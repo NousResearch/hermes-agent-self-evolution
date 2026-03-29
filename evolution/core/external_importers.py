@@ -51,12 +51,16 @@ SECRET_PATTERNS = re.compile(
     r'|xoxb-\S+'              # Slack bot tokens
     r'|xapp-\S+'              # Slack app tokens
     r'|ntn_\S+'               # Notion integration tokens
+    r'|AKIA[0-9A-Z]{16}'      # AWS access key IDs
     r'|Bearer\s+\S{20,}'      # Bearer auth headers (20+ char tokens)
+    r'|-----BEGIN\s+(RSA\s+)?PRIVATE\sKEY-----'  # PEM private keys
     r'|ANTHROPIC_API_KEY'      # Known env var names (exact match)
     r'|OPENAI_API_KEY'
     r'|OPENROUTER_API_KEY'
     r'|SLACK_BOT_TOKEN'
     r'|GITHUB_TOKEN'
+    r'|AWS_SECRET_ACCESS_KEY'
+    r'|DATABASE_URL'
     r'|\bpassword\s*[=:]\s*\S+' # password assignments (password=xxx, password: xxx)
     r'|\bsecret\s*[=:]\s*\S+'   # secret assignments (secret=xxx, secret: xxx)
     r'|\btoken\s*[=:]\s*\S{10,}' # token assignments with 10+ char values
@@ -460,7 +464,8 @@ class RelevanceFilter:
 
         # If heuristics found too few, sample remaining messages
         if len(candidates) < max_examples:
-            remaining = [m for m in messages if m not in candidates]
+            candidate_ids = {id(m) for m in candidates}
+            remaining = [m for m in messages if id(m) not in candidate_ids]
             random.shuffle(remaining)
             candidates.extend(remaining[:max_examples * 2])
 
@@ -546,14 +551,40 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
     except json.JSONDecodeError:
         pass
 
-    # Slow path: extract first {...} block from surrounding text
-    json_match = re.search(r'\{[^}]+\}', text, re.DOTALL)
-    if not json_match:
+    # Slow path: find balanced {...} block using brace counting.
+    # Simple regex like r'\{[^}]+\}' breaks on nested braces
+    # (e.g. "handle {edge} cases" in a string value).
+    start = text.find('{')
+    if start == -1:
         return None
-    try:
-        return json.loads(json_match.group())
-    except json.JSONDecodeError:
-        return None
+
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start:i + 1])
+                except json.JSONDecodeError:
+                    return None
+
+    return None
 
 
 # ── Orchestration ─────────────────────────────────────────────────────────

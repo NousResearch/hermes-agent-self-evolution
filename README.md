@@ -36,11 +36,17 @@ pip install -e ".[dev]"
 # Point at your hermes-agent repo
 export HERMES_AGENT_REPO=~/.hermes/hermes-agent
 
-# Evolve a skill
+# Evolve a skill (synthetic eval data)
 python -m evolution.skills.evolve_skill \
     --skill github-code-review \
     --iterations 10 \
     --eval-source synthetic
+
+# Or use real session history from Claude Code, Copilot, and Hermes
+python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --iterations 10 \
+    --eval-source sessiondb
 ```
 
 ## What It Optimizes

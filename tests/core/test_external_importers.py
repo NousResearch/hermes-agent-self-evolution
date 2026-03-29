@@ -140,6 +140,19 @@ class TestSecretDetection:
     def test_detects_github_token_env_var(self):
         assert _contains_secret("GITHUB_TOKEN=ghp_abc123")
 
+    def test_detects_aws_access_key(self):
+        assert _contains_secret("AKIAIOSFODNN7EXAMPLE")
+
+    def test_detects_pem_private_key(self):
+        assert _contains_secret("-----BEGIN RSA PRIVATE KEY-----\nMIIEow...")
+        assert _contains_secret("-----BEGIN PRIVATE KEY-----\nMIIEvQ...")
+
+    def test_detects_aws_secret_env_var(self):
+        assert _contains_secret("export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG")
+
+    def test_detects_database_url_env_var(self):
+        assert _contains_secret("DATABASE_URL=postgres://user:pass@host/db")
+
 
 # ── Relevance Heuristics ────────────────────────────────────────────────────
 
@@ -226,6 +239,14 @@ class TestScoringJsonParser:
         """A JSON array or string should return None (we need a dict)."""
         assert _parse_scoring_json('[1, 2, 3]') is None
         assert _parse_scoring_json('"just a string"') is None
+
+    def test_nested_braces_in_values(self):
+        """JSON with braces inside string values must parse correctly."""
+        text = 'Here: {"relevant": true, "expected_behavior": "handle {edge} cases"}'
+        result = _parse_scoring_json(text)
+        assert result is not None
+        assert result["relevant"] is True
+        assert "{edge}" in result["expected_behavior"]
 
     def test_empty_string_returns_none(self):
         assert _parse_scoring_json("") is None
