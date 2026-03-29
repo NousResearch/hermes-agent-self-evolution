@@ -20,6 +20,7 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig, get_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
+from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
@@ -82,6 +83,19 @@ def evolve(
     if eval_source == "golden" and dataset_path:
         dataset = GoldenDatasetLoader.load(Path(dataset_path))
         console.print(f"  Loaded golden dataset: {len(dataset.all_examples)} examples")
+    elif eval_source == "sessiondb":
+        save_path = Path(dataset_path) if dataset_path else Path("datasets") / "skills" / skill_name
+        dataset = build_dataset_from_external(
+            skill_name=skill_name,
+            skill_text=skill["raw"],
+            sources=["claude-code", "copilot", "hermes"],
+            output_path=save_path,
+            model=eval_model,
+        )
+        if not dataset.all_examples:
+            console.print("[red]✗ No relevant examples found from session history[/red]")
+            sys.exit(1)
+        console.print(f"  Mined {len(dataset.all_examples)} examples from session history")
     elif eval_source == "synthetic":
         builder = SyntheticDatasetBuilder(config)
         dataset = builder.generate(
