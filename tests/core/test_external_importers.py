@@ -5,17 +5,16 @@ Tests cover:
   - Skill relevance heuristics
   - Claude Code history parsing + edge cases
   - Copilot events.jsonl parsing + edge cases
-  - Hermes state.db parsing + edge cases
   - LLM scoring JSON parser
   - RelevanceFilter with mocked DSPy
   - build_dataset_from_external orchestration
+  - Input validation and normalization
   - _load_skill_text skill loader
   - CLI entry point via CliRunner
   - EvalExample serialization roundtrip
 """
 
 import json
-import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
@@ -35,7 +34,6 @@ from evolution.core.external_importers import (
     main,
     ClaudeCodeImporter,
     CopilotImporter,
-    HermesSessionImporter,
     RelevanceFilter,
     VALID_DIFFICULTIES,
     MIN_DATASET_SIZE,
@@ -465,152 +463,6 @@ class TestCopilotHelpers:
             events_path.chmod(0o644)  # Restore for cleanup
 
 
-# ── Hermes Session Importer ────────────────────────────────────────────────
-
-
-def _create_hermes_db(db_path, sessions, messages):
-    """Helper to create a Hermes-compatible SQLite database."""
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("CREATE TABLE sessions (id TEXT, title TEXT)")
-    conn.execute(
-        "CREATE TABLE messages "
-        "(id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, timestamp INTEGER)"
-    )
-    for s in sessions:
-        conn.execute("INSERT INTO sessions VALUES (?, ?)", s)
-    for m in messages:
-        conn.execute("INSERT INTO messages VALUES (?, ?, ?, ?, ?)", m)
-    conn.commit()
-    conn.close()
-
-
-class TestHermesSessionImporter:
-    def test_parses_sqlite_pairs(self, tmp_path):
-        db_path = tmp_path / "state.db"
-        _create_hermes_db(db_path,
-            sessions=[("s1", "my project")],
-            messages=[
-                (1, "s1", "user", "sort these messages into topics please", 1000),
-                (2, "s1", "assistant", "I will group them by theme", 1001),
-                (3, "s1", "user", "now do batch two with more detail", 1002),
-                (4, "s1", "assistant", "Here are the categories for batch 2", 1003),
-            ],
-        )
-
-        with patch.object(HermesSessionImporter, "DB_PATH", db_path):
-            messages = HermesSessionImporter.extract_messages()
-
-        assert len(messages) == 2
-        assert messages[0]["source"] == "hermes"
-        assert messages[0]["project"] == "my project"
-        inputs = {m["task_input"] for m in messages}
-        assert "sort these messages into topics please" in inputs
-        assert "now do batch two with more detail" in inputs
-
-    def test_filters_secrets(self, tmp_path):
-        db_path = tmp_path / "state.db"
-        _create_hermes_db(db_path,
-            sessions=[("s1", "test")],
-            messages=[
-                (1, "s1", "user", "my key is sk-ant-api03-SECRET1234567890123456", 1000),
-                (2, "s1", "assistant", "I see your key", 1001),
-            ],
-        )
-
-        with patch.object(HermesSessionImporter, "DB_PATH", db_path):
-            messages = HermesSessionImporter.extract_messages()
-
-        assert len(messages) == 0
-
-    def test_handles_missing_db(self, tmp_path):
-        with patch.object(HermesSessionImporter, "DB_PATH", tmp_path / "nonexistent.db"):
-            messages = HermesSessionImporter.extract_messages()
-        assert messages == []
-
-    def test_respects_limit(self, tmp_path):
-        db_path = tmp_path / "state.db"
-        sessions = [("s1", "test")]
-        messages = []
-        for i in range(50):
-            messages.append((i * 2 + 1, "s1", "user", f"message number {i} with enough length to pass", i * 2))
-            messages.append((i * 2 + 2, "s1", "assistant", f"response to message {i}", i * 2 + 1))
-        _create_hermes_db(db_path, sessions=sessions, messages=messages)
-
-        with patch.object(HermesSessionImporter, "DB_PATH", db_path):
-            result = HermesSessionImporter.extract_messages(limit=5)
-
-        assert len(result) == 5
-
-    def test_handles_null_content(self, tmp_path):
-        """NULL content fields should not crash."""
-        db_path = tmp_path / "state.db"
-        _create_hermes_db(db_path,
-            sessions=[("s1", "test")],
-            messages=[
-                (1, "s1", "user", "a valid message with enough chars", 1000),
-                (2, "s1", "assistant", None, 1001),
-            ],
-        )
-
-        with patch.object(HermesSessionImporter, "DB_PATH", db_path):
-            messages = HermesSessionImporter.extract_messages()
-
-        # Pair exists but assistant content is None -> empty string, not a crash
-        # The SQL JOIN should still find the row since it matches on role='assistant'
-        # and the content filtering handles None via `or ""`
-        assert isinstance(messages, list)
-
-    def test_skips_short_user_messages(self, tmp_path):
-        """Messages under 10 chars are filtered by the SQL query."""
-        db_path = tmp_path / "state.db"
-        _create_hermes_db(db_path,
-            sessions=[("s1", "test")],
-            messages=[
-                (1, "s1", "user", "hi", 1000),
-                (2, "s1", "assistant", "hello there", 1001),
-            ],
-        )
-
-        with patch.object(HermesSessionImporter, "DB_PATH", db_path):
-            messages = HermesSessionImporter.extract_messages()
-
-        assert len(messages) == 0
-
-    def test_wrong_schema_returns_empty(self, tmp_path):
-        """DB with wrong table schema -> SQL error caught, returns [], doesn't crash."""
-        db_path = tmp_path / "state.db"
-        conn = sqlite3.connect(str(db_path))
-        conn.execute("CREATE TABLE sessions (id TEXT, title TEXT)")
-        # Wrong schema: missing 'role' and 'content' columns
-        conn.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, data TEXT)")
-        conn.commit()
-        conn.close()
-
-        with patch.object(HermesSessionImporter, "DB_PATH", db_path):
-            messages = HermesSessionImporter.extract_messages()
-
-        assert messages == []
-
-    def test_connection_closed_on_error(self, tmp_path):
-        """Verify conn.close() is called even when query fails (finally block)."""
-        db_path = tmp_path / "state.db"
-        conn = sqlite3.connect(str(db_path))
-        conn.execute("CREATE TABLE sessions (id TEXT, title TEXT)")
-        conn.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, data TEXT)")
-        conn.commit()
-        conn.close()
-
-        with patch.object(HermesSessionImporter, "DB_PATH", db_path):
-            messages = HermesSessionImporter.extract_messages()
-            # After the call, the DB should not be locked
-            # Verify by opening it again successfully
-            verify_conn = sqlite3.connect(str(db_path), timeout=1)
-            verify_conn.execute("SELECT 1")
-            verify_conn.close()
-
-        assert messages == []
-
-
 # ── RelevanceFilter (mocked DSPy) ───────────────────────────────────────────
 
 
@@ -676,7 +528,7 @@ class TestRelevanceFilter:
         rf.scorer.return_value = SimpleNamespace(scoring="I cannot determine relevance right now")
 
         messages = [
-            {"task_input": "sort these messages by topic please", "source": "hermes"},
+            {"task_input": "sort these messages by topic please", "source": "claude-code"},
         ]
 
         examples = rf.filter_and_score(messages, "categorize", "Sort text into topics.", max_examples=10)
@@ -889,19 +741,20 @@ class TestEndToEndRoundtrip:
             assert ex.expected_behavior == "group by theme"
             assert ex.source == "claude-code"
 
-    def test_full_pipeline_with_real_sqlite(self, tmp_path):
-        """Create real SQLite DB, import, filter (mocked), save, reload."""
+    def test_full_pipeline_with_copilot_events(self, tmp_path):
+        """Create real Copilot events, import, filter (mocked), save, reload."""
         from evolution.core.dataset_builder import EvalDataset
 
-        db_path = tmp_path / "state.db"
-        _create_hermes_db(db_path,
-            sessions=[("s1", "test project")],
-            messages=[
-                (1, "s1", "user", "sort these messages into categories for me", 1000),
-                (2, "s1", "assistant", "I grouped them into 3 categories", 1001),
-                (3, "s1", "user", "now categorize the second batch of emails", 1002),
-                (4, "s1", "assistant", "Here are the email categories", 1003),
-            ],
+        session_dir = tmp_path / "session-state" / "test-session"
+        session_dir.mkdir(parents=True)
+        (session_dir / "workspace.yaml").write_text("cwd: /Users/test/project\n")
+
+        events = [
+            {"type": "user.message", "data": {"content": "sort these messages into categories for me"}},
+            {"type": "assistant.message", "data": {"content": "I grouped them into 3 categories"}},
+        ]
+        (session_dir / "events.jsonl").write_text(
+            "\n".join(json.dumps(e) for e in events) + "\n"
         )
 
         mock_examples = [
@@ -910,18 +763,18 @@ class TestEndToEndRoundtrip:
                 expected_behavior="group into categories",
                 difficulty="easy",
                 category="sorting",
-                source="hermes",
+                source="copilot",
             ),
         ]
 
         output = tmp_path / "dataset"
 
-        with patch.object(HermesSessionImporter, "DB_PATH", db_path), \
+        with patch.object(CopilotImporter, "SESSION_DIR", tmp_path / "session-state"), \
              patch.object(RelevanceFilter, "filter_and_score", return_value=mock_examples):
             dataset = build_dataset_from_external(
                 skill_name="categorize",
                 skill_text="Sort text.",
-                sources=["hermes"],
+                sources=["copilot"],
                 output_path=output,
                 model="test-model",
             )

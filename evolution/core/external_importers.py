@@ -2,12 +2,13 @@
 
 Bridges the gap between existing tool usage (Claude Code, GitHub Copilot)
 and Hermes self-evolution by mining real session history for skill-relevant
-evaluation examples.
+evaluation examples. Solves the cold-start problem: new Hermes users don't
+have golden datasets, but they do have session history from tools they
+already use.
 
 Supported sources:
   - Claude Code (~/.claude/history.jsonl) — user inputs only
   - GitHub Copilot (~/.copilot/session-state/*/events.jsonl) — full conversations
-  - Hermes sessiondb (~/.hermes/state.db) — full conversations
 
 Usage as standalone CLI:
     python -m evolution.core.external_importers \\
@@ -22,7 +23,6 @@ Usage from evolve_skill.py:
 
 import json
 import re
-import sqlite3
 import random
 from pathlib import Path
 from typing import Optional
@@ -325,84 +325,6 @@ def _parse_copilot_events(
     return pairs
 
 
-class HermesSessionImporter:
-    """Import conversations from Hermes state.db.
-
-    Hermes stores session data in a SQLite database with tables:
-      - sessions (id, title)
-      - messages (id, session_id, role, content, timestamp)
-
-    We pair each user message with the next assistant response in the
-    same session using a correlated subquery.
-    """
-
-    DB_PATH = Path.home() / ".hermes" / "state.db"
-
-    @staticmethod
-    def extract_messages(limit: int = 0) -> list[dict]:
-        """Read user/assistant message pairs from Hermes session database.
-
-        Args:
-            limit: Maximum messages to return (0 = no limit).
-
-        Returns:
-            List of dicts with keys: source, task_input, assistant_response,
-            project, session_id.
-        """
-        if not HermesSessionImporter.DB_PATH.exists():
-            return []
-
-        messages = []
-        conn = None
-        try:
-            conn = sqlite3.connect(str(HermesSessionImporter.DB_PATH), timeout=5)
-            conn.row_factory = sqlite3.Row
-
-            rows = conn.execute("""
-                SELECT
-                    m1.content AS user_msg,
-                    m2.content AS assistant_msg,
-                    s.id AS session_id,
-                    s.title AS project
-                FROM messages m1
-                JOIN messages m2 ON m1.session_id = m2.session_id
-                    AND m2.role = 'assistant'
-                    AND m2.id = (
-                        SELECT MIN(id) FROM messages
-                        WHERE session_id = m1.session_id
-                        AND role = 'assistant'
-                        AND id > m1.id
-                    )
-                JOIN sessions s ON m1.session_id = s.id
-                WHERE m1.role = 'user'
-                    AND length(m1.content) > 10
-                ORDER BY m1.timestamp DESC
-            """).fetchall()
-
-            for row in rows:
-                user_msg = row["user_msg"] or ""
-                assistant_msg = row["assistant_msg"] or ""
-                if _contains_secret(user_msg) or _contains_secret(assistant_msg):
-                    continue
-                messages.append({
-                    "source": "hermes",
-                    "task_input": user_msg,
-                    "assistant_response": assistant_msg,
-                    "project": row["project"] or "",
-                    "session_id": row["session_id"] or "",
-                })
-                if limit and len(messages) >= limit:
-                    break
-
-        except Exception as e:
-            console.print(f"[red]Error reading Hermes DB: {e}[/red]")
-        finally:
-            if conn:
-                conn.close()
-
-        return messages
-
-
 # ── Relevance Filtering ───────────────────────────────────────────────────
 
 
@@ -606,7 +528,7 @@ def build_dataset_from_external(
     Args:
         skill_name: Name of the target skill.
         skill_text: Full text of the SKILL.md file.
-        sources: List of source names ("claude-code", "copilot", "hermes").
+        sources: List of source names ("claude-code", "copilot").
         output_path: Directory to write train/val/holdout JSONL files.
         model: LiteLLM model string for relevance scoring.
         max_examples: Maximum eval examples to generate.
@@ -619,7 +541,6 @@ def build_dataset_from_external(
     importers = {
         "claude-code": ("Claude Code", ClaudeCodeImporter),
         "copilot": ("Copilot", CopilotImporter),
-        "hermes": ("Hermes", HermesSessionImporter),
     }
 
     for source in sources:
@@ -716,7 +637,7 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
 @click.command()
 @click.option(
     "--source",
-    type=click.Choice(["claude-code", "copilot", "hermes", "all"]),
+    type=click.Choice(["claude-code", "copilot", "all"]),
     default="all",
     help="Which tool to import from",
 )
@@ -739,13 +660,12 @@ def main(source, skill, output, model, max_examples, dry_run):
 
     console.print(f"  Loaded skill: {skill_name} ({len(skill_text):,} chars)")
 
-    sources = [source] if source != "all" else ["claude-code", "copilot", "hermes"]
+    sources = [source] if source != "all" else ["claude-code", "copilot"]
 
     if dry_run:
         importers = {
             "claude-code": ClaudeCodeImporter,
             "copilot": CopilotImporter,
-            "hermes": HermesSessionImporter,
         }
         for src in sources:
             msgs = importers[src].extract_messages()
