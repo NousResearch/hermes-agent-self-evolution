@@ -84,34 +84,34 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 class SkillModule(dspy.Module):
     """A DSPy module that wraps a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+    The skill text is embedded as the signature's instructions — the part
+    that DSPy optimizers (GEPA, MIPROv2) actually mutate. After
+    optimizer.compile(), call get_evolved_text() to extract the result.
     """
-
-    class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
-        task_input: str = dspy.InputField(desc="The task to complete")
-        output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
+        # Store original for reference/diff
         self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        # Embed skill text as signature instructions — this is what GEPA evolves
+        sig = dspy.Signature(
+            "task_input: str -> output: str",
+            instructions=skill_text,
+        )
+        self.predictor = dspy.ChainOfThought(sig)
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
+
+    def get_evolved_text(self) -> str:
+        """Extract the (potentially optimized) skill text from the predictor.
+
+        DSPy optimizers mutate predictor.signature.instructions, not
+        arbitrary instance attributes. ChainOfThought wraps an inner
+        Predict at self.predictor.predict — that's where the signature lives.
+        """
+        return self.predictor.predict.signature.instructions
 
 
 def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
