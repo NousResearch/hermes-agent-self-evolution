@@ -53,13 +53,13 @@ echo "Skill: $SKILL"
 echo "Time: $(date)"
 echo ""
 
-# Run evolution using OpenAI gpt-4.1 (LM calls have num_retries=8 + extended backoff)
+# Run evolution using ChatGPT OAuth (gpt-5.2) (LM calls have num_retries=8 + extended backoff)
 PYTHONUNBUFFERED=1 /usr/bin/python -u -m evolution.skills.evolve_skill \
     --skill "$SKILL" \
     --iterations 5 \
     --eval-source synthetic \
-    --eval-model openai/gpt-4.1 \
-    --optimizer-model openai/gpt-4.1 \
+    --eval-model chatgpt/gpt-5.2 \
+    --optimizer-model chatgpt/gpt-5.2 \
     2>&1
 
 # Find the latest output dir for this skill
