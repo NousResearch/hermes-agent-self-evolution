@@ -10,6 +10,13 @@ from typing import Optional
 
 from evolution.core.config import EvolutionConfig
 
+# CodexLM integration — swap dspy.LM for CodexLM if CODEX_ACCESS_TOKEN is set
+try:
+    from dspy_providers.configure import auto_configure
+    auto_configure()
+except ImportError:
+    pass  # dspy_providers not available; fall back to litellm
+
 
 @dataclass
 class FitnessScore:
@@ -71,7 +78,6 @@ class LLMJudge:
         max_size: Optional[int] = None,
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
-
         lm = dspy.LM(self.config.eval_model)
 
         with dspy.context(lm=lm):

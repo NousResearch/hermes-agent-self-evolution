@@ -14,6 +14,13 @@ from typing import Optional
 
 import dspy
 
+# CodexLM integration — swap dspy.LM for CodexLM if CODEX_ACCESS_TOKEN is set
+try:
+    from dspy_providers.configure import auto_configure
+    auto_configure()
+except ImportError:
+    pass  # dspy_providers not available; fall back to litellm
+
 from evolution.core.config import EvolutionConfig
 
 
@@ -122,7 +129,6 @@ class SyntheticDatasetBuilder:
 
         n = num_cases or self.config.eval_dataset_size
 
-        # Configure DSPy to use the judge model for generation
         lm = dspy.LM(self.config.judge_model)
 
         with dspy.context(lm=lm):

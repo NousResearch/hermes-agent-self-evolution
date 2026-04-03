@@ -19,6 +19,14 @@ from rich.panel import Panel
 from rich.table import Table
 
 from evolution.core.config import EvolutionConfig, get_hermes_agent_path
+
+# CodexLM integration — swap dspy.LM for CodexLM if CODEX_ACCESS_TOKEN is set
+try:
+    from dspy_providers.configure import auto_configure
+    auto_configure()
+except ImportError:
+    pass  # dspy_providers not available; fall back to litellm
+
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
@@ -137,7 +145,7 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
+    # Configure DSPy with CodexLM
     lm = dspy.LM(eval_model)
     dspy.configure(lm=lm)
 
@@ -174,6 +182,7 @@ def evolve(
         optimized_module = optimizer.compile(
             baseline_module,
             trainset=trainset,
+            requires_permission_to_run=False,
         )
 
     elapsed = time.time() - start_time
@@ -186,7 +195,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["body"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"

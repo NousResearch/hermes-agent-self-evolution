@@ -30,6 +30,14 @@ from typing import Optional
 
 import click
 import dspy
+
+# CodexLM integration — swap dspy.LM for CodexLM if CODEX_ACCESS_TOKEN is set
+try:
+    from dspy_providers.configure import auto_configure
+    auto_configure()
+except ImportError:
+    pass  # dspy_providers not available; fall back to litellm
+
 from rich.console import Console
 from rich.progress import Progress
 
