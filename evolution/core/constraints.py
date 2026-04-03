@@ -148,27 +148,30 @@ class ConstraintValidator:
             )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
-        """Check that a skill file has valid YAML frontmatter and markdown body."""
-        has_frontmatter = text.strip().startswith("---")
-        has_name = "name:" in text[:500] if has_frontmatter else False
-        has_description = "description:" in text[:500] if has_frontmatter else False
+        """Check that a skill body has valid markdown structure.
 
-        if has_frontmatter and has_name and has_description:
+        Note: validate_all() receives the skill body (after frontmatter has been
+        stripped by load_skill()), not the full file. Frontmatter is preserved
+        separately and reassembled by reassemble_skill() after evolution.
+        Therefore we validate the body's markdown structure, not frontmatter presence.
+        """
+        has_heading = text.strip().startswith("#") or "\n#" in text
+        has_content = len(text.strip()) > 50
+
+        if has_heading and has_content:
             return ConstraintResult(
                 passed=True,
                 constraint_name="skill_structure",
-                message="Skill has valid frontmatter (name + description)",
+                message="Skill body has valid markdown structure",
             )
         else:
             missing = []
-            if not has_frontmatter:
-                missing.append("YAML frontmatter (---)")
-            if not has_name:
-                missing.append("name field")
-            if not has_description:
-                missing.append("description field")
+            if not has_heading:
+                missing.append("markdown heading (#)")
+            if not has_content:
+                missing.append("meaningful content (>50 chars)")
             return ConstraintResult(
                 passed=False,
                 constraint_name="skill_structure",
-                message=f"Skill missing: {', '.join(missing)}",
+                message=f"Skill body missing: {', '.join(missing)}",
             )
