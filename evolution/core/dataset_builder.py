@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import dspy
+from dspy.clients.codex import CodexLM, is_codex_model
 
 from evolution.core.config import EvolutionConfig
 
@@ -123,7 +124,10 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        if is_codex_model(self.config.judge_model):
+            lm = CodexLM(model=self.config.judge_model, repo_root=self.config.hermes_agent_path, timeout_seconds=600)
+        else:
+            lm = dspy.LM(self.config.judge_model)
 
         with dspy.context(lm=lm):
             result = self.generator(

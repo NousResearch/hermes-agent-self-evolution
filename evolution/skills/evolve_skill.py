@@ -14,6 +14,7 @@ from typing import Optional
 
 import click
 import dspy
+from dspy.clients.codex import CodexLM, is_codex_model
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -138,7 +139,10 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    if is_codex_model(eval_model):
+        lm = CodexLM(model=eval_model, repo_root=config.hermes_agent_path, timeout_seconds=600)
+    else:
+        lm = dspy.LM(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -156,7 +160,8 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_metric_calls=iterations * 10,
+            reflection_lm=lm,
         )
 
         optimized_module = optimizer.compile(
