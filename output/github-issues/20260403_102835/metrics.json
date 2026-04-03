@@ -1,0 +1,17 @@
+{
+  "skill_name": "github-issues",
+  "timestamp": "20260403_102835",
+  "iterations": 5,
+  "optimizer_model": "openai/o3",
+  "eval_model": "openai/gpt-4.1",
+  "baseline_score": 0.586382183908046,
+  "evolved_score": 0.5849798850574712,
+  "improvement": -0.0014022988505747458,
+  "baseline_size": 8929,
+  "evolved_size": 4487,
+  "train_examples": 10,
+  "val_examples": 5,
+  "holdout_examples": 6,
+  "elapsed_seconds": 1165.5109312534332,
+  "constraints_passed": true
+}

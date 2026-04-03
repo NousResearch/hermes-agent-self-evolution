@@ -123,7 +123,7 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        lm = dspy.LM(self.config.judge_model, num_retries=8, timeout=120)
 
         with dspy.context(lm=lm):
             result = self.generator(
@@ -132,17 +132,27 @@ class SyntheticDatasetBuilder:
                 num_cases=n,
             )
 
-        # Parse the generated test cases
+        # Parse the generated test cases (models sometimes produce slightly broken JSON)
+        import re
+        raw = result.test_cases
         try:
-            cases_raw = json.loads(result.test_cases)
+            cases_raw = json.loads(raw)
         except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+            # Try to extract JSON array from the response
+            match = re.search(r'\[.*\]', raw, re.DOTALL)
+            if not match:
+                raise ValueError(f"Could not find JSON array in LLM output: {raw[:200]}")
+            extracted = match.group()
+            try:
+                cases_raw = json.loads(extracted)
+            except json.JSONDecodeError:
+                # Fix common issues: trailing commas, unescaped newlines in strings
+                cleaned = re.sub(r',\s*([}\]])', r'\1', extracted)  # trailing commas
+                cleaned = re.sub(r'(?<!\\)\n', r'\\n', cleaned)  # unescaped newlines in strings
+                try:
+                    cases_raw = json.loads(cleaned)
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"Could not parse test cases (even after cleanup): {e}\nRaw: {raw[:500]}")
 
         examples = [
             EvalExample(

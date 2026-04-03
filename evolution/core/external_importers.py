@@ -490,7 +490,7 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(self.model)
+        lm = dspy.LM(self.model, num_retries=8, timeout=120)
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))

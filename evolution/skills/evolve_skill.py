@@ -118,7 +118,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -137,7 +137,7 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = dspy.LM(eval_model, num_retries=8, timeout=120)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -152,10 +152,16 @@ def evolve(
 
     start_time = time.time()
 
+    # Map iterations to GEPA budget: 5 -> light, 10 -> medium, 15+ -> heavy
+    gepa_budget = "light" if iterations <= 5 else ("medium" if iterations <= 10 else "heavy")
+
     try:
+        # GEPA needs a reflection LM for proposing mutations
+        reflection_lm = dspy.LM(optimizer_model, num_retries=8, timeout=120)
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            auto=gepa_budget,
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -179,13 +185,27 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # GEPA evolves the Signature's instruction text which contains the skill.
+    # Extract it from the optimized predictor's signature.
+    try:
+        # ChainOfThought wraps a Predict sub-module: predictor.predict.signature
+        evolved_instructions = optimized_module.predictor.predict.signature.instructions
+        # Strip the prefix we added ("Complete the task by following these skill instructions:\n\n")
+        prefix = "Complete the task by following these skill instructions:\n\n"
+        if evolved_instructions.startswith(prefix):
+            evolved_body = evolved_instructions[len(prefix):]
+        else:
+            # GEPA rewrote the entire instruction — use it as the new skill body
+            evolved_body = evolved_instructions
+    except AttributeError:
+        # Fallback: if structure changed, use the original
+        console.print("[yellow]⚠ Could not extract evolved text from optimizer, using original[/yellow]")
+        evolved_body = optimized_module.skill_text
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"

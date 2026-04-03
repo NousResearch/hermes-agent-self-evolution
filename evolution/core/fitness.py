@@ -72,7 +72,7 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        lm = dspy.LM(self.config.eval_model, num_retries=8, timeout=120)
 
         with dspy.context(lm=lm):
             result = self.judge(
@@ -104,10 +104,13 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None, pred_name=None, pred_trace=None) -> float:
     """DSPy-compatible metric function for skill optimization.
 
     This is what gets passed to dspy.GEPA(metric=...).
+    GEPA requires 5 args: (gold, pred, trace, pred_name, pred_trace).
+    MIPROv2 uses 3 args: (example, prediction, trace).
+    Both are supported via defaults.
     Returns a float 0-1 score.
     """
     # The prediction should have an 'output' field with the agent's response
