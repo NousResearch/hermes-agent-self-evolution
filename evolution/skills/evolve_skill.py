@@ -154,10 +154,15 @@ def evolve(
     start_time = time.time()
 
     try:
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
-        )
+        # DSPy >=3.0: GEPA uses auto/max_metric_calls/max_full_evals (not max_steps)
+        gepa_kwargs = dict(metric=skill_fitness_metric, auto="light")
+
+        # GEPA benefits from a dedicated reflection LM for trace-aware mutations.
+        # If not provided, GEPA will raise — so we configure one from the optimizer model.
+        optimizer_lm = dspy.LM(optimizer_model, temperature=1.0, max_tokens=4096)
+        gepa_kwargs["reflection_lm"] = optimizer_lm
+
+        optimizer = dspy.GEPA(**gepa_kwargs)
 
         optimized_module = optimizer.compile(
             baseline_module,
@@ -165,8 +170,8 @@ def evolve(
             valset=valset,
         )
     except Exception as e:
-        # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
-        console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
+        # Fall back to MIPROv2 if GEPA isn't available or misconfigured
+        console.print(f"[yellow]GEPA unavailable ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
             metric=skill_fitness_metric,
             auto="light",
