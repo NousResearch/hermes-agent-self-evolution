@@ -49,6 +49,36 @@ python -m evolution.skills.evolve_skill \
     --eval-source sessiondb
 ```
 
+### Using MiniMax
+
+Set your API key and pass `--use-minimax` (or specify the model directly):
+
+```bash
+export MINIMAX_API_KEY=your_key_here
+
+# Shorthand — uses MiniMax-M2.7 for both optimizer and eval
+python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --use-minimax
+
+# Explicit model selection
+python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --optimizer-model minimax/MiniMax-M2.7 \
+    --eval-model minimax/MiniMax-M2.7-highspeed
+```
+
+Supported MiniMax models:
+
+| Model ID | Description |
+|----------|-------------|
+| `MiniMax-M2.7` | Peak performance — default choice |
+| `MiniMax-M2.7-highspeed` | Same performance, lower latency |
+
+MiniMax uses the OpenAI-compatible endpoint at `https://api.minimax.io/v1`. The
+`MINIMAX_API_KEY` environment variable is read automatically; no other
+configuration is needed.
+
 ## What It Optimizes
 
 | Phase | Target | Engine | Status |

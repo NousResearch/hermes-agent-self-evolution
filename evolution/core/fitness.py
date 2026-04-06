@@ -72,7 +72,7 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        lm = self.config.make_lm(self.config.eval_model)
 
         with dspy.context(lm=lm):
             result = self.judge(
