@@ -1,7 +1,7 @@
 """Wraps a SKILL.md file as a DSPy module for optimization.
 
 The key abstraction: a skill file becomes a parameterized DSPy module
-where the skill text is the optimizable parameter. GEPA can then
+where the skill text is the optimizable instruction. GEPA can then
 mutate the skill text and evaluate the results.
 """
 
@@ -59,18 +59,23 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
     """Find a skill by name in the hermes-agent skills directory.
 
     Searches recursively for a SKILL.md in a directory matching the skill name.
+    Uses os.walk with followlinks=True to handle symlinked skill directories.
     """
+    import os
+
     skills_dir = hermes_agent_path / "skills"
     if not skills_dir.exists():
         return None
 
-    # Direct match: skills/<category>/<skill_name>/SKILL.md
-    for skill_md in skills_dir.rglob("SKILL.md"):
-        if skill_md.parent.name == skill_name:
-            return skill_md
+    for root, dirs, files in os.walk(str(skills_dir), followlinks=True):
+        if "SKILL.md" in files and Path(root).name == skill_name:
+            return Path(root) / "SKILL.md"
 
     # Fuzzy match: check the name field in frontmatter
-    for skill_md in skills_dir.rglob("SKILL.md"):
+    for root, dirs, files in os.walk(str(skills_dir), followlinks=True):
+        if "SKILL.md" not in files:
+            continue
+        skill_md = Path(root) / "SKILL.md"
         try:
             content = skill_md.read_text()[:500]
             if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
@@ -84,33 +89,38 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 class SkillModule(dspy.Module):
     """A DSPy module that wraps a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+    The skill text (body) is set as the Signature's instruction, making
+    it the optimizable parameter that GEPA/MIPROv2 can evolve. On each
+    forward pass, the module uses the skill text as context to complete
+    the given task.
     """
-
-    class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
-        task_input: str = dspy.InputField(desc="The task to complete")
-        output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
         self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+
+        # Build a dynamic Signature with the skill text as the instruction.
+        # This makes the instruction the optimizable parameter for GEPA/MIPROv2.
+        signature = dspy.Signature(
+            "task_input -> output",
+            instructions=skill_text,
+        )
+        signature = signature.with_updated_fields(
+            "task_input",
+            desc="The task to complete following the skill instructions",
+        )
+        signature = signature.with_updated_fields(
+            "output",
+            desc="Your response following the skill instructions",
+        )
+        self.predictor = dspy.ChainOfThought(signature)
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
+        # After optimization, extract the (possibly evolved) instruction
+        # back as the skill text for reassembly.
+        if hasattr(self.predictor, 'signature') and hasattr(self.predictor.signature, 'instructions'):
+            self.skill_text = self.predictor.signature.instructions
         return dspy.Prediction(output=result.output)
 
 
