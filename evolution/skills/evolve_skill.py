@@ -33,6 +33,11 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def _is_successful_improvement(baseline_text: str, evolved_text: str, improvement: float) -> bool:
+    """Return True only when optimization produced a real artifact change and a score win."""
+    return evolved_text != baseline_text and improvement > 0
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -225,6 +230,7 @@ def evolve(
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
+    successful_improvement = _is_successful_improvement(skill["raw"], evolved_full, improvement)
 
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
@@ -285,9 +291,12 @@ def evolve(
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if successful_improvement:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif evolved_full == skill["raw"]:
+        console.print(f"\n[yellow]⚠ Evolution produced no artifact change (score delta: {improvement:+.3f})[/yellow]")
+        console.print("  Identical baseline/evolved files are treated as a no-op run")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
