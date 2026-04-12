@@ -33,6 +33,47 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+class RewriteSkillBody(dspy.Signature):
+    """Rewrite a SKILL.md body to improve execution behavior.
+
+    Return only markdown body text (no YAML frontmatter, no code fences).
+    Preserve command correctness and keep changes minimal/surgical.
+    """
+
+    original_skill_body: str = dspy.InputField(desc="Original SKILL.md body markdown")
+    optimizer_observations: str = dspy.InputField(desc="Optimization observations and behavioral deltas")
+    rewritten_skill_body: str = dspy.OutputField(desc="Improved SKILL.md body markdown only")
+
+
+def rewrite_skill_body_from_observations(
+    original_skill_body: str,
+    optimizer_observations: str,
+    optimizer_model: str,
+) -> tuple[str, str]:
+    """Try to generate an evolved SKILL body when optimizer didn't mutate module attrs.
+
+    Returns: (candidate_body, rewrite_status)
+    """
+    if not optimizer_observations.strip():
+        return original_skill_body, "rewrite_skipped_no_observations"
+
+    try:
+        rewriter = dspy.Predict(RewriteSkillBody)
+        with dspy.context(lm=dspy.LM(optimizer_model)):
+            pred = rewriter(
+                original_skill_body=original_skill_body,
+                optimizer_observations=optimizer_observations,
+            )
+        candidate = (getattr(pred, "rewritten_skill_body", "") or "").strip()
+        if not candidate:
+            return original_skill_body, "rewrite_failed_empty"
+        if candidate.strip() == original_skill_body.strip():
+            return original_skill_body, "rewrite_no_change"
+        return candidate, "rewrite_success"
+    except Exception as e:
+        return original_skill_body, f"rewrite_error:{type(e).__name__}"
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -119,7 +160,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -180,13 +221,56 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
+    # NOTE: DSPy optimizers often tune predictor prompts/demos, not arbitrary module attrs.
+    # If `skill_text` stays unchanged, any score delta is not promotable to SKILL.md.
     evolved_body = optimized_module.skill_text
+    skill_mutated = evolved_body.strip() != skill["body"].strip()
+    mutation_source = "optimizer_direct"
+    rewrite_status = "not_needed"
+
+    if not skill_mutated:
+        observations = []
+        try:
+            sig = getattr(getattr(optimized_module, "predictor", None), "signature", None)
+            instr = getattr(sig, "instructions", "") if sig else ""
+            if instr:
+                observations.append(f"optimized_predictor_instructions:\n{instr}")
+        except Exception:
+            pass
+        try:
+            dumped = optimized_module.dump_state()
+            maybe_sig = dumped.get("predictor", {}).get("signature_instructions") if isinstance(dumped, dict) else None
+            if maybe_sig:
+                observations.append(f"dumped_signature_instructions:\n{maybe_sig}")
+        except Exception:
+            pass
+
+        observations.append(
+            "behavioral_requirements:\n"
+            "- direct action phrasing over hedging\n"
+            "- avoid patterns like 'please run', 'once you provide', 'if you'd like I can'\n"
+            "- keep command sequences concrete and executable\n"
+            "- minimize wording changes outside behavior-critical sections"
+        )
+
+        evolved_body, rewrite_status = rewrite_skill_body_from_observations(
+            original_skill_body=skill["body"],
+            optimizer_observations="\n\n".join(observations),
+            optimizer_model=optimizer_model,
+        )
+        skill_mutated = evolved_body.strip() != skill["body"].strip()
+        if skill_mutated:
+            mutation_source = "llm_rewrite_from_optimizer"
+            console.print("[green]✓ Applied fallback SKILL body rewrite from optimizer observations[/green]")
+
+    if not skill_mutated:
+        console.print("[yellow]⚠ Optimizer did not mutate SKILL body text (non-promotable run)[/yellow]")
+
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -211,6 +295,7 @@ def evolve(
 
     baseline_scores = []
     evolved_scores = []
+    evolved_module = SkillModule(evolved_body)
     for ex in holdout_examples:
         # Score baseline
         with dspy.context(lm=lm):
@@ -218,13 +303,16 @@ def evolve(
             baseline_score = skill_fitness_metric(ex, baseline_pred)
             baseline_scores.append(baseline_score)
 
-            evolved_pred = optimized_module(task_input=ex.task_input)
+            evolved_pred = evolved_module(task_input=ex.task_input)
             evolved_score = skill_fitness_metric(ex, evolved_pred)
             evolved_scores.append(evolved_score)
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
-    improvement = avg_evolved - avg_baseline
+    raw_improvement = avg_evolved - avg_baseline
+    improvement = raw_improvement if skill_mutated else 0.0
+
+    run_status = "success" if skill_mutated else "no_skill_mutation"
 
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
@@ -240,6 +328,8 @@ def evolve(
         f"{avg_evolved:.3f}",
         f"[{change_color}]{improvement:+.3f}[/{change_color}]",
     )
+    if not skill_mutated:
+        table.add_row("Raw delta (non-promotable)", "", "", f"{raw_improvement:+.3f}")
     table.add_row(
         "Skill Size",
         f"{len(skill['body']):,} chars",
@@ -263,6 +353,12 @@ def evolve(
     # Save baseline for comparison
     (output_dir / "baseline_skill.md").write_text(skill["raw"])
 
+    # Save optimizer state for forensic/debugging
+    try:
+        (output_dir / "optimized_module_state.json").write_text(json.dumps(optimized_module.dump_state(), indent=2))
+    except Exception as e:
+        console.print(f"[yellow]⚠ Could not dump optimized module state: {e}[/yellow]")
+
     # Save metrics
     metrics = {
         "skill_name": skill_name,
@@ -273,6 +369,11 @@ def evolve(
         "baseline_score": avg_baseline,
         "evolved_score": avg_evolved,
         "improvement": improvement,
+        "raw_improvement": raw_improvement,
+        "skill_mutated": skill_mutated,
+        "mutation_source": mutation_source,
+        "rewrite_status": rewrite_status,
+        "run_status": run_status,
         "baseline_size": len(skill["body"]),
         "evolved_size": len(evolved_body),
         "train_examples": len(dataset.train),
@@ -285,9 +386,12 @@ def evolve(
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if skill_mutated and improvement > 0:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif not skill_mutated:
+        console.print("\n[yellow]⚠ Run completed but SKILL text was unchanged; marked as non-promotable[/yellow]")
+        console.print(f"  Raw holdout delta (prompt-only): {raw_improvement:+.3f}")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
