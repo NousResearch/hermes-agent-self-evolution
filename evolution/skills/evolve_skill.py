@@ -21,7 +21,8 @@ from rich.table import Table
 from evolution.core.config import EvolutionConfig, get_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
-from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.fitness import skill_fitness_metric, mad_fitness_metric, LLMJudge, FitnessScore, ConfidenceScoredFitness, ConfidenceResult, compute_confidence, compute_mad
+from evolution.core.hermes_judge import HermesJudge
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -40,17 +41,28 @@ def evolve(
     dataset_path: Optional[str] = None,
     optimizer_model: str = "openai/gpt-4.1",
     eval_model: str = "openai/gpt-4.1-mini",
+    judge_model: Optional[str] = None,
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    mad_trials: int = 1,
 ):
-    """Main evolution function — orchestrates the full optimization loop."""
+    """Main evolution function — orchestrates the full optimization loop.
+
+    Args:
+        mad_trials: Number of bootstrap trials for MAD confidence scoring.
+                    1 = standard heuristic (no MAD).
+                    >=3 = MAD-gated scoring (filters noise before GEPA sees it).
+        judge_model: Model for LLM-as-judge (MAD scoring). If None, uses eval_model.
+                     Set to 'xiaomi/mimo-v2-pro' for free judging via Nous API.
+    """
+    import functools
 
     config = EvolutionConfig(
         iterations=iterations,
         optimizer_model=optimizer_model,
-        eval_model=eval_model,
-        judge_model=eval_model,  # Use same model for dataset generation
+        eval_model=judge_model or eval_model,
+        judge_model=judge_model or eval_model,
         run_pytest=run_tests,
     )
     if hermes_repo:
@@ -135,10 +147,30 @@ def evolve(
     console.print(f"\n[bold]Configuring optimizer[/bold]")
     console.print(f"  Optimizer: GEPA ({iterations} iterations)")
     console.print(f"  Optimizer model: {optimizer_model}")
-    console.print(f"  Eval model: {eval_model}")
+    console.print(f"  Eval model: {config.eval_model}")
+    if config.nous_api_key:
+        console.print(f"  Nous API: active (free MiMo via inference-api.nousresearch.com)")
+    else:
+        console.print(f"  Nous API: not configured (set up hermes auth for free MiMo)")
+
+    # Select fitness metric
+    if mad_trials >= 3:
+        console.print(f"  MAD scoring: enabled ({mad_trials} trials, confidence threshold 2.0x)")
+        metric = functools.partial(mad_fitness_metric, n_trials=mad_trials)
+    else:
+        console.print(f"  MAD scoring: disabled (use --mad-trials >= 3 to enable)")
+        metric = skill_fitness_metric
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    if config.nous_api_key:
+        # Use Nous API (OpenAI-compatible) for all model calls
+        lm = dspy.LM(
+            "openai/xiaomi/mimo-v2-pro",
+            api_key=config.nous_api_key,
+            api_base=config.nous_base_url,
+        )
+    else:
+        lm = dspy.LM(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -155,7 +187,7 @@ def evolve(
 
     try:
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
+            metric=metric,
             max_steps=iterations,
         )
 
@@ -168,7 +200,7 @@ def evolve(
         # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
+            metric=metric,
             auto="light",
         )
         optimized_module = optimizer.compile(
@@ -184,9 +216,32 @@ def evolve(
     evolved_body = optimized_module.skill_text
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
+    # Extract optimized MIPROv2 artifacts for proof
+    optimized_instructions = {}
+    try:
+        for name, pred in optimized_module.named_predictors():
+            optimized_instructions[name] = {
+                "signature_instructions": getattr(pred, "signature", None).instructions if hasattr(pred, "signature") else None,
+                "demos": [
+                    {"input": d.get("task_input", ""), "output": d.get("output", "")}
+                    for d in (getattr(pred, "demos", []) or [])
+                ],
+            }
+    except Exception:
+        pass
+
+    # Save optimization proof alongside evolved skill
+    proof = {
+        "skill_text_changed": evolved_body != skill["body"],
+        "skill_text_size_before": len(skill["body"]),
+        "skill_text_size_after": len(evolved_body),
+        "optimized_instructions": optimized_instructions,
+        "optimizer_score": float(scores[0]) if 'scores' in dir() else None,
+    }
+
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -204,27 +259,97 @@ def evolve(
         console.print(f"  Saved failed variant to {output_path}")
         return
 
-    # ── 8. Evaluate on holdout set ──────────────────────────────────────
+    # ── 8. Evaluate on holdout set with MAD confidence ──────────────────
+    holdout_n_trials = mad_trials if mad_trials >= 3 else 3
     console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
+    console.print(f"  Confidence scoring: {holdout_n_trials} trials per example")
 
     holdout_examples = dataset.to_dspy_examples("holdout")
 
+    # Use hermes chat as judge — GPT-5.4 via hermes auth, no API key management
+    judge_model = judge_model or "gpt-5.4"
+    console.print(f"  Judge: hermes chat -m {judge_model}")
+
+    judge = HermesJudge(model=judge_model)
+    mad_judge = ConfidenceScoredFitness(judge, n_trials=holdout_n_trials)
+
     baseline_scores = []
     evolved_scores = []
+    baseline_confidences = []
+    evolved_confidences = []
     for ex in holdout_examples:
-        # Score baseline
         with dspy.context(lm=lm):
+            # Baseline with MAD confidence
             baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
-            baseline_scores.append(baseline_score)
+            b_fitness, b_conf = mad_judge.score_with_confidence(
+                task_input=getattr(ex, "task_input", "") or "",
+                expected_behavior=getattr(ex, "expected_behavior", "") or "",
+                agent_output=getattr(baseline_pred, "output", "") or "",
+                skill_text=skill["body"],
+            )
+            baseline_scores.append(b_fitness.composite)
+            baseline_confidences.append(b_conf)
 
+            # Evolved with MAD confidence
             evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
-            evolved_scores.append(evolved_score)
+            e_fitness, e_conf = mad_judge.score_with_confidence(
+                task_input=getattr(ex, "task_input", "") or "",
+                expected_behavior=getattr(ex, "expected_behavior", "") or "",
+                agent_output=getattr(evolved_pred, "output", "") or "",
+                skill_text=evolved_body,
+            )
+            evolved_scores.append(e_fitness.composite)
+            evolved_confidences.append(e_conf)
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
+
+    # Compute aggregate confidence: is the evolved skill genuinely better?
+    # Direct MAD on per-example deltas: delta = evolved - baseline per example
+    delta_scores = [e - b for e, b in zip(evolved_scores, baseline_scores)]
+    mean_delta = sum(delta_scores) / max(1, len(delta_scores))
+    median_delta = sorted(delta_scores)[len(delta_scores) // 2]
+    mad_delta = compute_mad(delta_scores)
+
+    if mad_delta > 0:
+        confidence_ratio = abs(mean_delta) / mad_delta
+    else:
+        confidence_ratio = abs(mean_delta) / 0.01  # floor to avoid div-by-zero
+
+    if confidence_ratio >= 2.0:
+        conf_label = "likely real"
+    elif confidence_ratio >= 1.0:
+        conf_label = "marginal"
+    else:
+        conf_label = "within noise"
+
+    # Create a synthetic ConfidenceResult for reporting
+    from evolution.core.mad_scoring import ConfidenceResult as _CR
+    holdout_confidence = _CR(
+        decision="keep" if (mean_delta > 0 and confidence_ratio >= 2.0) else "discard",
+        confidence=confidence_ratio,
+        delta=mean_delta,
+        delta_pct=(mean_delta / max(0.001, abs(avg_baseline)) * 100) if avg_baseline != 0 else 0.0,
+        label=conf_label,
+        best=max(evolved_scores) if evolved_scores else 0.0,
+        baseline=avg_baseline,
+        mad=mad_delta,
+        n_trials=len(delta_scores),
+    ) if len(delta_scores) >= 3 else None
+
+    # Classify per-example confidence labels
+    def _conf_summary(confidences):
+        if not confidences:
+            return {}
+        from collections import Counter
+        labels = Counter(c.label for c in confidences)
+        return {"likely_real": labels.get("likely real", 0),
+                "marginal": labels.get("marginal", 0),
+                "within_noise": labels.get("within noise", 0)}
+
+    baseline_conf_summary = _conf_summary(baseline_confidences)
+    evolved_conf_summary = _conf_summary(evolved_confidences)
 
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
@@ -248,6 +373,16 @@ def evolve(
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
+
+    # Confidence rows
+    if holdout_confidence:
+        conf_color = {"likely real": "green", "marginal": "yellow", "within noise": "red"}.get(holdout_confidence.label, "white")
+        table.add_row(
+            "Holdout Confidence",
+            "",
+            "",
+            f"[{conf_color}]{holdout_confidence.label} ({holdout_confidence.confidence:.2f}x)[/{conf_color}]",
+        )
 
     console.print()
     console.print(table)
@@ -280,8 +415,23 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "confidence": {
+            "holdout_trials_per_example": holdout_n_trials,
+            "holdout_delta_confidence": {
+                "label": holdout_confidence.label,
+                "confidence": holdout_confidence.confidence,
+                "delta": holdout_confidence.delta,
+                "delta_pct": holdout_confidence.delta_pct,
+                "mad": holdout_confidence.mad,
+            } if holdout_confidence else None,
+            "baseline_per_example": baseline_conf_summary,
+            "evolved_per_example": evolved_conf_summary,
+        },
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+    # Save optimization proof (instruction changes, demos, skill text diff)
+    (output_dir / "proof.json").write_text(json.dumps(proof, indent=2, default=str))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
@@ -300,11 +450,15 @@ def evolve(
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
 @click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
+@click.option("--eval-model", default="openai/gpt-5.4", help="Model for LLM-as-judge evaluations")
+@click.option("--judge-model", default=None,
+              help="Model for LLM-as-judge (e.g. 'xiaomi/mimo-v2-pro' for free Nous API)")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
+@click.option("--mad-trials", default=1, type=int,
+              help="MAD confidence trials (>=3 enables noise-gated scoring)")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, judge_model, hermes_repo, run_tests, mad_trials, dry_run):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -313,9 +467,11 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         dataset_path=dataset_path,
         optimizer_model=optimizer_model,
         eval_model=eval_model,
+        judge_model=judge_model,
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        mad_trials=mad_trials,
     )
 
 
