@@ -2,11 +2,12 @@
 
 Uses LLM-as-judge with rubrics to score agent outputs.
 Supports length penalties and multi-dimensional scoring.
+Optionally wraps LLMJudge with MAD confidence scoring via ConfidenceScoredFitness.
 """
 
 import dspy
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List, Literal
 
 from evolution.core.config import EvolutionConfig
 
@@ -72,7 +73,17 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        lm_kwargs = {}
+
+        # If Nous API key is available, use it (OpenAI-compatible)
+        if self.config.nous_api_key:
+            model_name = "openai/xiaomi/mimo-v2-pro"
+            lm_kwargs["api_key"] = self.config.nous_api_key
+            lm_kwargs["api_base"] = self.config.nous_base_url
+        else:
+            model_name = self.config.eval_model
+
+        lm = dspy.LM(model_name, temperature=1.0, **lm_kwargs)
 
         with dspy.context(lm=lm):
             result = self.judge(
@@ -144,3 +155,28 @@ def _parse_score(value) -> float:
         return min(1.0, max(0.0, float(str(value).strip())))
     except (ValueError, TypeError):
         return 0.5  # Default to neutral on parse failure
+
+
+# ---------------------------------------------------------------------------
+# MAD confidence scoring — re-exported from mad_scoring for convenience
+# ---------------------------------------------------------------------------
+from evolution.core.mad_scoring import (
+    ConfidenceScoredFitness,
+    compute_confidence,
+    compute_mad,
+    mad_fitness_metric,
+    ConfidenceResult,
+    ConfidenceLabel,
+)
+
+__all__ = [
+    "FitnessScore",
+    "LLMJudge",
+    "ConfidenceScoredFitness",
+    "compute_confidence",
+    "compute_mad",
+    "mad_fitness_metric",
+    "ConfidenceResult",
+    "ConfidenceLabel",
+    "skill_fitness_metric",
+]
