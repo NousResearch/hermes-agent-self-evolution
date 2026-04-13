@@ -43,6 +43,8 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    api_base: Optional[str] = None,
+    api_key: Optional[str] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -52,6 +54,8 @@ def evolve(
         eval_model=eval_model,
         judge_model=eval_model,  # Use same model for dataset generation
         run_pytest=run_tests,
+        api_base=api_base,
+        api_key=api_key,
     )
     if hermes_repo:
         config.hermes_agent_path = Path(hermes_repo)
@@ -91,6 +95,8 @@ def evolve(
             sources=["claude-code", "copilot", "hermes"],
             output_path=save_path,
             model=eval_model,
+            api_base=api_base,
+            api_key=api_key,
         )
         if not dataset.all_examples:
             console.print("[red]✗ No relevant examples found from session history[/red]")
@@ -138,7 +144,11 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = dspy.LM(
+        eval_model,
+        api_base=config.api_base,
+        api_key=config.api_key,
+    )
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -304,7 +314,9 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--api-base", default=None, help="API base URL (for custom endpoints like vLLM)")
+@click.option("--api-key", default=None, help="API key (for custom endpoints)")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, api_base, api_key):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -316,6 +328,8 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        api_base=api_base,
+        api_key=api_key,
     )
 
 
