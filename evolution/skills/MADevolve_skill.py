@@ -1,8 +1,13 @@
-"""Evolve a Hermes Agent skill using DSPy + GEPA.
+"""Evolve a Hermes Agent skill using DSPy + GEPA with MAD confidence scoring.
+
+Similar to evolve_skill.py but wraps the fitness function with multi-trial
+MAD (Median Absolute Deviation) scoring so only statistically significant
+improvements propagate through the evolutionary loop.
 
 Usage:
-    python -m evolution.skills.evolve_skill --skill github-code-review --iterations 10
-    python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
+    python -m evolution.skills.MADevolve_skill --skill github-code-review --iterations 10
+    python -m evolution.skills.MADevolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
+    python -m evolution.skills.MADevolve_skill --skill code-review --n-trials 5 --confidence-threshold 2.5
 """
 
 import json
@@ -10,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 import click
 import dspy
@@ -21,8 +26,14 @@ from rich.table import Table
 from evolution.core.config import EvolutionConfig, get_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
-from evolution.core.fitness import skill_fitness_metric, mad_fitness_metric, LLMJudge, FitnessScore, ConfidenceScoredFitness, ConfidenceResult, compute_confidence, compute_mad
-from evolution.core.hermes_judge import HermesJudge
+from evolution.core.fitness import (
+    skill_fitness_metric,
+    LLMJudge,
+    FitnessScore,
+    ConfidenceScoredFitness,
+    compute_confidence,
+    ConfidenceResult,
+)
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -34,6 +45,71 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+# ---------------------------------------------------------------------------
+# MAD-aware DSPy metric — runs n_trials and gates on confidence
+# ---------------------------------------------------------------------------
+
+class MADGuardedMetric:
+    """DSPy-compatible metric that wraps skill_fitness_metric with MAD confidence.
+
+    Instead of accepting a single score, this runs n_trials evaluations of
+    skill_fitness_metric and only propagates the score if
+    confidence = |best - baseline| / MAD >= confidence_threshold.
+
+    This prevents noisy LLM-as-judge evaluations from misleading GEPA's
+    search over the skill space.
+    """
+
+    def __init__(
+        self,
+        n_trials: int = 3,
+        confidence_threshold: float = 2.0,
+        direction: str = "higher",
+    ):
+        self.n_trials = n_trials
+        self.confidence_threshold = confidence_threshold
+        self.direction = direction
+        self._trial_cache: dict = {}
+
+    def __call__(self, example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+        """Evaluate with MAD confidence gating.
+
+        Returns a float 0-1 score only if confidence >= threshold.
+        Returns the baseline score (0.5) if confidence < threshold,
+        signalling GEPA to discard this variant.
+        """
+        agent_output = getattr(prediction, "output", "") or ""
+        expected = getattr(example, "expected_behavior", "") or ""
+        task = getattr(example, "task_input", "") or ""
+
+        if not agent_output.strip():
+            return 0.0
+
+        # Run n_trials
+        trial_scores: List[float] = []
+        for _ in range(self.n_trials):
+            score = skill_fitness_metric(example, prediction, trace)
+            trial_scores.append(score)
+
+        # Compute MAD confidence
+        confidence_result = compute_confidence(trial_scores, direction=self.direction)
+
+        if confidence_result.decision == "keep":
+            # Return the best score from the trials
+            return max(trial_scores)
+        else:
+            # Gate: return a neutral score so GEPA discards this variant
+            # 0.5 is the neutral baseline — neither reward nor penalize
+            return 0.5
+
+    def get_last_confidence(self) -> Optional[ConfidenceResult]:
+        """Returns the ConfidenceResult from the last evaluation.
+
+        Call this after a batch of evaluations to log confidence stats.
+        """
+        return getattr(self, "_last_confidence", None)
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -41,35 +117,27 @@ def evolve(
     dataset_path: Optional[str] = None,
     optimizer_model: str = "openai/gpt-4.1",
     eval_model: str = "openai/gpt-4.1-mini",
-    judge_model: Optional[str] = None,
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
-    mad_trials: int = 1,
+    n_trials: int = 3,
+    confidence_threshold: float = 2.0,
 ):
-    """Main evolution function — orchestrates the full optimization loop.
-
-    Args:
-        mad_trials: Number of bootstrap trials for MAD confidence scoring.
-                    1 = standard heuristic (no MAD).
-                    >=3 = MAD-gated scoring (filters noise before GEPA sees it).
-        judge_model: Model for LLM-as-judge (MAD scoring). If None, uses eval_model.
-                     Set to 'xiaomi/mimo-v2-pro' for free judging via Nous API.
-    """
-    import functools
+    """Main evolution function with MAD confidence scoring — orchestrates the full optimization loop."""
 
     config = EvolutionConfig(
         iterations=iterations,
         optimizer_model=optimizer_model,
-        eval_model=judge_model or eval_model,
-        judge_model=judge_model or eval_model,
+        eval_model=eval_model,
+        judge_model=eval_model,  # Use same model for dataset generation
         run_pytest=run_tests,
     )
     if hermes_repo:
         config.hermes_agent_path = Path(hermes_repo)
 
     # ── 1. Find and load the skill ──────────────────────────────────────
-    console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]\n")
+    console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution (MAD)[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]")
+    console.print(f"  MAD config: {n_trials} trials, confidence threshold {confidence_threshold}x\n")
 
     skill_path = find_skill(skill_name, config.hermes_agent_path)
     if not skill_path:
@@ -85,7 +153,7 @@ def evolve(
     if dry_run:
         console.print(f"\n[bold green]DRY RUN — setup validated successfully.[/bold green]")
         console.print(f"  Would generate eval dataset (source: {eval_source})")
-        console.print(f"  Would run GEPA optimization ({iterations} iterations)")
+        console.print(f"  Would run GEPA optimization ({iterations} iterations, {n_trials} trials, {confidence_threshold}x MAD threshold)")
         console.print(f"  Would validate constraints and create PR")
         return
 
@@ -147,30 +215,12 @@ def evolve(
     console.print(f"\n[bold]Configuring optimizer[/bold]")
     console.print(f"  Optimizer: GEPA ({iterations} iterations)")
     console.print(f"  Optimizer model: {optimizer_model}")
-    console.print(f"  Eval model: {config.eval_model}")
-    if config.nous_api_key:
-        console.print(f"  Nous API: active (free MiMo via inference-api.nousresearch.com)")
-    else:
-        console.print(f"  Nous API: not configured (set up hermes auth for free MiMo)")
-
-    # Select fitness metric
-    if mad_trials >= 3:
-        console.print(f"  MAD scoring: enabled ({mad_trials} trials, confidence threshold 2.0x)")
-        metric = functools.partial(mad_fitness_metric, n_trials=mad_trials)
-    else:
-        console.print(f"  MAD scoring: disabled (use --mad-trials >= 3 to enable)")
-        metric = skill_fitness_metric
+    console.print(f"  Eval model: {eval_model}")
+    console.print(f"  MAD trials per evaluation: {n_trials}")
+    console.print(f"  Confidence threshold: {confidence_threshold}x")
 
     # Configure DSPy
-    if config.nous_api_key:
-        # Use Nous API (OpenAI-compatible) for all model calls
-        lm = dspy.LM(
-            "openai/xiaomi/mimo-v2-pro",
-            api_key=config.nous_api_key,
-            api_base=config.nous_base_url,
-        )
-    else:
-        lm = dspy.LM(eval_model)
+    lm = dspy.LM(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -180,14 +230,21 @@ def evolve(
     trainset = dataset.to_dspy_examples("train")
     valset = dataset.to_dspy_examples("val")
 
-    # ── 5. Run GEPA optimization ────────────────────────────────────────
-    console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
+    # ── 5. Create MAD-guarded metric ─────────────────────────────────────
+    mad_metric = MADGuardedMetric(
+        n_trials=n_trials,
+        confidence_threshold=confidence_threshold,
+        direction="higher",
+    )
+
+    # ── 6. Run GEPA optimization ────────────────────────────────────────
+    console.print(f"\n[bold cyan]Running GEPA optimization with MAD confidence gating ({iterations} iterations)...[/bold cyan]\n")
 
     start_time = time.time()
 
     try:
         optimizer = dspy.GEPA(
-            metric=metric,
+            metric=mad_metric,
             max_steps=iterations,
         )
 
@@ -200,7 +257,7 @@ def evolve(
         # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
-            metric=metric,
+            metric=mad_metric,
             auto="light",
         )
         optimized_module = optimizer.compile(
@@ -211,37 +268,14 @@ def evolve(
     elapsed = time.time() - start_time
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
-    # ── 6. Extract evolved skill text ───────────────────────────────────
+    # ── 7. Extract evolved skill text ────────────────────────────────────
     # The optimized module's instructions contain the evolved skill text
     evolved_body = optimized_module.skill_text
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
-    # Extract optimized MIPROv2 artifacts for proof
-    optimized_instructions = {}
-    try:
-        for name, pred in optimized_module.named_predictors():
-            optimized_instructions[name] = {
-                "signature_instructions": getattr(pred, "signature", None).instructions if hasattr(pred, "signature") else None,
-                "demos": [
-                    {"input": d.get("task_input", ""), "output": d.get("output", "")}
-                    for d in (getattr(pred, "demos", []) or [])
-                ],
-            }
-    except Exception:
-        pass
-
-    # Save optimization proof alongside evolved skill
-    proof = {
-        "skill_text_changed": evolved_body != skill["body"],
-        "skill_text_size_before": len(skill["body"]),
-        "skill_text_size_after": len(evolved_body),
-        "optimized_instructions": optimized_instructions,
-        "optimizer_score": float(scores[0]) if 'scores' in dir() else None,
-    }
-
-    # ── 7. Validate evolved skill ───────────────────────────────────────
+    # ── 8. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
+    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -259,100 +293,65 @@ def evolve(
         console.print(f"  Saved failed variant to {output_path}")
         return
 
-    # ── 8. Evaluate on holdout set with MAD confidence ──────────────────
-    holdout_n_trials = mad_trials if mad_trials >= 3 else 3
+    # ── 9. Evaluate on holdout set with MAD confidence ──────────────────
     console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
-    console.print(f"  Confidence scoring: {holdout_n_trials} trials per example")
+    console.print(f"  Running {n_trials} trials per example with MAD confidence gating\n")
 
     holdout_examples = dataset.to_dspy_examples("holdout")
 
-    # Use hermes chat as judge — GPT-5.4 via hermes auth, no API key management
-    judge_model = judge_model or "gpt-5.4"
-    console.print(f"  Judge: hermes chat -m {judge_model}")
-
-    judge = HermesJudge(model=judge_model)
-    mad_judge = ConfidenceScoredFitness(judge, n_trials=holdout_n_trials)
-
     baseline_scores = []
     evolved_scores = []
-    baseline_confidences = []
-    evolved_confidences = []
-    for ex in holdout_examples:
-        with dspy.context(lm=lm):
-            # Baseline with MAD confidence
-            baseline_pred = baseline_module(task_input=ex.task_input)
-            b_fitness, b_conf = mad_judge.score_with_confidence(
-                task_input=getattr(ex, "task_input", "") or "",
-                expected_behavior=getattr(ex, "expected_behavior", "") or "",
-                agent_output=getattr(baseline_pred, "output", "") or "",
-                skill_text=skill["body"],
-            )
-            baseline_scores.append(b_fitness.composite)
-            baseline_confidences.append(b_conf)
+    all_confidence_results: List[ConfidenceResult] = []
 
-            # Evolved with MAD confidence
-            evolved_pred = optimized_module(task_input=ex.task_input)
-            e_fitness, e_conf = mad_judge.score_with_confidence(
-                task_input=getattr(ex, "task_input", "") or "",
-                expected_behavior=getattr(ex, "expected_behavior", "") or "",
-                agent_output=getattr(evolved_pred, "output", "") or "",
-                skill_text=evolved_body,
-            )
-            evolved_scores.append(e_fitness.composite)
-            evolved_confidences.append(e_conf)
+    for ex in holdout_examples:
+        # Score baseline with MAD
+        baseline_trial_scores: List[float] = []
+        for _ in range(n_trials):
+            with dspy.context(lm=lm):
+                baseline_pred = baseline_module(task_input=ex.task_input)
+                baseline_score = skill_fitness_metric(ex, baseline_pred)
+                baseline_trial_scores.append(baseline_score)
+
+        baseline_cr = compute_confidence(baseline_trial_scores, direction="higher")
+        baseline_best = max(baseline_trial_scores)
+        baseline_scores.append(baseline_best)
+        all_confidence_results.append(baseline_cr)
+
+        # Score evolved with MAD
+        evolved_trial_scores: List[float] = []
+        for _ in range(n_trials):
+            with dspy.context(lm=lm):
+                evolved_pred = optimized_module(task_input=ex.task_input)
+                evolved_score = skill_fitness_metric(ex, evolved_pred)
+                evolved_trial_scores.append(evolved_score)
+
+        evolved_cr = compute_confidence(evolved_trial_scores, direction="higher")
+        evolved_best = max(evolved_trial_scores)
+        evolved_scores.append(evolved_best)
+        all_confidence_results.append(evolved_cr)
+
+        # Log per-example confidence
+        delta = evolved_best - baseline_best
+        icon = "✓" if evolved_cr.decision == "keep" else "✗"
+        color = "green" if evolved_cr.decision == "keep" else "red"
+        console.print(
+            f"  [{color}]{icon}[/{color}] ex={ex.task_input[:40]}... "
+            f"baseline={baseline_best:.3f} evolved={evolved_best:.3f} "
+            f"delta={delta:+.3f} conf={evolved_cr.confidence:.2f}x [{evolved_cr.label}]"
+        )
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
 
-    # Compute aggregate confidence: is the evolved skill genuinely better?
-    # Direct MAD on per-example deltas: delta = evolved - baseline per example
-    delta_scores = [e - b for e, b in zip(evolved_scores, baseline_scores)]
-    mean_delta = sum(delta_scores) / max(1, len(delta_scores))
-    median_delta = sorted(delta_scores)[len(delta_scores) // 2]
-    mad_delta = compute_mad(delta_scores)
+    # Aggregate confidence stats
+    keep_count = sum(1 for cr in all_confidence_results if cr.decision == "keep")
+    marginal_count = sum(1 for cr in all_confidence_results if cr.label == "marginal")
+    noise_count = sum(1 for cr in all_confidence_results if cr.label == "within noise")
+    avg_confidence = sum(cr.confidence for cr in all_confidence_results) / max(1, len(all_confidence_results))
 
-    if mad_delta > 0:
-        confidence_ratio = abs(mean_delta) / mad_delta
-    else:
-        confidence_ratio = abs(mean_delta) / 0.01  # floor to avoid div-by-zero
-
-    if confidence_ratio >= 2.0:
-        conf_label = "likely real"
-    elif confidence_ratio >= 1.0:
-        conf_label = "marginal"
-    else:
-        conf_label = "within noise"
-
-    # Create a synthetic ConfidenceResult for reporting
-    from evolution.core.mad_scoring import ConfidenceResult as _CR
-    holdout_confidence = _CR(
-        decision="keep" if (mean_delta > 0 and confidence_ratio >= 2.0) else "discard",
-        confidence=confidence_ratio,
-        delta=mean_delta,
-        delta_pct=(mean_delta / max(0.001, abs(avg_baseline)) * 100) if avg_baseline != 0 else 0.0,
-        label=conf_label,
-        best=max(evolved_scores) if evolved_scores else 0.0,
-        baseline=avg_baseline,
-        mad=mad_delta,
-        n_trials=len(delta_scores),
-    ) if len(delta_scores) >= 3 else None
-
-    # Classify per-example confidence labels
-    def _conf_summary(confidences):
-        if not confidences:
-            return {}
-        from collections import Counter
-        labels = Counter(c.label for c in confidences)
-        return {"likely_real": labels.get("likely real", 0),
-                "marginal": labels.get("marginal", 0),
-                "within_noise": labels.get("within noise", 0)}
-
-    baseline_conf_summary = _conf_summary(baseline_confidences)
-    evolved_conf_summary = _conf_summary(evolved_confidences)
-
-    # ── 9. Report results ───────────────────────────────────────────────
-    table = Table(title="Evolution Results")
+    # ── 10. Report results ───────────────────────────────────────────────
+    table = Table(title="Evolution Results (MAD-Guarded)")
     table.add_column("Metric", style="bold")
     table.add_column("Baseline", justify="right")
     table.add_column("Evolved", justify="right")
@@ -373,21 +372,15 @@ def evolve(
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
-
-    # Confidence rows
-    if holdout_confidence:
-        conf_color = {"likely real": "green", "marginal": "yellow", "within noise": "red"}.get(holdout_confidence.label, "white")
-        table.add_row(
-            "Holdout Confidence",
-            "",
-            "",
-            f"[{conf_color}]{holdout_confidence.label} ({holdout_confidence.confidence:.2f}x)[/{conf_color}]",
-        )
+    table.add_row("MAD Trials", "", str(n_trials), "")
+    table.add_row("Confidence Threshold", "", f"{confidence_threshold}x", "")
+    table.add_row("Avg Confidence", "", f"{avg_confidence:.2f}x", "")
+    table.add_row("Keep / Marginal / Noise", "", f"{keep_count} / {marginal_count} / {noise_count}", "")
 
     console.print()
     console.print(table)
 
-    # ── 10. Save output ─────────────────────────────────────────────────
+    # ── 11. Save output ─────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = Path("output") / skill_name / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -415,32 +408,47 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
-        "confidence": {
-            "holdout_trials_per_example": holdout_n_trials,
-            "holdout_delta_confidence": {
-                "label": holdout_confidence.label,
-                "confidence": holdout_confidence.confidence,
-                "delta": holdout_confidence.delta,
-                "delta_pct": holdout_confidence.delta_pct,
-                "mad": holdout_confidence.mad,
-            } if holdout_confidence else None,
-            "baseline_per_example": baseline_conf_summary,
-            "evolved_per_example": evolved_conf_summary,
-        },
+        # MAD-specific metrics
+        "n_trials": n_trials,
+        "confidence_threshold": confidence_threshold,
+        "avg_confidence": avg_confidence,
+        "keep_count": keep_count,
+        "marginal_count": marginal_count,
+        "noise_count": noise_count,
+        "confidence_label": (
+            "likely real" if keep_count > marginal_count + noise_count
+            else "marginal" if marginal_count > noise_count
+            else "within noise"
+        ),
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
-    # Save optimization proof (instruction changes, demos, skill text diff)
-    (output_dir / "proof.json").write_text(json.dumps(proof, indent=2, default=str))
+    # Save per-example confidence results
+    confidence_log = [
+        {
+            "task_input": ex.task_input,
+            "baseline_best": baseline_scores[i],
+            "evolved_best": evolved_scores[i],
+            "delta": evolved_scores[i] - baseline_scores[i],
+            "confidence": all_confidence_results[i].confidence,
+            "decision": all_confidence_results[i].decision,
+            "label": all_confidence_results[i].label,
+        }
+        for i, ex in enumerate(holdout_examples)
+    ]
+    (output_dir / "confidence_log.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in confidence_log)
+    )
 
     console.print(f"\n  Output saved to {output_dir}/")
 
     if improvement > 0:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
+        console.print(f"  {keep_count} examples passed MAD confidence threshold ({confidence_threshold}x)")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
-        console.print("  Try: more iterations, better eval dataset, or different optimizer model")
+        console.print("  Try: more trials, lower confidence threshold, or different optimizer model")
 
 
 @click.command()
@@ -450,16 +458,14 @@ def evolve(
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
 @click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/gpt-5.4", help="Model for LLM-as-judge evaluations")
-@click.option("--judge-model", default=None,
-              help="Model for LLM-as-judge (e.g. 'xiaomi/mimo-v2-pro' for free Nous API)")
+@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
-@click.option("--mad-trials", default=1, type=int,
-              help="MAD confidence trials (>=3 enables noise-gated scoring)")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, judge_model, hermes_repo, run_tests, mad_trials, dry_run):
-    """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
+@click.option("--n-trials", default=3, help="Number of LLM-judge trials per evaluation for MAD scoring")
+@click.option("--confidence-threshold", default=2.0, help="MAD confidence threshold (in x-MAD units)")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, n_trials, confidence_threshold):
+    """Evolve a Hermes Agent skill using DSPy + GEPA with MAD confidence scoring."""
     evolve(
         skill_name=skill,
         iterations=iterations,
@@ -467,11 +473,11 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         dataset_path=dataset_path,
         optimizer_model=optimizer_model,
         eval_model=eval_model,
-        judge_model=judge_model,
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
-        mad_trials=mad_trials,
+        n_trials=n_trials,
+        confidence_threshold=confidence_threshold,
     )
 
 

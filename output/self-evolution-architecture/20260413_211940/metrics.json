@@ -1,0 +1,37 @@
+{
+  "skill_name": "self-evolution-architecture",
+  "timestamp": "20260413_211940",
+  "iterations": 5,
+  "optimizer_model": "openai/xiaomi/mimo-v2-pro",
+  "eval_model": "openai/xiaomi/mimo-v2-pro",
+  "baseline_score": 0.7716666666666666,
+  "evolved_score": 0.875,
+  "improvement": 0.10333333333333339,
+  "baseline_size": 3223,
+  "evolved_size": 3223,
+  "train_examples": 10,
+  "val_examples": 5,
+  "holdout_examples": 6,
+  "elapsed_seconds": 683.0502278804779,
+  "constraints_passed": true,
+  "confidence": {
+    "holdout_trials_per_example": 3,
+    "holdout_delta_confidence": {
+      "label": "marginal",
+      "confidence": 1.0333333333333328,
+      "delta": 0.10333333333333332,
+      "delta_pct": 13.390928725701942,
+      "mad": 0.10000000000000003
+    },
+    "baseline_per_example": {
+      "likely_real": 1,
+      "marginal": 0,
+      "within_noise": 5
+    },
+    "evolved_per_example": {
+      "likely_real": 1,
+      "marginal": 0,
+      "within_noise": 5
+    }
+  }
+}

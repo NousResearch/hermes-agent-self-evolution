@@ -1,6 +1,7 @@
 """Configuration and hermes-agent repo discovery."""
 
 import os
+import json
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -19,8 +20,12 @@ class EvolutionConfig:
 
     # LLM configuration
     optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
-    eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
-    judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    eval_model: str = "openai/gpt-5.4"  # Model for LLM-as-judge scoring (needs content output + variance)
+    judge_model: str = "openai/gpt-5.4"  # Model for dataset generation
+
+    # Nous Research API (for free MiMo judge)
+    nous_api_key: Optional[str] = field(default_factory=lambda: _load_nous_agent_key())
+    nous_base_url: str = "https://inference-api.nousresearch.com/v1"
 
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
@@ -42,6 +47,27 @@ class EvolutionConfig:
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
     create_pr: bool = True
+
+
+def _load_nous_agent_key() -> Optional[str]:
+    """Load Nous Research agent key from hermes auth.json.
+
+    Returns the agent_key if available, None otherwise.
+    This key authenticates with https://inference-api.nousresearch.com/v1
+    which serves MiMo-v2-pro for free.
+    """
+    auth_path = Path.home() / ".hermes" / "auth.json"
+    if not auth_path.exists():
+        return None
+    try:
+        auth = json.loads(auth_path.read_text())
+        nous = auth.get("providers", {}).get("nous", {})
+        key = nous.get("agent_key", "")
+        if key and key.startswith("sk-"):
+            return key
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return None
 
 
 def get_hermes_agent_path() -> Path:

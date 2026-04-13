@@ -1,0 +1,67 @@
+[
+  {
+    "task": "Generate a BibTeX entry for paper 1706.03762.",
+    "fitness_composite": 0.0,
+    "correctness": 0.0,
+    "procedure_following": 0.0,
+    "conciseness": 0.0,
+    "confidence_label": "within noise",
+    "confidence_score": 0.0,
+    "delta": 0.0,
+    "mad": 0.0,
+    "decision": "discard",
+    "feedback": "The agent did not execute the task; it merely restated the expectation. To improve, follow the skill instructions: use the arXiv API to fetch metadata for paper 1706.03762 (e.g., via `curl \"https://ex"
+  },
+  {
+    "task": "Find papers that mention both 'reinforcement learning' and 'robotics' but not 'simulation'.",
+    "fitness_composite": 0.48,
+    "correctness": 0.5,
+    "procedure_following": 0.3,
+    "conciseness": 0.7,
+    "confidence_label": "within noise",
+    "confidence_score": 0.0,
+    "delta": 0.0,
+    "mad": 0.0,
+    "decision": "discard",
+    "feedback": "The agent correctly formulated the boolean query but did not actually perform the search. To improve, execute the search using the arXiv API with a command like: `curl -s \"https://export.arxiv.org/api"
+  },
+  {
+    "task": "Search for papers with exact phrase 'gradient descent' in abstract, sorted by relevance.",
+    "fitness_composite": 0.29000000000000004,
+    "correctness": 0.2,
+    "procedure_following": 0.1,
+    "conciseness": 0.8,
+    "confidence_label": "within noise",
+    "confidence_score": 0.0,
+    "delta": 0.0,
+    "mad": 0.0,
+    "decision": "discard",
+    "feedback": "The agent correctly understood the query requirements but stopped at description. The main issue is a lack of execution. To improve, the agent must:\n1.  **Construct the full API URL** using the skill'"
+  },
+  {
+    "task": "Search for papers in 'physics.comp-ph' category that have 'quantum' in the title.",
+    "fitness_composite": 0.04000000000000001,
+    "correctness": 0.0,
+    "procedure_following": 0.0,
+    "conciseness": 0.2,
+    "confidence_label": "within noise",
+    "confidence_score": 0.0,
+    "delta": 0.0,
+    "mad": 0.0,
+    "decision": "discard",
+    "feedback": "The agent should have actively performed the search by using the arXiv API as described in the skill text. For example, it could have run a curl command with the query \"cat:physics.comp-ph+ti:quantum\""
+  },
+  {
+    "task": "Look up author profile for 'Yoshua Bengio' on Semantic Scholar, get h-index and citation count.",
+    "fitness_composite": 0.0,
+    "correctness": 0.0,
+    "procedure_following": 0.0,
+    "conciseness": 0.0,
+    "confidence_label": "within noise",
+    "confidence_score": 0.0,
+    "delta": 0.0,
+    "mad": 0.0,
+    "decision": "discard",
+    "feedback": "The agent should have executed the Semantic Scholar author search API call for Yoshua Bengio and returned the specific data. For example, use the command: curl -s \"https://api.semanticscholar.org/grap"
+  }
+]
