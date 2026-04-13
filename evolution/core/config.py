@@ -22,6 +22,10 @@ class EvolutionConfig:
     eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
 
+    # Custom base URL for local models (e.g., vLLM, Ollama)
+    api_base: Optional[str] = None  # e.g., "http://localhost:8000/v1"
+    api_key: Optional[str] = None  # e.g., "sk_test_key"
+
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
     max_tool_desc_size: int = 500  # chars
