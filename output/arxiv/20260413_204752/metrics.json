@@ -1,0 +1,37 @@
+{
+  "skill_name": "arxiv",
+  "timestamp": "20260413_204752",
+  "iterations": 3,
+  "optimizer_model": "openai/xiaomi/mimo-v2-pro",
+  "eval_model": "openai/xiaomi/mimo-v2-pro",
+  "baseline_score": 0.7390000000000001,
+  "evolved_score": 0.6559999999999999,
+  "improvement": -0.08300000000000018,
+  "baseline_size": 9773,
+  "evolved_size": 9773,
+  "train_examples": 10,
+  "val_examples": 5,
+  "holdout_examples": 5,
+  "elapsed_seconds": 342.3560092449188,
+  "constraints_passed": true,
+  "confidence": {
+    "holdout_trials_per_example": 3,
+    "holdout_delta_confidence": {
+      "label": "likely real",
+      "confidence": 3.3199999999999994,
+      "delta": -0.08300000000000006,
+      "delta_pct": -11.231393775372132,
+      "mad": 0.025000000000000022
+    },
+    "baseline_per_example": {
+      "likely_real": 2,
+      "marginal": 1,
+      "within_noise": 2
+    },
+    "evolved_per_example": {
+      "likely_real": 2,
+      "marginal": 3,
+      "within_noise": 0
+    }
+  }
+}
