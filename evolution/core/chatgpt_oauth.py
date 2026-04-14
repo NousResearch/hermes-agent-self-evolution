@@ -50,12 +50,40 @@ class ChatGPTOAuthLM(dspy.BaseLM):
         clean_model = normalize_chatgpt_model(model)
         super().__init__(model=clean_model, model_type="responses", temperature=None, max_tokens=None, cache=False)
         self.kwargs = {k: v for k, v in kwargs.items() if v is not None and k not in disallowed}
+        self.base_url = base_url
+        self.auth_file = str(Path(auth_file).expanduser()) if auth_file else None
+        self.auth_profile = auth_profile
         self.oauth_token = resolve_chatgpt_oauth_token(
             oauth_token=oauth_token,
             auth_file=auth_file,
             auth_profile=auth_profile,
         )
         self.client = OpenAI(base_url=base_url, api_key=self.oauth_token)
+
+    def copy(self, **kwargs: Any):
+        """Rebuild a fresh client instead of deepcopying the OpenAI/httpx stack."""
+        supported_attrs = {"model", "base_url", "oauth_token", "auth_file", "auth_profile"}
+        init_kwargs = {
+            "model": kwargs.pop("model", self.model),
+            "oauth_token": kwargs.pop("oauth_token", self.oauth_token),
+            "auth_file": kwargs.pop("auth_file", self.auth_file),
+            "auth_profile": kwargs.pop("auth_profile", self.auth_profile),
+            "base_url": kwargs.pop("base_url", self.base_url),
+            **self.kwargs,
+        }
+        copied = type(self)(**init_kwargs)
+        copied.history = []
+
+        for key, value in kwargs.items():
+            if key in supported_attrs and hasattr(copied, key):
+                setattr(copied, key, value)
+                continue
+            if value is None:
+                copied.kwargs.pop(key, None)
+            else:
+                copied.kwargs[key] = value
+
+        return copied
 
     def forward(
         self,

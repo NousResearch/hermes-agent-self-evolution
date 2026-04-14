@@ -85,3 +85,17 @@ def test_create_lm_rejects_unsupported_temperature(monkeypatch):
 
     with pytest.raises(ValueError, match="does not support temperature"):
         create_lm("chatgpt/gpt-5.4", temperature=0.2)
+
+
+def test_chatgpt_lm_copy_rebuilds_client_without_deepcopying_httpx(monkeypatch):
+    monkeypatch.setenv("CHATGPT_OAUTH_TOKEN", "token-from-env")
+
+    lm = create_lm("chatgpt/gpt-5.4", reasoning={"effort": "low"})
+    copied = lm.copy(rollout_id="r1")
+
+    assert isinstance(copied, ChatGPTOAuthLM)
+    assert copied is not lm
+    assert copied.client is not lm.client
+    assert copied.model == lm.model
+    assert copied.kwargs["reasoning"] == {"effort": "low"}
+    assert copied.kwargs["rollout_id"] == "r1"
