@@ -18,6 +18,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from evolution.core.chatgpt_oauth import create_lm
 from evolution.core.config import EvolutionConfig, get_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
@@ -78,24 +79,28 @@ def evolve(
         return
 
     # ── 2. Build or load evaluation dataset ─────────────────────────────
-    console.print(f"\n[bold]Building evaluation dataset[/bold] (source: {eval_source})")
+    # ── 2. Build / load evaluation dataset ──────────────────────────────
+    dataset_label = dataset_path if dataset_path else eval_source
+    console.print(f"\n[bold]Building evaluation dataset (source: {dataset_label})[/bold]")
 
-    if eval_source == "golden" and dataset_path:
-        dataset = GoldenDatasetLoader.load(Path(dataset_path))
+    if dataset_path:
+        dataset = EvalDataset.load(Path(dataset_path))
+        console.print(f"  Loaded dataset: {len(dataset.all_examples)} examples")
+    elif eval_source == "golden":
+        dataset = GoldenDatasetLoader().load_skill_dataset(skill_name)
         console.print(f"  Loaded golden dataset: {len(dataset.all_examples)} examples")
     elif eval_source == "sessiondb":
-        save_path = Path(dataset_path) if dataset_path else Path("datasets") / "skills" / skill_name
         dataset = build_dataset_from_external(
-            skill_name=skill_name,
-            skill_text=skill["raw"],
-            sources=["claude-code", "copilot", "hermes"],
-            output_path=save_path,
+            source="sessiondb",
+            artifact_name=skill_name,
+            artifact_type="skill",
             model=eval_model,
+            sample_size=50,
         )
-        if not dataset.all_examples:
-            console.print("[red]✗ No relevant examples found from session history[/red]")
-            sys.exit(1)
-        console.print(f"  Mined {len(dataset.all_examples)} examples from session history")
+        save_path = Path("datasets") / "skills" / skill_name
+        dataset.save(save_path)
+        console.print(f"  Imported {len(dataset.all_examples)} examples from sessiondb")
+        console.print(f"  Saved to {save_path}/")
     elif eval_source == "synthetic":
         builder = SyntheticDatasetBuilder(config)
         dataset = builder.generate(
@@ -107,9 +112,6 @@ def evolve(
         dataset.save(save_path)
         console.print(f"  Generated {len(dataset.all_examples)} synthetic examples")
         console.print(f"  Saved to {save_path}/")
-    elif dataset_path:
-        dataset = EvalDataset.load(Path(dataset_path))
-        console.print(f"  Loaded dataset: {len(dataset.all_examples)} examples")
     else:
         console.print("[red]✗ Specify --dataset-path or use --eval-source synthetic[/red]")
         sys.exit(1)
@@ -119,7 +121,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -138,7 +140,8 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = create_lm(eval_model)
+    optimizer_lm = create_lm(optimizer_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -157,6 +160,7 @@ def evolve(
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
             max_steps=iterations,
+            reflection_lm=optimizer_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -170,10 +174,13 @@ def evolve(
         optimizer = dspy.MIPROv2(
             metric=skill_fitness_metric,
             auto="light",
+            prompt_model=optimizer_lm,
+            task_model=lm,
         )
         optimized_module = optimizer.compile(
             baseline_module,
             trainset=trainset,
+            valset=valset,
         )
 
     elapsed = time.time() - start_time
@@ -186,7 +193,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"

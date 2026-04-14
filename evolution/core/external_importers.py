@@ -28,11 +28,12 @@ import random
 from pathlib import Path
 from typing import Optional
 
-import click
 import dspy
+import click
 from rich.console import Console
 from rich.progress import Progress
 
+from evolution.core.chatgpt_oauth import create_lm
 from evolution.core.dataset_builder import EvalExample, EvalDataset
 
 console = Console()
@@ -490,7 +491,7 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(self.model)
+        lm = create_lm(self.model)
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))

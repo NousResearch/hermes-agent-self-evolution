@@ -47,7 +47,33 @@ python -m evolution.skills.evolve_skill \
     --skill github-code-review \
     --iterations 10 \
     --eval-source sessiondb
+
+# Or use ChatGPT OAuth instead of an OpenAI API key
+python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --iterations 3 \
+    --eval-source synthetic \
+    --optimizer-model chatgpt/gpt-5.4 \
+    --eval-model chatgpt/gpt-5.4
 ```
+
+### ChatGPT OAuth-backed models
+
+If you already use ChatGPT/Codex OAuth locally, this repo can now use it directly.
+
+- Prefix the model with `chatgpt/` — for example `chatgpt/gpt-5.4`
+- The runner will resolve the bearer token from, in order:
+  1. `CHATGPT_OAUTH_TOKEN`
+  2. `CHATGPT_OAUTH_FILE`
+  3. `~/.openclaw/agents/main/agent/auth-profiles.json`
+  4. `~/.codex/auth.json`
+  5. `~/.hermes/auth.json`
+- Optional profile override for OpenClaw auth-profiles: `CHATGPT_AUTH_PROFILE=openai-codex:default`
+
+Notes:
+- This backend talks to `https://chatgpt.com/backend-api/codex/responses`
+- It is meant for practical local experimentation, not polished public API semantics
+- ChatGPT OAuth currently ignores unsupported OpenAI knobs like `temperature` and `max_tokens`
 
 ## What It Optimizes
 
