@@ -18,6 +18,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from evolution.core.chatgpt_oauth import create_lm
 from evolution.core.config import EvolutionConfig, get_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
@@ -138,7 +139,8 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = create_lm(eval_model)
+    optimizer_lm = create_lm(optimizer_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -157,6 +159,7 @@ def evolve(
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
             max_steps=iterations,
+            reflection_lm=optimizer_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -170,6 +173,8 @@ def evolve(
         optimizer = dspy.MIPROv2(
             metric=skill_fitness_metric,
             auto="light",
+            prompt_model=optimizer_lm,
+            task_model=lm,
         )
         optimized_module = optimizer.compile(
             baseline_module,
