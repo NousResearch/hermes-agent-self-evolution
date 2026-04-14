@@ -156,7 +156,8 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_metric_calls=iterations * 10,  # Convert iterations to metric call budget
+            auto="light",
         )
 
         optimized_module = optimizer.compile(
@@ -180,8 +181,43 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # MIPROv2/GEPA replaces the predictor's instruction. Extract the full instruction
+    # and separate the evolved skill text from the wrapper.
+    # The instruction was prepended with "Follow these skill instructions...\n\n{skill_text}\n\n---\n"
+    evolved_instruction = ""
+    for name, pred in optimized_module.predictor.named_predictors():
+        evolved_instruction = pred.signature.instructions
+        break
+    
+    if not evolved_instruction:
+        evolved_instruction = getattr(
+            optimized_module.predictor, 'signature', None
+        )
+        if evolved_instruction and hasattr(evolved_instruction, 'instructions'):
+            evolved_instruction = evolved_instruction.instructions
+        else:
+            evolved_instruction = skill["body"]
+    
+    # Parse out the skill text from the instruction wrapper
+    import re as _re
+    skill_header = "Follow these skill instructions to complete the task:\n\n"
+    separator = "\n\n---\n"
+    
+    if evolved_instruction.startswith(skill_header):
+        rest = evolved_instruction[len(skill_header):]
+        if separator in rest:
+            evolved_body = rest.split(separator, 1)[0]
+        else:
+            # No separator found — the optimizer may have reformulated
+            evolved_body = rest
+    else:
+        # Optimizer completely rewrote the instruction — treat as evolved body
+        evolved_body = evolved_instruction
+    
+    # If the evolved body is empty or just whitespace, fall back to original
+    if not evolved_body.strip():
+        evolved_body = skill["body"]
+    
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
