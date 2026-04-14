@@ -4,6 +4,7 @@ Every candidate variant must pass ALL constraints before it can be
 considered valid. Failed constraints = immediate rejection.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass
@@ -148,27 +149,48 @@ class ConstraintValidator:
             )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
-        """Check that a skill file has valid YAML frontmatter and markdown body."""
-        has_frontmatter = text.strip().startswith("---")
-        has_name = "name:" in text[:500] if has_frontmatter else False
-        has_description = "description:" in text[:500] if has_frontmatter else False
+        """Check that a skill markdown body has structural integrity.
 
-        if has_frontmatter and has_name and has_description:
+        This validates the markdown BODY (content after frontmatter has been
+        stripped). The frontmatter is preserved separately by load_skill()/
+        reassemble_skill() and does not need re-validation here.
+        """
+        issues = []
+
+        # Body should not be mostly list markers — check first (most specific)
+        all_lines = [l.strip() for l in text.split('\n') if l.strip()]
+        non_heading_lines = [l for l in all_lines if not l.startswith('#')]
+        if non_heading_lines:
+            list_lines = sum(
+                1 for l in non_heading_lines
+                if re.match(r'^[-*+]\s+\S', l) or re.match(r'^\d+\.\s+\S', l)
+            )
+            if list_lines > 0 and list_lines == len(non_heading_lines):
+                issues.append("body is only lists with no prose (add prose between list items)")
+
+        # Must have at least one markdown heading (# Header, space after # optional)
+        heading_pattern = re.compile(r'^#{1,6}\s?\S', re.MULTILINE)
+        if not heading_pattern.search(text):
+            issues.append("no markdown heading found (add at least one # heading)")
+
+        # Must have meaningful content beyond headings (at least 50 chars of non-heading text)
+        body_lines = [
+            line for line in text.split('\n')
+            if line.strip() and not line.strip().startswith('#')
+        ]
+        body_chars = sum(len(line) for line in body_lines)
+        if body_chars < 50:
+            issues.append(f"body content too short ({body_chars} < 50 chars of non-heading text)")
+
+        if not issues:
             return ConstraintResult(
                 passed=True,
                 constraint_name="skill_structure",
-                message="Skill has valid frontmatter (name + description)",
+                message="Skill body has valid structure (heading + content)",
             )
         else:
-            missing = []
-            if not has_frontmatter:
-                missing.append("YAML frontmatter (---)")
-            if not has_name:
-                missing.append("name field")
-            if not has_description:
-                missing.append("description field")
             return ConstraintResult(
                 passed=False,
                 constraint_name="skill_structure",
-                message=f"Skill missing: {', '.join(missing)}",
+                message=f"Skill body structure issues: {'; '.join(issues)}",
             )
