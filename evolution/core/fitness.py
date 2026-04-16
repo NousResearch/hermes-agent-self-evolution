@@ -14,6 +14,7 @@ from evolution.core.config import EvolutionConfig
 @dataclass
 class FitnessScore:
     """Multi-dimensional fitness score."""
+
     correctness: float = 0.0  # Did the agent produce correct output? (0-1)
     procedure_following: float = 0.0  # Did it follow the skill's procedure? (0-1)
     conciseness: float = 0.0  # Was it appropriately concise? (0-1)
@@ -23,11 +24,7 @@ class FitnessScore:
     @property
     def composite(self) -> float:
         """Weighted composite score."""
-        raw = (
-            0.5 * self.correctness
-            + 0.3 * self.procedure_following
-            + 0.2 * self.conciseness
-        )
+        raw = 0.5 * self.correctness + 0.3 * self.procedure_following + 0.2 * self.conciseness
         return max(0.0, raw - self.length_penalty)
 
 
@@ -48,6 +45,7 @@ class LLMJudge:
 
         Also provide specific, actionable feedback on what could be improved.
         """
+
         task_input: str = dspy.InputField(desc="The task the agent was given")
         expected_behavior: str = dspy.InputField(desc="Rubric describing what a good response looks like")
         agent_output: str = dspy.InputField(desc="The agent's actual response")
@@ -104,7 +102,9 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(
+    example: dspy.Example, prediction: dspy.Prediction, trace=None, pred_name=None, pred_trace=None
+) -> float:
     """DSPy-compatible metric function for skill optimization.
 
     This is what gets passed to dspy.GEPA(metric=...).
@@ -113,7 +113,6 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
-    task = getattr(example, "task_input", "") or ""
 
     if not agent_output.strip():
         return 0.0
