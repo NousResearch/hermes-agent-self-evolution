@@ -43,29 +43,29 @@ console = Console()
 # Each pattern is intentionally anchored to known key formats to minimize
 # false positives on normal prose.
 SECRET_PATTERNS = re.compile(
-    r'('
-    r'sk-ant-api\S+'           # Anthropic API keys
-    r'|sk-or-v1-\S+'          # OpenRouter API keys
-    r'|sk-\S{20,}'            # Generic OpenAI-style keys (20+ chars after sk-)
-    r'|ghp_\S+'               # GitHub personal access tokens
-    r'|ghu_\S+'               # GitHub user tokens
-    r'|xoxb-\S+'              # Slack bot tokens
-    r'|xapp-\S+'              # Slack app tokens
-    r'|ntn_\S+'               # Notion integration tokens
-    r'|AKIA[0-9A-Z]{16}'      # AWS access key IDs
-    r'|Bearer\s+\S{20,}'      # Bearer auth headers (20+ char tokens)
-    r'|-----BEGIN\s+(RSA\s+)?PRIVATE\sKEY-----'  # PEM private keys
-    r'|ANTHROPIC_API_KEY'      # Known env var names (exact match)
-    r'|OPENAI_API_KEY'
-    r'|OPENROUTER_API_KEY'
-    r'|SLACK_BOT_TOKEN'
-    r'|GITHUB_TOKEN'
-    r'|AWS_SECRET_ACCESS_KEY'
-    r'|DATABASE_URL'
-    r'|\bpassword\s*[=:]\s*\S+' # password assignments (password=xxx, password: xxx)
-    r'|\bsecret\s*[=:]\s*\S+'   # secret assignments (secret=xxx, secret: xxx)
-    r'|\btoken\s*[=:]\s*\S{10,}' # token assignments with 10+ char values
-    r')',
+    r"("
+    r"sk-ant-api\S+"  # Anthropic API keys
+    r"|sk-or-v1-\S+"  # OpenRouter API keys
+    r"|sk-\S{20,}"  # Generic OpenAI-style keys (20+ chars after sk-)
+    r"|ghp_\S+"  # GitHub personal access tokens
+    r"|ghu_\S+"  # GitHub user tokens
+    r"|xoxb-\S+"  # Slack bot tokens
+    r"|xapp-\S+"  # Slack app tokens
+    r"|ntn_\S+"  # Notion integration tokens
+    r"|AKIA[0-9A-Z]{16}"  # AWS access key IDs
+    r"|Bearer\s+\S{20,}"  # Bearer auth headers (20+ char tokens)
+    r"|-----BEGIN\s+(RSA\s+)?PRIVATE\sKEY-----"  # PEM private keys
+    r"|ANTHROPIC_API_KEY"  # Known env var names (exact match)
+    r"|OPENAI_API_KEY"
+    r"|OPENROUTER_API_KEY"
+    r"|SLACK_BOT_TOKEN"
+    r"|GITHUB_TOKEN"
+    r"|AWS_SECRET_ACCESS_KEY"
+    r"|DATABASE_URL"
+    r"|\bpassword\s*[=:]\s*\S+"  # password assignments (password=xxx, password: xxx)
+    r"|\bsecret\s*[=:]\s*\S+"  # secret assignments (secret=xxx, secret: xxx)
+    r"|\btoken\s*[=:]\s*\S{10,}"  # token assignments with 10+ char values
+    r")",
     re.IGNORECASE,
 )
 
@@ -141,12 +141,12 @@ def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
     # Extract meaningful keywords from skill text (first 500 chars)
     skill_keywords = set()
     for word in skill_text[:500].lower().split():
-        word = re.sub(r'[^a-z]', '', word)
+        word = re.sub(r"[^a-z]", "", word)
         if len(word) > 4:
             skill_keywords.add(word)
 
     # Require at least 2 keyword matches
-    message_words = set(re.sub(r'[^a-z\s]', '', text_lower).split())
+    message_words = set(re.sub(r"[^a-z\s]", "", text_lower).split())
     overlap = message_words & skill_keywords
     return len(overlap) >= 2
 
@@ -193,13 +193,15 @@ class ClaudeCodeImporter:
                 if _contains_secret(text):
                     continue
 
-                messages.append({
-                    "source": "claude-code",
-                    "task_input": text,
-                    "project": entry.get("project", ""),
-                    "session_id": entry.get("sessionId", ""),
-                    "timestamp": entry.get("timestamp", 0),
-                })
+                messages.append(
+                    {
+                        "source": "claude-code",
+                        "task_input": text,
+                        "project": entry.get("project", ""),
+                        "session_id": entry.get("sessionId", ""),
+                        "timestamp": entry.get("timestamp", 0),
+                    }
+                )
 
                 if limit and len(messages) >= limit:
                     break
@@ -265,13 +267,15 @@ def _read_copilot_workspace(workspace_path: Path) -> str:
         for line in workspace_path.read_text().split("\n"):
             if line.startswith("cwd:"):
                 return line.split(":", 1)[1].strip()
-    except Exception:
-        pass
+    except Exception as e:
+        console.print(f"[dim]Could not read {workspace_path}: {e}[/dim]")
     return ""
 
 
 def _parse_copilot_events(
-    events_path: Path, session_id: str, project: str,
+    events_path: Path,
+    session_id: str,
+    project: str,
 ) -> list[dict]:
     """Parse a single Copilot events.jsonl into user/assistant pairs."""
     pairs = []
@@ -295,13 +299,15 @@ def _parse_copilot_events(
                     # Save previous pair before starting new one
                     if current_user_msg and current_assistant_msg:
                         if not _contains_secret(current_user_msg) and not _contains_secret(current_assistant_msg):
-                            pairs.append({
-                                "source": "copilot",
-                                "task_input": current_user_msg,
-                                "assistant_response": current_assistant_msg,
-                                "project": project,
-                                "session_id": session_id,
-                            })
+                            pairs.append(
+                                {
+                                    "source": "copilot",
+                                    "task_input": current_user_msg,
+                                    "assistant_response": current_assistant_msg,
+                                    "project": project,
+                                    "session_id": session_id,
+                                }
+                            )
 
                     current_user_msg = data.get("content", "")
                     current_assistant_msg = None
@@ -317,13 +323,15 @@ def _parse_copilot_events(
         # Don't forget the last pair in the file
         if current_user_msg and current_assistant_msg:
             if not _contains_secret(current_user_msg) and not _contains_secret(current_assistant_msg):
-                pairs.append({
-                    "source": "copilot",
-                    "task_input": current_user_msg,
-                    "assistant_response": current_assistant_msg,
-                    "project": project,
-                    "session_id": session_id,
-                })
+                pairs.append(
+                    {
+                        "source": "copilot",
+                        "task_input": current_user_msg,
+                        "assistant_response": current_assistant_msg,
+                        "project": project,
+                        "session_id": session_id,
+                    }
+                )
 
     except Exception as e:
         console.print(f"[dim]Skipped {session_id}: {e}[/dim]")
@@ -403,12 +411,14 @@ class HermesSessionImporter:
                 if assistant_text and _contains_secret(assistant_text):
                     continue
 
-                messages.append({
-                    "source": "hermes",
-                    "task_input": user_text,
-                    "assistant_response": assistant_text,
-                    "session_id": session_id,
-                })
+                messages.append(
+                    {
+                        "source": "hermes",
+                        "task_input": user_text,
+                        "assistant_response": assistant_text,
+                        "session_id": session_id,
+                    }
+                )
 
                 if limit and len(messages) >= limit:
                     return messages
@@ -422,10 +432,26 @@ class HermesSessionImporter:
 class RelevanceFilter:
     """Use LLM-as-judge to determine which messages are relevant to a skill.
 
-    Two-stage pipeline:
-      1. Cheap heuristic pre-filter (_is_relevant_to_skill)
-      2. LLM scoring for final relevance + eval metadata generation
+    Three-stage pipeline:
+      1. LLM generates ~40 skill-specific keywords/phrases (one call, once).
+      2. Substring pre-filter against the entire corpus using expanded keywords.
+      3. LLM scores each pre-filtered candidate for relevance + metadata.
     """
+
+    class ExpandKeywords(dspy.Signature):
+        """Generate relevance keywords/phrases for a skill.
+
+        List 30-50 words and short phrases that indicate a user message is
+        relevant to this skill's domain. Include synonyms, abbreviations
+        (e.g., "PR" for "pull request"), action verbs ("review", "audit"),
+        and concrete artifacts (file types, tools, commands).
+
+        Output as a JSON array of lowercase strings. No explanation, no code fences.
+        """
+
+        skill_name: str = dspy.InputField(desc="Name of the skill")
+        skill_text: str = dspy.InputField(desc="Full SKILL.md content")
+        keywords: str = dspy.OutputField(desc="JSON array of 30-50 lowercase keyword strings")
 
     class ScoreRelevance(dspy.Signature):
         """Score whether a user message is relevant to a specific agent skill.
@@ -436,6 +462,7 @@ class RelevanceFilter:
         - difficulty: string (easy, medium, or hard)
         - category: string (what aspect of the skill this tests)
         """
+
         skill_name: str = dspy.InputField(desc="Name of the skill")
         skill_description: str = dspy.InputField(desc="First 800 chars of the skill file")
         user_message: str = dspy.InputField(desc="The user's message to evaluate")
@@ -443,8 +470,47 @@ class RelevanceFilter:
         scoring: str = dspy.OutputField(desc="JSON object with: relevant, expected_behavior, difficulty, category")
 
     def __init__(self, model: str):
+        self.expander = dspy.ChainOfThought(self.ExpandKeywords)
         self.scorer = dspy.ChainOfThought(self.ScoreRelevance)
         self.model = model
+
+    def _expand_keywords(self, skill_name: str, skill_text: str) -> list[str]:
+        """Ask the LLM for skill-specific keywords/phrases (one call, cached by caller)."""
+        lm = dspy.LM(self.model)
+        try:
+            with dspy.context(lm=lm):
+                result = self.expander(
+                    skill_name=skill_name,
+                    skill_text=skill_text[:6000],
+                )
+            parsed = _parse_scoring_json(result.keywords)
+            if isinstance(parsed, list):
+                keywords = [str(k).lower().strip() for k in parsed if isinstance(k, str) and str(k).strip()]
+            else:
+                # Try direct array parse
+                try:
+                    arr = json.loads(result.keywords)
+                    keywords = [str(k).lower().strip() for k in arr if str(k).strip()]
+                except (json.JSONDecodeError, TypeError):
+                    keywords = []
+        except Exception as e:
+            console.print(f"  [yellow]Keyword expansion failed ({e}); falling back to name-based filter[/yellow]")
+            keywords = []
+
+        # Always seed with tokens from the skill name so absurd LLM output doesn't
+        # collapse the candidate pool to zero.
+        for token in skill_name.lower().replace("-", " ").replace("_", " ").split():
+            if token and token not in keywords:
+                keywords.append(token)
+
+        # Keep only meaningful keywords (length > 2) and de-duplicate while preserving order
+        seen = set()
+        cleaned = []
+        for k in keywords:
+            if len(k) > 2 and k not in seen:
+                seen.add(k)
+                cleaned.append(k)
+        return cleaned
 
     def filter_and_score(
         self,
@@ -469,21 +535,29 @@ class RelevanceFilter:
         # Stage 0: drop messages missing required fields
         messages = [m for m in messages if m.get("task_input") and m.get("source")]
 
-        # Stage 1: cheap heuristic pre-filter
-        candidates = [
-            m for m in messages
-            if _is_relevant_to_skill(m["task_input"], skill_name, skill_text)
-        ]
+        # Stage 1: LLM-expanded keywords (one call)
+        console.print(f"  Expanding skill keywords with LLM ({self.model})...")
+        keywords = self._expand_keywords(skill_name, skill_text)
+        console.print(f"  Using {len(keywords)} relevance keywords (e.g. {', '.join(keywords[:6])}...)")
 
-        # If heuristics found too few, sample remaining messages
-        if len(candidates) < max_examples:
+        # Stage 2: substring pre-filter against the ENTIRE corpus
+        candidates = []
+        for m in messages:
+            text_lower = m["task_input"].lower()
+            if any(kw in text_lower for kw in keywords):
+                candidates.append(m)
+
+        # Cap LLM scoring budget — sample if pre-filter produced too many
+        llm_budget = max_examples * 8  # 8x overscan to account for LLM rejecting borderline cases
+        if len(candidates) > llm_budget:
+            random.shuffle(candidates)
+            candidates = candidates[:llm_budget]
+        elif len(candidates) < max_examples:
+            # Pre-filter too strict — sample random messages to widen the net
             candidate_ids = {id(m) for m in candidates}
             remaining = [m for m in messages if id(m) not in candidate_ids]
             random.shuffle(remaining)
-            candidates.extend(remaining[:max_examples * 2])
-
-        # Cap candidates to control LLM costs
-        candidates = candidates[:max_examples * 3]
+            candidates.extend(remaining[: max_examples * 2])
 
         console.print(f"  Pre-filtered to {len(candidates)} candidates (from {len(messages)} total)")
 
@@ -519,10 +593,12 @@ class RelevanceFilter:
                             category=scoring.get("category", "general"),
                         )
                         if validated:
-                            examples.append(EvalExample(
-                                source=msg["source"],
-                                **validated,
-                            ))
+                            examples.append(
+                                EvalExample(
+                                    source=msg["source"],
+                                    **validated,
+                                )
+                            )
 
                 except Exception:
                     errors += 1
@@ -567,7 +643,7 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
     # Slow path: find balanced {...} block using brace counting.
     # Simple regex like r'\{[^}]+\}' breaks on nested braces
     # (e.g. "handle {edge} cases" in a string value).
-    start = text.find('{')
+    start = text.find("{")
     if start == -1:
         return None
 
@@ -579,7 +655,7 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
         if escape_next:
             escape_next = False
             continue
-        if ch == '\\' and in_string:
+        if ch == "\\" and in_string:
             escape_next = True
             continue
         if ch == '"':
@@ -587,13 +663,13 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
             continue
         if in_string:
             continue
-        if ch == '{':
+        if ch == "{":
             depth += 1
-        elif ch == '}':
+        elif ch == "}":
             depth -= 1
             if depth == 0:
                 try:
-                    return json.loads(text[start:i + 1])
+                    return json.loads(text[start : i + 1])
                 except json.JSONDecodeError:
                     return None
 
@@ -653,7 +729,10 @@ def build_dataset_from_external(
 
     relevance_filter = RelevanceFilter(model=model)
     examples = relevance_filter.filter_and_score(
-        all_messages, skill_name, skill_text, max_examples=max_examples,
+        all_messages,
+        skill_name,
+        skill_text,
+        max_examples=max_examples,
     )
 
     console.print(f"\n[bold green]Found {len(examples)} relevant examples[/bold green]")
@@ -676,8 +755,8 @@ def build_dataset_from_external(
 
     dataset = EvalDataset(
         train=examples[:n_train],
-        val=examples[n_train:n_train + n_val],
-        holdout=examples[n_train + n_val:],
+        val=examples[n_train : n_train + n_val],
+        holdout=examples[n_train + n_val :],
     )
 
     dataset.save(output_path)
@@ -734,10 +813,10 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
     help="Which tool to import from",
 )
 @click.option("--skill", required=True, help="Skill name to generate eval data for")
-@click.option("--output", type=click.Path(), default=None,
-              help="Output directory (default: datasets/skills/<skill>/)")
-@click.option("--model", default="openrouter/google/gemini-2.5-flash",
-              help="LiteLLM model string for relevance scoring")
+@click.option("--output", type=click.Path(), default=None, help="Output directory (default: datasets/skills/<skill>/)")
+@click.option(
+    "--model", default="openrouter/google/gemini-2.5-flash", help="LiteLLM model string for relevance scoring"
+)
 @click.option("--max-examples", default=50, help="Max eval examples to generate")
 @click.option("--dry-run", is_flag=True, help="Show message counts without LLM scoring")
 def main(source, skill, output, model, max_examples, dry_run):
