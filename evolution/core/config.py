@@ -13,14 +13,23 @@ class EvolutionConfig:
     # hermes-agent repo path
     hermes_agent_path: Path = field(default_factory=lambda: get_hermes_agent_path())
 
-    # Optimization parameters
-    iterations: int = 10
-    population_size: int = 5
-
     # LLM configuration
-    optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
-    eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
+    optimizer_model: str = "openai/gpt-4.1"  # Model for mutations/crossover
+    eval_model: str = "openai/gpt-4.1-mini"  # Model for evaluation/judging
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    api_base: Optional[str] = None  # Custom OpenAI-compatible endpoint
+    api_key: Optional[str] = None  # API key (prefer env var over this)
+
+    # EA parameters
+    num_islands: int = 3
+    population_size: int = 8
+    num_generations: int = 10
+    migration_interval: int = 2
+    elite_count: int = 2
+    mutation_rate: float = 0.7
+    crossover_rate: float = 0.3
+    stagnation_limit: int = 4
+    fast_screen_threshold: float = 0.3
 
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
@@ -36,8 +45,8 @@ class EvolutionConfig:
 
     # Benchmark gating
     run_pytest: bool = True
-    run_tblite: bool = False  # Expensive — opt-in
-    tblite_regression_threshold: float = 0.02  # Max 2% regression allowed
+    run_tblite: bool = False
+    tblite_regression_threshold: float = 0.02
 
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
