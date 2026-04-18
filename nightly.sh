@@ -2,7 +2,7 @@
 # Hermes self-evolution nightly pipeline
 #
 # Phases:
-#   1. Preflight smoke (t1 baseline + t4 propose-mode E2E)
+#   1. Preflight smoke (t1 baseline + t5 propose-mode structural; zero-token, ~10s)
 #   2. Evolve skill in propose-mode (safe: no auto-merge to bundled skills)
 #   3. Build markdown digest of last 24h of activity
 #
