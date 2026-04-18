@@ -23,6 +23,9 @@ from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset,
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
+from evolution.core.regression_guard import AutoMergeGate
+from evolution.core.proposals import ProposalWriter, build_proposal_record
+from evolution.core.write_back import write_back_skill
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -43,6 +46,10 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    mode: str = "propose",
+    min_improvement: float = 0.02,
+    regression_tolerance: float = 0.01,
+    proposals_dir: Optional[str] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -119,7 +126,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -137,8 +144,9 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy. `timeout` is forwarded to litellm so a single hung
+    # request can't wedge the whole evaluation (per 2026-04-18 hang).
+    lm = dspy.LM(eval_model, timeout=120, num_retries=2)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -180,22 +188,26 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # The Predictor's signature.instructions IS the optimizable parameter
+    # that GEPA reflection / MIPROv2 proposals mutate. Read it back.
+    evolved_body = optimized_module.predictor.predict.signature.instructions
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
-    all_pass = True
+    # Validate the reassembled full skill (frontmatter + body) so structure
+    # checks like YAML frontmatter presence can pass. Growth check still
+    # compares body-only against baseline body-only via baseline_text.
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["body"])
+    evolved_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
         color = "green" if c.passed else "red"
         console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
         if not c.passed:
-            all_pass = False
+            evolved_pass = False
 
-    if not all_pass:
+    if not evolved_pass:
         console.print("[red]✗ Evolved skill FAILED constraints — not deploying[/red]")
         # Still save for inspection
         output_path = Path("output") / skill_name / "evolved_FAILED.md"
@@ -209,21 +221,30 @@ def evolve(
 
     holdout_examples = dataset.to_dspy_examples("holdout")
 
-    baseline_scores = []
-    evolved_scores = []
-    for ex in holdout_examples:
-        # Score baseline
-        with dspy.context(lm=lm):
-            baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
-            baseline_scores.append(baseline_score)
+    # Use dspy.Evaluate for parallel, progress-visible, error-tolerant holdout
+    # scoring. Prior serial loop silently hung on any single slow LLM call
+    # and gave no progress output — see 2026-04-18 smoke hang.
+    from dspy.evaluate import Evaluate
+    evaluator = Evaluate(
+        devset=holdout_examples,
+        metric=skill_fitness_metric,
+        num_threads=4,
+        display_progress=True,
+        max_errors=max(1, len(holdout_examples) // 2),
+        failure_score=0.0,
+    )
+    with dspy.context(lm=lm):
+        baseline_result = evaluator(baseline_module)
+        evolved_result = evaluator(optimized_module)
 
-            evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
-            evolved_scores.append(evolved_score)
+    # EvaluationResult.score is already a % (0-100) in current DSPy;
+    # normalize to 0-1 to match prior semantics and downstream gate inputs.
+    def _norm(r):
+        s = getattr(r, "score", r)
+        return s / 100.0 if s > 1.0 else s
 
-    avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
-    avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
+    avg_baseline = _norm(baseline_result)
+    avg_evolved = _norm(evolved_result)
     improvement = avg_evolved - avg_baseline
 
     # ── 9. Report results ───────────────────────────────────────────────
@@ -279,9 +300,91 @@ def evolve(
         "val_examples": len(dataset.val),
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
-        "constraints_passed": all_pass,
+        "constraints_passed": evolved_pass,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+    # ── 9b. Auto-merge gate ──────────────────────────────────────────────
+    gate = AutoMergeGate(
+        min_improvement=min_improvement,
+        regression_tolerance=regression_tolerance,
+    )
+    decision = gate.evaluate(avg_baseline, avg_evolved, evolved_pass)
+    metrics["auto_merge"] = decision.auto_merge
+    metrics["gate_reason"] = decision.reason
+    metrics["regression"] = decision.regression
+    metrics["mode"] = mode
+    (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+    console.print(f"\n[bold]Gate decision:[/bold] {decision.reason}")
+
+    # ── 9c. Propose-mode output ─────────────────────────────────────────
+    # Write a ProposalRecord for human review. This runs in both `propose`
+    # mode (always) and `auto` mode when the gate rejects — so a rejected
+    # auto run still leaves a reviewable artifact behind.
+    proposals_root = Path(proposals_dir) if proposals_dir else (Path("proposals"))
+    should_write_proposal = (mode == "propose") or (not decision.auto_merge)
+    proposal_path: Optional[Path] = None
+    if should_write_proposal:
+        writer = ProposalWriter(proposals_root)
+        record = build_proposal_record(
+            skill_name=skill_name,
+            baseline_text=skill["raw"],
+            evolved_text=evolved_full,
+            baseline_score=avg_baseline,
+            evolved_score=avg_evolved,
+            decision=decision,
+            constraint_results=evolved_constraints,
+            mode=mode,
+            metadata={
+                "iterations": iterations,
+                "optimizer_model": optimizer_model,
+                "eval_model": eval_model,
+                "elapsed_seconds": elapsed,
+                "train_examples": len(dataset.train),
+                "val_examples": len(dataset.val),
+                "holdout_examples": len(dataset.holdout),
+                "eval_source": eval_source,
+                "output_dir": str(output_dir),
+            },
+            timestamp=timestamp,
+        )
+        proposal_path = writer.write(record)
+        metrics["proposal_path"] = str(proposal_path)
+        (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+        console.print(f"  Proposal written: [cyan]{proposal_path}[/cyan]")
+
+    # ── 9d. Auto-mode write-back ────────────────────────────────────────
+    # Only when mode=='auto' AND the gate approves do we overwrite the
+    # live skill in hermes-agent. All other paths go through human review.
+    # Always creates a timestamped backup before overwriting.
+    wb_result = write_back_skill(
+        live_path=skill_path,
+        evolved_text=evolved_full,
+        mode=mode,
+        auto_merge=decision.auto_merge,
+        timestamp=timestamp,
+    )
+    if wb_result.merged:
+        console.print(
+            f"[bold green]✓ AUTO-MERGED[/bold green] — wrote evolved skill to {wb_result.live_path}"
+        )
+        console.print(f"  Backup: [cyan]{wb_result.backup_path}[/cyan]")
+        metrics["merged_to"] = str(wb_result.live_path)
+        metrics["backup_path"] = str(wb_result.backup_path)
+        (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    else:
+        metrics["merged_to"] = None
+        (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+    if decision.regression:
+        if mode == "propose":
+            # Propose-mode success: regression was caught and a proposal was written
+            # for human review. The pipeline worked correctly — do not exit non-zero.
+            console.print(f"[yellow]⚠ REGRESSION detected — proposal written for review (propose mode)[/yellow]")
+        else:
+            console.print(f"[red]✗ REGRESSION — exiting non-zero[/red]")
+            sys.exit(2)
 
     console.print(f"\n  Output saved to {output_dir}/")
 
@@ -304,7 +407,13 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--mode", type=click.Choice(["propose", "auto"]), default="propose",
+              help="propose: write to review queue (Task 3); auto: overwrite live skill if gate passes")
+@click.option("--min-improvement", default=0.02, type=float, help="Minimum holdout Δ for auto-merge")
+@click.option("--regression-tolerance", default=0.01, type=float, help="Negative Δ tolerance before flagging regression")
+@click.option("--proposals-dir", default=None, help="Where propose-only writes land (Task 3)")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model,
+         hermes_repo, run_tests, dry_run, mode, min_improvement, regression_tolerance, proposals_dir):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -316,6 +425,10 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        mode=mode,
+        min_improvement=min_improvement,
+        regression_tolerance=regression_tolerance,
+        proposals_dir=proposals_dir,
     )
 
 
