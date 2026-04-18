@@ -378,8 +378,13 @@ def evolve(
         (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     if decision.regression:
-        console.print(f"[red]✗ REGRESSION — exiting non-zero[/red]")
-        sys.exit(2)
+        if mode == "propose":
+            # Propose-mode success: regression was caught and a proposal was written
+            # for human review. The pipeline worked correctly — do not exit non-zero.
+            console.print(f"[yellow]⚠ REGRESSION detected — proposal written for review (propose mode)[/yellow]")
+        else:
+            console.print(f"[red]✗ REGRESSION — exiting non-zero[/red]")
+            sys.exit(2)
 
     console.print(f"\n  Output saved to {output_dir}/")
 

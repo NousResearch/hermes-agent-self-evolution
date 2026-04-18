@@ -1,17 +1,21 @@
 #!/bin/bash
 # Smoke test for hermes self-evolution pipeline.
 #
-# Three tiers:
+# Tiers:
 #   T1 — dry-run on each top-5 skill: validates skill discovery, frontmatter, constraints. No LLM.
 #   T2 — local LLM endpoint reachability: verifies cx/gpt-5.4 responds via OpenAI-compat API.
-#   T3 — real 1-iteration run on smallest top-5 skill: full loop end-to-end.
+#   T3 — real 1-iteration run on smallest top-5 skill: full loop end-to-end. EXPENSIVE.
+#   T4 — propose-mode E2E with real optimization. EXPENSIVE (~4min, real tokens).
+#   T5 — propose-mode STRUCTURAL (dry-run). Zero tokens, ~2s. Nightly cron uses T1 + T5.
 #
 # Usage:
-#   ./smoke_test.sh            # run all tiers
+#   ./smoke_test.sh            # run T1 + T5 (fast, zero-token — nightly default)
 #   ./smoke_test.sh t1         # only tier 1
 #   ./smoke_test.sh t2         # only tier 2
-#   ./smoke_test.sh t3         # only tier 3
-#   ./smoke_test.sh t4         # only tier 4 (propose-mode E2E)
+#   ./smoke_test.sh t3         # only tier 3 (expensive)
+#   ./smoke_test.sh t4         # only tier 4 (expensive)
+#   ./smoke_test.sh t5         # only tier 5 (cheap propose-mode check)
+#   ./smoke_test.sh full       # run everything including T2/T3/T4 (weekly manual)
 #   VERBOSE=1 ./smoke_test.sh  # stream subprocess output
 
 set -uo pipefail
@@ -218,8 +222,77 @@ PY
 }
 
 # ═════════════════════════════════════════════════════════════════════
+# T5 — Propose-mode structural check (dry-run, zero tokens)
+# ═════════════════════════════════════════════════════════════════════
+# Validates the propose-mode code path without any LLM calls:
+#   - CLI accepts --mode propose + --proposals-dir
+#   - Skill discovery + frontmatter parsing works for the evolution target
+#   - Proposals dir is writable
+#   - All imports resolve (catches regressions from refactors)
+#
+# Use T4 (full E2E with real optimization) only for manual weekly verification —
+# it's expensive (~4min, real LLM spend). Nightly cron should use T1 + T5.
+run_t5() {
+  hdr "T5 — propose-mode structural (dry-run, zero tokens)"
+
+  skill="github-code-review"
+  repo="$HOME/.hermes/hermes-agent"
+  prop_dir="$(pwd)/proposals/_smoke_t5"
+  rm -rf "$prop_dir"
+  mkdir -p "$prop_dir"
+
+  # Confirm proposals dir is writable BEFORE invoking Python.
+  if ! touch "$prop_dir/.writable" 2>/dev/null; then
+    fail "proposals dir not writable: $prop_dir"
+    return
+  fi
+  rm -f "$prop_dir/.writable"
+  pass "proposals dir writable"
+
+  start=$(date +%s)
+  if [ "$VERBOSE" = "1" ]; then
+    python -m evolution.skills.evolve_skill \
+      --skill "$skill" \
+      --hermes-repo "$repo" \
+      --dry-run \
+      --mode propose \
+      --proposals-dir "$prop_dir" \
+      --optimizer-model "$MODEL" \
+      --eval-model "$MODEL" 2>&1 | tee "$RUN_LOG"
+    rc=${PIPESTATUS[0]}
+  else
+    python -m evolution.skills.evolve_skill \
+      --skill "$skill" \
+      --hermes-repo "$repo" \
+      --dry-run \
+      --mode propose \
+      --proposals-dir "$prop_dir" \
+      --optimizer-model "$MODEL" \
+      --eval-model "$MODEL" >"$RUN_LOG" 2>&1
+    rc=$?
+  fi
+  elapsed=$(($(date +%s) - start))
+
+  if [ $rc -ne 0 ]; then
+    fail "propose-mode dry-run failed (exit $rc, ${elapsed}s)"
+    tail -20 "$RUN_LOG" | sed 's/^/      /'
+    return
+  fi
+  pass "propose-mode dry-run OK (${elapsed}s, zero tokens)"
+
+  # Confirm the dry-run emitted the expected validation markers.
+  if grep -q "DRY RUN" "$RUN_LOG"; then
+    pass "dry-run confirmation logged"
+  else
+    fail "dry-run marker missing from output — code path may be broken"
+  fi
+}
+
+# ═════════════════════════════════════════════════════════════════════
 # T4 — Propose-mode E2E: gate-rejected run writes proposal, leaves live skill untouched
 # ═════════════════════════════════════════════════════════════════════
+# WARNING: T4 is expensive (~4min, real LLM spend). Not for nightly cron.
+# Use for manual weekly verification. Nightly cron uses T1 + T5 (both zero-token).
 run_t4() {
   hdr "T4 — propose-mode E2E (github-code-review, 1 iter, gate-rejected)"
 
@@ -329,13 +402,17 @@ PY
 }
 
 # ── dispatch ─────────────────────────────────────────────────────────
+# Default ("") runs T1 + T5 — the fast, zero-token nightly profile.
+# "full" runs everything including the expensive T2/T3/T4 tiers.
 case "$TIER" in
   t1|T1) run_t1 ;;
   t2|T2) run_t2 ;;
   t3|T3) run_t3 ;;
   t4|T4) run_t4 ;;
-  all|"") run_t1; run_t2; run_t3; run_t4 ;;
-  *) echo "unknown tier: $TIER (use t1|t2|t3|t4|all)"; exit 2 ;;
+  t5|T5) run_t5 ;;
+  all|"") run_t1; run_t5 ;;
+  full)  run_t1; run_t2; run_t3; run_t4; run_t5 ;;
+  *) echo "unknown tier: $TIER (use t1|t2|t3|t4|t5|all|full)"; exit 2 ;;
 esac
 
 # ── summary ──────────────────────────────────────────────────────────

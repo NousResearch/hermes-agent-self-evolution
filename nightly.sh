@@ -65,18 +65,21 @@ log "skill=$SKILL iters=$ITERATIONS mode=$MODE model=$MODEL window=${WINDOW_HOUR
 log "nightly log: $NIGHTLY_LOG"
 
 # ─── phase 1: smoke preflight ─────────────────────────────────────────────────
+# Runs T1 (dry-run on all top-5 skills) + T5 (propose-mode structural dry-run).
+# Both are zero-token — total ~10s. Use `bash smoke_test.sh full` weekly for the
+# expensive T2/T3/T4 tiers that hit the LLM.
 if [[ "$SKIP_SMOKE" == "1" ]]; then
     log "Phase 1 (smoke) skipped via SKIP_SMOKE=1"
 else
-    log "Phase 1: smoke preflight (t1 baseline + t4 propose-mode E2E)"
+    log "Phase 1: smoke preflight (t1 + t5, zero-token)"
     if ! bash smoke_test.sh t1 >>"$SMOKE_LOG" 2>&1; then
         fail "smoke t1 failed — see $SMOKE_LOG"
     fi
     log "  t1 OK"
-    if ! bash smoke_test.sh t4 >>"$SMOKE_LOG" 2>&1; then
-        fail "smoke t4 failed — see $SMOKE_LOG"
+    if ! bash smoke_test.sh t5 >>"$SMOKE_LOG" 2>&1; then
+        fail "smoke t5 failed — see $SMOKE_LOG"
     fi
-    log "  t4 OK"
+    log "  t5 OK"
 fi
 
 # ─── phase 2: evolve ──────────────────────────────────────────────────────────
