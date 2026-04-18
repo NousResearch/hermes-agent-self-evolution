@@ -25,6 +25,7 @@ from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
 from evolution.core.regression_guard import AutoMergeGate
 from evolution.core.proposals import ProposalWriter, build_proposal_record
+from evolution.core.write_back import write_back_skill
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -356,11 +357,24 @@ def evolve(
     # ── 9d. Auto-mode write-back ────────────────────────────────────────
     # Only when mode=='auto' AND the gate approves do we overwrite the
     # live skill in hermes-agent. All other paths go through human review.
-    if mode == "auto" and decision.auto_merge:
-        live_path = skill_path
-        live_path.write_text(evolved_full)
-        console.print(f"[bold green]✓ AUTO-MERGED[/bold green] — wrote evolved skill to {live_path}")
-        metrics["merged_to"] = str(live_path)
+    # Always creates a timestamped backup before overwriting.
+    wb_result = write_back_skill(
+        live_path=skill_path,
+        evolved_text=evolved_full,
+        mode=mode,
+        auto_merge=decision.auto_merge,
+        timestamp=timestamp,
+    )
+    if wb_result.merged:
+        console.print(
+            f"[bold green]✓ AUTO-MERGED[/bold green] — wrote evolved skill to {wb_result.live_path}"
+        )
+        console.print(f"  Backup: [cyan]{wb_result.backup_path}[/cyan]")
+        metrics["merged_to"] = str(wb_result.live_path)
+        metrics["backup_path"] = str(wb_result.backup_path)
+        (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    else:
+        metrics["merged_to"] = None
         (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     if decision.regression:
