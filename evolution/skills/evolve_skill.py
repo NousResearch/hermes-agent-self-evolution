@@ -24,6 +24,7 @@ from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
 from evolution.core.regression_guard import AutoMergeGate
+from evolution.core.proposals import ProposalWriter, build_proposal_record
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -315,6 +316,53 @@ def evolve(
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n[bold]Gate decision:[/bold] {decision.reason}")
+
+    # ── 9c. Propose-mode output ─────────────────────────────────────────
+    # Write a ProposalRecord for human review. This runs in both `propose`
+    # mode (always) and `auto` mode when the gate rejects — so a rejected
+    # auto run still leaves a reviewable artifact behind.
+    proposals_root = Path(proposals_dir) if proposals_dir else (Path("proposals"))
+    should_write_proposal = (mode == "propose") or (not decision.auto_merge)
+    proposal_path: Optional[Path] = None
+    if should_write_proposal:
+        writer = ProposalWriter(proposals_root)
+        record = build_proposal_record(
+            skill_name=skill_name,
+            baseline_text=skill["raw"],
+            evolved_text=evolved_full,
+            baseline_score=avg_baseline,
+            evolved_score=avg_evolved,
+            decision=decision,
+            constraint_results=evolved_constraints,
+            mode=mode,
+            metadata={
+                "iterations": iterations,
+                "optimizer_model": optimizer_model,
+                "eval_model": eval_model,
+                "elapsed_seconds": elapsed,
+                "train_examples": len(dataset.train),
+                "val_examples": len(dataset.val),
+                "holdout_examples": len(dataset.holdout),
+                "eval_source": eval_source,
+                "output_dir": str(output_dir),
+            },
+            timestamp=timestamp,
+        )
+        proposal_path = writer.write(record)
+        metrics["proposal_path"] = str(proposal_path)
+        (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+        console.print(f"  Proposal written: [cyan]{proposal_path}[/cyan]")
+
+    # ── 9d. Auto-mode write-back ────────────────────────────────────────
+    # Only when mode=='auto' AND the gate approves do we overwrite the
+    # live skill in hermes-agent. All other paths go through human review.
+    if mode == "auto" and decision.auto_merge:
+        live_path = skill_path
+        live_path.write_text(evolved_full)
+        console.print(f"[bold green]✓ AUTO-MERGED[/bold green] — wrote evolved skill to {live_path}")
+        metrics["merged_to"] = str(live_path)
+        (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
     if decision.regression:
         console.print(f"[red]✗ REGRESSION — exiting non-zero[/red]")
         sys.exit(2)
