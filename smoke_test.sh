@@ -11,6 +11,7 @@
 #   ./smoke_test.sh t1         # only tier 1
 #   ./smoke_test.sh t2         # only tier 2
 #   ./smoke_test.sh t3         # only tier 3
+#   ./smoke_test.sh t4         # only tier 4 (propose-mode E2E)
 #   VERBOSE=1 ./smoke_test.sh  # stream subprocess output
 
 set -uo pipefail
@@ -216,13 +217,125 @@ PY
   fi
 }
 
+# ═════════════════════════════════════════════════════════════════════
+# T4 — Propose-mode E2E: gate-rejected run writes proposal, leaves live skill untouched
+# ═════════════════════════════════════════════════════════════════════
+run_t4() {
+  hdr "T4 — propose-mode E2E (github-code-review, 1 iter, gate-rejected)"
+
+  skill="github-code-review"
+  repo="$HOME/.hermes/hermes-agent"
+  live_path="$repo/skills/github/$skill/SKILL.md"
+
+  if [ ! -f "$live_path" ]; then
+    fail "live skill not found at $live_path — cannot run T4"
+    return
+  fi
+
+  # Snapshot live mtime + checksum BEFORE the run.
+  mtime_before=$(stat -f '%m' "$live_path" 2>/dev/null || stat -c '%Y' "$live_path")
+  sha_before=$(shasum -a 256 "$live_path" | awk '{print $1}')
+
+  prop_dir="$(pwd)/proposals/_smoke_propose"
+  rm -rf "$prop_dir"
+  mkdir -p "$prop_dir"
+
+  start=$(date +%s)
+  if [ "$VERBOSE" = "1" ]; then
+    python -m evolution.skills.evolve_skill \
+      --skill "$skill" \
+      --hermes-repo "$repo" \
+      --iterations 1 \
+      --optimizer-model "$MODEL" \
+      --eval-model "$MODEL" \
+      --mode propose \
+      --proposals-dir "$prop_dir" 2>&1 | tee "$RUN_LOG"
+    rc=${PIPESTATUS[0]}
+  else
+    python -m evolution.skills.evolve_skill \
+      --skill "$skill" \
+      --hermes-repo "$repo" \
+      --iterations 1 \
+      --optimizer-model "$MODEL" \
+      --eval-model "$MODEL" \
+      --mode propose \
+      --proposals-dir "$prop_dir" >"$RUN_LOG" 2>&1
+    rc=$?
+  fi
+  elapsed=$(($(date +%s) - start))
+
+  if [ $rc -ne 0 ]; then
+    fail "propose-mode run failed (exit $rc, ${elapsed}s)"
+    tail -30 "$RUN_LOG" | sed 's/^/      /'
+    return
+  fi
+  pass "propose-mode run completed (exit 0, ${elapsed}s)"
+
+  # 1. Live skill must NOT have been touched.
+  mtime_after=$(stat -f '%m' "$live_path" 2>/dev/null || stat -c '%Y' "$live_path")
+  sha_after=$(shasum -a 256 "$live_path" | awk '{print $1}')
+  if [ "$mtime_before" = "$mtime_after" ] && [ "$sha_before" = "$sha_after" ]; then
+    pass "live skill untouched (mtime + sha256 match)"
+  else
+    fail "live skill modified by propose mode (mtime $mtime_before→$mtime_after, sha $sha_before→$sha_after)"
+  fi
+
+  # 2. Proposal dir must contain expected artifacts.
+  prop_run=$(find "$prop_dir/$skill" -maxdepth 1 -type d -name "20*" 2>/dev/null | sort | tail -1)
+  if [ -z "$prop_run" ]; then
+    fail "no proposal dir under $prop_dir/$skill/ — artifacts not written"
+    return
+  fi
+  pass "proposal dir created: $(basename "$prop_run")"
+
+  for f in decision.json baseline_skill.md evolved_skill.md constraints.json review.md STATUS; do
+    if [ -e "$prop_run/$f" ]; then
+      pass "$f present"
+    else
+      fail "$f missing from proposal"
+    fi
+  done
+
+  # 3. decision.json schema + correctness.
+  if [ -s "$prop_run/decision.json" ]; then
+    py_out=$(python - <<PY 2>&1
+import json, sys
+d = json.load(open("$prop_run/decision.json"))
+need = ["skill_name","timestamp","mode","baseline_score","evolved_score","improvement","auto_merge","gate_reason"]
+missing = [k for k in need if k not in d]
+if missing:
+    print("MISSING:" + ",".join(missing)); sys.exit(1)
+if d["mode"] != "propose":
+    print(f"BAD MODE: {d['mode']}"); sys.exit(1)
+if d["auto_merge"] is not False:
+    print(f"BAD AUTO_MERGE: {d['auto_merge']} (propose mode must be false)"); sys.exit(1)
+print(f"OK mode={d['mode']} auto_merge={d['auto_merge']} Δ={d['improvement']:+.3f}")
+PY
+)
+    if [ $? -eq 0 ]; then
+      pass "decision.json schema — $py_out"
+    else
+      fail "decision.json schema — $py_out"
+    fi
+  fi
+
+  # 4. No .bak files created under live skill dir (propose must never touch backups).
+  bak_count=$(find "$(dirname "$live_path")" -maxdepth 1 -name "*.bak.*" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$bak_count" = "0" ]; then
+    pass "no .bak files created in live skill dir"
+  else
+    fail ".bak files found — propose mode should never create backups ($bak_count found)"
+  fi
+}
+
 # ── dispatch ─────────────────────────────────────────────────────────
 case "$TIER" in
   t1|T1) run_t1 ;;
   t2|T2) run_t2 ;;
   t3|T3) run_t3 ;;
-  all|"") run_t1; run_t2; run_t3 ;;
-  *) echo "unknown tier: $TIER (use t1|t2|t3|all)"; exit 2 ;;
+  t4|T4) run_t4 ;;
+  all|"") run_t1; run_t2; run_t3; run_t4 ;;
+  *) echo "unknown tier: $TIER (use t1|t2|t3|t4|all)"; exit 2 ;;
 esac
 
 # ── summary ──────────────────────────────────────────────────────────
