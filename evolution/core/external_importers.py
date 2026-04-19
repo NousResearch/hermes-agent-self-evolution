@@ -34,6 +34,7 @@ from rich.console import Console
 from rich.progress import Progress
 
 from evolution.core.dataset_builder import EvalExample, EvalDataset
+from evolution.core.lm import build_lm
 
 console = Console()
 
@@ -490,7 +491,7 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(self.model)
+        lm = build_lm(self.model)
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))
