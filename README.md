@@ -35,14 +35,46 @@ pip install -e ".[dev]"
 
 # Point at your hermes-agent repo
 export HERMES_AGENT_REPO=~/.hermes/hermes-agent
+```
 
-# Evolve a skill (synthetic eval data)
-python -m evolution.skills.evolve_skill \
-    --skill github-code-review \
-    --iterations 10 \
-    --eval-source synthetic
+### Recommended safe path: codex-batched
 
-# Or use real session history from Claude Code, Copilot, and Hermes
+Use the bounded Codex CLI path when you want explicit model invocations and
+conservative runtime guardrails.
+
+```bash
+# Conservative cached-dataset run with hard limits
+mkdir -p ./datasets/plan-smoke
+
+HERMES_EVOLUTION_MAX_CODEX_CALLS=2 \
+HERMES_EVOLUTION_PHASE_TIMEOUT_SECONDS=90 \
+HERMES_EVOLUTION_MAX_RUN_SECONDS=180 \
+HERMES_EVOLUTION_MAX_CANDIDATES_PER_ITERATION=1 \
+HERMES_EVOLUTION_ALLOW_LIVE_MODEL=0 \
+python -m evolution.skills.evolve_skill_codex \
+    --skill plan \
+    --eval-source cached \
+    --dataset-path ./datasets/plan-smoke \
+    --iterations 1 \
+    --hermes-repo "$HERMES_AGENT_REPO"
+```
+
+This path is currently the safer option because it:
+- uses explicit `codex exec` subprocess phases instead of hidden DSPy call trees
+- enforces explicit call/time budgets before each phase starts
+- prefers cached datasets over live generation
+- currently supports cached datasets and `iterations=1` only
+- writes structured metrics including per-example results and recommendation metadata
+
+### Legacy DSPy path
+
+The original `evolve_skill` entrypoint is still present for compatibility and
+experiments, but it is not the recommended path when running against a local
+OpenAI-compatible provider. In that configuration, it is intentionally blocked
+because the DSPy-based flow can fan out into too many hidden calls.
+
+```bash
+# Legacy / experimental path
 python -m evolution.skills.evolve_skill \
     --skill github-code-review \
     --iterations 10 \
