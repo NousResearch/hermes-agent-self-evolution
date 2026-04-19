@@ -1,4 +1,9 @@
-"""Evolve a Hermes Agent skill using DSPy + GEPA.
+"""Legacy DSPy-based self-evolution entrypoint.
+
+WARNING: This path is retained only for compatibility and experiments against
+non-local providers. It is not safe for unattended runs against the local
+Hermes API on this host because DSPy can fan out into many hidden model calls.
+Use `evolve_skill_codex.py` for the new guarded codex-batched path.
 
 Usage:
     python -m evolution.skills.evolve_skill --skill github-code-review --iterations 10
@@ -19,6 +24,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from evolution.core.config import EvolutionConfig, get_hermes_agent_path
+from evolution.core.lm import build_lm
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
@@ -33,6 +39,15 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def enforce_legacy_backend_guard(lm_api_base: str) -> None:
+    """Hard-block the legacy DSPy path when pointed at the local Hermes API."""
+    normalized = (lm_api_base or "").strip().lower()
+    if normalized.startswith("http://127.0.0.1:8642") or normalized.startswith("http://localhost:8642"):
+        raise RuntimeError(
+            "Legacy DSPy path is blocked for the local Hermes API; use the codex-batched path instead."
+        )
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -43,6 +58,7 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    dataset_size: Optional[int] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -53,19 +69,24 @@ def evolve(
         judge_model=eval_model,  # Use same model for dataset generation
         run_pytest=run_tests,
     )
+    if dataset_size is not None:
+        config.eval_dataset_size = dataset_size
     if hermes_repo:
         config.hermes_agent_path = Path(hermes_repo)
+    enforce_legacy_backend_guard(config.lm_api_base)
+
+    hermes_path = config.resolve_hermes_agent_path()
 
     # ── 1. Find and load the skill ──────────────────────────────────────
     console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]\n")
 
-    skill_path = find_skill(skill_name, config.hermes_agent_path)
+    skill_path = find_skill(skill_name, hermes_path)
     if not skill_path:
-        console.print(f"[red]✗ Skill '{skill_name}' not found in {config.hermes_agent_path / 'skills'}[/red]")
+        console.print(f"[red]✗ Skill '{skill_name}' not found in {hermes_path / 'skills'}[/red]")
         sys.exit(1)
 
     skill = load_skill(skill_path)
-    console.print(f"  Loaded: {skill_path.relative_to(config.hermes_agent_path)}")
+    console.print(f"  Loaded: {skill_path.relative_to(hermes_path)}")
     console.print(f"  Name: {skill['name']}")
     console.print(f"  Size: {len(skill['raw']):,} chars")
     console.print(f"  Description: {skill['description'][:80]}...")
@@ -119,7 +140,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -138,7 +159,7 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = build_lm(eval_model, config)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -186,7 +207,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -304,7 +325,8 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--dataset-size", default=None, type=int, help="Override number of generated evaluation cases")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, dataset_size):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -316,6 +338,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        dataset_size=dataset_size,
     )
 
 
