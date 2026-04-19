@@ -1,8 +1,4 @@
-"""Prompt/protocol builders for codex-batched self-evolution.
-
-Kept separate from the CLI entrypoint so prompt evolution stays isolated and
-merge-friendly across upstream updates.
-"""
+"""Prompt/protocol builders for codex-batched self-evolution."""
 
 from __future__ import annotations
 

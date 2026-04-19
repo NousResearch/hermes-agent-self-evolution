@@ -1,15 +1,11 @@
-"""Cached dataset helpers for codex-batched evolution.
-
-This module is additive and intentionally independent of the legacy DSPy entry
-point so it can survive upstream repo updates with minimal merge friction.
-"""
+"""Cached dataset helpers for codex-batched evolution."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Callable
 
-from evolution.core.dataset_builder import EvalDataset
+from evolution.core.eval_dataset import EvalDataset
 
 
 def _has_complete_dataset(path: Path) -> bool:

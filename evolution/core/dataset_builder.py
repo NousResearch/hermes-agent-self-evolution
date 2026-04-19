@@ -9,82 +9,13 @@ C) Golden sets — hand-curated JSONL files
 import json
 import random
 from pathlib import Path
-from dataclasses import dataclass, field
 from typing import Optional
 
 import dspy
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.eval_dataset import EvalDataset, EvalExample
 from evolution.core.lm import build_lm
-
-
-@dataclass
-class EvalExample:
-    """A single evaluation example."""
-    task_input: str  # What the user asks
-    expected_behavior: str  # Rubric — what a good response looks like
-    difficulty: str = "medium"  # easy, medium, hard
-    category: str = "general"  # Category for stratified eval
-    source: str = "synthetic"  # synthetic, sessiondb, golden
-
-    def to_dict(self) -> dict:
-        return {
-            "task_input": self.task_input,
-            "expected_behavior": self.expected_behavior,
-            "difficulty": self.difficulty,
-            "category": self.category,
-            "source": self.source,
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "EvalExample":
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
-
-
-@dataclass
-class EvalDataset:
-    """Train/val/holdout split of evaluation examples."""
-    train: list[EvalExample] = field(default_factory=list)
-    val: list[EvalExample] = field(default_factory=list)
-    holdout: list[EvalExample] = field(default_factory=list)
-
-    @property
-    def all_examples(self) -> list[EvalExample]:
-        return self.train + self.val + self.holdout
-
-    def save(self, path: Path):
-        """Save dataset splits to JSONL files."""
-        path.mkdir(parents=True, exist_ok=True)
-        for split_name, split_data in [("train", self.train), ("val", self.val), ("holdout", self.holdout)]:
-            with open(path / f"{split_name}.jsonl", "w") as f:
-                for ex in split_data:
-                    f.write(json.dumps(ex.to_dict()) + "\n")
-
-    @classmethod
-    def load(cls, path: Path) -> "EvalDataset":
-        """Load dataset splits from JSONL files."""
-        dataset = cls()
-        for split_name in ["train", "val", "holdout"]:
-            split_file = path / f"{split_name}.jsonl"
-            if split_file.exists():
-                examples = []
-                with open(split_file) as f:
-                    for line in f:
-                        if line.strip():
-                            examples.append(EvalExample.from_dict(json.loads(line)))
-                setattr(dataset, split_name, examples)
-        return dataset
-
-    def to_dspy_examples(self, split: str = "train") -> list[dspy.Example]:
-        """Convert a split to DSPy Example objects."""
-        data = getattr(self, split)
-        return [
-            dspy.Example(
-                task_input=ex.task_input,
-                expected_behavior=ex.expected_behavior,
-            ).with_inputs("task_input")
-            for ex in data
-        ]
 
 
 class SyntheticDatasetBuilder:

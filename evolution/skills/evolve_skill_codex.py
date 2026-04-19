@@ -1,9 +1,4 @@
-"""Codex-batched self-evolution entrypoint.
-
-This module is intentionally additive and keeps the legacy DSPy path untouched.
-It provides a bounded orchestration path with explicit guardrails, cached dataset
-loading, and a small number of Codex subprocess phases.
-"""
+"""Codex-batched self-evolution entrypoint."""
 
 from __future__ import annotations
 
@@ -18,10 +13,10 @@ from evolution.core.budget import RunBudget
 from evolution.core.cached_dataset import load_or_create_dataset
 from evolution.core.codex_protocol import build_evaluation_prompt, build_mutation_prompt
 from evolution.core.codex_runner import CodexRunner
-from evolution.core.codex_schema import parse_evaluation_result, parse_mutation_result
+from evolution.core.codex_schema import EvaluationResult, parse_evaluation_result, parse_mutation_result
 from evolution.core.config import EvolutionConfig
 from evolution.core.constraints import ConstraintValidator
-from evolution.skills.skill_module import find_skill, load_skill
+from evolution.skills.skill_io import find_skill, load_skill
 
 console = Console()
 
@@ -44,6 +39,26 @@ def _load_dataset(dataset_path: str | None, *, allow_live_generation: bool):
     )
 
 
+def _select_holdout_examples(dataset, max_examples: int) -> list[dict]:
+    if max_examples < 1:
+        raise click.ClickException("HERMES_EVOLUTION_MAX_EXAMPLES must be at least 1")
+    return [example.to_dict() for example in dataset.holdout[:max_examples]]
+
+
+def _ensure_candidate_is_accepted(evaluation_result: EvaluationResult) -> None:
+    if evaluation_result.recommendation.winner != "candidate":
+        raise click.ClickException(
+            "Candidate rejected by evaluation: "
+            f"winner={evaluation_result.recommendation.winner}; "
+            f"reason={evaluation_result.recommendation.reason}"
+        )
+    if evaluation_result.improvement <= 0:
+        raise click.ClickException(
+            "Candidate rejected by evaluation: "
+            f"improvement must be > 0, got {evaluation_result.improvement}"
+        )
+
+
 def _save_run_artifacts(config: EvolutionConfig, skill_name: str, baseline_skill: str, candidate_skill: str, metrics: dict) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = config.output_dir / skill_name / timestamp
@@ -56,7 +71,7 @@ def _save_run_artifacts(config: EvolutionConfig, skill_name: str, baseline_skill
 
 @click.command()
 @click.option("--skill", required=True, help="Name of the skill to evolve")
-@click.option("--eval-source", default="cached", type=click.Choice(["cached", "synthetic"]), help="Dataset source for codex-batched evolution")
+@click.option("--eval-source", default="cached", type=click.Choice(["cached"]), help="Dataset source for codex-batched evolution")
 @click.option("--dataset-path", default=None, help="Path to cached evaluation dataset")
 @click.option("--iterations", default=1, type=int, help="Number of mutation iterations")
 @click.option("--dry-run", is_flag=True, help="Validate configuration and guardrails without running Codex")
@@ -65,9 +80,6 @@ def main(skill: str, eval_source: str, dataset_path: str | None, iterations: int
     """Run the new codex-batched self-evolution workflow."""
     if iterations != 1:
         raise click.ClickException("codex-batched path currently supports only iterations=1 until the multi-iteration loop exists")
-
-    if eval_source == "synthetic":
-        raise click.ClickException("synthetic eval-source is not implemented in the codex-batched path yet")
 
     config = _build_config(iterations=iterations, hermes_repo=hermes_repo)
 
@@ -95,8 +107,6 @@ def main(skill: str, eval_source: str, dataset_path: str | None, iterations: int
         phase_timeout_seconds=config.phase_timeout_seconds,
         max_examples=config.max_examples,
         max_iterations=config.iterations,
-        max_candidates_per_iteration=config.max_candidates_per_iteration,
-        budget_strict=config.budget_strict,
     )
     budget.start_run()
     runner = CodexRunner(workdir=hermes_path, codex_bin=config.codex_bin)
@@ -118,7 +128,7 @@ def main(skill: str, eval_source: str, dataset_path: str | None, iterations: int
         problems = "; ".join(result.message for result in results if not result.passed)
         raise click.ClickException(f"Candidate failed constraints: {problems}")
 
-    holdout_examples = [example.to_dict() for example in dataset.holdout]
+    holdout_examples = _select_holdout_examples(dataset, config.max_examples)
     budget.register_call("evaluation")
     try:
         evaluation_payload = runner.run_json_task(
@@ -128,6 +138,8 @@ def main(skill: str, eval_source: str, dataset_path: str | None, iterations: int
         evaluation_result = parse_evaluation_result(evaluation_payload)
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
+
+    _ensure_candidate_is_accepted(evaluation_result)
 
     metrics = {
         "skill_name": skill,
@@ -139,15 +151,13 @@ def main(skill: str, eval_source: str, dataset_path: str | None, iterations: int
         "recommendation": evaluation_result.recommendation.to_dict(),
         "prompt_version": "v1",
         "calls_used": budget.calls_used,
-        "holdout_examples": len(dataset.holdout),
+        "holdout_examples": len(holdout_examples),
         "budget": {
             "max_codex_calls": budget.max_codex_calls,
             "phase_timeout_seconds": budget.phase_timeout_seconds,
             "max_run_seconds": budget.max_run_seconds,
             "max_examples": budget.max_examples,
             "max_iterations": budget.max_iterations,
-            "max_candidates_per_iteration": budget.max_candidates_per_iteration,
-            "budget_strict": budget.budget_strict,
         },
     }
     output_dir = _save_run_artifacts(config, skill, loaded_skill["raw"], candidate_skill, metrics)

@@ -44,13 +44,12 @@ conservative runtime guardrails.
 
 ```bash
 # Conservative cached-dataset run with hard limits
-mkdir -p ./datasets/plan-smoke
+# Dataset directory must already contain: train.jsonl, val.jsonl, holdout.jsonl
 
 HERMES_EVOLUTION_MAX_CODEX_CALLS=2 \
 HERMES_EVOLUTION_PHASE_TIMEOUT_SECONDS=90 \
 HERMES_EVOLUTION_MAX_RUN_SECONDS=180 \
-HERMES_EVOLUTION_MAX_CANDIDATES_PER_ITERATION=1 \
-HERMES_EVOLUTION_ALLOW_LIVE_MODEL=0 \
+HERMES_EVOLUTION_MAX_EXAMPLES=4 \
 python -m evolution.skills.evolve_skill_codex \
     --skill plan \
     --eval-source cached \
@@ -100,12 +99,16 @@ python -m evolution.skills.evolve_skill \
 
 ## Guardrails
 
-Every evolved variant must pass:
-1. **Full test suite** — `pytest tests/ -q` must pass 100%
-2. **Size limits** — Skills ≤15KB, tool descriptions ≤500 chars
-3. **Caching compatibility** — No mid-conversation changes
-4. **Semantic preservation** — Must not drift from original purpose
-5. **PR review** — All changes go through human review, never direct commit
+Current codex-batched runs enforce:
+1. **Explicit runtime/call budgets** before each Codex phase starts
+2. **Cached-dataset evaluation only**
+3. **Size/growth/structure constraints** on the candidate skill
+4. **Evaluation acceptance gating** — candidates are rejected unless evaluation prefers them with positive improvement
+5. **Human review** — changes are still intended to go through PR review rather than unattended promotion
+
+Recommended validation before merging any evolved change:
+- run the relevant project tests explicitly
+- inspect the structured evaluation output and generated diff
 
 ## Full Plan
 

@@ -16,15 +16,11 @@ class EvolutionConfig:
     iterations: int = 10
     population_size: int = 5
 
-    # Execution backend
-    execution_backend: str = field(default_factory=lambda: os.getenv("HERMES_EVOLUTION_EXECUTION_BACKEND", "codex-batch"))
-    allow_live_model: bool = field(default_factory=lambda: _env_bool("HERMES_EVOLUTION_ALLOW_LIVE_MODEL", False))
+    # Codex-batched execution limits
     max_codex_calls: int = field(default_factory=lambda: int(os.getenv("HERMES_EVOLUTION_MAX_CODEX_CALLS", "3")))
     max_examples: int = field(default_factory=lambda: int(os.getenv("HERMES_EVOLUTION_MAX_EXAMPLES", "8")))
     phase_timeout_seconds: int = field(default_factory=lambda: int(os.getenv("HERMES_EVOLUTION_PHASE_TIMEOUT_SECONDS", "180")))
     max_run_seconds: int = field(default_factory=lambda: int(os.getenv("HERMES_EVOLUTION_MAX_RUN_SECONDS", "600")))
-    max_candidates_per_iteration: int = field(default_factory=lambda: int(os.getenv("HERMES_EVOLUTION_MAX_CANDIDATES_PER_ITERATION", "1")))
-    budget_strict: bool = field(default_factory=lambda: _env_bool("HERMES_EVOLUTION_BUDGET_STRICT", True))
     codex_bin: str = field(default_factory=lambda: os.getenv("HERMES_EVOLUTION_CODEX_BIN", "codex"))
 
     # LLM configuration
@@ -76,13 +72,6 @@ def _first_set_env(*names: str) -> str:
         if value:
             return value
     return ""
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _maybe_get_hermes_agent_path() -> Path | None:

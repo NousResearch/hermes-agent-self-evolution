@@ -14,7 +14,7 @@ from evolution.core.codex_runner import (
 
 class TestBuildCodexCommand:
     def test_build_codex_command_uses_stdin_prompt_mode(self, tmp_path):
-        cmd = build_codex_command(workdir=tmp_path)
+        cmd = build_codex_command()
 
         assert cmd[:3] == ["codex", "exec", "-"]
 

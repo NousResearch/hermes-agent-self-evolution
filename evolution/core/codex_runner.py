@@ -1,8 +1,4 @@
-"""Codex CLI subprocess runner for batched evolution phases.
-
-Kept isolated from the legacy DSPy path so upstream updates can replace the old
-optimizer logic without colliding with this adapter.
-"""
+"""Codex CLI subprocess runner for batched evolution phases."""
 
 from __future__ import annotations
 
@@ -16,9 +12,8 @@ class CodexRunTimeout(RuntimeError):
     """Raised when a codex subprocess exceeds its timeout."""
 
 
-def build_codex_command(workdir: Path | str, codex_bin: str = "codex") -> list[str]:
+def build_codex_command(codex_bin: str = "codex") -> list[str]:
     """Build the Codex CLI command using stdin prompt mode."""
-    _ = workdir
     return [codex_bin, "exec", "-"]
 
 
@@ -44,7 +39,7 @@ class CodexRunner:
     codex_bin: str = "codex"
 
     def run_json_task(self, prompt: str, timeout_seconds: float) -> dict:
-        command = build_codex_command(workdir=self.workdir, codex_bin=self.codex_bin)
+        command = build_codex_command(codex_bin=self.codex_bin)
         try:
             stdout = _run_subprocess(command, self.workdir, timeout_seconds, prompt)
         except TimeoutError as exc:

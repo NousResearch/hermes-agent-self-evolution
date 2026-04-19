@@ -3,7 +3,7 @@
 import pytest
 
 from evolution.core.cached_dataset import load_or_create_dataset
-from evolution.core.dataset_builder import EvalDataset, EvalExample
+from evolution.core.eval_dataset import EvalDataset, EvalExample
 
 
 class TestLoadOrCreateDataset:

@@ -49,25 +49,21 @@ class TestCodexBatchConfig:
     def test_config_exposes_safe_codex_batch_defaults(self):
         config = EvolutionConfig()
 
-        assert config.execution_backend == "codex-batch"
-        assert config.allow_live_model is False
         assert config.max_codex_calls == 3
         assert config.max_examples == 8
         assert config.phase_timeout_seconds == 180
         assert config.max_run_seconds == 600
-        assert config.max_candidates_per_iteration == 1
-        assert config.budget_strict is True
         assert config.codex_bin == "codex"
 
     def test_config_reads_codex_batch_env_overrides(self, monkeypatch):
-        monkeypatch.setenv("HERMES_EVOLUTION_ALLOW_LIVE_MODEL", "1")
         monkeypatch.setenv("HERMES_EVOLUTION_MAX_CODEX_CALLS", "7")
+        monkeypatch.setenv("HERMES_EVOLUTION_MAX_EXAMPLES", "5")
         monkeypatch.setenv("HERMES_EVOLUTION_PHASE_TIMEOUT_SECONDS", "55")
         monkeypatch.setenv("HERMES_EVOLUTION_MAX_RUN_SECONDS", "999")
 
         config = EvolutionConfig()
 
-        assert config.allow_live_model is True
         assert config.max_codex_calls == 7
+        assert config.max_examples == 5
         assert config.phase_timeout_seconds == 55
         assert config.max_run_seconds == 999

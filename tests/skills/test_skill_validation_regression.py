@@ -4,7 +4,7 @@ from pathlib import Path
 
 from evolution.core.config import EvolutionConfig
 from evolution.core.constraints import ConstraintValidator
-from evolution.skills.skill_module import load_skill, reassemble_skill
+from evolution.skills.skill_io import load_skill, reassemble_skill
 
 
 def _write_test_skill(tmp_path: Path) -> Path:

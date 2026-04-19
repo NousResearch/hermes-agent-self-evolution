@@ -1,8 +1,4 @@
-"""Hard budget enforcement for codex-batched evolution runs.
-
-This module is intentionally standalone and additive so it can survive upstream
-repo updates with minimal merge friction.
-"""
+"""Hard budget enforcement for codex-batched evolution runs."""
 
 from __future__ import annotations
 
@@ -23,8 +19,6 @@ class RunBudget:
     phase_timeout_seconds: float
     max_examples: int | None = None
     max_iterations: int | None = None
-    max_candidates_per_iteration: int | None = None
-    budget_strict: bool = True
     calls_used: int = 0
     started_at: float | None = field(default=None, init=False)
 
