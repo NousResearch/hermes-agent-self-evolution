@@ -64,3 +64,33 @@ class TestEvaluationSchema:
                 "per_example": [],
                 "recommendation": {"winner": "candidate"},
             })
+
+    def test_parse_evaluation_result_accepts_qualitative_confidence(self):
+        result = parse_evaluation_result({
+            "baseline_score": 0.4,
+            "candidate_score": 0.6,
+            "improvement": 0.2,
+            "per_example": [],
+            "recommendation": {
+                "winner": "candidate",
+                "reason": "candidate is clearer",
+                "confidence": "high",
+            },
+        })
+
+        assert result.recommendation.confidence == 0.9
+
+    def test_parse_evaluation_result_accepts_percentage_confidence(self):
+        result = parse_evaluation_result({
+            "baseline_score": 0.4,
+            "candidate_score": 0.6,
+            "improvement": 0.2,
+            "per_example": [],
+            "recommendation": {
+                "winner": "candidate",
+                "reason": "candidate is clearer",
+                "confidence": "78%",
+            },
+        })
+
+        assert result.recommendation.confidence == 0.78

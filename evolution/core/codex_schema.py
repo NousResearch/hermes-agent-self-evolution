@@ -63,5 +63,26 @@ def _parse_recommendation(payload: dict) -> Recommendation:
     return Recommendation(
         winner=str(payload["winner"]),
         reason=str(payload["reason"]),
-        confidence=float(payload["confidence"]),
+        confidence=_parse_confidence(payload["confidence"]),
     )
+
+
+def _parse_confidence(value) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        qualitative = {
+            "low": 0.3,
+            "medium": 0.6,
+            "med": 0.6,
+            "high": 0.9,
+        }
+        if normalized in qualitative:
+            return qualitative[normalized]
+        if normalized.endswith("%"):
+            return float(normalized[:-1].strip()) / 100.0
+        return float(normalized)
+
+    raise ValueError(f"Unsupported confidence value: {value!r}")
