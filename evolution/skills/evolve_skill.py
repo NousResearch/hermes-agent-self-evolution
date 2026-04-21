@@ -33,6 +33,43 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def _baseline_validation_text(skill: dict) -> str:
+    """Return the full baseline skill text for structural validation."""
+    return skill["raw"]
+
+
+def _evolved_validation_text(skill: dict, evolved_body: str) -> str:
+    """Return the reassembled evolved skill for structural validation."""
+    return reassemble_skill(skill["frontmatter"], evolved_body)
+
+
+def validate_skill_constraints(
+    validator: ConstraintValidator,
+    skill: dict,
+    evolved_body: Optional[str] = None,
+) -> list:
+    """Validate a skill while keeping budget checks on the body only.
+
+    Size, growth, and non-empty checks should apply to the mutable markdown body.
+    Structural validation should apply to the full SKILL.md file with frontmatter.
+    """
+    artifact_body = skill["body"] if evolved_body is None else evolved_body
+    baseline_body = None if evolved_body is None else skill["body"]
+    full_skill_text = (
+        _baseline_validation_text(skill)
+        if evolved_body is None
+        else _evolved_validation_text(skill, evolved_body)
+    )
+
+    results = [
+        result
+        for result in validator.validate_all(artifact_body, "skill", baseline_text=baseline_body)
+        if result.constraint_name != "skill_structure"
+    ]
+    results.append(validator._check_skill_structure(full_skill_text))
+    return results
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -119,7 +156,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validate_skill_constraints(validator, skill)
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -186,7 +223,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validate_skill_constraints(validator, skill, evolved_body=evolved_body)
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
