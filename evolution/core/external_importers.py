@@ -30,6 +30,7 @@ from typing import Optional
 
 import click
 import dspy
+import os
 from rich.console import Console
 from rich.progress import Progress
 
@@ -490,7 +491,7 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(self.model)
+        lm = dspy.LM(self.model, api_base=os.getenv("OPENROUTER_BASE_URL")) if os.getenv("OPENROUTER_BASE_URL") else dspy.LM(self.model)
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))

@@ -6,15 +6,94 @@ B) SessionDB mining — extract real usage patterns and score with LLM-as-judge
 C) Golden sets — hand-curated JSONL files
 """
 
+import ast
 import json
 import random
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
 import dspy
+import os
 
 from evolution.core.config import EvolutionConfig
+
+
+def _try_parse_json(text: str) -> list:
+    """Parse JSON with multiple fallback strategies for LLM output.
+
+    LLMs frequently produce malformed JSON: trailing commas, single quotes,
+    text wrapped in markdown fences, etc. This tries progressively more
+    aggressive fixes before giving up.
+    """
+    text = text.strip()
+
+    # Strategy 1: Direct parse
+    try:
+        result = json.loads(text)
+        if isinstance(result, list):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 2: Python literal_eval — handles single-quoted dicts/strings
+    try:
+        result = ast.literal_eval(text)
+        if isinstance(result, list):
+            return result
+    except (ValueError, SyntaxError):
+        pass
+
+    # Strategy 3: Extract JSON array from surrounding text
+    match = re.search(r'\[\s*\{.*\}\s*\]', text, re.DOTALL)
+    if match:
+        try:
+            result = json.loads(match.group())
+            if isinstance(result, list):
+                return result
+        except json.JSONDecodeError:
+            pass
+
+    # Strategy 4: Try literal_eval on extracted candidate
+    if match:
+        try:
+            result = ast.literal_eval(match.group())
+            if isinstance(result, list):
+                return result
+        except (ValueError, SyntaxError):
+            pass
+
+    # Strategy 5: Fix trailing commas, then parse
+    fixed = re.sub(r',\s*([}\]])', r'\1', text)
+    fixed = re.sub(r"(?<!')\'([^']+?)'(?=\s*[:,\]\}])", r'"\1"', fixed)
+    try:
+        result = json.loads(fixed)
+        if isinstance(result, list):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 6: Strip markdown code fences
+    stripped = re.sub(r'^```(?:json)?\s*', '', text, flags=re.MULTILINE)
+    stripped = re.sub(r'\s*```$', '', stripped)
+    try:
+        result = json.loads(stripped)
+        if isinstance(result, list):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # Last resort: extract all {...} blocks and try each
+    for block_match in re.finditer(r'\{[^{}]*\}', text):
+        try:
+            result = json.loads(block_match.group())
+            if isinstance(result, list):
+                return result
+        except json.JSONDecodeError:
+            continue
+
+    return None
 
 
 @dataclass
@@ -123,7 +202,7 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        lm = dspy.LM(self.config.judge_model, api_base=os.getenv("OPENROUTER_BASE_URL")) if os.getenv("OPENROUTER_BASE_URL") else dspy.LM(self.config.judge_model)
 
         with dspy.context(lm=lm):
             result = self.generator(
@@ -132,17 +211,10 @@ class SyntheticDatasetBuilder:
                 num_cases=n,
             )
 
-        # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+        # Parse the generated test cases using robust multi-strategy parser
+        cases_raw = _try_parse_json(result.test_cases)
+        if cases_raw is None:
+            raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:500]}")
 
         examples = [
             EvalExample(

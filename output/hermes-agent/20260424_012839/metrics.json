@@ -1,0 +1,17 @@
+{
+  "skill_name": "hermes-agent",
+  "timestamp": "20260424_012839",
+  "iterations": 10,
+  "optimizer_model": "openrouter/anthropic/claude-sonnet-4",
+  "eval_model": "openrouter/google/gemini-2.5-flash",
+  "baseline_score": 0.5979440860215053,
+  "evolved_score": 0.732700358422939,
+  "improvement": 0.13475627240143373,
+  "baseline_size": 27212,
+  "evolved_size": 27212,
+  "train_examples": 10,
+  "val_examples": 5,
+  "holdout_examples": 5,
+  "elapsed_seconds": 892.1851706504822,
+  "constraints_passed": true
+}

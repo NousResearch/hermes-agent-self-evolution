@@ -1,0 +1,17 @@
+{
+  "skill_name": "systematic-debugging",
+  "timestamp": "20260424_232423",
+  "iterations": 3,
+  "optimizer_model": "openrouter/anthropic/claude-sonnet-4",
+  "eval_model": "openrouter/google/gemini-2.5-flash",
+  "baseline_score": 0.4787204285302781,
+  "evolved_score": 0.4787204285302781,
+  "improvement": 0.0,
+  "baseline_size": 10020,
+  "evolved_size": 10020,
+  "train_examples": 10,
+  "val_examples": 5,
+  "holdout_examples": 5,
+  "elapsed_seconds": 93.34848666191101,
+  "constraints_passed": true
+}

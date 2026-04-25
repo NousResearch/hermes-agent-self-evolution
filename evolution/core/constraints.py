@@ -4,6 +4,7 @@ Every candidate variant must pass ALL constraints before it can be
 considered valid. Failed constraints = immediate rejection.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass
@@ -148,27 +149,65 @@ class ConstraintValidator:
             )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
-        """Check that a skill file has valid YAML frontmatter and markdown body."""
+        """Check that a skill file has valid YAML frontmatter AND a substantive body.
+
+        Frontmatter validation (YAML between --- markers):
+        - Must start with ---
+        - Must contain 'name:' field
+        - Must contain 'description:' field
+
+        Body validation (markdown after frontmatter):
+        - Must have at least 2 of 3: headings, procedural content, substantial length
+        This allows varied skill formats while ensuring meaningful content.
+        """
         has_frontmatter = text.strip().startswith("---")
         has_name = "name:" in text[:500] if has_frontmatter else False
         has_description = "description:" in text[:500] if has_frontmatter else False
 
-        if has_frontmatter and has_name and has_description:
+        frontmatter_ok = has_frontmatter and has_name and has_description
+
+        # Separate body from frontmatter for body validation
+        body = text
+        if has_frontmatter:
+            parts = text.split("---", 2)
+            if len(parts) >= 3:
+                body = parts[2].strip()
+
+        # Body must have ≥2 of 3: headings, procedural content, substantial length
+        has_headings = bool(re.search(r"^#+\s", body, re.MULTILINE))
+        has_steps = any(
+            marker in body.lower()
+            for marker in ["step", "1.", "procedure", "how to", "instructions"]
+        )
+        has_content = len(body.strip()) > 100
+
+        body_checks = {
+            "headings": has_headings,
+            "procedural content": has_steps,
+            "substantial content": has_content,
+        }
+        body_passed = sum(body_checks.values()) >= 2
+
+        if frontmatter_ok and body_passed:
             return ConstraintResult(
                 passed=True,
                 constraint_name="skill_structure",
-                message="Skill has valid frontmatter (name + description)",
+                message="Skill has valid frontmatter (name + description) and substantive body",
             )
-        else:
-            missing = []
-            if not has_frontmatter:
-                missing.append("YAML frontmatter (---)")
-            if not has_name:
-                missing.append("name field")
-            if not has_description:
-                missing.append("description field")
-            return ConstraintResult(
-                passed=False,
-                constraint_name="skill_structure",
-                message=f"Skill missing: {', '.join(missing)}",
-            )
+
+        missing = []
+        if not has_frontmatter:
+            missing.append("YAML frontmatter (---)")
+        if not has_name:
+            missing.append("name field")
+        if not has_description:
+            missing.append("description field")
+        if not body_passed:
+            failed_checks = [k for k, v in body_checks.items() if not v]
+            missing.append(f"body lacks: {', '.join(failed_checks)}")
+
+        return ConstraintResult(
+            passed=False,
+            constraint_name="skill_structure",
+            message=f"Skill missing: {', '.join(missing)}",
+        )

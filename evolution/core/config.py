@@ -23,7 +23,7 @@ class EvolutionConfig:
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
 
     # Constraints
-    max_skill_size: int = 15_000  # 15KB default
+    max_skill_size: int = 50_000  # 50KB default — evolved skills may include few-shot examples
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
