@@ -59,24 +59,37 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
     """Find a skill by name in the hermes-agent skills directory.
 
     Searches recursively for a SKILL.md in a directory matching the skill name.
+    Accepts both 'skill_name' and 'category/skill_name' formats.
+    Also falls back to ~/.hermes/skills if not found in hermes-agent/skills.
     """
-    skills_dir = hermes_agent_path / "skills"
-    if not skills_dir.exists():
-        return None
+    # Extract leaf name from 'category/skill_name' format
+    leaf_name = skill_name.split("/")[-1]
 
-    # Direct match: skills/<category>/<skill_name>/SKILL.md
-    for skill_md in skills_dir.rglob("SKILL.md"):
-        if skill_md.parent.name == skill_name:
-            return skill_md
+    # Search both possible skill directories
+    search_dirs = [hermes_agent_path / "skills"]
+    hermes_skills = Path.home() / ".hermes" / "skills"
+    if hermes_skills not in search_dirs:
+        search_dirs.append(hermes_skills)
 
-    # Fuzzy match: check the name field in frontmatter
-    for skill_md in skills_dir.rglob("SKILL.md"):
-        try:
-            content = skill_md.read_text()[:500]
-            if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
-                return skill_md
-        except Exception:
+    for skills_dir in search_dirs:
+        if not skills_dir.exists():
             continue
+
+        # Direct match: skills/<category>/<skill_name>/SKILL.md
+        for skill_md in skills_dir.rglob("SKILL.md"):
+            if skill_md.parent.name == skill_name or skill_md.parent.name == leaf_name:
+                return skill_md
+
+        # Fuzzy match: check the name field in frontmatter
+        for skill_md in skills_dir.rglob("SKILL.md"):
+            try:
+                content = skill_md.read_text()[:500]
+                if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
+                    return skill_md
+                if f"name: {leaf_name}" in content or f'name: "{leaf_name}"' in content:
+                    return skill_md
+            except Exception:
+                continue
 
     return None
 
