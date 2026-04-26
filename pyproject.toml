@@ -20,6 +20,8 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.0",
     "rich>=13.0",
+    # MIPROv2 (the fallback path in evolve_skill.py when GEPA is unavailable)
+    # imports optuna. Without it the fallback dies with ModuleNotFoundError.
     "optuna>=3.0.0",
 ]
 
