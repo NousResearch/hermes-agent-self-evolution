@@ -1,8 +1,8 @@
-"""Regression tests for skill evolution validation behavior."""
+"""Regression tests for skill evolution helpers and validation behavior."""
 
 from evolution.core.config import EvolutionConfig
 from evolution.core.constraints import ConstraintValidator
-from evolution.skills.evolve_skill import validate_skill_constraints
+from evolution.skills.evolve_skill import _is_successful_improvement, validate_skill_constraints
 from evolution.skills.skill_module import load_skill
 
 
@@ -47,6 +47,14 @@ version: 1.0.0
 
 def _result_map(results):
     return {result.constraint_name: result for result in results}
+
+
+class TestIsSuccessfulImprovement:
+    def test_requires_artifact_diff_and_positive_improvement(self):
+        assert not _is_successful_improvement("same", "same", 0.1)
+        assert not _is_successful_improvement("before", "after", 0.0)
+        assert not _is_successful_improvement("before", "after", -0.1)
+        assert _is_successful_improvement("before", "after", 0.1)
 
 
 def test_baseline_validation_uses_full_skill_file_for_structure(tmp_path):
