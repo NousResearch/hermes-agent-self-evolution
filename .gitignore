@@ -19,6 +19,11 @@ datasets/**/*.json
 snapshots/
 *.pkl
 
+# Evolution outputs — may contain skill bodies/diffs derived from private
+# session transcripts; never commit
+output/
+proposals/
+
 # IDE
 .idea/
 .vscode/

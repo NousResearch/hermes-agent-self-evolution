@@ -20,20 +20,30 @@ dependencies = [
     # (e.g. on DSPy >=3.0 where GEPA's __init__ signature changed). Without
     # the [optuna] extra the fallback crashes with ModuleNotFoundError, so the
     # whole pipeline is broken on stock installs.
-    "dspy[optuna]>=3.0.0",
-    "openai>=1.0.0",
-    "pyyaml>=6.0",
-    "click>=8.0",
-    "rich>=13.0",
+    #
+    # Upper bounds are pinned to limit supply chain risk and to fence off API
+    # breaks: DSPy's GEPA/MIPROv2 signatures changed across 3.x minors, openai
+    # 2.x is a breaking rewrite, and PyYAML/Click/Rich each ship CVEs we want
+    # to opt into rather than be auto-bumped through.
+    "dspy[optuna]>=3.0.0,<4",
+    "openai>=1.40.0,<3",
+    "pyyaml>=6.0,<7",
+    "click>=8.0,<9",
+    "rich>=13.0,<15",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
+    "pytest>=7.0,<10",
+    "pytest-asyncio>=0.21,<2",
 ]
 darwinian = [
     "darwinian-evolver",
+]
+# generate_report.py uses reportlab to produce the validation PDF. Optional
+# because the pipeline itself does not depend on PDF generation.
+report = [
+    "reportlab>=4.0,<5",
 ]
 
 [project.urls]
