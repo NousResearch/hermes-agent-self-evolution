@@ -54,7 +54,54 @@ class ConstraintValidator:
         return results
 
     def run_test_suite(self, hermes_repo: Path) -> ConstraintResult:
-        """Run the full hermes-agent test suite. Must pass 100%."""
+        """Run the full hermes-agent test suite. Must pass 100%.
+
+        Refuses to run if `hermes_repo` does not look like a real hermes-agent
+        checkout. Pytest auto-discovers and executes `conftest.py`, so pointing
+        at an untrusted tree is equivalent to executing arbitrary Python.
+        """
+        try:
+            hermes_repo = Path(hermes_repo).resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message=f"hermes-agent path is invalid: {exc}",
+            )
+
+        # Sanity-check the path looks like a hermes-agent checkout. We do not
+        # try to fully validate authenticity — that is a tree-of-trust problem
+        # — but we do reject obvious mistakes like pointing at /etc or at an
+        # unrelated project.
+        pyproject = hermes_repo / "pyproject.toml"
+        tests_dir = hermes_repo / "tests"
+        if not pyproject.exists() or not tests_dir.exists():
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message=(
+                    f"{hermes_repo} does not look like a hermes-agent checkout "
+                    "(missing pyproject.toml or tests/ directory)."
+                ),
+            )
+        try:
+            project_meta = pyproject.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message=f"Cannot read {pyproject}: {exc}",
+            )
+        if "hermes-agent" not in project_meta and "hermes_agent" not in project_meta:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message=(
+                    f"{pyproject} does not reference hermes-agent — refusing "
+                    "to run pytest in an unrelated project."
+                ),
+            )
+
         try:
             result = subprocess.run(
                 ["python", "-m", "pytest", "tests/", "-q", "--tb=no"],
@@ -62,6 +109,7 @@ class ConstraintValidator:
                 text=True,
                 timeout=300,
                 cwd=str(hermes_repo),
+                check=False,
             )
 
             if result.returncode == 0:

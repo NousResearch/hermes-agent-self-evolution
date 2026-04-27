@@ -41,30 +41,58 @@ console = Console()
 
 # Patterns that indicate secrets — NEVER include these in datasets.
 # Each pattern is intentionally anchored to known key formats to minimize
-# false positives on normal prose.
+# false positives on normal prose. This is a defence-in-depth heuristic, not
+# an authoritative scanner — pair with detect-secrets/gitleaks for production
+# scans of any output that ships externally.
 SECRET_PATTERNS = re.compile(
     r'('
-    r'sk-ant-api\S+'           # Anthropic API keys
-    r'|sk-or-v1-\S+'          # OpenRouter API keys
-    r'|sk-\S{20,}'            # Generic OpenAI-style keys (20+ chars after sk-)
-    r'|ghp_\S+'               # GitHub personal access tokens
-    r'|ghu_\S+'               # GitHub user tokens
-    r'|xoxb-\S+'              # Slack bot tokens
-    r'|xapp-\S+'              # Slack app tokens
-    r'|ntn_\S+'               # Notion integration tokens
-    r'|AKIA[0-9A-Z]{16}'      # AWS access key IDs
-    r'|Bearer\s+\S{20,}'      # Bearer auth headers (20+ char tokens)
-    r'|-----BEGIN\s+(RSA\s+)?PRIVATE\sKEY-----'  # PEM private keys
-    r'|ANTHROPIC_API_KEY'      # Known env var names (exact match)
-    r'|OPENAI_API_KEY'
-    r'|OPENROUTER_API_KEY'
-    r'|SLACK_BOT_TOKEN'
-    r'|GITHUB_TOKEN'
-    r'|AWS_SECRET_ACCESS_KEY'
-    r'|DATABASE_URL'
-    r'|\bpassword\s*[=:]\s*\S+' # password assignments (password=xxx, password: xxx)
-    r'|\bsecret\s*[=:]\s*\S+'   # secret assignments (secret=xxx, secret: xxx)
-    r'|\btoken\s*[=:]\s*\S{10,}' # token assignments with 10+ char values
+    # OpenAI / Anthropic / OpenRouter
+    r'sk-ant-api\S+'                                    # Anthropic
+    r'|sk-or-v1-\S+'                                    # OpenRouter
+    r'|sk-\S{8,}'                                       # OpenAI-style (and Stripe sk_)
+    # GitHub — keep prefix-based detection loose so short tokens still trip
+    r'|gh[pousr]_\S+'                                   # PAT / user / oauth / server / refresh
+    # GitLab
+    r'|glpat-[A-Za-z0-9_\-]{20,}'
+    # Slack — separate alternations so xapp- / xoxb- / xoxp- all match
+    r'|xoxb-\S+'
+    r'|xoxp-\S+'
+    r'|xoxa-\S+'
+    r'|xoxr-\S+'
+    r'|xoxs-\S+'
+    r'|xapp-\S+'
+    # Notion (modern + legacy)
+    r'|ntn_[A-Za-z0-9]+'
+    r'|secret_[A-Za-z0-9]{43}'
+    # AWS
+    r'|AKIA[0-9A-Z]{16}'                                # access key id
+    r'|ASIA[0-9A-Z]{16}'                                # session/temporary access key id
+    # Google API key
+    r'|AIza[0-9A-Za-z_\-]{35}'
+    # Stripe — explicit live/test variants (also covered by sk-\S{8,} above)
+    r'|rk_(?:live|test)_[A-Za-z0-9]{20,}'
+    r'|pk_(?:live|test)_[A-Za-z0-9]{20,}'
+    # Twilio
+    r'|AC[a-f0-9]{32}'
+    # SendGrid
+    r'|SG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}'
+    # Mailgun
+    r'|key-[a-f0-9]{32}'
+    # Generic Bearer / private key / JWT
+    r'|Bearer\s+\S{20,}'
+    r'|-----BEGIN\s+(?:[A-Z]+\s+)?PRIVATE\s+KEY-----'   # any algo or none
+    r'|eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+'   # JWT (3-part)
+    # Known env var names — flag presence even without a value, so a transcript
+    # describing key handling does not slip through.
+    r'|\b(?:'
+    r'ANTHROPIC_API_KEY|OPENAI_API_KEY|OPENROUTER_API_KEY|MINIMAX_API_KEY'
+    r'|SLACK_BOT_TOKEN|GITHUB_TOKEN|AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID'
+    r'|DATABASE_URL|REDIS_URL|MONGO_URI|HF_TOKEN|HUGGINGFACE_TOKEN'
+    r'|STRIPE_SECRET_KEY|TWILIO_AUTH_TOKEN|SENDGRID_API_KEY'
+    r')\b'
+    # Generic key/secret/password assignments — last so prefixed patterns win.
+    r'|\b(?:password|passwd|pwd)\s*[=:]\s*\S+'
+    r'|\b(?:api[_-]?key|secret|token|credential)\s*[=:]\s*\S{10,}'
     r')',
     re.IGNORECASE,
 )
@@ -78,6 +106,17 @@ MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
 def _contains_secret(text: str) -> bool:
     """Check if text contains potential API keys or tokens."""
     return bool(SECRET_PATTERNS.search(text))
+
+
+def scrub_secrets(text: str, replacement: str = "[REDACTED]") -> str:
+    """Replace any matched secret patterns with a placeholder.
+
+    Defence-in-depth scan on artifacts about to be persisted to disk (evolved
+    skill bodies, error messages, log lines). Not a substitute for the
+    `_contains_secret` ingest filter — this is the last-resort layer for
+    content the model may have paraphrased into plausible secret-shaped text.
+    """
+    return SECRET_PATTERNS.sub(replacement, text)
 
 
 def _validate_eval_example(
