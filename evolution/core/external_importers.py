@@ -155,25 +155,57 @@ def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
 
 
 class ClaudeCodeImporter:
-    """Import user prompts from Claude Code history.jsonl.
+    """Import sessions from Claude Code.
 
-    Claude Code stores a flat JSONL of user messages at ~/.claude/history.jsonl.
-    Each line has: display (user text), timestamp, project, sessionId.
-    Only user inputs are available — no assistant responses.
+    Claude Code stores data in two locations:
+
+    1. ``~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`` — full session
+       transcripts. Each line is one event (``user``, ``assistant``,
+       ``attachment``, ``permission-mode``, etc.). When present these yield
+       paired ``(task_input, assistant_response)`` examples comparable to the
+       Copilot/Hermes importers.
+
+    2. ``~/.claude/history.jsonl`` — flat log of user prompts only. Used as a
+       fallback when ``projects/`` is empty or missing (older Claude Code
+       installations, or fresh machines).
+
+    The default behaviour is ``source="auto"``: prefer rich project transcripts
+    when available, fall back to ``history.jsonl`` otherwise. Pass
+    ``source="history"`` to force the legacy user-only path, or
+    ``source="projects"`` to read transcripts only.
     """
 
     HISTORY_PATH = Path.home() / ".claude" / "history.jsonl"
+    PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
     @staticmethod
-    def extract_messages(limit: int = 0) -> list[dict]:
-        """Read user messages from Claude Code history.
+    def extract_messages(limit: int = 0, source: str = "auto") -> list[dict]:
+        """Read messages from Claude Code session storage.
 
         Args:
             limit: Maximum messages to return (0 = no limit).
+            source: "auto" (default), "projects", or "history".
 
         Returns:
-            List of dicts with keys: source, task_input, project, session_id, timestamp.
+            List of dicts. Always include ``source``, ``task_input``,
+            ``project``, ``session_id``, ``timestamp``. Project transcripts
+            additionally include ``assistant_response``.
         """
+        if source not in ("auto", "projects", "history"):
+            raise ValueError(
+                f"source must be 'auto', 'projects', or 'history' (got {source!r})"
+            )
+
+        if source in ("auto", "projects"):
+            messages = ClaudeCodeImporter._extract_from_projects(limit)
+            if messages or source == "projects":
+                return messages
+
+        return ClaudeCodeImporter._extract_from_history(limit)
+
+    @staticmethod
+    def _extract_from_history(limit: int = 0) -> list[dict]:
+        """Read user prompts from the flat ``history.jsonl`` log."""
         if not ClaudeCodeImporter.HISTORY_PATH.exists():
             return []
 
@@ -203,6 +235,26 @@ class ClaudeCodeImporter:
 
                 if limit and len(messages) >= limit:
                     break
+
+        return messages
+
+    @staticmethod
+    def _extract_from_projects(limit: int = 0) -> list[dict]:
+        """Read paired user/assistant turns from project session transcripts."""
+        if not ClaudeCodeImporter.PROJECTS_DIR.exists():
+            return []
+
+        session_files = sorted(ClaudeCodeImporter.PROJECTS_DIR.rglob("*.jsonl"))
+        if not session_files:
+            return []
+
+        messages: list[dict] = []
+        for session_path in session_files:
+            project = session_path.parent.name
+            messages.extend(_parse_claude_code_session(session_path, project))
+            if limit and len(messages) >= limit:
+                messages = messages[:limit]
+                break
 
         return messages
 
@@ -268,6 +320,80 @@ def _read_copilot_workspace(workspace_path: Path) -> str:
     except Exception:
         pass
     return ""
+
+
+def _parse_claude_code_session(session_path: Path, project: str) -> list[dict]:
+    """Parse one Claude Code session JSONL into (user, assistant) pairs.
+
+    Claude Code project transcripts interleave many record types. We keep only
+    real user prompts (``type == "user"`` with string content — array content
+    means a tool result, which we skip) and concatenate the text blocks of all
+    assistant turns that follow until the next user prompt.
+
+    Records lacking ``type``, malformed JSON, or events containing detected
+    secrets are skipped. A session that yields no clean pairs returns an empty
+    list rather than raising.
+    """
+    pairs: list[dict] = []
+    current_user: Optional[str] = None
+    current_assistant_parts: list[str] = []
+
+    session_id = session_path.stem
+
+    def flush() -> None:
+        if current_user and current_assistant_parts:
+            assistant = "\n".join(current_assistant_parts).strip()
+            if assistant and not _contains_secret(current_user) and not _contains_secret(assistant):
+                pairs.append({
+                    "source": "claude-code",
+                    "task_input": current_user,
+                    "assistant_response": assistant,
+                    "project": project,
+                    "session_id": session_id,
+                    "timestamp": 0,
+                })
+
+    try:
+        with open(session_path) as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                event_type = event.get("type")
+                message = event.get("message") or {}
+
+                if event_type == "user":
+                    content = message.get("content")
+                    # array content == tool_result, skip it
+                    if not isinstance(content, str):
+                        continue
+                    text = content.strip()
+                    if len(text) < 10:
+                        continue
+                    # close out the previous turn before starting a new one
+                    flush()
+                    current_user = text
+                    current_assistant_parts = []
+
+                elif event_type == "assistant" and current_user is not None:
+                    content = message.get("content")
+                    if not isinstance(content, list):
+                        continue
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "").strip()
+                            if text:
+                                current_assistant_parts.append(text)
+
+        flush()
+    except OSError as e:
+        console.print(f"[dim]Skipped {session_path.name}: {e}[/dim]")
+
+    return pairs
 
 
 def _parse_copilot_events(
