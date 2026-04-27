@@ -149,29 +149,65 @@ class ConstraintValidator:
             )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
-        """Check that a skill body has meaningful structure (headings, steps, etc.).
+        """Check that a skill has valid frontmatter and/or meaningful body structure.
 
-        Note: This validates the BODY of a skill file, not the full file with frontmatter.
-        Frontmatter (name, description) is handled separately during reassembly.
+        `validate_skill_constraints()` passes a full SKILL.md here for structural
+        validation while keeping size/growth checks on the mutable body. Keep this
+        method backward-compatible with direct full-file callers from the original
+        test suite, and reject body-only text when called directly so a full skill
+        file still requires frontmatter.
         """
-        # Check for common skill body structure markers
-        has_headings = bool(re.search(r'^#+\s', text, re.MULTILINE))
-        has_steps = any(marker in text.lower() for marker in ['step', '1.', 'procedure', 'how to', 'instructions'])
-        has_content = len(text.strip()) > 100  # Meaningful body, not just a stub
+        stripped = text.strip()
+        has_frontmatter = stripped.startswith("---")
+        body = stripped
+
+        if has_frontmatter:
+            parts = stripped.split("---", 2)
+            frontmatter = parts[1] if len(parts) >= 3 else ""
+            body = parts[2].strip() if len(parts) >= 3 else ""
+            has_name = "name:" in frontmatter
+            has_description = "description:" in frontmatter
+            if not (has_name and has_description):
+                missing = []
+                if not has_name:
+                    missing.append("name field")
+                if not has_description:
+                    missing.append("description field")
+                return ConstraintResult(
+                    passed=False,
+                    constraint_name="skill_structure",
+                    message=f"Skill missing: {', '.join(missing)}",
+                )
+        else:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="skill_structure",
+                message="Skill missing: YAML frontmatter (---)",
+            )
+
+        has_headings = bool(re.search(r'^#+\s', body, re.MULTILINE))
+        has_steps = any(marker in body.lower() for marker in ['step', '1.', 'procedure', 'how to', 'instructions'])
+        has_substantial_content = len(body.strip()) > 100
+        has_any_content = bool(body.strip())
 
         checks = {
             'headings': has_headings,
             'procedural content': has_steps,
-            'substantial content': has_content,
+            'substantial content': has_substantial_content,
         }
-        passed = sum(checks.values()) >= 2  # At least 2 of 3
+        # Existing tests allow a small but valid skill file with frontmatter,
+        # heading, and body text. Richer evolved skills still need at least two
+        # structural signals unless they are a valid minimal full SKILL.md.
+        passed = (has_headings and has_any_content) or sum(checks.values()) >= 2
 
         if passed:
             found = [k for k, v in checks.items() if v]
+            if has_any_content and not found:
+                found = ["body content"]
             return ConstraintResult(
                 passed=True,
                 constraint_name="skill_structure",
-                message=f"Skill body has valid structure ({', '.join(found)})",
+                message=f"Skill has valid structure ({', '.join(found)})",
             )
         else:
             missing = [k for k, v in checks.items() if not v]
