@@ -4,6 +4,7 @@ Every candidate variant must pass ALL constraints before it can be
 considered valid. Failed constraints = immediate rejection.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass
@@ -148,27 +149,34 @@ class ConstraintValidator:
             )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
-        """Check that a skill file has valid YAML frontmatter and markdown body."""
-        has_frontmatter = text.strip().startswith("---")
-        has_name = "name:" in text[:500] if has_frontmatter else False
-        has_description = "description:" in text[:500] if has_frontmatter else False
+        """Check that a skill body has meaningful structure (headings, steps, etc.).
 
-        if has_frontmatter and has_name and has_description:
+        Note: This validates the BODY of a skill file, not the full file with frontmatter.
+        Frontmatter (name, description) is handled separately during reassembly.
+        """
+        # Check for common skill body structure markers
+        has_headings = bool(re.search(r'^#+\s', text, re.MULTILINE))
+        has_steps = any(marker in text.lower() for marker in ['step', '1.', 'procedure', 'how to', 'instructions'])
+        has_content = len(text.strip()) > 100  # Meaningful body, not just a stub
+
+        checks = {
+            'headings': has_headings,
+            'procedural content': has_steps,
+            'substantial content': has_content,
+        }
+        passed = sum(checks.values()) >= 2  # At least 2 of 3
+
+        if passed:
+            found = [k for k, v in checks.items() if v]
             return ConstraintResult(
                 passed=True,
                 constraint_name="skill_structure",
-                message="Skill has valid frontmatter (name + description)",
+                message=f"Skill body has valid structure ({', '.join(found)})",
             )
         else:
-            missing = []
-            if not has_frontmatter:
-                missing.append("YAML frontmatter (---)")
-            if not has_name:
-                missing.append("name field")
-            if not has_description:
-                missing.append("description field")
+            missing = [k for k, v in checks.items() if not v]
             return ConstraintResult(
                 passed=False,
                 constraint_name="skill_structure",
-                message=f"Skill missing: {', '.join(missing)}",
+                message=f"Skill body missing: {', '.join(missing)}",
             )
