@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import dspy
+from pydantic import BaseModel, Field
 
 from evolution.core.config import EvolutionConfig
 
@@ -86,6 +87,19 @@ class EvalDataset:
         ]
 
 
+class TestCaseSchema(BaseModel):
+    task_input: str
+    expected_behavior: str
+    difficulty: str
+    category: str
+
+class SSoTOutputSchema(BaseModel):
+    ssot_random_string: str = Field(..., max_length=16)
+    ssot_ascii_math_cot: str
+    test_cases: list[TestCaseSchema]
+
+SSoTOutputSchema.model_rebuild()
+
 class SyntheticDatasetBuilder:
     """Generate evaluation datasets using a strong LLM.
 
@@ -96,21 +110,19 @@ class SyntheticDatasetBuilder:
     class GenerateTestCases(dspy.Signature):
         """Generate realistic evaluation test cases for an agent skill or tool.
 
-        Given the full text of a skill/tool description, generate diverse test cases
-        that would exercise different aspects of the skill. Each test case should include:
-        - A realistic task_input (what a user would actually ask)
-        - An expected_behavior rubric (what a good response should contain/do, NOT exact text)
-        - A difficulty level (easy, medium, hard)
-        - A category (what aspect of the skill this tests)
+        The model MUST follow the SSoT protocol to ensure distribution-faithful diversity.
+        CRITICAL: Do not use backslashes (\), quotation marks ("), or newline characters inside the ssot_ascii_math_cot block. Use plain alphanumeric text only to prevent JSON parsing errors.
         """
         artifact_text: str = dspy.InputField(desc="The full text of the skill/tool/prompt being tested")
         artifact_type: str = dspy.InputField(desc="Type: 'skill', 'tool_description', or 'prompt_section'")
-        num_cases: int = dspy.InputField(desc="Number of test cases to generate")
-        test_cases: str = dspy.OutputField(desc="JSON array of test cases, each with: task_input, expected_behavior, difficulty, category")
+        num_cases_per_batch: int = dspy.InputField(desc="Number of test cases to generate in this batch")
+        random_seed: str = dspy.InputField(desc="Unique entropy seed. First, generate 16 random characters in ssot_random_string. Then, in ssot_ascii_math_cot, perform a polynomial rolling hash on those characters to map the seed to a specific structural constraint. Finally, output the payload.")
+        output: SSoTOutputSchema = dspy.OutputField()
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
-        self.generator = dspy.ChainOfThought(self.GenerateTestCases)
+        # Use Predict for Pydantic/Outlines guided decoding
+        self.generator = dspy.Predict(self.GenerateTestCases)
 
     def generate(
         self,
@@ -118,43 +130,56 @@ class SyntheticDatasetBuilder:
         artifact_type: str = "skill",
         num_cases: Optional[int] = None,
     ) -> EvalDataset:
-        """Generate a full eval dataset with train/val/holdout splits."""
+        """Generate a full eval dataset using Batched Stochastic Slot Mapping."""
 
-        n = num_cases or self.config.eval_dataset_size
+        total_needed = num_cases or self.config.eval_dataset_size
+        batch_size = 5  # Items per LLM call
+        num_batches = (total_needed // batch_size) + 1
+        
+        # Ensure at least 100+ parallel requests for vLLM batching efficiency if needed,
+        # but here we scale to the requested total_needed.
+        # For 'Batched Stochastic Slot Mapping', we generate unique seeds for each call.
+        
+        lm = dspy.LM(self.config.judge_model, cache=False) # Disable cache for diversity
+        
+        import uuid
+        import asyncio
 
-        # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        async def run_batch(seed: str):
+            with dspy.context(lm=lm):
+                # DSPy Predict is sync, so use to_thread for parallelism
+                return await asyncio.to_thread(
+                    self.generator,
+                    artifact_text=artifact_text,
+                    artifact_type=artifact_type,
+                    num_cases_per_batch=batch_size,
+                    random_seed=seed
+                )
 
-        with dspy.context(lm=lm):
-            result = self.generator(
-                artifact_text=artifact_text,
-                artifact_type=artifact_type,
-                num_cases=n,
-            )
+        # Generate unique seeds for each request to preserve prefix caching while forcing diversity
+        seeds = [str(uuid.uuid4())[:8] for _ in range(num_batches)]
+        
+        # Flat array of concurrent requests
+        import nest_asyncio
+        nest_asyncio.apply()
+        
+        loop = asyncio.get_event_loop()
+        tasks = [run_batch(seed) for seed in seeds]
+        results = loop.run_until_complete(asyncio.gather(*tasks))
 
-        # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
-
-        examples = [
-            EvalExample(
-                task_input=c.get("task_input", ""),
-                expected_behavior=c.get("expected_behavior", ""),
-                difficulty=c.get("difficulty", "medium"),
-                category=c.get("category", "general"),
-                source="synthetic",
-            )
-            for c in cases_raw
-            if c.get("task_input") and c.get("expected_behavior")
-        ]
+        examples = []
+        for result in results:
+            # result is a Prediction object with an 'output' attribute
+            for c in result.output.test_cases:
+                examples.append(
+                    EvalExample(
+                        task_input=c.task_input,
+                        expected_behavior=c.expected_behavior,
+                        difficulty=c.difficulty,
+                        category=c.category,
+                        source="synthetic",
+                    )
+                )
 
         # Shuffle and split
         random.shuffle(examples)
