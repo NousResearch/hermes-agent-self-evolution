@@ -40,7 +40,7 @@ class ConstraintValidator:
         results.append(self._check_size(artifact_text, artifact_type))
 
         # 2. Growth limit (if baseline provided)
-        if baseline_text:
+        if baseline_text is not None:
             results.append(self._check_growth(artifact_text, baseline_text, artifact_type))
 
         # 3. Non-empty
