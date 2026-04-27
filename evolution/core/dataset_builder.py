@@ -6,8 +6,10 @@ B) SessionDB mining — extract real usage patterns and score with LLM-as-judge
 C) Golden sets — hand-curated JSONL files
 """
 
+import ast
 import json
 import random
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -15,6 +17,84 @@ from typing import Optional
 import dspy
 
 from evolution.core.config import EvolutionConfig
+
+
+def _try_parse_json_list(text: str) -> Optional[list]:
+    """Parse a JSON list out of LLM-emitted text using progressively more
+    aggressive recovery strategies.
+
+    LLMs frequently emit malformed JSON: trailing commas, single quotes,
+    surrounding markdown fences, prose preambles. We try the cheap,
+    well-defined parses first and only reach for `ast.literal_eval` (which
+    is safer than `eval` but still parses Python literal syntax) on the
+    extracted-array candidates. Returns `None` if everything fails.
+    """
+    text = text.strip()
+
+    # 1. Direct JSON.
+    try:
+        result = json.loads(text)
+        if isinstance(result, list):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # 2. ast.literal_eval — handles single-quoted dicts/strings.
+    try:
+        result = ast.literal_eval(text)
+        if isinstance(result, list):
+            return result
+    except (ValueError, SyntaxError):
+        pass
+
+    # 3. Extract the first plausible array from surrounding prose.
+    match = re.search(r"\[\s*\{.*\}\s*\]", text, re.DOTALL)
+    if match:
+        candidate = match.group()
+        try:
+            result = json.loads(candidate)
+            if isinstance(result, list):
+                return result
+        except json.JSONDecodeError:
+            pass
+        try:
+            result = ast.literal_eval(candidate)
+            if isinstance(result, list):
+                return result
+        except (ValueError, SyntaxError):
+            pass
+
+    # 4. Fix trailing commas + naive single-quote rewrite, then retry.
+    fixed = re.sub(r",\s*([}\]])", r"\1", text)
+    fixed = re.sub(r"(?<!\\)'([^']+?)'(?=\s*[:,\]\}])", r'"\1"', fixed)
+    try:
+        result = json.loads(fixed)
+        if isinstance(result, list):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # 5. Strip markdown code fences.
+    stripped = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
+    stripped = re.sub(r"\s*```$", "", stripped)
+    try:
+        result = json.loads(stripped)
+        if isinstance(result, list):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # 6. Last-ditch: collect every `{...}` block individually.
+    blocks: list = []
+    for block_match in re.finditer(r"\{[^{}]*\}", text, re.DOTALL):
+        try:
+            blocks.append(json.loads(block_match.group()))
+        except json.JSONDecodeError:
+            continue
+    if blocks:
+        return blocks
+
+    return None
 
 
 @dataclass
@@ -132,56 +212,15 @@ class SyntheticDatasetBuilder:
                 num_cases=n,
             )
 
-        # Parse the generated test cases — LLMs often produce slightly malformed JSON
-        import re
+        # Parse the generated test cases. LLMs often produce slightly
+        # malformed JSON; `_try_parse_json_list` tries six progressively more
+        # aggressive recovery strategies before giving up.
         raw_text = result.test_cases
-
-        def _try_parse_json(text: str) -> list:
-            """Try multiple strategies to parse LLM JSON output."""
-            # Strategy 1: Direct JSON parse
-            try:
-                return json.loads(text)
-            except json.JSONDecodeError:
-                pass
-
-            # Strategy 2: Python literal eval — handles single-quoted dicts
-            try:
-                import ast
-                result = ast.literal_eval(text.strip())
-                if isinstance(result, list):
-                    return result
-            except (ValueError, SyntaxError):
-                pass
-
-            # Strategy 3: Extract array from surrounding text
-            match = re.search(r'\[[\s\S]*\]', text)
-            if match:
-                candidate = match.group()
-                try:
-                    return json.loads(candidate)
-                except json.JSONDecodeError:
-                    pass
-
-                # Try literal_eval on extracted array
-                try:
-                    import ast
-                    result = ast.literal_eval(candidate)
-                    if isinstance(result, list):
-                        return result
-                except (ValueError, SyntaxError):
-                    pass
-
-                # Fix common LLM JSON issues
-                fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
-                fixed = re.sub(r"(?<!\\)'([^']+?)'(?=\s*[:,\]\}])", r'"\1"', fixed)
-                try:
-                    return json.loads(fixed)
-                except json.JSONDecodeError:
-                    pass
-
-            raise ValueError(f"Could not parse test cases from LLM output: {raw_text[:500]}")
-
-        cases_raw = _try_parse_json(raw_text)
+        cases_raw = _try_parse_json_list(raw_text)
+        if cases_raw is None:
+            raise ValueError(
+                f"Could not parse test cases from LLM output: {raw_text[:500]}"
+            )
 
         examples = [
             EvalExample(

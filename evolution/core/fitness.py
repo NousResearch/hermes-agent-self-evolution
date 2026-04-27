@@ -1,7 +1,23 @@
 """Fitness functions for evaluating evolved artifacts.
 
-Uses LLM-as-judge with rubrics to score agent outputs.
-Supports length penalties and multi-dimensional scoring.
+Two scoring modes:
+
+1. **LLM-as-judge** (preferred for serious runs). Wires `LLMJudge` through
+   `init_fitness_metric(config, skill_text)`. Scores correctness,
+   procedure-following, and completeness on a 0-1 scale and returns textual
+   feedback that GEPA's reflective optimizer can read.
+
+2. **Deterministic multi-signal fallback** (default, zero LLM cost). Combines
+   keyword overlap, character n-gram similarity, structural pattern alignment,
+   length quality, and content density. Useful for cheap iteration loops and
+   for runs where the user does not want eval-set content sent to a third
+   party judge model.
+
+Note on `expected_behavior`: the importers and dataset builder document this
+field as a *rubric* (what a good response looks like), not as a literal
+ground-truth string. The deterministic metric therefore approximates rubric
+match rather than ground-truth match — a real LLM judge is recommended when
+absolute scores matter.
 """
 
 import re
@@ -16,19 +32,19 @@ from evolution.core.config import EvolutionConfig
 @dataclass
 class FitnessScore:
     """Multi-dimensional fitness score."""
-    correctness: float = 0.0  # Did the agent produce correct output? (0-1)
+    correctness: float = 0.0          # Did the agent produce correct output? (0-1)
     procedure_following: float = 0.0  # Did it follow the skill's procedure? (0-1)
-    conciseness: float = 0.0  # Was it appropriately concise? (0-1)
-    length_penalty: float = 0.0  # Penalty for being too verbose (0-1, 0 = no penalty)
-    feedback: str = ""  # Textual feedback for GEPA's reflective analysis
+    completeness: float = 0.0         # Did it include all necessary detail? (0-1)
+    length_penalty: float = 0.0       # Penalty for over-verbosity (0-1, 0 = no penalty)
+    feedback: str = ""                # Textual feedback for GEPA's reflective analysis
 
     @property
     def composite(self) -> float:
         """Weighted composite score."""
         raw = (
-            0.5 * self.correctness
+            0.4 * self.correctness
             + 0.3 * self.procedure_following
-            + 0.2 * self.conciseness
+            + 0.3 * self.completeness
         )
         return max(0.0, raw - self.length_penalty)
 
@@ -36,17 +52,24 @@ class FitnessScore:
 class LLMJudge:
     """LLM-as-judge scorer with rubric-based evaluation.
 
-    Scores agent outputs on multiple dimensions and provides
-    textual feedback that GEPA can use for reflective mutation.
+    Scores agent outputs on multiple dimensions and provides textual feedback
+    that GEPA/MIPROv2 can use for reflective mutation.
     """
 
     class JudgeSignature(dspy.Signature):
-        """Evaluate an agent's response against an expected behavior rubric.
+        """Evaluate an agent's response against an expected-behaviour rubric.
 
         Score the response on three dimensions (0.0 to 1.0 each):
         1. correctness: Did the response correctly address the task?
         2. procedure_following: Did it follow the expected approach/procedure?
-        3. conciseness: Was it appropriately concise without omitting important info?
+        3. completeness: Did it include all necessary details, references,
+           examples, and edge cases?
+
+        Completeness is critical — a response that is correct but omits
+        important API references, code examples, or error-handling
+        instructions is INCOMPLETE. Do NOT reward brevity over thoroughness.
+        A longer, detailed response covering all necessary information is
+        better than a terse one that skips important details.
 
         Also provide specific, actionable feedback on what could be improved.
         """
@@ -56,8 +79,8 @@ class LLMJudge:
         skill_text: str = dspy.InputField(desc="The skill/instructions the agent was following")
         correctness: float = dspy.OutputField(desc="Score 0.0-1.0: Did the response correctly address the task?")
         procedure_following: float = dspy.OutputField(desc="Score 0.0-1.0: Did it follow the expected procedure?")
-        conciseness: float = dspy.OutputField(desc="Score 0.0-1.0: Appropriately concise?")
-        feedback: str = dspy.OutputField(desc="Specific, actionable feedback on what could be improved")
+        completeness: float = dspy.OutputField(desc="Score 0.0-1.0: Did it include all necessary details, references, examples, and edge cases? Penalise omissions.")
+        feedback: str = dspy.OutputField(desc="Specific, actionable feedback on what could be improved or was missing")
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
@@ -84,64 +107,113 @@ class LLMJudge:
                 skill_text=skill_text,
             )
 
-        # Parse scores (clamp to 0-1)
         correctness = _parse_score(result.correctness)
         procedure_following = _parse_score(result.procedure_following)
-        conciseness = _parse_score(result.conciseness)
+        completeness = _parse_score(result.completeness)
 
-        # Length penalty
         length_penalty = 0.0
-        if artifact_size is not None and max_size is not None:
+        if artifact_size is not None and max_size is not None and max_size > 0:
             ratio = artifact_size / max_size
             if ratio > 0.9:
-                # Penalty ramps from 0 at 90% to 0.3 at 100%+
                 length_penalty = min(0.3, (ratio - 0.9) * 3.0)
 
         return FitnessScore(
             correctness=correctness,
             procedure_following=procedure_following,
-            conciseness=conciseness,
+            completeness=completeness,
             length_penalty=length_penalty,
             feedback=str(result.feedback),
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> dspy.Prediction:
+# ── Global judge instance (initialized lazily by the runner) ──────────────
+
+_judge: Optional[LLMJudge] = None
+_judge_skill_text: str = ""
+_judge_max_size: Optional[int] = None
+
+
+def init_fitness_metric(
+    config: EvolutionConfig,
+    skill_text: str = "",
+    *,
+    use_llm_judge: bool = False,
+    max_skill_size: Optional[int] = None,
+) -> None:
+    """Configure the global state read by `skill_fitness_metric`.
+
+    When `use_llm_judge=True`, an LLMJudge is constructed and used as the
+    primary scorer; the deterministic multi-signal scorer becomes the fallback
+    for transient judge failures. When `use_llm_judge=False` (default) the
+    metric is purely deterministic.
+    """
+    global _judge, _judge_skill_text, _judge_max_size
+    _judge = LLMJudge(config) if use_llm_judge else None
+    _judge_skill_text = skill_text
+    _judge_max_size = max_skill_size
+
+
+def reset_fitness_metric() -> None:
+    """Clear global judge state. Tests use this to avoid cross-test pollution."""
+    global _judge, _judge_skill_text, _judge_max_size
+    _judge = None
+    _judge_skill_text = ""
+    _judge_max_size = None
+
+
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name=None,
+    pred_trace=None,
+) -> dspy.Prediction:
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a dspy.Prediction with score (float 0-1) and feedback (str).
+    Accepts the 5-arg GEPA signature `(gold, pred, trace, pred_name, pred_trace)`
+    so it works with both GEPA and the older 3-arg metric API used by MIPROv2.
 
-    Scoring components (weighted):
-    - keyword_overlap: Traditional word-level overlap with stop-word filtering (25%)
-    - char_ngram_similarity: Character 3-gram Jaccard similarity (25%)
-    - structural_match: Structural pattern alignment (20%)
-    - length_quality: Output length reasonableness (15%)
-    - content_density: Ratio of meaningful content to total output (15%)
+    Returns a `dspy.Prediction(score: float, feedback: str)`.
     """
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
 
     if not agent_output.strip():
-        return dspy.Prediction(score=0.0, feedback="Empty output — no response was generated.")
+        return dspy.Prediction(
+            score=0.0,
+            feedback="Empty output — no response was generated.",
+        )
 
-    # --- Component 1: Keyword overlap (with stop-word filtering) ---
+    # ── LLM-as-judge (preferred when initialized) ──────────────────────────
+    if _judge is not None:
+        try:
+            score_obj = _judge.score(
+                task_input=task,
+                expected_behavior=expected,
+                agent_output=agent_output,
+                skill_text=_judge_skill_text,
+                artifact_size=len(_judge_skill_text) if _judge_skill_text else None,
+                max_size=_judge_max_size,
+            )
+            return dspy.Prediction(
+                score=score_obj.composite,
+                feedback=score_obj.feedback,
+            )
+        except Exception as exc:
+            # Fall through to deterministic. The feedback string flags the
+            # judge failure so the user can see why scores look heuristic.
+            judge_failure = f"[judge unavailable: {exc.__class__.__name__}] "
+    else:
+        judge_failure = ""
+
+    # ── Deterministic multi-signal fallback ────────────────────────────────
     keyword_score = _keyword_overlap_score(expected, agent_output)
-
-    # --- Component 2: Character n-gram similarity ---
     char_ngram_score = _char_ngram_similarity(expected, agent_output, n=3)
-
-    # --- Component 3: Structural matching ---
     structural_score = _structural_match_score(expected, agent_output)
-
-    # --- Component 4: Length quality ---
     length_score = _length_quality_score(expected, agent_output)
-
-    # --- Component 5: Content density ---
     density_score = _content_density_score(agent_output)
 
-    # Weighted composite
     composite = (
         0.25 * keyword_score
         + 0.25 * char_ngram_score
@@ -149,10 +221,8 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
         + 0.15 * length_score
         + 0.15 * density_score
     )
-
     score = min(1.0, max(0.0, composite))
 
-    # Build feedback string for GEPA reflective mutation
     feedback_parts = []
     if score < 0.3:
         feedback_parts.append("Output has very low alignment with expected behavior.")
@@ -171,7 +241,7 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     elif not feedback_parts:
         feedback_parts.append(f"Moderate quality (score: {score:.2f}). Room for improvement in alignment with expected output.")
 
-    feedback = " ".join(feedback_parts)
+    feedback = judge_failure + " ".join(feedback_parts)
     return dspy.Prediction(score=score, feedback=feedback)
 
 
@@ -196,14 +266,12 @@ def _keyword_overlap_score(expected: str, output: str) -> float:
     output_tokens = _tokenize(output)
 
     if not expected_tokens:
-        return 0.5  # Neutral when no expected keywords
+        return 0.5
 
-    # Filter stop words
     expected_meaningful = [w for w in expected_tokens if w not in _STOP_WORDS]
     output_meaningful = [w for w in output_tokens if w not in _STOP_WORDS]
 
     if not expected_meaningful:
-        # All expected words are stop words — fall back to all tokens
         expected_meaningful = expected_tokens
         output_meaningful = output_tokens
 
@@ -213,27 +281,15 @@ def _keyword_overlap_score(expected: str, output: str) -> float:
     if not expected_set:
         return 0.5
 
-    # Jaccard-like: intersection over expected (recall-oriented)
     recall = len(expected_set & output_set) / len(expected_set)
+    precision = len(expected_set & output_set) / len(output_set) if output_set else 0.0
+    f1 = 2 * recall * precision / (recall + precision) if (recall + precision) > 0 else 0.0
 
-    # Bonus for precision (how much of output is relevant)
-    if output_set:
-        precision = len(expected_set & output_set) / len(output_set)
-    else:
-        precision = 0.0
-
-    # F1-like combination
-    if recall + precision > 0:
-        f1 = 2 * recall * precision / (recall + precision)
-    else:
-        f1 = 0.0
-
-    # Blend recall-heavy (0.6 recall + 0.4 F1)
     return 0.6 * recall + 0.4 * f1
 
 
 def _char_ngram_similarity(text_a: str, text_b: str, n: int = 3) -> float:
-    """Character n-gram Jaccard similarity — captures partial word/substring overlap."""
+    """Character n-gram Jaccard similarity — captures partial word overlap."""
     def get_ngrams(text: str) -> set[str]:
         text = text.lower().strip()
         if len(text) < n:
@@ -250,16 +306,11 @@ def _char_ngram_similarity(text_a: str, text_b: str, n: int = 3) -> float:
 
     intersection = ngrams_a & ngrams_b
     union = ngrams_a | ngrams_b
-
     return len(intersection) / len(union) if union else 0.0
 
 
 def _structural_match_score(expected: str, output: str) -> float:
-    """Check structural pattern alignment between expected and output.
-
-    Looks for: code blocks, bullet lists, numbered lists, headers,
-    inline code, URLs, and paragraph structure.
-    """
+    """Check structural pattern alignment between expected and output."""
     patterns = {
         "code_block": r"```[\s\S]*?```",
         "inline_code": r"`[^`]+`",
@@ -273,7 +324,6 @@ def _structural_match_score(expected: str, output: str) -> float:
 
     expected_features = set()
     output_features = set()
-
     for name, pattern in patterns.items():
         if re.search(pattern, expected):
             expected_features.add(name)
@@ -281,14 +331,10 @@ def _structural_match_score(expected: str, output: str) -> float:
             output_features.add(name)
 
     if not expected_features:
-        # No structural expectations — give moderate score
         return 0.6
 
-    # How many expected features are present in output?
     matched = expected_features & output_features
     recall = len(matched) / len(expected_features)
-
-    # Penalize unexpected structural features (noise)
     unexpected = output_features - expected_features
     noise_penalty = min(0.2, len(unexpected) * 0.05)
 
@@ -296,20 +342,15 @@ def _structural_match_score(expected: str, output: str) -> float:
 
 
 def _length_quality_score(expected: str, output: str) -> float:
-    """Score based on output length relative to expected length.
-
-    Outputs that are proportionally similar in length to expected
-    receive higher scores. Very short or very long outputs are penalized.
-    """
+    """Score based on output length relative to expected length."""
     expected_len = len(expected.strip())
     output_len = len(output.strip())
 
     if expected_len == 0:
-        # No expected length — score based on reasonable output length
         if output_len < 10:
-            return 0.2  # Too short
+            return 0.2
         elif output_len > 5000:
-            return 0.4  # Possibly too verbose
+            return 0.4
         else:
             return 0.8
 
@@ -318,58 +359,44 @@ def _length_quality_score(expected: str, output: str) -> float:
 
     ratio = output_len / expected_len
 
-    # Ideal ratio is close to 1.0, with tolerance for 0.5x-2.0x
     if 0.7 <= ratio <= 1.5:
         return 1.0
     elif 0.4 <= ratio < 0.7:
-        # Somewhat short
         return 0.6 + 0.4 * (ratio - 0.4) / 0.3
     elif 1.5 < ratio <= 3.0:
-        # Somewhat long
         return 1.0 - 0.4 * (ratio - 1.5) / 1.5
     elif ratio < 0.4:
-        # Very short
         return max(0.1, 0.6 * ratio / 0.4)
     else:
-        # Very long (>3x)
         return max(0.1, 0.6 / (ratio / 3.0))
 
 
 def _content_density_score(text: str) -> float:
-    """Measure content density — ratio of meaningful tokens to total.
-
-    High density = concise, information-rich output.
-    Low density = excessive filler, repetition, or padding.
-    """
+    """Measure content density — meaningful tokens / total."""
     tokens = _tokenize(text)
     if not tokens:
         return 0.0
 
-    # Unique token ratio (penalize repetition)
     unique_ratio = len(set(tokens)) / len(tokens)
-
-    # Average token length (longer tokens tend to be more meaningful)
     avg_token_len = sum(len(t) for t in tokens) / len(tokens)
-    length_score = min(1.0, avg_token_len / 6.0)  # Normalize: 6+ char avg = 1.0
+    length_score = min(1.0, avg_token_len / 6.0)
 
-    # Sentence-level: check for varied sentence structure
     sentences = re.split(r"[.!?]+", text)
     sentences = [s.strip() for s in sentences if len(s.strip()) > 5]
     if len(sentences) > 1:
-        # Penalize if all sentences start the same way
         first_words = [s.split()[0].lower() for s in sentences if s.split()]
         variety = len(set(first_words)) / len(first_words) if first_words else 0.5
     else:
-        variety = 0.5  # Single sentence — neutral
+        variety = 0.5
 
     return 0.4 * unique_ratio + 0.3 * length_score + 0.3 * variety
 
 
 def _parse_score(value) -> float:
-    """Parse a score value, handling various LLM output formats."""
+    """Parse an LLM-emitted score value, clamping to [0, 1]."""
     if isinstance(value, (int, float)):
         return min(1.0, max(0.0, float(value)))
     try:
         return min(1.0, max(0.0, float(str(value).strip())))
     except (ValueError, TypeError):
-        return 0.5  # Default to neutral on parse failure
+        return 0.5
