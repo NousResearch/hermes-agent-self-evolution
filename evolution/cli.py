@@ -18,6 +18,7 @@ from evolution.orchestrator.gates import evaluate_run_gate
 from evolution.orchestrator.run_manager import create_skill_run
 from evolution.repos.git import get_git_snapshot
 from evolution.repos.targets import scan_skill_targets
+from evolution.traces.jsonl import failed_traces_to_eval_examples, load_trace_jsonl, scan_traces_for_secrets
 
 
 @click.group()
@@ -247,6 +248,150 @@ def dataset_list(ctx: click.Context, target_ref: str | None):
         )
 
 
+@main.group("traces")
+def traces_group():
+    """Import attempt traces and convert failures into eval datasets."""
+
+
+@traces_group.command("import")
+@click.option("--target", "target_ref", required=True, help="Target reference like skill:github-code-review.")
+@click.option("--source", required=True, help="Trace source label, e.g. hermes-session.")
+@click.option("--path", "trace_path", required=True, type=click.Path(path_type=Path, exists=True))
+@click.pass_context
+def traces_import(ctx: click.Context, target_ref: str, source: str, trace_path: Path):
+    """Import JSONL attempt traces for a target."""
+    store = _store(ctx)
+    target_type, target_name = _parse_target_ref(target_ref)
+    target = store.get_target_by_name(target_type, target_name)
+    if not target:
+        raise click.ClickException(f"Target not found: {target_ref}. Run targets scan first.")
+
+    traces = load_trace_jsonl(trace_path, default_source=source)
+    scan_report = scan_traces_for_secrets(traces)
+    if scan_report["status"] != "passed":
+        raise click.ClickException(f"secret scan failed: {scan_report['matches']}")
+
+    imported = []
+    for trace in traces:
+        imported.append(
+            store.add_attempt_trace(
+                target_id=target["id"],
+                source=trace["source"],
+                task_input=trace["task_input"],
+                observed_output=trace.get("observed_output"),
+                expected_behavior=trace.get("expected_behavior"),
+                status=trace["status"],
+                failure_reason=trace.get("failure_reason"),
+                source_ref_hash=trace.get("source_ref_hash"),
+                metadata=trace.get("metadata"),
+            )
+        )
+
+    click.echo(f"Imported {len(imported)} traces for {target_ref}")
+
+
+@traces_group.command("list")
+@click.option("--target", "target_ref", default=None, help="Optional target reference like skill:github-code-review.")
+@click.option("--status", "status", default=None, type=click.Choice(["failure", "success"]))
+@click.pass_context
+def traces_list(ctx: click.Context, target_ref: str | None, status: str | None):
+    """List imported attempt traces."""
+    store = _store(ctx)
+    target_id = None
+    if target_ref:
+        target_type, target_name = _parse_target_ref(target_ref)
+        target = store.get_target_by_name(target_type, target_name)
+        if not target:
+            raise click.ClickException(f"Target not found: {target_ref}")
+        target_id = target["id"]
+
+    traces = store.list_attempt_traces(target_id=target_id, status=status)
+    if not traces:
+        click.echo("No traces")
+        return
+    for trace in traces:
+        reason = trace["failure_reason"] or ""
+        click.echo(f"{trace['id']} {trace['status']} {trace['source']} target={trace['target_id']} {reason}")
+
+
+@traces_group.command("dataset")
+@click.option("--target", "target_ref", required=True, help="Target reference like skill:github-code-review.")
+@click.option("--version", default="trace-v1", show_default=True)
+@click.pass_context
+def traces_dataset(ctx: click.Context, target_ref: str, version: str):
+    """Build an eval dataset from failed attempt traces."""
+    store = _store(ctx)
+    root: Path = ctx.obj["root"]
+    target_type, target_name = _parse_target_ref(target_ref)
+    target = store.get_target_by_name(target_type, target_name)
+    if not target:
+        raise click.ClickException(f"Target not found: {target_ref}")
+
+    trace_rows = store.list_attempt_traces(target_id=target["id"], status="failure")
+    if not trace_rows:
+        raise click.ClickException(f"No failed traces for {target_ref}")
+    normalized_traces = [_trace_row_for_examples(row) for row in trace_rows]
+    examples = _assign_trace_splits(failed_traces_to_eval_examples(normalized_traces))
+    scan_report = scan_examples_for_secrets(examples)
+    if scan_report["status"] != "passed":
+        raise click.ClickException(f"secret scan failed: {scan_report['matches']}")
+
+    split_spec = _split_spec(examples)
+    manifest = {
+        "schema_version": 1,
+        "target": target_ref,
+        "source": "traces",
+        "version": version,
+        "trace_count": len(trace_rows),
+        "example_count": len(examples),
+        "split_spec": split_spec,
+        "secret_scan": scan_report,
+        "pii_scan": {"status": "not_implemented"},
+    }
+    manifest_ref = ArtifactStore(root).write_text(
+        json.dumps(manifest, indent=2, sort_keys=True),
+        suffix=".json",
+        kind="dataset",
+        mime_type="application/json",
+        metadata={"target": target_ref, "source": "traces", "version": version},
+    )
+    artifact = store.add_artifact(
+        kind="dataset",
+        content_sha256=manifest_ref.content_sha256,
+        storage_uri=manifest_ref.storage_uri,
+        size_bytes=manifest_ref.size_bytes,
+        target_id=target["id"],
+        mime_type="application/json",
+        metadata=manifest_ref.metadata,
+    )
+    dataset = store.add_dataset(
+        target_id=target["id"],
+        source="traces",
+        version=version,
+        artifact_id=artifact["id"],
+        split_spec=split_spec,
+        pii_scan_status="not_implemented",
+        secret_scan_status=scan_report["status"],
+        example_count=len(examples),
+    )
+    for example in examples:
+        store.add_eval_example(
+            dataset_id=dataset["id"],
+            split=example["split"],
+            source=example.get("source"),
+            task_input=example["task_input"],
+            expected_behavior=example["expected_behavior"],
+            source_ref_hash=example.get("source_ref_hash"),
+            metadata=example.get("metadata"),
+        )
+
+    dataset_dir = root / "datasets" / target_type / target_name
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    (dataset_dir / f"{dataset['id']}.manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    click.echo(f"Built trace dataset {dataset['id']} for {target_ref}: {len(examples)} examples")
+    click.echo(f"Manifest artifact: {manifest_ref.storage_uri}")
+
+
 @main.group("run")
 def run_group():
     """Create and execute evolution run records."""
@@ -395,6 +540,27 @@ def _parse_target_ref(target_ref: str) -> tuple[str, str]:
     if not target_type or not target_name:
         raise click.ClickException("Target must be formatted as <type>:<name>, e.g. skill:github-code-review")
     return target_type, target_name
+
+
+def _trace_row_for_examples(row: dict) -> dict:
+    data = dict(row)
+    data["metadata"] = row.get("metadata_json") or {}
+    return data
+
+
+def _assign_trace_splits(examples: list[dict]) -> list[dict]:
+    split_cycle = ["train", "val", "holdout"]
+    assigned = []
+    for index, example in enumerate(examples):
+        assigned.append({**example, "split": split_cycle[index % len(split_cycle)]})
+    return assigned
+
+
+def _split_spec(examples: list[dict]) -> dict[str, int]:
+    counts = {"train": 0, "val": 0, "holdout": 0}
+    for example in examples:
+        counts[example["split"]] = counts.get(example["split"], 0) + 1
+    return {split: count for split, count in counts.items() if count}
 
 
 if __name__ == "__main__":

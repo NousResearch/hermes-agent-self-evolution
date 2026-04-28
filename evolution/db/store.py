@@ -291,6 +291,60 @@ class EvolutionStore:
             (dataset_id,),
         )
 
+    def add_attempt_trace(
+        self,
+        target_id: str,
+        source: str,
+        task_input: str,
+        observed_output: str | None = None,
+        expected_behavior: str | None = None,
+        status: str = "failure",
+        failure_reason: str | None = None,
+        source_ref_hash: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        trace_id = _new_id("trace")
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO attempt_traces (
+                    id, target_id, source, task_input, observed_output,
+                    expected_behavior, status, failure_reason, source_ref_hash,
+                    metadata_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    trace_id,
+                    target_id,
+                    source,
+                    task_input,
+                    observed_output,
+                    expected_behavior,
+                    status,
+                    failure_reason,
+                    source_ref_hash,
+                    json.dumps(metadata or {}, sort_keys=True),
+                    _now(),
+                ),
+            )
+        return self._fetch_one("SELECT * FROM attempt_traces WHERE id = ?", (trace_id,))
+
+    def list_attempt_traces(
+        self,
+        target_id: str | None = None,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        clauses = []
+        params: list[Any] = []
+        if target_id:
+            clauses.append("target_id = ?")
+            params.append(target_id)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        return self._fetch_all(f"SELECT * FROM attempt_traces {where} ORDER BY created_at, id", tuple(params))
+
     def add_candidate(
         self,
         run_id: str,
@@ -610,6 +664,20 @@ CREATE TABLE IF NOT EXISTS eval_examples (
     expected_behavior TEXT NOT NULL,
     difficulty TEXT,
     category TEXT,
+    source_ref_hash TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS attempt_traces (
+    id TEXT PRIMARY KEY,
+    target_id TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    task_input TEXT NOT NULL,
+    observed_output TEXT,
+    expected_behavior TEXT,
+    status TEXT NOT NULL,
+    failure_reason TEXT,
     source_ref_hash TEXT,
     metadata_json TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL
