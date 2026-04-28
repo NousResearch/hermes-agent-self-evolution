@@ -13,6 +13,7 @@ from evolution.datasets.golden import flatten_splits, load_golden_splits
 from evolution.datasets.redaction import scan_examples_for_secrets
 from evolution.db.store import EvolutionStore
 from evolution.orchestrator.executor import execute_skill_run
+from evolution.orchestrator.exporter import export_review_bundle
 from evolution.orchestrator.gates import evaluate_run_gate
 from evolution.orchestrator.run_manager import create_skill_run
 from evolution.repos.git import get_git_snapshot
@@ -318,6 +319,31 @@ def run_gate(ctx: click.Context, run_id: str, min_holdout_improvement: float):
         f"holdout_improvement={result['metrics']['holdout_improvement']} "
         f"reasons={reasons}"
     )
+
+
+@run_group.command("export")
+@click.argument("run_id")
+@click.option("--out", "out_dir", default=None, type=click.Path(path_type=Path, file_okay=False), help="Directory to write review bundles into.")
+@click.option("--allow-hold", is_flag=True, help="Export even when latest gate decision is hold.")
+@click.pass_context
+def run_export(ctx: click.Context, run_id: str, out_dir: Path | None, allow_hold: bool):
+    """Export a human-review bundle for the latest gated candidate."""
+    try:
+        result = export_review_bundle(
+            store=_store(ctx),
+            root=ctx.obj["root"],
+            run_id=run_id,
+            out_dir=out_dir,
+            allow_hold=allow_hold,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(
+        f"Exported review bundle for run {run_id} decision={result['gate_decision']} "
+        f"candidate={result['candidate_id']} manifest={result['manifest_artifact_id']}"
+    )
+    click.echo(f"bundle_dir={result['bundle_dir']}")
 
 
 @main.group("runs")
