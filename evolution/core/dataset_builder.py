@@ -94,8 +94,8 @@ class TestCaseSchema(BaseModel):
     category: str
 
 class SSoTOutputSchema(BaseModel):
-    ssot_random_string: str = Field(..., max_length=16)
-    ssot_ascii_math_cot: str
+    ssot_random_string: str = Field(..., description="A short unique string for entropy")
+    ssot_ascii_math_cot: str = Field(..., description="Mathematical reasoning block")
     test_cases: list[TestCaseSchema]
 
 SSoTOutputSchema.model_rebuild()
@@ -103,20 +103,22 @@ SSoTOutputSchema.model_rebuild()
 class SyntheticDatasetBuilder:
     """Generate evaluation datasets using a strong LLM.
 
-    Reads the target artifact (skill file, tool description, etc.)
-    and generates realistic (task_input, expected_behavior) pairs.
+    This builder uses the SSoT (String Seed of Thought) protocol to prevent
+    mode collapse and ensure diverse test case generation.
     """
 
     class GenerateTestCases(dspy.Signature):
         """Generate realistic evaluation test cases for an agent skill or tool.
 
-        The model MUST follow the SSoT protocol to ensure distribution-faithful diversity.
-        CRITICAL: Do not use backslashes (\), quotation marks ("), or newline characters inside the ssot_ascii_math_cot block. Use plain alphanumeric text only to prevent JSON parsing errors.
+        The model MUST follow the SSoT protocol:
+        1. Generate a unique 'ssot_random_string'.
+        2. Perform mathematical reasoning in 'ssot_ascii_math_cot'.
+        3. Finally, generate the diverse 'test_cases' payload.
         """
         artifact_text: str = dspy.InputField(desc="The full text of the skill/tool/prompt being tested")
         artifact_type: str = dspy.InputField(desc="Type: 'skill', 'tool_description', or 'prompt_section'")
         num_cases_per_batch: int = dspy.InputField(desc="Number of test cases to generate in this batch")
-        random_seed: str = dspy.InputField(desc="Unique entropy seed. First, generate 16 random characters in ssot_random_string. Then, in ssot_ascii_math_cot, perform a polynomial rolling hash on those characters to map the seed to a specific structural constraint. Finally, output the payload.")
+        random_seed: str = dspy.InputField(desc="Unique entropy seed for the SSoT protocol.")
         output: SSoTOutputSchema = dspy.OutputField()
 
     def __init__(self, config: EvolutionConfig):
