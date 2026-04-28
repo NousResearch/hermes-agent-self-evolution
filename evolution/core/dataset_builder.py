@@ -8,6 +8,9 @@ C) Golden sets — hand-curated JSONL files
 
 import json
 import random
+import asyncio
+import uuid
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -148,8 +151,6 @@ class SyntheticDatasetBuilder:
         semaphore = asyncio.Semaphore(2)
 
         def _run_gen(seed: str):
-            import json
-            import re
             with dspy.context(lm=lm):
                 try:
                     res = self.generator(
@@ -161,6 +162,8 @@ class SyntheticDatasetBuilder:
                     return res
                 except Exception as e:
                     # Capture the raw output for debugging
+                    from rich.console import Console
+                    console = Console()
                     console.print(f"[yellow]  DEBUG: Generation failed ({e}). Model response might be invalid JSON.[/yellow]")
                     return None
 
