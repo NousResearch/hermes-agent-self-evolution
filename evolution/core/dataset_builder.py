@@ -137,12 +137,10 @@ class SyntheticDatasetBuilder:
             max_tokens=2000,
             temperature=0.0,
             presence_penalty=0.0,
-            frequency_penalty=0.0,
+            frequency_penalty=1.0, # Aggressive loop prevention
             stop=["[[ ## completed ## ]]"]
         )
         
-        import uuid
-        import asyncio
         # We repeat the instruction and truncate the skill if it's too long for 3B models
         safe_artifact_text = artifact_text[:3000] + "..." if len(artifact_text) > 3000 else artifact_text
         reinforced_text = f"{safe_artifact_text}\n\nREPEATED INSTRUCTION: Generate {batch_size} synthetic test cases for the above {artifact_type}. Output ONLY a JSON list of objects. Response MUST start with [ and end with ]."
@@ -150,6 +148,8 @@ class SyntheticDatasetBuilder:
         semaphore = asyncio.Semaphore(2)
 
         def _run_gen(seed: str):
+            import json
+            import re
             with dspy.context(lm=lm):
                 try:
                     res = self.generator(
@@ -161,7 +161,7 @@ class SyntheticDatasetBuilder:
                     return res
                 except Exception as e:
                     # Capture the raw output for debugging
-                    console.print(f"[yellow]  DEBUG: Generation failed. Model response might be invalid JSON.[/yellow]")
+                    console.print(f"[yellow]  DEBUG: Generation failed ({e}). Model response might be invalid JSON.[/yellow]")
                     return None
 
         async def run_batch(seed: str):
