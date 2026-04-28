@@ -97,22 +97,25 @@ class SyntheticDatasetBuilder:
     class GenerateTestCases(dspy.Signature):
         """Generate realistic evaluation test cases for an agent skill or tool.
 
-        You MUST follow the SSoT protocol in your response:
-        1. <ssot_random_string>: A short unique entropy string.
-        2. <ssot_math_cot>: Mathematical reasoning for diversity.
-        3. <payload_json>: A valid JSON array of test cases.
-           Each test case must have: task_input, expected_behavior, difficulty, category.
+        Example:
+        text: "Skill to generate jokes"
+        type: "skill"
+        batch_size: 1
+        seed: "xyz123"
+        output: <ssot_random_string>joke_99</ssot_random_string><ssot_math_cot>1+1=2</ssot_math_cot><payload_json>[{"task_input": "Tell me a joke", "expected_behavior": "Should output a joke", "difficulty": "easy", "category": "humor"}]</payload_json>
+
+        You MUST follow this format exactly.
         """
-        artifact_text: str = dspy.InputField(desc="The full text of the skill/tool/prompt being tested")
-        artifact_type: str = dspy.InputField(desc="Type: 'skill', 'tool_description', or 'prompt_section'")
-        num_cases_per_batch: int = dspy.InputField(desc="Number of test cases to generate in this batch")
-        random_seed: str = dspy.InputField(desc="Unique entropy seed.")
+        text: str = dspy.InputField(desc="The text to test")
+        type: str = dspy.InputField(desc="The type of artifact")
+        batch_size: int = dspy.InputField(desc="Number of cases")
+        seed: str = dspy.InputField(desc="Entropy seed")
         
-        ssot_payload: str = dspy.OutputField(desc="Combined SSoT stream: <ssot_random_string>, <ssot_math_cot>, <payload_json>")
+        output: str = dspy.OutputField(desc="Combined SSoT stream: <ssot_random_string>, <ssot_math_cot>, <payload_json>")
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
-        # Use Predict for uninterrupted SSoT stream
+        # Use Predict for raw uninterrupted stream
         self.generator = dspy.Predict(self.GenerateTestCases)
 
     def generate(
@@ -121,18 +124,19 @@ class SyntheticDatasetBuilder:
         artifact_type: str = "skill",
         num_cases: Optional[int] = None,
     ) -> EvalDataset:
-        """Generate a full eval dataset using Bounded Stochastic Slot Mapping."""
+        """Generate a full eval dataset using Anchored SSoT."""
 
         total_needed = num_cases or self.config.eval_dataset_size
         batch_size = 5
         num_batches = (total_needed // batch_size) + 1
         
-        # Production Safety Rails: Prevent infinite loops and GPU overload
+        # Hardened LM settings for small models
         lm = dspy.LM(
             self.config.judge_model, 
             cache=False,
-            max_tokens=1000,
-            temperature=1.0
+            max_tokens=1500,
+            temperature=0.8,
+            stop=["[[ ## completed ## ]]"] # Force stop if model goes off rails
         )
         
         import uuid
@@ -140,16 +144,15 @@ class SyntheticDatasetBuilder:
         import json
         import re
 
-        # Semaphore limits concurrency to prevent local hardware hangs
         semaphore = asyncio.Semaphore(2)
 
         def _run_gen(seed: str):
             with dspy.context(lm=lm):
                 return self.generator(
-                    artifact_text=artifact_text,
-                    artifact_type=artifact_type,
-                    num_cases_per_batch=batch_size,
-                    random_seed=seed
+                    text=artifact_text,
+                    type=artifact_type,
+                    batch_size=batch_size,
+                    seed=seed
                 )
 
         async def run_batch(seed: str):
@@ -166,7 +169,7 @@ class SyntheticDatasetBuilder:
         examples = []
         for result in results:
             try:
-                payload = getattr(result, "ssot_payload", "")
+                payload = getattr(result, "output", "")
                 if not payload:
                     continue
                 
