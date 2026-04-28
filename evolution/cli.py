@@ -9,6 +9,7 @@ import click
 
 from evolution.artifacts.store import ArtifactStore
 from evolution.config_file import init_evolution_root
+from evolution.content.validator import validate_content_package
 from evolution.datasets.golden import flatten_splits, load_golden_splits
 from evolution.datasets.redaction import scan_examples_for_secrets
 from evolution.db.store import EvolutionStore
@@ -49,6 +50,36 @@ def init_cmd(ctx: click.Context):
     click.echo(f"Initialized evolution root: {root}")
     click.echo(f"Config: {config_path}")
     click.echo(f"Database: {root / 'evolution.db'}")
+
+
+@main.group("content")
+def content_group():
+    """Validate content/video production packages."""
+
+
+@content_group.command("validate")
+@click.argument("project_path", type=click.Path(path_type=Path, exists=True, file_okay=False))
+@click.option("--write/--no-write", default=True, show_default=True, help="Write runtime_check.json and qa_verdict.json into the package root.")
+@click.option("--allow-hold", is_flag=True, help="Exit zero even when the package verdict is HOLD; useful for audits.")
+@click.option("--json", "json_output", is_flag=True, help="Print full JSON validation result.")
+def content_validate(project_path: Path, write: bool, allow_hold: bool, json_output: bool):
+    """Validate one content package and emit runtime/QA verdict artifacts."""
+    try:
+        result = validate_content_package(project_path, write=write)
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if json_output:
+        click.echo(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        click.echo(f"Content package verdict={result['verdict']} project={result['project_path']}")
+        click.echo(f"runtime_check={result['runtime_check_path']}")
+        click.echo(f"qa_verdict={result['qa_verdict_path']}")
+        for hold in result["holds"]:
+            click.echo(f"HOLD {hold['id']}: {hold['message']}")
+
+    if result["verdict"] != "pass" and not allow_hold:
+        raise click.ClickException(f"content package verdict={result['verdict']}")
 
 
 @main.group("repo")
