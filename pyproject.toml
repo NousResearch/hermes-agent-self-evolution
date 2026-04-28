@@ -35,6 +35,9 @@ darwinian = [
 Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"
 Repository = "https://github.com/NousResearch/hermes-agent-self-evolution"
 
+[project.scripts]
+hermes-evolve = "evolution.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["evolution*"]
 
