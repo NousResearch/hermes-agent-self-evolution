@@ -12,6 +12,7 @@ from evolution.config_file import init_evolution_root
 from evolution.datasets.golden import flatten_splits, load_golden_splits
 from evolution.datasets.redaction import scan_examples_for_secrets
 from evolution.db.store import EvolutionStore
+from evolution.orchestrator.executor import execute_skill_run
 from evolution.orchestrator.run_manager import create_skill_run
 from evolution.repos.git import get_git_snapshot
 from evolution.repos.targets import scan_skill_targets
@@ -246,7 +247,7 @@ def dataset_list(ctx: click.Context, target_ref: str | None):
 
 @main.group("run")
 def run_group():
-    """Create evolution run records."""
+    """Create and execute evolution run records."""
 
 
 @run_group.command("skill")
@@ -268,6 +269,29 @@ def run_skill(ctx: click.Context, target_ref: str, dataset_id: str, engine: str,
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Created run {run['id']} for {target_ref} dataset={dataset_id} engine={engine} status={run['status']}")
+
+
+@run_group.command("execute")
+@click.argument("run_id")
+@click.option("--strategy", default="deterministic", type=click.Choice(["deterministic"]), show_default=True)
+@click.pass_context
+def run_execute(ctx: click.Context, run_id: str, strategy: str):
+    """Execute a pending run and persist candidate/evaluation artifacts."""
+    try:
+        result = execute_skill_run(
+            store=_store(ctx),
+            root=ctx.obj["root"],
+            run_id=run_id,
+            strategy=strategy,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(
+        f"Executed run {run_id} status={result['run']['status']} "
+        f"candidates={len(result['candidates'])} evaluations={len(result['evaluations'])} "
+        f"manifest={result['manifest_artifact_id']}"
+    )
 
 
 @main.group("runs")
