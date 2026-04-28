@@ -143,22 +143,26 @@ class SyntheticDatasetBuilder:
         
         import uuid
         import asyncio
-        import json
-        import re
-
-        # We repeat the instruction at the end to fix "Lost in the Middle" for small models
-        reinforced_text = f"{artifact_text}\n\nREPEATED INSTRUCTION: Generate {batch_size} synthetic test cases for the above {artifact_type}. Output ONLY valid JSON."
+        # We repeat the instruction and truncate the skill if it's too long for 3B models
+        safe_artifact_text = artifact_text[:3000] + "..." if len(artifact_text) > 3000 else artifact_text
+        reinforced_text = f"{safe_artifact_text}\n\nREPEATED INSTRUCTION: Generate {batch_size} synthetic test cases for the above {artifact_type}. Output ONLY a JSON list of objects. Response MUST start with [ and end with ]."
 
         semaphore = asyncio.Semaphore(2)
 
         def _run_gen(seed: str):
             with dspy.context(lm=lm):
-                return self.generator(
-                    text=reinforced_text,
-                    type=artifact_type,
-                    batch_size=batch_size,
-                    seed=seed
-                )
+                try:
+                    res = self.generator(
+                        text=reinforced_text,
+                        type=artifact_type,
+                        batch_size=batch_size,
+                        seed=seed
+                    )
+                    return res
+                except Exception as e:
+                    # Capture the raw output for debugging
+                    console.print(f"[yellow]  DEBUG: Generation failed. Model response might be invalid JSON.[/yellow]")
+                    return None
 
         async def run_batch(seed: str):
             async with semaphore:
