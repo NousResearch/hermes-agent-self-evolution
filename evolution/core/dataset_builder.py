@@ -127,16 +127,18 @@ class SyntheticDatasetBuilder:
         """Generate a full eval dataset using Anchored SSoT."""
 
         total_needed = num_cases or self.config.eval_dataset_size
-        batch_size = 5
+        batch_size = 2 # Small batches for small models
         num_batches = (total_needed // batch_size) + 1
         
         # Hardened LM settings for small models
         lm = dspy.LM(
             self.config.judge_model, 
             cache=False,
-            max_tokens=1500,
+            max_tokens=1000,
             temperature=0.8,
-            stop=["[[ ## completed ## ]]"] # Force stop if model goes off rails
+            presence_penalty=0.2, # Force diversity
+            frequency_penalty=0.2, # Stop repetition loops
+            stop=["[[ ## completed ## ]]"]
         )
         
         import uuid
@@ -181,7 +183,13 @@ class SyntheticDatasetBuilder:
                 clean_text = re.sub(r'^```json\s*|```$', '', json_text.strip(), flags=re.MULTILINE)
                 cases = json.loads(clean_text)
                 
+                if not isinstance(cases, list):
+                    continue
+
                 for c in cases:
+                    if not isinstance(c, dict):
+                        continue
+                        
                     examples.append(
                         EvalExample(
                             task_input=c.get("task_input", ""),
