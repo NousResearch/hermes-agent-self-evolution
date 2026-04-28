@@ -121,18 +121,27 @@ class SyntheticDatasetBuilder:
         artifact_type: str = "skill",
         num_cases: Optional[int] = None,
     ) -> EvalDataset:
-        """Generate a full eval dataset using Batched Stochastic Slot Mapping."""
+        """Generate a full eval dataset using Bounded Stochastic Slot Mapping."""
 
         total_needed = num_cases or self.config.eval_dataset_size
         batch_size = 5
         num_batches = (total_needed // batch_size) + 1
         
-        lm = dspy.LM(self.config.judge_model, cache=False)
+        # Production Safety Rails: Prevent infinite loops and GPU overload
+        lm = dspy.LM(
+            self.config.judge_model, 
+            cache=False,
+            max_tokens=1000,
+            temperature=1.0
+        )
         
         import uuid
         import asyncio
         import json
         import re
+
+        # Semaphore limits concurrency to prevent local hardware hangs
+        semaphore = asyncio.Semaphore(2)
 
         def _run_gen(seed: str):
             with dspy.context(lm=lm):
@@ -144,7 +153,8 @@ class SyntheticDatasetBuilder:
                 )
 
         async def run_batch(seed: str):
-            return await asyncio.to_thread(_run_gen, seed)
+            async with semaphore:
+                return await asyncio.to_thread(_run_gen, seed)
 
         import nest_asyncio
         nest_asyncio.apply()
@@ -164,7 +174,7 @@ class SyntheticDatasetBuilder:
                 json_match = re.search(r'<payload_json>(.*?)</payload_json>', payload, re.DOTALL)
                 json_text = json_match.group(1).strip() if json_match else payload
                 
-                # Clean markdown
+                # Clean markdown and common LLM debris
                 clean_text = re.sub(r'^```json\s*|```$', '', json_text.strip(), flags=re.MULTILINE)
                 cases = json.loads(clean_text)
                 
