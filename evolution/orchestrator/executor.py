@@ -16,10 +16,11 @@ from typing import Any
 
 from evolution.artifacts.store import ArtifactStore
 from evolution.db.store import EvolutionStore
+from evolution.models.compare import ModelConfigError, compare_chat_models
 from evolution.skills.skill_module import load_skill, reassemble_skill
 
 
-_ALLOWED_STRATEGIES = {"deterministic"}
+_ALLOWED_STRATEGIES = {"deterministic", "model-synthesis"}
 
 
 def execute_skill_run(
@@ -27,6 +28,15 @@ def execute_skill_run(
     root: str | Path,
     run_id: str,
     strategy: str = "deterministic",
+    provider: str = "deepseek",
+    optimizer_model: str | None = None,
+    base_url: str | None = None,
+    api_key_env: str | None = None,
+    max_tokens: int = 2048,
+    temperature: float = 0.0,
+    timeout: float = 60.0,
+    extra_body: dict[str, Any] | None = None,
+    client_factory: Any | None = None,
 ) -> dict[str, Any]:
     """Execute a registered skill-evolution run and persist evidence.
 
@@ -48,7 +58,21 @@ def execute_skill_run(
     store.add_run_event(run_id, "status", "run started", {"strategy": strategy})
 
     try:
-        result = _execute_deterministic_skill_run(store, Path(root), run_id, strategy)
+        result = _execute_skill_run_with_strategy(
+            store=store,
+            root=Path(root),
+            run_id=run_id,
+            strategy=strategy,
+            provider=provider,
+            optimizer_model=optimizer_model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=timeout,
+            extra_body=extra_body,
+            client_factory=client_factory,
+        )
         completed = store.update_run_status(run_id, "completed", completed=True)
         store.add_run_event(run_id, "status", "run completed", {"strategy": strategy})
         result["run"] = completed
@@ -59,11 +83,20 @@ def execute_skill_run(
         raise
 
 
-def _execute_deterministic_skill_run(
+def _execute_skill_run_with_strategy(
     store: EvolutionStore,
     root: Path,
     run_id: str,
     strategy: str,
+    provider: str,
+    optimizer_model: str | None,
+    base_url: str | None,
+    api_key_env: str | None,
+    max_tokens: int,
+    temperature: float,
+    timeout: float,
+    extra_body: dict[str, Any] | None,
+    client_factory: Any | None,
 ) -> dict[str, Any]:
     run = _require(store.get_run(run_id), f"Run not found: {run_id}")
     target = _require(store.get_target(run["target_id"]), f"Target not found: {run['target_id']}")
@@ -80,7 +113,20 @@ def _execute_deterministic_skill_run(
     training_examples = [example for example in examples if example["split"] in {"train", "val"}]
 
     baseline_full = skill["raw"]
-    evolved_body = _build_deterministic_candidate_body(skill["body"], training_examples)
+    evolved_body, optimizer_metadata = _build_candidate_body_for_strategy(
+        strategy=strategy,
+        baseline_body=skill["body"],
+        training_examples=training_examples,
+        provider=provider,
+        optimizer_model=optimizer_model,
+        base_url=base_url,
+        api_key_env=api_key_env,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        timeout=timeout,
+        extra_body=extra_body,
+        client_factory=client_factory,
+    )
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     artifact_store = ArtifactStore(root)
@@ -101,12 +147,7 @@ def _execute_deterministic_skill_run(
         role="evolved",
         text=evolved_full,
         parent_candidate_id=baseline_candidate["id"],
-        metadata={
-            "source": "deterministic_train_val_synthesis",
-            "strategy": strategy,
-            "train_val_examples": len(training_examples),
-            "holdout_examples_used_for_generation": 0,
-        },
+        metadata=optimizer_metadata,
     )
 
     evaluations = []
@@ -137,6 +178,7 @@ def _execute_deterministic_skill_run(
         "target_path": str(skill_path),
         "engine": run["engine"],
         "execution_strategy": strategy,
+        "optimizer": optimizer_metadata,
         "dataset_id": dataset_id,
         "dataset": {
             "source": dataset["source"],
@@ -213,6 +255,47 @@ def _persist_candidate(
     return candidate
 
 
+def _build_candidate_body_for_strategy(
+    *,
+    strategy: str,
+    baseline_body: str,
+    training_examples: list[dict[str, Any]],
+    provider: str,
+    optimizer_model: str | None,
+    base_url: str | None,
+    api_key_env: str | None,
+    max_tokens: int,
+    temperature: float,
+    timeout: float,
+    extra_body: dict[str, Any] | None,
+    client_factory: Any | None,
+) -> tuple[str, dict[str, Any]]:
+    if strategy == "deterministic":
+        return _build_deterministic_candidate_body(baseline_body, training_examples), {
+            "source": "deterministic_train_val_synthesis",
+            "strategy": strategy,
+            "train_val_examples": len(training_examples),
+            "holdout_examples_used_for_generation": 0,
+        }
+    if strategy == "model-synthesis":
+        if not optimizer_model:
+            raise ValueError("optimizer_model is required for model-synthesis strategy")
+        return _build_model_synthesis_candidate_body(
+            baseline_body=baseline_body,
+            training_examples=training_examples,
+            provider=provider,
+            optimizer_model=optimizer_model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=timeout,
+            extra_body=extra_body,
+            client_factory=client_factory,
+        )
+    raise ValueError(f"Unsupported execution strategy: {strategy}")
+
+
 def _build_deterministic_candidate_body(baseline_body: str, training_examples: list[dict[str, Any]]) -> str:
     hints = []
     seen = set()
@@ -233,6 +316,95 @@ def _build_deterministic_candidate_body(baseline_body: str, training_examples: l
         + "Expected behavior calibration:\n"
         + hint_lines
     )
+
+
+def _build_model_synthesis_candidate_body(
+    *,
+    baseline_body: str,
+    training_examples: list[dict[str, Any]],
+    provider: str,
+    optimizer_model: str,
+    base_url: str | None,
+    api_key_env: str | None,
+    max_tokens: int,
+    temperature: float,
+    timeout: float,
+    extra_body: dict[str, Any] | None,
+    client_factory: Any | None,
+) -> tuple[str, dict[str, Any]]:
+    prompt = _render_model_synthesis_prompt(baseline_body, training_examples)
+    try:
+        results = compare_chat_models(
+            models=[optimizer_model],
+            prompt=prompt,
+            provider=provider,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=timeout,
+            extra_body=extra_body,
+            client_factory=client_factory,
+        )
+    except ModelConfigError as exc:
+        raise ValueError(str(exc)) from exc
+    result = results[0]
+    if not result["ok"]:
+        raise RuntimeError(f"model-synthesis failed for {optimizer_model}: {result['error']}")
+    evolved_body = _extract_model_synthesis_body(result.get("output_text") or "")
+    if not evolved_body:
+        raise RuntimeError(f"model-synthesis returned empty candidate for {optimizer_model}")
+    metadata = {
+        "source": "model_synthesis",
+        "strategy": "model-synthesis",
+        "provider": provider,
+        "optimizer_model": optimizer_model,
+        "base_url": base_url,
+        "api_key_env": api_key_env,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "timeout": timeout,
+        "extra_body": extra_body or {},
+        "train_val_examples": len(training_examples),
+        "holdout_examples_used_for_generation": 0,
+        "model_usage": {
+            "prompt_tokens": result.get("prompt_tokens", 0),
+            "completion_tokens": result.get("completion_tokens", 0),
+            "total_tokens": result.get("total_tokens", 0),
+            "latency_ms": result.get("latency_ms", 0),
+        },
+    }
+    return evolved_body, metadata
+
+
+def _render_model_synthesis_prompt(baseline_body: str, training_examples: list[dict[str, Any]]) -> str:
+    examples = []
+    for index, example in enumerate(training_examples, start=1):
+        examples.append(
+            f"Example {index} ({example['split']}):\n"
+            f"Task input: {example['task_input']}\n"
+            f"Expected behavior: {example['expected_behavior']}"
+        )
+    example_text = "\n\n".join(examples) if examples else "No train/val examples available. Preserve baseline behavior."
+    return (
+        "You are improving a Hermes Agent SKILL.md body.\n"
+        "Return only the improved Markdown body, without YAML frontmatter and without code fences.\n"
+        "Use ONLY the train/validation examples below. Do not infer or mention holdout examples.\n"
+        "Keep the skill concise, actionable, and compatible with existing Hermes tooling.\n\n"
+        "Current skill body:\n"
+        f"{baseline_body}\n\n"
+        "Train/validation failure pressure:\n"
+        f"{example_text}\n"
+    )
+
+
+def _extract_model_synthesis_body(output_text: str) -> str:
+    text = output_text.strip()
+    fence = re.match(r"^```(?:markdown|md)?\s*(.*?)\s*```$", text, flags=re.DOTALL | re.IGNORECASE)
+    if fence:
+        text = fence.group(1).strip()
+    text = re.sub(r"^---\s*\n.*?\n---\s*\n", "", text, flags=re.DOTALL)
+    return text.strip()
 
 
 def _keyword_overlap_score(candidate_text: str, expected_behavior: str) -> tuple[float, dict[str, Any]]:

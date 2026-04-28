@@ -507,16 +507,45 @@ def run_skill(ctx: click.Context, target_ref: str, dataset_id: str, engine: str,
 
 @run_group.command("execute")
 @click.argument("run_id")
-@click.option("--strategy", default="deterministic", type=click.Choice(["deterministic"]), show_default=True)
+@click.option("--strategy", default="deterministic", type=click.Choice(["deterministic", "model-synthesis"]), show_default=True)
+@click.option("--provider", default="deepseek", show_default=True, help="Provider profile for model-backed strategies.")
+@click.option("--optimizer-model", default=None, help="Model ID for model-backed strategies, e.g. deepseek-v4-pro.")
+@click.option("--base-url", default=None, help="Override provider base URL.")
+@click.option("--api-key-env", default=None, help="Environment variable holding provider API key.")
+@click.option("--max-tokens", default=2048, show_default=True, type=int)
+@click.option("--temperature", default=0.0, show_default=True, type=float)
+@click.option("--timeout", default=60.0, show_default=True, type=float)
+@click.option("--extra-body-json", default=None, help="Provider-specific OpenAI SDK extra_body JSON.")
 @click.pass_context
-def run_execute(ctx: click.Context, run_id: str, strategy: str):
+def run_execute(
+    ctx: click.Context,
+    run_id: str,
+    strategy: str,
+    provider: str,
+    optimizer_model: str | None,
+    base_url: str | None,
+    api_key_env: str | None,
+    max_tokens: int,
+    temperature: float,
+    timeout: float,
+    extra_body_json: str | None,
+):
     """Execute a pending run and persist candidate/evaluation artifacts."""
+    extra_body = _parse_extra_body_json(extra_body_json)
     try:
         result = execute_skill_run(
             store=_store(ctx),
             root=ctx.obj["root"],
             run_id=run_id,
             strategy=strategy,
+            provider=provider,
+            optimizer_model=optimizer_model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=timeout,
+            extra_body=extra_body,
         )
     except (ValueError, FileNotFoundError) as exc:
         raise click.ClickException(str(exc)) from exc
