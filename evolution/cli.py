@@ -16,6 +16,7 @@ from evolution.models.compare import ModelConfigError, compare_chat_models
 from evolution.orchestrator.executor import execute_skill_run
 from evolution.orchestrator.exporter import export_review_bundle
 from evolution.orchestrator.gates import evaluate_run_gate
+from evolution.orchestrator.loop import run_loop_once
 from evolution.orchestrator.promoter import apply_gated_candidate, draft_pr_text
 from evolution.orchestrator.run_manager import create_skill_run
 from evolution.repos.git import get_git_snapshot
@@ -478,6 +479,107 @@ def _parse_extra_body_json(extra_body_json: str | None) -> dict | None:
     if not isinstance(parsed, dict):
         raise click.ClickException("--extra-body-json must decode to a JSON object")
     return parsed
+
+
+@main.group("loop")
+def loop_group():
+    """Run one-shot evolution loops."""
+
+
+@loop_group.command("once")
+@click.option("--target", "target_ref", required=True, help="Target reference like skill:github-code-review.")
+@click.option("--trace-path", required=True, type=click.Path(path_type=Path, exists=True, dir_okay=False), help="JSONL traces to import before building the dataset.")
+@click.option("--trace-source", default="hermes-session", show_default=True)
+@click.option("--dataset-version", default="loop-v1", show_default=True)
+@click.option("--engine", default="gepa", type=click.Choice(["gepa", "mipro"]), show_default=True)
+@click.option("--iterations", default=5, show_default=True, type=int)
+@click.option("--strategy", default="deterministic", type=click.Choice(["deterministic", "model-synthesis", "dspy-gepa"]), show_default=True)
+@click.option("--provider", default="deepseek", show_default=True)
+@click.option("--optimizer-model", default=None)
+@click.option("--eval-model", default=None)
+@click.option("--base-url", default=None)
+@click.option("--api-key-env", default=None)
+@click.option("--max-tokens", default=2048, show_default=True, type=int)
+@click.option("--temperature", default=0.0, show_default=True, type=float)
+@click.option("--timeout", default=60.0, show_default=True, type=float)
+@click.option("--extra-body-json", default=None, help="Provider-specific OpenAI SDK extra_body JSON.")
+@click.option("--scoring-strategy", default="deterministic-rubric", type=click.Choice(["deterministic-rubric", "keyword-overlap", "model-rubric"]), show_default=True)
+@click.option("--judge-model", default=None)
+@click.option("--dspy-model-prefix", default=None)
+@click.option("--gepa-max-full-evals", default=None, type=int)
+@click.option("--gepa-reflection-minibatch-size", default=3, show_default=True, type=int)
+@click.option("--gepa-log-dir", default=None)
+@click.option("--min-holdout-improvement", default=0.0, show_default=True, type=float)
+@click.option("--preferred-metric", default="rubric_score", show_default=True)
+@click.option("--export-out", default=None, type=click.Path(path_type=Path, file_okay=False))
+@click.pass_context
+def loop_once(
+    ctx: click.Context,
+    target_ref: str,
+    trace_path: Path,
+    trace_source: str,
+    dataset_version: str,
+    engine: str,
+    iterations: int,
+    strategy: str,
+    provider: str,
+    optimizer_model: str | None,
+    eval_model: str | None,
+    base_url: str | None,
+    api_key_env: str | None,
+    max_tokens: int,
+    temperature: float,
+    timeout: float,
+    extra_body_json: str | None,
+    scoring_strategy: str,
+    judge_model: str | None,
+    dspy_model_prefix: str | None,
+    gepa_max_full_evals: int | None,
+    gepa_reflection_minibatch_size: int,
+    gepa_log_dir: str | None,
+    min_holdout_improvement: float,
+    preferred_metric: str,
+    export_out: Path | None,
+):
+    """Run import→dataset→execute→gate→export once."""
+    extra_body = _parse_extra_body_json(extra_body_json)
+    try:
+        result = run_loop_once(
+            store=_store(ctx),
+            root=ctx.obj["root"],
+            target_ref=target_ref,
+            trace_path=trace_path,
+            trace_source=trace_source,
+            dataset_version=dataset_version,
+            engine=engine,
+            iterations=iterations,
+            strategy=strategy,
+            provider=provider,
+            optimizer_model=optimizer_model,
+            eval_model=eval_model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=timeout,
+            extra_body=extra_body,
+            scoring_strategy=scoring_strategy,
+            judge_model=judge_model,
+            dspy_model_prefix=dspy_model_prefix,
+            gepa_max_full_evals=gepa_max_full_evals,
+            gepa_reflection_minibatch_size=gepa_reflection_minibatch_size,
+            gepa_log_dir=gepa_log_dir,
+            min_holdout_improvement=min_holdout_improvement,
+            preferred_metric=preferred_metric,
+            export_out=export_out,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        f"Loop once completed target={result['target']} traces={result['imported_traces']} "
+        f"dataset={result['dataset']['id']} run={result['run']['id']} "
+        f"gate={result['gate']['decision']} bundle_dir={result['export']['bundle_dir']}"
+    )
 
 
 @main.group("run")
