@@ -72,6 +72,7 @@ def compare_chat_models(
     max_tokens: int = 256,
     temperature: float = 0.0,
     timeout: float = 60.0,
+    extra_body: dict[str, Any] | None = None,
     client_factory: ClientFactory | None = None,
 ) -> list[dict[str, Any]]:
     """Call each supplied model with the same prompt and return safe comparison rows."""
@@ -94,12 +95,15 @@ def compare_chat_models(
     for model in model_ids:
         started = time.perf_counter()
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt_text}],
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+            request_args = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt_text}],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            if extra_body:
+                request_args["extra_body"] = extra_body
+            response = client.chat.completions.create(**request_args)
             latency_ms = int((time.perf_counter() - started) * 1000)
             output_text = _extract_output_text(response)
             usage = _extract_usage(response)

@@ -26,6 +26,7 @@ def test_cli_models_compare_emits_json_for_supplied_models(monkeypatch):
         assert kwargs["models"] == ["deepseek-v4-flash", "deepseek-v4-pro"]
         assert kwargs["prompt"] == "classify this comment"
         assert kwargs["max_tokens"] == 128
+        assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
         return [
             {
                 "model": "deepseek-v4-flash",
@@ -66,6 +67,8 @@ def test_cli_models_compare_emits_json_for_supplied_models(monkeypatch):
             "classify this comment",
             "--max-tokens",
             "128",
+            "--extra-body-json",
+            '{"thinking":{"type":"disabled"}}',
             "--json-output",
         ],
     )

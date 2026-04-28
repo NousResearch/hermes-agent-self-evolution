@@ -60,6 +60,7 @@ def test_compare_chat_models_uses_supplied_model_ids_and_never_returns_api_key(m
         max_tokens=64,
         temperature=0.1,
         timeout=12.5,
+        extra_body={"thinking": {"type": "disabled"}},
         client_factory=factory,
     )
 
@@ -71,6 +72,7 @@ def test_compare_chat_models_uses_supplied_model_ids_and_never_returns_api_key(m
     assert [call["model"] for call in calls] == ["deepseek-v4-flash", "deepseek-v4-pro"]
     assert all(call["max_tokens"] == 64 for call in calls)
     assert all(call["temperature"] == 0.1 for call in calls)
+    assert all(call["extra_body"] == {"thinking": {"type": "disabled"}} for call in calls)
     assert [result["model"] for result in results] == ["deepseek-v4-flash", "deepseek-v4-pro"]
     assert all(result["ok"] for result in results)
     assert "super-secret-value" not in json.dumps(results)

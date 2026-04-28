@@ -408,6 +408,7 @@ def models_group():
 @click.option("--max-tokens", default=256, show_default=True, type=int)
 @click.option("--temperature", default=0.0, show_default=True, type=float)
 @click.option("--timeout", default=60.0, show_default=True, type=float)
+@click.option("--extra-body-json", default=None, help="Provider-specific OpenAI SDK extra_body JSON, e.g. '{\"thinking\":{\"type\":\"disabled\"}}'.")
 @click.option("--json-output", is_flag=True, help="Emit machine-readable JSON.")
 def models_compare(
     provider: str,
@@ -419,10 +420,12 @@ def models_compare(
     max_tokens: int,
     temperature: float,
     timeout: float,
+    extra_body_json: str | None,
     json_output: bool,
 ):
     """Compare supplied model IDs with the same prompt; no model IDs are implicit."""
     prompt_text = _load_model_compare_prompt(prompt, prompt_file)
+    extra_body = _parse_extra_body_json(extra_body_json)
     try:
         results = compare_chat_models(
             models=list(models),
@@ -433,6 +436,7 @@ def models_compare(
             max_tokens=max_tokens,
             temperature=temperature,
             timeout=timeout,
+            extra_body=extra_body,
         )
     except ModelConfigError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -461,6 +465,18 @@ def _load_model_compare_prompt(prompt: str | None, prompt_file: Path | None) -> 
     if not loaded.strip():
         raise click.ClickException("Provide --prompt or --prompt-file")
     return loaded
+
+
+def _parse_extra_body_json(extra_body_json: str | None) -> dict | None:
+    if not extra_body_json:
+        return None
+    try:
+        parsed = json.loads(extra_body_json)
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(f"Invalid --extra-body-json: {exc.msg}") from exc
+    if not isinstance(parsed, dict):
+        raise click.ClickException("--extra-body-json must decode to a JSON object")
+    return parsed
 
 
 @main.group("run")
