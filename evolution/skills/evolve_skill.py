@@ -5,6 +5,7 @@ Usage:
     python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
 """
 
+import hashlib
 import json
 import sys
 import time
@@ -31,6 +32,21 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+
+def _sha256_text(text: str) -> str:
+    """Return a stable SHA256 digest for text artifacts."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _constraint_dict(result) -> dict:
+    """Serialize a ConstraintResult for metrics/manifests."""
+    return {
+        "name": result.constraint_name,
+        "passed": result.passed,
+        "message": result.message,
+        "details": result.details,
+    }
 
 
 def evolve(
@@ -119,7 +135,10 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_skill_file(
+        full_skill_text=skill["raw"],
+        body_text=skill["body"],
+    )
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -186,7 +205,13 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_skill_file(
+        full_skill_text=evolved_full,
+        body_text=evolved_body,
+        baseline_body_text=skill["body"],
+    )
+    if config.run_pytest:
+        evolved_constraints.append(validator.run_test_suite(config.hermes_agent_path))
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -264,6 +289,10 @@ def evolve(
     (output_dir / "baseline_skill.md").write_text(skill["raw"])
 
     # Save metrics
+    baseline_hash = _sha256_text(skill["raw"])
+    evolved_hash = _sha256_text(evolved_full)
+    baseline_constraint_data = [_constraint_dict(c) for c in baseline_constraints]
+    evolved_constraint_data = [_constraint_dict(c) for c in evolved_constraints]
     metrics = {
         "skill_name": skill_name,
         "timestamp": timestamp,
@@ -275,13 +304,58 @@ def evolve(
         "improvement": improvement,
         "baseline_size": len(skill["body"]),
         "evolved_size": len(evolved_body),
+        "baseline_sha256": baseline_hash,
+        "evolved_sha256": evolved_hash,
         "train_examples": len(dataset.train),
         "val_examples": len(dataset.val),
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "baseline_constraints": baseline_constraint_data,
+        "evolved_constraints": evolved_constraint_data,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+    manifest = {
+        "schema_version": 1,
+        "run_type": "skill_evolution",
+        "skill_name": skill_name,
+        "skill_path": str(skill_path),
+        "hermes_repo": str(config.hermes_agent_path),
+        "timestamp": timestamp,
+        "models": {
+            "optimizer": optimizer_model,
+            "eval": eval_model,
+        },
+        "artifacts": {
+            "baseline_skill": {
+                "path": str(output_dir / "baseline_skill.md"),
+                "sha256": baseline_hash,
+                "bytes": len(skill["raw"].encode("utf-8")),
+            },
+            "evolved_skill": {
+                "path": str(output_dir / "evolved_skill.md"),
+                "sha256": evolved_hash,
+                "bytes": len(evolved_full.encode("utf-8")),
+            },
+            "metrics": {
+                "path": str(output_dir / "metrics.json"),
+            },
+        },
+        "dataset": {
+            "source": eval_source,
+            "path": str(dataset_path) if dataset_path else str(Path("datasets") / "skills" / skill_name),
+            "train_examples": len(dataset.train),
+            "val_examples": len(dataset.val),
+            "holdout_examples": len(dataset.holdout),
+        },
+        "constraints": {
+            "baseline": baseline_constraint_data,
+            "evolved": evolved_constraint_data,
+            "passed": all_pass,
+        },
+    }
+    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 

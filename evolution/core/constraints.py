@@ -5,6 +5,7 @@ considered valid. Failed constraints = immediate rejection.
 """
 
 import subprocess
+import sys
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
@@ -52,11 +53,33 @@ class ConstraintValidator:
 
         return results
 
+    def validate_skill_file(
+        self,
+        full_skill_text: str,
+        body_text: str,
+        baseline_body_text: Optional[str] = None,
+    ) -> list[ConstraintResult]:
+        """Validate a SKILL.md candidate without mixing body and file-level checks.
+
+        Size, growth, and non-empty constraints apply to the mutable skill body.
+        YAML/frontmatter structure applies to the full reassembled SKILL.md file.
+        This prevents body-only evolved text from failing the structure gate just
+        because frontmatter is intentionally preserved outside the optimizer.
+        """
+        results = [self._check_size(body_text, "skill")]
+
+        if baseline_body_text is not None:
+            results.append(self._check_growth(body_text, baseline_body_text, "skill"))
+
+        results.append(self._check_non_empty(body_text))
+        results.append(self._check_skill_structure(full_skill_text))
+        return results
+
     def run_test_suite(self, hermes_repo: Path) -> ConstraintResult:
         """Run the full hermes-agent test suite. Must pass 100%."""
         try:
             result = subprocess.run(
-                ["python", "-m", "pytest", "tests/", "-q", "--tb=no"],
+                [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no"],
                 capture_output=True,
                 text=True,
                 timeout=300,
