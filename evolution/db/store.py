@@ -143,6 +143,12 @@ class EvolutionStore:
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         return self._fetch_all(f"SELECT * FROM targets {where} ORDER BY target_type, name", tuple(params))
 
+    def get_target_by_name(self, target_type: str, name: str) -> dict[str, Any] | None:
+        return self._fetch_one(
+            "SELECT * FROM targets WHERE target_type = ? AND name = ? ORDER BY created_at DESC LIMIT 1",
+            (target_type, name),
+        )
+
     def add_artifact(
         self,
         kind: str,
@@ -184,6 +190,100 @@ class EvolutionStore:
 
     def get_artifact(self, artifact_id: str) -> dict[str, Any] | None:
         return self._fetch_one("SELECT * FROM artifacts WHERE id = ?", (artifact_id,))
+
+    def add_dataset(
+        self,
+        target_id: str,
+        source: str,
+        version: str,
+        artifact_id: str | None,
+        split_spec: dict[str, Any],
+        pii_scan_status: str,
+        secret_scan_status: str,
+        example_count: int,
+    ) -> dict[str, Any]:
+        dataset_id = _new_id("dataset")
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO datasets (
+                    id, target_id, source, version, artifact_id, split_spec_json,
+                    pii_scan_status, secret_scan_status, example_count, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    dataset_id,
+                    target_id,
+                    source,
+                    version,
+                    artifact_id,
+                    json.dumps(split_spec, sort_keys=True),
+                    pii_scan_status,
+                    secret_scan_status,
+                    example_count,
+                    _now(),
+                ),
+            )
+        return self.get_dataset(dataset_id)
+
+    def get_dataset(self, dataset_id: str) -> dict[str, Any] | None:
+        return self._fetch_one("SELECT * FROM datasets WHERE id = ?", (dataset_id,))
+
+    def list_datasets(self, target_id: str | None = None) -> list[dict[str, Any]]:
+        if target_id:
+            return self._fetch_all(
+                "SELECT * FROM datasets WHERE target_id = ? ORDER BY created_at DESC",
+                (target_id,),
+            )
+        return self._fetch_all("SELECT * FROM datasets ORDER BY created_at DESC")
+
+    def add_eval_example(
+        self,
+        dataset_id: str,
+        split: str,
+        task_input: str,
+        expected_behavior: str,
+        difficulty: str | None = None,
+        category: str | None = None,
+        source: str | None = None,
+        source_ref_hash: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        example_id = _new_id("example")
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO eval_examples (
+                    id, dataset_id, split, source, task_input, expected_behavior,
+                    difficulty, category, source_ref_hash, metadata_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    example_id,
+                    dataset_id,
+                    split,
+                    source,
+                    task_input,
+                    expected_behavior,
+                    difficulty,
+                    category,
+                    source_ref_hash,
+                    json.dumps(metadata or {}, sort_keys=True),
+                    _now(),
+                ),
+            )
+        return self._fetch_one("SELECT * FROM eval_examples WHERE id = ?", (example_id,))
+
+    def list_eval_examples(self, dataset_id: str, split: str | None = None) -> list[dict[str, Any]]:
+        if split:
+            return self._fetch_all(
+                "SELECT * FROM eval_examples WHERE dataset_id = ? AND split = ? ORDER BY created_at",
+                (dataset_id, split),
+            )
+        return self._fetch_all(
+            "SELECT * FROM eval_examples WHERE dataset_id = ? ORDER BY created_at",
+            (dataset_id,),
+        )
 
     def create_run(
         self,
@@ -310,6 +410,33 @@ CREATE TABLE IF NOT EXISTS targets (
     metadata_json TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL,
     UNIQUE(repository_id, target_type, name)
+);
+
+CREATE TABLE IF NOT EXISTS datasets (
+    id TEXT PRIMARY KEY,
+    target_id TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    version TEXT NOT NULL,
+    artifact_id TEXT REFERENCES artifacts(id),
+    split_spec_json TEXT NOT NULL DEFAULT '{}',
+    pii_scan_status TEXT NOT NULL,
+    secret_scan_status TEXT NOT NULL,
+    example_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eval_examples (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    split TEXT NOT NULL,
+    source TEXT,
+    task_input TEXT NOT NULL,
+    expected_behavior TEXT NOT NULL,
+    difficulty TEXT,
+    category TEXT,
+    source_ref_hash TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS runs (

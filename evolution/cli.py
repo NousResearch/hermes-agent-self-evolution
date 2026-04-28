@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import click
 
+from evolution.artifacts.store import ArtifactStore
 from evolution.config_file import init_evolution_root
+from evolution.datasets.golden import flatten_splits, load_golden_splits
+from evolution.datasets.redaction import scan_examples_for_secrets
 from evolution.db.store import EvolutionStore
 from evolution.repos.git import get_git_snapshot
 from evolution.repos.targets import scan_skill_targets
@@ -129,6 +133,116 @@ def targets_list(ctx: click.Context, repo_name: str | None, target_type: str | N
         click.echo(f"{target['id']} {target['target_type']}:{target['name']} {target['file_path']}")
 
 
+@main.group("dataset")
+def dataset_group():
+    """Build and inspect evaluation datasets."""
+
+
+@dataset_group.command("build")
+@click.option("--target", "target_ref", required=True, help="Target reference like skill:github-code-review.")
+@click.option("--source", required=True, type=click.Choice(["golden"]), help="Dataset source.")
+@click.option("--path", "dataset_path", required=True, type=click.Path(path_type=Path, exists=True))
+@click.option("--version", default="v1", show_default=True)
+@click.pass_context
+def dataset_build(ctx: click.Context, target_ref: str, source: str, dataset_path: Path, version: str):
+    """Build a dataset from a supported source and persist it."""
+    store = _store(ctx)
+    root: Path = ctx.obj["root"]
+    target_type, target_name = _parse_target_ref(target_ref)
+    target = store.get_target_by_name(target_type, target_name)
+    if not target:
+        raise click.ClickException(f"Target not found: {target_ref}. Run targets scan first.")
+
+    if source != "golden":
+        raise click.ClickException(f"Unsupported dataset source: {source}")
+
+    splits = load_golden_splits(dataset_path)
+    examples = flatten_splits(splits)
+    scan_report = scan_examples_for_secrets(examples)
+    if scan_report["status"] != "passed":
+        raise click.ClickException(f"secret scan failed: {scan_report['matches']}")
+
+    dataset_dir = root / "datasets" / target_type / target_name
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    split_spec = {split: len(rows) for split, rows in splits.items()}
+    manifest = {
+        "schema_version": 1,
+        "target": target_ref,
+        "source": source,
+        "source_path": str(dataset_path),
+        "version": version,
+        "split_spec": split_spec,
+        "example_count": len(examples),
+        "secret_scan": scan_report,
+        "pii_scan": {"status": "not_implemented"},
+    }
+    manifest_ref = ArtifactStore(root).write_text(
+        json.dumps(manifest, indent=2, sort_keys=True),
+        suffix=".json",
+        kind="dataset",
+        mime_type="application/json",
+        metadata={"target": target_ref, "source": source, "version": version},
+    )
+    artifact = store.add_artifact(
+        kind="dataset",
+        content_sha256=manifest_ref.content_sha256,
+        storage_uri=manifest_ref.storage_uri,
+        size_bytes=manifest_ref.size_bytes,
+        target_id=target["id"],
+        mime_type="application/json",
+        metadata=manifest_ref.metadata,
+    )
+    dataset = store.add_dataset(
+        target_id=target["id"],
+        source=source,
+        version=version,
+        artifact_id=artifact["id"],
+        split_spec=split_spec,
+        pii_scan_status="not_implemented",
+        secret_scan_status=scan_report["status"],
+        example_count=len(examples),
+    )
+    for example in examples:
+        store.add_eval_example(
+            dataset_id=dataset["id"],
+            split=example["split"],
+            source=source,
+            task_input=example["task_input"],
+            expected_behavior=example["expected_behavior"],
+            difficulty=example.get("difficulty"),
+            category=example.get("category"),
+            metadata={k: v for k, v in example.items() if k not in {"split", "task_input", "expected_behavior", "difficulty", "category"}},
+        )
+
+    (dataset_dir / f"{dataset['id']}.manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    click.echo(f"Built dataset {dataset['id']} for {target_ref}: {len(examples)} examples")
+    click.echo(f"Manifest artifact: {manifest_ref.storage_uri}")
+
+
+@dataset_group.command("list")
+@click.option("--target", "target_ref", default=None, help="Optional target reference like skill:github-code-review.")
+@click.pass_context
+def dataset_list(ctx: click.Context, target_ref: str | None):
+    """List persisted datasets."""
+    store = _store(ctx)
+    target_id = None
+    if target_ref:
+        target_type, target_name = _parse_target_ref(target_ref)
+        target = store.get_target_by_name(target_type, target_name)
+        if not target:
+            raise click.ClickException(f"Target not found: {target_ref}")
+        target_id = target["id"]
+    datasets = store.list_datasets(target_id=target_id)
+    if not datasets:
+        click.echo("No datasets")
+        return
+    for dataset in datasets:
+        click.echo(
+            f"{dataset['id']} {dataset['source']} {dataset['version']} "
+            f"{dataset['example_count']} examples target={dataset['target_id']}"
+        )
+
+
 @main.group("runs")
 def runs_group():
     """Inspect evolution runs."""
@@ -169,6 +283,15 @@ def _require_repo(store: EvolutionStore, name: str) -> dict:
     if not repo:
         raise click.ClickException(f"Repository not found: {name}. Run repo add first.")
     return repo
+
+
+def _parse_target_ref(target_ref: str) -> tuple[str, str]:
+    if ":" not in target_ref:
+        raise click.ClickException("Target must be formatted as <type>:<name>, e.g. skill:github-code-review")
+    target_type, target_name = target_ref.split(":", 1)
+    if not target_type or not target_name:
+        raise click.ClickException("Target must be formatted as <type>:<name>, e.g. skill:github-code-review")
+    return target_type, target_name
 
 
 if __name__ == "__main__":
