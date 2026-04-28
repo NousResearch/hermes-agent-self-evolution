@@ -1,83 +1,186 @@
 # 🧬 Hermes Agent Self-Evolution
 
-**Evolutionary self-improvement for [Hermes Agent](https://github.com/NousResearch/hermes-agent).**
+Production-safe self-improvement control plane for Hermes Agent skills.
 
-Hermes Agent Self-Evolution uses DSPy + GEPA (Genetic-Pareto Prompt Evolution) to automatically evolve and optimize Hermes Agent's skills, tool descriptions, system prompts, and code — producing measurably better versions through reflective evolutionary search.
+It implements the loop:
 
-**No GPU training required.** Everything operates via API calls — mutating text, evaluating results, and selecting the best variants. ~$2-10 per optimization run.
-
-## How It Works
-
-```
-Read current skill/prompt/tool ──► Generate eval dataset
-                                        │
-                                        ▼
-                                   GEPA Optimizer ◄── Execution traces
-                                        │                    ▲
-                                        ▼                    │
-                                   Candidate variants ──► Evaluate
-                                        │
-                                   Constraint gates (tests, size limits, benchmarks)
-                                        │
-                                        ▼
-                                   Best variant ──► PR against hermes-agent
+```text
+attempt -> trace -> failure -> eval -> candidate improvement -> benchmark/judge -> gate -> review bundle -> safe local promotion -> repeat
 ```
 
-GEPA reads execution traces to understand *why* things fail (not just that they failed), then proposes targeted improvements. ICLR 2026 Oral, MIT licensed.
+No GPU training. No auto-push. No auto-merge. The machine proposes; the human still owns the steering wheel. Civilization survives another sprint.
 
-## Quick Start
+## Current V1 status
+
+| Capability | Status |
+|---|---:|
+| SQLite control plane + content-addressed artifacts | ✅ built |
+| Repo snapshots + skill target scanning | ✅ built |
+| Golden eval datasets | ✅ built |
+| Attempt trace ingestion | ✅ built |
+| Failed-trace eval dataset generation | ✅ built |
+| Run registration and resumable state | ✅ built |
+| Deterministic offline execution | ✅ built |
+| Model-backed synthesis | ✅ built |
+| DSPy/GEPA optimizer strategy | ✅ built |
+| Rubric and model-rubric scoring | ✅ built |
+| Holdout gate + constraint checks | ✅ built |
+| Review bundle export | ✅ built |
+| Safe local promotion + PR draft text | ✅ built |
+| One-command `loop once` | ✅ built |
+
+## Install
 
 ```bash
-# Install
 git clone https://github.com/NousResearch/hermes-agent-self-evolution.git
 cd hermes-agent-self-evolution
-pip install -e ".[dev]"
-
-# Point at your hermes-agent repo
-export HERMES_AGENT_REPO=~/.hermes/hermes-agent
-
-# Evolve a skill (synthetic eval data)
-python -m evolution.skills.evolve_skill \
-    --skill github-code-review \
-    --iterations 10 \
-    --eval-source synthetic
-
-# Or use real session history from Claude Code, Copilot, and Hermes
-python -m evolution.skills.evolve_skill \
-    --skill github-code-review \
-    --iterations 10 \
-    --eval-source sessiondb
+python3.12 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
 ```
 
-## What It Optimizes
+Check the CLI:
 
-| Phase | Target | Engine | Status |
-|-------|--------|--------|--------|
-| **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
-| **Phase 2** | Tool descriptions | DSPy + GEPA | 🔲 Planned |
-| **Phase 3** | System prompt sections | DSPy + GEPA | 🔲 Planned |
-| **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
-| **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
+```bash
+.venv/bin/hermes-evolve --help
+```
 
-## Engines
+## Quick deterministic demo
 
-| Engine | What It Does | License |
-|--------|-------------|---------|
-| **[DSPy](https://github.com/stanfordnlp/dspy) + [GEPA](https://github.com/gepa-ai/gepa)** | Reflective prompt evolution — reads execution traces, proposes targeted mutations | MIT |
-| **[Darwinian Evolver](https://github.com/imbue-ai/darwinian_evolver)** | Code evolution with Git-based organisms | AGPL v3 (external CLI only) |
+1. Initialize local state:
 
-## Guardrails
+```bash
+.venv/bin/hermes-evolve --root .evolution-state init
+```
 
-Every evolved variant must pass:
-1. **Full test suite** — `pytest tests/ -q` must pass 100%
-2. **Size limits** — Skills ≤15KB, tool descriptions ≤500 chars
-3. **Caching compatibility** — No mid-conversation changes
-4. **Semantic preservation** — Must not drift from original purpose
-5. **PR review** — All changes go through human review, never direct commit
+2. Register a repo containing Hermes-style skills:
 
-## Full Plan
+```bash
+.venv/bin/hermes-evolve --root .evolution-state repo add hermes-agent --path /path/to/hermes-agent
+.venv/bin/hermes-evolve --root .evolution-state repo snapshot hermes-agent
+.venv/bin/hermes-evolve --root .evolution-state targets scan --repo hermes-agent
+```
 
-See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.
+3. Run the one-command loop against the included demo traces:
+
+```bash
+.venv/bin/hermes-evolve --root .evolution-state loop once \
+  --target skill:github-code-review \
+  --trace-path examples/demo/failures.jsonl \
+  --strategy deterministic \
+  --scoring-strategy deterministic-rubric \
+  --preferred-metric rubric_score \
+  --export-out .evolution-review
+```
+
+Output includes a run id, gate decision, and review bundle path.
+
+## DeepSeek V4 / DSPy-GEPA run
+
+```bash
+export DEEPSEEK_API_KEY=...
+
+.venv/bin/hermes-evolve --root .evolution-state loop once \
+  --target skill:github-code-review \
+  --trace-path examples/demo/failures.jsonl \
+  --strategy dspy-gepa \
+  --provider deepseek \
+  --optimizer-model deepseek-v4-pro \
+  --eval-model deepseek-v4-flash \
+  --dspy-model-prefix openai \
+  --extra-body-json '{"thinking":{"type":"disabled"}}' \
+  --scoring-strategy model-rubric \
+  --judge-model deepseek-v4-pro \
+  --preferred-metric rubric_score \
+  --export-out .evolution-review
+```
+
+Model guidance:
+
+```text
+deepseek-v4-pro    candidate generation, GEPA optimizer, final/hard judge
+deepseek-v4-flash  volume eval and fast checks
+```
+
+## Manual staged workflow
+
+```bash
+.venv/bin/hermes-evolve --root .evolution-state traces import \
+  --target skill:github-code-review \
+  --path examples/demo/failures.jsonl
+
+.venv/bin/hermes-evolve --root .evolution-state traces dataset \
+  --target skill:github-code-review
+
+.venv/bin/hermes-evolve --root .evolution-state run skill \
+  --target skill:github-code-review \
+  --dataset DATASET_ID \
+  --iterations 5
+
+.venv/bin/hermes-evolve --root .evolution-state run execute RUN_ID \
+  --strategy dspy-gepa \
+  --provider deepseek \
+  --optimizer-model deepseek-v4-pro \
+  --eval-model deepseek-v4-flash \
+  --extra-body-json '{"thinking":{"type":"disabled"}}' \
+  --scoring-strategy model-rubric \
+  --judge-model deepseek-v4-pro
+
+.venv/bin/hermes-evolve --root .evolution-state run gate RUN_ID --preferred-metric rubric_score
+.venv/bin/hermes-evolve --root .evolution-state run export RUN_ID --out .evolution-review
+```
+
+## Safe promotion
+
+Dry-run first:
+
+```bash
+.venv/bin/hermes-evolve --root .evolution-state run apply RUN_ID --branch evolve/github-code-review-RUNID
+```
+
+Apply locally only after review:
+
+```bash
+.venv/bin/hermes-evolve --root .evolution-state run apply RUN_ID \
+  --branch evolve/github-code-review-RUNID \
+  --apply \
+  --commit
+```
+
+Draft PR text:
+
+```bash
+.venv/bin/hermes-evolve --root .evolution-state run pr-draft RUN_ID --branch evolve/github-code-review-RUNID
+```
+
+Safety contract:
+
+```text
+No auto-push. No auto-merge.
+PASS gate required by default.
+HOLD export/apply requires explicit override.
+Dirty target repos block non-dry-run apply unless explicitly overridden.
+```
+
+## Evidence artifacts
+
+Review bundles contain:
+
+```text
+baseline_SKILL.md
+evolved_SKILL.md
+candidate.diff
+manifest.json
+APPLY.md
+```
+
+State and artifacts are inspectable under the selected `--root` directory.
+
+## Docs
+
+- Product workflow: `docs/V1_PRODUCT_WORKFLOW.md`
+- Full-system blueprint: `docs/KARPATHY_LOOP_FULL_SYSTEM.md`
+- Demo traces: `examples/demo/failures.jsonl`
+- Original plan: `PLAN.md`
 
 ## License
 
