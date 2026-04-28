@@ -148,6 +148,11 @@ def evolve(
     trainset = dataset.to_dspy_examples("train")
     valset = dataset.to_dspy_examples("val")
 
+    # Low data guard: MIPROv2 needs at least 2 train examples
+    if len(trainset) < 2 and len(valset) > 0:
+        trainset = trainset + valset
+        valset = []
+
     # ── 5. Run GEPA optimization ────────────────────────────────────────
     console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
 
@@ -156,6 +161,7 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
+            max_metric_calls=iterations,
         )
 
         optimized_module = optimizer.compile(
