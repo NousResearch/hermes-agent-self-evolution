@@ -136,8 +136,8 @@ class SyntheticDatasetBuilder:
             cache=False,
             max_tokens=2000,
             temperature=0.0,
-            presence_penalty=0.0, # Greedy
-            frequency_penalty=0.5, # Aggressive loop prevention
+            presence_penalty=0.0,
+            frequency_penalty=0.0,
             stop=["[[ ## completed ## ]]"]
         )
         
@@ -146,12 +146,15 @@ class SyntheticDatasetBuilder:
         import json
         import re
 
+        # We repeat the instruction at the end to fix "Lost in the Middle" for small models
+        reinforced_text = f"{artifact_text}\n\nREPEATED INSTRUCTION: Generate {batch_size} synthetic test cases for the above {artifact_type}. Output ONLY valid JSON."
+
         semaphore = asyncio.Semaphore(2)
 
         def _run_gen(seed: str):
             with dspy.context(lm=lm):
                 return self.generator(
-                    text=artifact_text,
+                    text=reinforced_text,
                     type=artifact_type,
                     batch_size=batch_size,
                     seed=seed
