@@ -12,6 +12,7 @@ from evolution.config_file import init_evolution_root
 from evolution.datasets.golden import flatten_splits, load_golden_splits
 from evolution.datasets.redaction import scan_examples_for_secrets
 from evolution.db.store import EvolutionStore
+from evolution.models.compare import ModelConfigError, compare_chat_models
 from evolution.orchestrator.executor import execute_skill_run
 from evolution.orchestrator.exporter import export_review_bundle
 from evolution.orchestrator.gates import evaluate_run_gate
@@ -390,6 +391,76 @@ def traces_dataset(ctx: click.Context, target_ref: str, version: str):
     (dataset_dir / f"{dataset['id']}.manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
     click.echo(f"Built trace dataset {dataset['id']} for {target_ref}: {len(examples)} examples")
     click.echo(f"Manifest artifact: {manifest_ref.storage_uri}")
+
+
+@main.group("models")
+def models_group():
+    """Smoke-test and compare OpenAI-compatible model endpoints."""
+
+
+@models_group.command("compare")
+@click.option("--provider", default="deepseek", show_default=True, help="Provider profile name. Use custom/openai-compatible with --base-url and --api-key-env.")
+@click.option("--model", "models", multiple=True, required=True, help="Model ID to test. Repeat for comparison.")
+@click.option("--base-url", default=None, help="Override provider base URL.")
+@click.option("--api-key-env", default=None, help="Environment variable containing the provider API key.")
+@click.option("--prompt", default=None, help="Prompt to send to every model.")
+@click.option("--prompt-file", type=click.Path(path_type=Path, exists=True, dir_okay=False), default=None, help="Read comparison prompt from a file.")
+@click.option("--max-tokens", default=256, show_default=True, type=int)
+@click.option("--temperature", default=0.0, show_default=True, type=float)
+@click.option("--timeout", default=60.0, show_default=True, type=float)
+@click.option("--json-output", is_flag=True, help="Emit machine-readable JSON.")
+def models_compare(
+    provider: str,
+    models: tuple[str, ...],
+    base_url: str | None,
+    api_key_env: str | None,
+    prompt: str | None,
+    prompt_file: Path | None,
+    max_tokens: int,
+    temperature: float,
+    timeout: float,
+    json_output: bool,
+):
+    """Compare supplied model IDs with the same prompt; no model IDs are implicit."""
+    prompt_text = _load_model_compare_prompt(prompt, prompt_file)
+    try:
+        results = compare_chat_models(
+            models=list(models),
+            prompt=prompt_text,
+            provider=provider,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=timeout,
+        )
+    except ModelConfigError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if json_output:
+        click.echo(json.dumps({"provider": provider, "models": list(models), "results": results}, indent=2, sort_keys=True))
+        return
+
+    for result in results:
+        status = "ok" if result["ok"] else "error"
+        base = f"{result['model']} {status} latency_ms={result['latency_ms']} tokens={result['total_tokens']}"
+        if result["ok"]:
+            preview = " ".join(result.get("output_text", "").split())[:240]
+            click.echo(f"{base} output={preview}")
+        else:
+            click.echo(f"{base} error={result.get('error')}")
+
+
+def _load_model_compare_prompt(prompt: str | None, prompt_file: Path | None) -> str:
+    if prompt and prompt_file:
+        raise click.ClickException("Use either --prompt or --prompt-file, not both")
+    if prompt_file:
+        loaded = prompt_file.read_text()
+    else:
+        loaded = prompt or ""
+    if not loaded.strip():
+        raise click.ClickException("Provide --prompt or --prompt-file")
+    return loaded
 
 
 @main.group("run")

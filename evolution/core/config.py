@@ -18,9 +18,9 @@ class EvolutionConfig:
     population_size: int = 5
 
     # LLM configuration
-    optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
-    eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
-    judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    optimizer_model: str = field(default_factory=lambda: _env_default("HERMES_EVOLVE_OPTIMIZER_MODEL", "openai/gpt-4.1"))
+    eval_model: str = field(default_factory=lambda: _env_default("HERMES_EVOLVE_EVAL_MODEL", "openai/gpt-4.1-mini"))
+    judge_model: str = field(default_factory=lambda: _env_default("HERMES_EVOLVE_JUDGE_MODEL", "openai/gpt-4.1"))
 
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
@@ -42,6 +42,11 @@ class EvolutionConfig:
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
     create_pr: bool = True
+
+
+def _env_default(name: str, fallback: str) -> str:
+    value = os.getenv(name)
+    return value if value else fallback
 
 
 def get_hermes_agent_path() -> Path:
