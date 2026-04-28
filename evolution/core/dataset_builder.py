@@ -97,24 +97,23 @@ class SyntheticDatasetBuilder:
     class GenerateTestCases(dspy.Signature):
         """Generate realistic evaluation test cases for an agent skill or tool.
 
-        The model MUST follow the SSoT protocol:
-        1. ssot_random_string: Generate a short unique string for entropy.
-        2. ssot_ascii_math_cot: Perform mathematical reasoning based on the seed.
-        3. test_cases_json: Output a valid JSON array of test cases.
-           Each test case MUST have: task_input, expected_behavior, difficulty, category.
+        You MUST follow the SSoT protocol in your response:
+        1. <ssot_random_string>: A short unique entropy string.
+        2. <ssot_math_cot>: Mathematical reasoning for diversity.
+        3. <payload_json>: A valid JSON array of test cases.
+           Each test case must have: task_input, expected_behavior, difficulty, category.
         """
         artifact_text: str = dspy.InputField(desc="The full text of the skill/tool/prompt being tested")
         artifact_type: str = dspy.InputField(desc="Type: 'skill', 'tool_description', or 'prompt_section'")
         num_cases_per_batch: int = dspy.InputField(desc="Number of test cases to generate in this batch")
-        random_seed: str = dspy.InputField(desc="Unique entropy seed for the SSoT protocol.")
+        random_seed: str = dspy.InputField(desc="Unique entropy seed.")
         
-        ssot_random_string: str = dspy.OutputField(desc="A short unique string for entropy")
-        ssot_ascii_math_cot: str = dspy.OutputField(desc="Mathematical reasoning block")
-        test_cases_json: str = dspy.OutputField(desc="JSON array of test cases")
+        ssot_payload: str = dspy.OutputField(desc="Combined SSoT stream: <ssot_random_string>, <ssot_math_cot>, <payload_json>")
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
-        self.generator = dspy.ChainOfThought(self.GenerateTestCases)
+        # Use Predict for uninterrupted SSoT stream
+        self.generator = dspy.Predict(self.GenerateTestCases)
 
     def generate(
         self,
@@ -125,7 +124,7 @@ class SyntheticDatasetBuilder:
         """Generate a full eval dataset using Batched Stochastic Slot Mapping."""
 
         total_needed = num_cases or self.config.eval_dataset_size
-        batch_size = 5  # Items per LLM call
+        batch_size = 5
         num_batches = (total_needed // batch_size) + 1
         
         lm = dspy.LM(self.config.judge_model, cache=False)
@@ -157,13 +156,16 @@ class SyntheticDatasetBuilder:
         examples = []
         for result in results:
             try:
-                # Robust parsing of the test_cases_json block
-                raw_text = getattr(result, "test_cases_json", "")
-                if not raw_text:
+                payload = getattr(result, "ssot_payload", "")
+                if not payload:
                     continue
                 
-                # Strip markdown blocks if present
-                clean_text = re.sub(r'^```json\s*|```$', '', raw_text.strip(), flags=re.MULTILINE)
+                # Extract the payload_json block using regex
+                json_match = re.search(r'<payload_json>(.*?)</payload_json>', payload, re.DOTALL)
+                json_text = json_match.group(1).strip() if json_match else payload
+                
+                # Clean markdown
+                clean_text = re.sub(r'^```json\s*|```$', '', json_text.strip(), flags=re.MULTILINE)
                 cases = json.loads(clean_text)
                 
                 for c in cases:
