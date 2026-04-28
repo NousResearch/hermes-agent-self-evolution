@@ -127,17 +127,17 @@ class SyntheticDatasetBuilder:
         """Generate a full eval dataset using Anchored SSoT."""
 
         total_needed = num_cases or self.config.eval_dataset_size
-        batch_size = 2 # Small batches for small models
-        num_batches = (total_needed // batch_size) + 1
+        batch_size = 1 # Single examples for high complexity skills
+        num_batches = total_needed
         
         # Hardened LM settings for small models
         lm = dspy.LM(
             self.config.judge_model, 
             cache=False,
-            max_tokens=1000,
-            temperature=0.8,
-            presence_penalty=0.2, # Force diversity
-            frequency_penalty=0.2, # Stop repetition loops
+            max_tokens=2000,
+            temperature=0.0,
+            presence_penalty=0.0, # Greedy
+            frequency_penalty=0.5, # Aggressive loop prevention
             stop=["[[ ## completed ## ]]"]
         )
         
