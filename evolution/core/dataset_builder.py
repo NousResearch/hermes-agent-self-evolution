@@ -87,19 +87,6 @@ class EvalDataset:
         ]
 
 
-class TestCaseSchema(BaseModel):
-    task_input: str
-    expected_behavior: str
-    difficulty: str
-    category: str
-
-class SSoTOutputSchema(BaseModel):
-    ssot_random_string: str = Field(..., description="A short unique string for entropy")
-    ssot_ascii_math_cot: str = Field(..., description="Mathematical reasoning block")
-    test_cases: list[TestCaseSchema]
-
-SSoTOutputSchema.model_rebuild()
-
 class SyntheticDatasetBuilder:
     """Generate evaluation datasets using a strong LLM.
 
@@ -111,20 +98,23 @@ class SyntheticDatasetBuilder:
         """Generate realistic evaluation test cases for an agent skill or tool.
 
         The model MUST follow the SSoT protocol:
-        1. Generate a unique 'ssot_random_string'.
-        2. Perform mathematical reasoning in 'ssot_ascii_math_cot'.
-        3. Finally, generate the diverse 'test_cases' payload.
+        1. ssot_random_string: Generate a short unique string for entropy.
+        2. ssot_ascii_math_cot: Perform mathematical reasoning based on the seed.
+        3. test_cases_json: Output a valid JSON array of test cases.
+           Each test case MUST have: task_input, expected_behavior, difficulty, category.
         """
         artifact_text: str = dspy.InputField(desc="The full text of the skill/tool/prompt being tested")
         artifact_type: str = dspy.InputField(desc="Type: 'skill', 'tool_description', or 'prompt_section'")
         num_cases_per_batch: int = dspy.InputField(desc="Number of test cases to generate in this batch")
         random_seed: str = dspy.InputField(desc="Unique entropy seed for the SSoT protocol.")
-        output: SSoTOutputSchema = dspy.OutputField()
+        
+        ssot_random_string: str = dspy.OutputField(desc="A short unique string for entropy")
+        ssot_ascii_math_cot: str = dspy.OutputField(desc="Mathematical reasoning block")
+        test_cases_json: str = dspy.OutputField(desc="JSON array of test cases")
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
-        # Use Predict for Pydantic/Outlines guided decoding
-        self.generator = dspy.Predict(self.GenerateTestCases)
+        self.generator = dspy.ChainOfThought(self.GenerateTestCases)
 
     def generate(
         self,
@@ -138,14 +128,12 @@ class SyntheticDatasetBuilder:
         batch_size = 5  # Items per LLM call
         num_batches = (total_needed // batch_size) + 1
         
-        # Ensure at least 100+ parallel requests for vLLM batching efficiency if needed,
-        # but here we scale to the requested total_needed.
-        # For 'Batched Stochastic Slot Mapping', we generate unique seeds for each call.
-        
-        lm = dspy.LM(self.config.judge_model, cache=False) # Disable cache for diversity
+        lm = dspy.LM(self.config.judge_model, cache=False)
         
         import uuid
         import asyncio
+        import json
+        import re
 
         def _run_gen(seed: str):
             with dspy.context(lm=lm):
@@ -157,33 +145,40 @@ class SyntheticDatasetBuilder:
                 )
 
         async def run_batch(seed: str):
-            # DSPy Predict is sync, so use to_thread for parallelism with local context
             return await asyncio.to_thread(_run_gen, seed)
 
-        # Generate unique seeds for each request to preserve prefix caching while forcing diversity
-        seeds = [str(uuid.uuid4())[:8] for _ in range(num_batches)]
-        
-        # Flat array of concurrent requests
         import nest_asyncio
         nest_asyncio.apply()
         
         loop = asyncio.get_event_loop()
-        tasks = [run_batch(seed) for seed in seeds]
+        tasks = [run_batch(str(uuid.uuid4())[:8]) for _ in range(num_batches)]
         results = loop.run_until_complete(asyncio.gather(*tasks))
 
         examples = []
         for result in results:
-            # result is a Prediction object with an 'output' attribute
-            for c in result.output.test_cases:
-                examples.append(
-                    EvalExample(
-                        task_input=c.task_input,
-                        expected_behavior=c.expected_behavior,
-                        difficulty=c.difficulty,
-                        category=c.category,
-                        source="synthetic",
+            try:
+                # Robust parsing of the test_cases_json block
+                raw_text = getattr(result, "test_cases_json", "")
+                if not raw_text:
+                    continue
+                
+                # Strip markdown blocks if present
+                clean_text = re.sub(r'^```json\s*|```$', '', raw_text.strip(), flags=re.MULTILINE)
+                cases = json.loads(clean_text)
+                
+                for c in cases:
+                    examples.append(
+                        EvalExample(
+                            task_input=c.get("task_input", ""),
+                            expected_behavior=c.get("expected_behavior", ""),
+                            difficulty=c.get("difficulty", "medium"),
+                            category=c.get("category", "general"),
+                            source="synthetic",
+                        )
                     )
-                )
+            except Exception as e:
+                print(f"⚠️ Warning: Failed to parse a batch: {e}")
+                continue
 
         # Shuffle and split
         random.shuffle(examples)
