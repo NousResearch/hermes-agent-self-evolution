@@ -404,6 +404,40 @@ class EvolutionStore:
             (run_id,),
         )
 
+    def add_gate_result(
+        self,
+        run_id: str,
+        candidate_id: str,
+        decision: str,
+        reasons: list[str],
+        metrics: dict[str, Any],
+    ) -> dict[str, Any]:
+        gate_id = _new_id("gate")
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO gate_results (
+                    id, run_id, candidate_id, decision, reasons_json, metrics_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    gate_id,
+                    run_id,
+                    candidate_id,
+                    decision,
+                    json.dumps(reasons, sort_keys=True),
+                    json.dumps(metrics, sort_keys=True),
+                    _now(),
+                ),
+            )
+        return self._fetch_one("SELECT * FROM gate_results WHERE id = ?", (gate_id,))
+
+    def list_gate_results(self, run_id: str) -> list[dict[str, Any]]:
+        return self._fetch_all(
+            "SELECT * FROM gate_results WHERE run_id = ? ORDER BY created_at DESC, id DESC",
+            (run_id,),
+        )
+
     def create_run(
         self,
         target_id: str,
@@ -629,6 +663,16 @@ CREATE TABLE IF NOT EXISTS run_events (
     event_type TEXT NOT NULL,
     message TEXT NOT NULL,
     metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gate_results (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+    decision TEXT NOT NULL,
+    reasons_json TEXT NOT NULL DEFAULT '[]',
+    metrics_json TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL
 );
 """

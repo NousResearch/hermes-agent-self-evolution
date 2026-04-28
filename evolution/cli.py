@@ -13,6 +13,7 @@ from evolution.datasets.golden import flatten_splits, load_golden_splits
 from evolution.datasets.redaction import scan_examples_for_secrets
 from evolution.db.store import EvolutionStore
 from evolution.orchestrator.executor import execute_skill_run
+from evolution.orchestrator.gates import evaluate_run_gate
 from evolution.orchestrator.run_manager import create_skill_run
 from evolution.repos.git import get_git_snapshot
 from evolution.repos.targets import scan_skill_targets
@@ -291,6 +292,31 @@ def run_execute(ctx: click.Context, run_id: str, strategy: str):
         f"Executed run {run_id} status={result['run']['status']} "
         f"candidates={len(result['candidates'])} evaluations={len(result['evaluations'])} "
         f"manifest={result['manifest_artifact_id']}"
+    )
+
+
+@run_group.command("gate")
+@click.argument("run_id")
+@click.option("--min-holdout-improvement", default=0.0, show_default=True, type=float)
+@click.pass_context
+def run_gate(ctx: click.Context, run_id: str, min_holdout_improvement: float):
+    """Evaluate benchmark/constraint gate for a completed run."""
+    try:
+        result = evaluate_run_gate(
+            store=_store(ctx),
+            root=ctx.obj["root"],
+            run_id=run_id,
+            min_holdout_improvement=min_holdout_improvement,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    reasons = ",".join(result["reasons"]) if result["reasons"] else "none"
+    click.echo(
+        f"Gate run {run_id} decision={result['decision']} "
+        f"candidate={result['candidate_id']} "
+        f"holdout_improvement={result['metrics']['holdout_improvement']} "
+        f"reasons={reasons}"
     )
 
 
