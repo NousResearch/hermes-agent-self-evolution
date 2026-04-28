@@ -16,6 +16,7 @@ from evolution.models.compare import ModelConfigError, compare_chat_models
 from evolution.orchestrator.executor import execute_skill_run
 from evolution.orchestrator.exporter import export_review_bundle
 from evolution.orchestrator.gates import evaluate_run_gate
+from evolution.orchestrator.promoter import apply_gated_candidate, draft_pr_text
 from evolution.orchestrator.run_manager import create_skill_run
 from evolution.repos.git import get_git_snapshot
 from evolution.repos.targets import scan_skill_targets
@@ -629,6 +630,69 @@ def run_export(ctx: click.Context, run_id: str, out_dir: Path | None, allow_hold
         f"candidate={result['candidate_id']} manifest={result['manifest_artifact_id']}"
     )
     click.echo(f"bundle_dir={result['bundle_dir']}")
+
+
+@run_group.command("apply")
+@click.argument("run_id")
+@click.option("--apply", "apply_mode", is_flag=True, help="Actually write the evolved candidate locally. Default is dry-run.")
+@click.option("--branch", default=None, help="Optional local branch to create/switch before applying.")
+@click.option("--commit", is_flag=True, help="Create a local commit after applying. Never pushes.")
+@click.option("--message", default=None, help="Commit message when --commit is used.")
+@click.option("--allow-hold", is_flag=True, help="Allow applying/exporting a HOLD gate candidate.")
+@click.option("--allow-dirty", is_flag=True, help="Allow applying into a dirty git repository.")
+@click.pass_context
+def run_apply(
+    ctx: click.Context,
+    run_id: str,
+    apply_mode: bool,
+    branch: str | None,
+    commit: bool,
+    message: str | None,
+    allow_hold: bool,
+    allow_dirty: bool,
+):
+    """Safely dry-run or locally apply a gated candidate. No push, no merge."""
+    try:
+        result = apply_gated_candidate(
+            store=_store(ctx),
+            root=ctx.obj["root"],
+            run_id=run_id,
+            branch=branch,
+            dry_run=not apply_mode,
+            commit=commit,
+            message=message,
+            allow_hold=allow_hold,
+            allow_dirty=allow_dirty,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        f"Apply run {run_id} mode={result['mode']} gate={result['gate_decision']} "
+        f"target={result['target_file']} branch={result['branch']} "
+        f"mutated={result['mutated']} committed={result['committed']} pushed={result['pushed']}"
+    )
+
+
+@run_group.command("pr-draft")
+@click.argument("run_id")
+@click.option("--branch", default=None, help="Branch name to include in the PR draft.")
+@click.option("--allow-hold", is_flag=True, help="Draft PR text even when latest gate is HOLD.")
+@click.pass_context
+def run_pr_draft(ctx: click.Context, run_id: str, branch: str | None, allow_hold: bool):
+    """Draft PR title/body for a gated candidate without mutating anything."""
+    try:
+        result = draft_pr_text(
+            store=_store(ctx),
+            root=ctx.obj["root"],
+            run_id=run_id,
+            branch=branch,
+            allow_hold=allow_hold,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"title={result['title']}")
+    click.echo(f"branch={result['branch']}")
+    click.echo(result["body"])
 
 
 @main.group("runs")
