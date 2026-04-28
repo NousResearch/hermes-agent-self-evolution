@@ -145,16 +145,18 @@ class SyntheticDatasetBuilder:
         import uuid
         import asyncio
 
-        async def run_batch(seed: str):
+        def _run_gen(seed: str):
             with dspy.context(lm=lm):
-                # DSPy Predict is sync, so use to_thread for parallelism
-                return await asyncio.to_thread(
-                    self.generator,
+                return self.generator(
                     artifact_text=artifact_text,
                     artifact_type=artifact_type,
                     num_cases_per_batch=batch_size,
                     random_seed=seed
                 )
+
+        async def run_batch(seed: str):
+            # DSPy Predict is sync, so use to_thread for parallelism with local context
+            return await asyncio.to_thread(_run_gen, seed)
 
         # Generate unique seeds for each request to preserve prefix caching while forcing diversity
         seeds = [str(uuid.uuid4())[:8] for _ in range(num_batches)]
