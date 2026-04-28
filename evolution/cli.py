@@ -507,15 +507,20 @@ def run_skill(ctx: click.Context, target_ref: str, dataset_id: str, engine: str,
 
 @run_group.command("execute")
 @click.argument("run_id")
-@click.option("--strategy", default="deterministic", type=click.Choice(["deterministic", "model-synthesis"]), show_default=True)
+@click.option("--strategy", default="deterministic", type=click.Choice(["deterministic", "model-synthesis", "dspy-gepa"]), show_default=True)
 @click.option("--provider", default="deepseek", show_default=True, help="Provider profile for model-backed strategies.")
 @click.option("--optimizer-model", default=None, help="Model ID for model-backed strategies, e.g. deepseek-v4-pro.")
+@click.option("--eval-model", default=None, help="Eval/task model ID for DSPy/GEPA, e.g. deepseek-v4-flash.")
 @click.option("--base-url", default=None, help="Override provider base URL.")
 @click.option("--api-key-env", default=None, help="Environment variable holding provider API key.")
 @click.option("--max-tokens", default=2048, show_default=True, type=int)
 @click.option("--temperature", default=0.0, show_default=True, type=float)
 @click.option("--timeout", default=60.0, show_default=True, type=float)
 @click.option("--extra-body-json", default=None, help="Provider-specific OpenAI SDK extra_body JSON.")
+@click.option("--dspy-model-prefix", default=None, help="DSPy/LiteLLM provider prefix for bare OpenAI-compatible model IDs, e.g. openai.")
+@click.option("--gepa-max-full-evals", default=None, type=int, help="GEPA max_full_evals budget. Defaults to run iterations.")
+@click.option("--gepa-reflection-minibatch-size", default=3, show_default=True, type=int)
+@click.option("--gepa-log-dir", default=None, help="Optional GEPA log directory.")
 @click.pass_context
 def run_execute(
     ctx: click.Context,
@@ -523,12 +528,17 @@ def run_execute(
     strategy: str,
     provider: str,
     optimizer_model: str | None,
+    eval_model: str | None,
     base_url: str | None,
     api_key_env: str | None,
     max_tokens: int,
     temperature: float,
     timeout: float,
     extra_body_json: str | None,
+    dspy_model_prefix: str | None,
+    gepa_max_full_evals: int | None,
+    gepa_reflection_minibatch_size: int,
+    gepa_log_dir: str | None,
 ):
     """Execute a pending run and persist candidate/evaluation artifacts."""
     extra_body = _parse_extra_body_json(extra_body_json)
@@ -540,12 +550,17 @@ def run_execute(
             strategy=strategy,
             provider=provider,
             optimizer_model=optimizer_model,
+            eval_model=eval_model,
             base_url=base_url,
             api_key_env=api_key_env,
             max_tokens=max_tokens,
             temperature=temperature,
             timeout=timeout,
             extra_body=extra_body,
+            dspy_model_prefix=dspy_model_prefix,
+            gepa_max_full_evals=gepa_max_full_evals,
+            gepa_reflection_minibatch_size=gepa_reflection_minibatch_size,
+            gepa_log_dir=gepa_log_dir,
         )
     except (ValueError, FileNotFoundError) as exc:
         raise click.ClickException(str(exc)) from exc

@@ -1,10 +1,11 @@
 """Execution engine for registered evolution runs.
 
-This module intentionally starts with a deterministic local executor. It does not
-pretend to be GEPA: it creates a reproducible candidate from train/val examples,
-persists candidate artifacts, scores every split with a transparent heuristic,
-and records lifecycle evidence in SQLite. The real optimizer can plug into the
-same persistence contract next.
+This module owns the DB-backed run lifecycle: load target/dataset, generate a
+candidate via the selected strategy, persist artifacts/evaluations, and write a
+manifest. Strategies intentionally share one persistence contract:
+- deterministic: offline train/val synthesis for safe tests;
+- model-synthesis: single OpenAI-compatible model call;
+- dspy-gepa: real DSPy GEPA optimizer adapter with holdout isolation.
 """
 
 from __future__ import annotations
@@ -17,10 +18,11 @@ from typing import Any
 from evolution.artifacts.store import ArtifactStore
 from evolution.db.store import EvolutionStore
 from evolution.models.compare import ModelConfigError, compare_chat_models
+from evolution.optimizers.dspy_gepa import DSpyGepaConfig, run_dspy_gepa_skill_optimizer
 from evolution.skills.skill_module import load_skill, reassemble_skill
 
 
-_ALLOWED_STRATEGIES = {"deterministic", "model-synthesis"}
+_ALLOWED_STRATEGIES = {"deterministic", "model-synthesis", "dspy-gepa"}
 
 
 def execute_skill_run(
@@ -30,12 +32,19 @@ def execute_skill_run(
     strategy: str = "deterministic",
     provider: str = "deepseek",
     optimizer_model: str | None = None,
+    eval_model: str | None = None,
     base_url: str | None = None,
     api_key_env: str | None = None,
     max_tokens: int = 2048,
     temperature: float = 0.0,
     timeout: float = 60.0,
     extra_body: dict[str, Any] | None = None,
+    dspy_model_prefix: str | None = None,
+    gepa_max_full_evals: int | None = None,
+    gepa_reflection_minibatch_size: int = 3,
+    gepa_log_dir: str | None = None,
+    dspy_module: Any | None = None,
+    skill_module_factory: Any | None = None,
     client_factory: Any | None = None,
 ) -> dict[str, Any]:
     """Execute a registered skill-evolution run and persist evidence.
@@ -65,12 +74,19 @@ def execute_skill_run(
             strategy=strategy,
             provider=provider,
             optimizer_model=optimizer_model,
+            eval_model=eval_model,
             base_url=base_url,
             api_key_env=api_key_env,
             max_tokens=max_tokens,
             temperature=temperature,
             timeout=timeout,
             extra_body=extra_body,
+            dspy_model_prefix=dspy_model_prefix,
+            gepa_max_full_evals=gepa_max_full_evals,
+            gepa_reflection_minibatch_size=gepa_reflection_minibatch_size,
+            gepa_log_dir=gepa_log_dir,
+            dspy_module=dspy_module,
+            skill_module_factory=skill_module_factory,
             client_factory=client_factory,
         )
         completed = store.update_run_status(run_id, "completed", completed=True)
@@ -90,12 +106,19 @@ def _execute_skill_run_with_strategy(
     strategy: str,
     provider: str,
     optimizer_model: str | None,
+    eval_model: str | None,
     base_url: str | None,
     api_key_env: str | None,
     max_tokens: int,
     temperature: float,
     timeout: float,
     extra_body: dict[str, Any] | None,
+    dspy_model_prefix: str | None,
+    gepa_max_full_evals: int | None,
+    gepa_reflection_minibatch_size: int,
+    gepa_log_dir: str | None,
+    dspy_module: Any | None,
+    skill_module_factory: Any | None,
     client_factory: Any | None,
 ) -> dict[str, Any]:
     run = _require(store.get_run(run_id), f"Run not found: {run_id}")
@@ -110,21 +133,33 @@ def _execute_skill_run_with_strategy(
 
     skill = load_skill(skill_path)
     examples = store.list_eval_examples(dataset_id)
-    training_examples = [example for example in examples if example["split"] in {"train", "val"}]
+    train_examples = [example for example in examples if example["split"] == "train"]
+    val_examples = [example for example in examples if example["split"] == "val"]
+    training_examples = [*train_examples, *val_examples]
 
     baseline_full = skill["raw"]
     evolved_body, optimizer_metadata = _build_candidate_body_for_strategy(
         strategy=strategy,
         baseline_body=skill["body"],
         training_examples=training_examples,
+        train_examples=train_examples,
+        val_examples=val_examples,
+        run_iterations=_run_iterations(run),
         provider=provider,
         optimizer_model=optimizer_model,
+        eval_model=eval_model,
         base_url=base_url,
         api_key_env=api_key_env,
         max_tokens=max_tokens,
         temperature=temperature,
         timeout=timeout,
         extra_body=extra_body,
+        dspy_model_prefix=dspy_model_prefix,
+        gepa_max_full_evals=gepa_max_full_evals,
+        gepa_reflection_minibatch_size=gepa_reflection_minibatch_size,
+        gepa_log_dir=gepa_log_dir,
+        dspy_module=dspy_module,
+        skill_module_factory=skill_module_factory,
         client_factory=client_factory,
     )
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
@@ -260,14 +295,24 @@ def _build_candidate_body_for_strategy(
     strategy: str,
     baseline_body: str,
     training_examples: list[dict[str, Any]],
+    train_examples: list[dict[str, Any]],
+    val_examples: list[dict[str, Any]],
+    run_iterations: int,
     provider: str,
     optimizer_model: str | None,
+    eval_model: str | None,
     base_url: str | None,
     api_key_env: str | None,
     max_tokens: int,
     temperature: float,
     timeout: float,
     extra_body: dict[str, Any] | None,
+    dspy_model_prefix: str | None,
+    gepa_max_full_evals: int | None,
+    gepa_reflection_minibatch_size: int,
+    gepa_log_dir: str | None,
+    dspy_module: Any | None,
+    skill_module_factory: Any | None,
     client_factory: Any | None,
 ) -> tuple[str, dict[str, Any]]:
     if strategy == "deterministic":
@@ -293,6 +338,36 @@ def _build_candidate_body_for_strategy(
             extra_body=extra_body,
             client_factory=client_factory,
         )
+    if strategy == "dspy-gepa":
+        if not optimizer_model:
+            raise ValueError("optimizer_model is required for dspy-gepa strategy")
+        resolved_eval_model = eval_model or optimizer_model
+        try:
+            result = run_dspy_gepa_skill_optimizer(
+                baseline_body=baseline_body,
+                train_examples=train_examples,
+                val_examples=val_examples,
+                config=DSpyGepaConfig(
+                    provider=provider,
+                    optimizer_model=optimizer_model,
+                    eval_model=resolved_eval_model,
+                    base_url=base_url,
+                    api_key_env=api_key_env,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    timeout=timeout,
+                    extra_body=extra_body,
+                    max_full_evals=gepa_max_full_evals or max(1, run_iterations),
+                    reflection_minibatch_size=gepa_reflection_minibatch_size,
+                    dspy_model_prefix=dspy_model_prefix,
+                    log_dir=gepa_log_dir,
+                ),
+                dspy_module=dspy_module,
+                module_factory=skill_module_factory,
+            )
+        except ModelConfigError as exc:
+            raise ValueError(str(exc)) from exc
+        return result.evolved_body, result.metadata
     raise ValueError(f"Unsupported execution strategy: {strategy}")
 
 
@@ -458,3 +533,11 @@ def _require(value: Any, message: str) -> Any:
 def _safe_error(exc: Exception) -> str:
     # Keep error evidence concise; future secret-redaction can plug in here.
     return str(exc)
+
+
+def _run_iterations(run: dict[str, Any]) -> int:
+    config = run.get("config_json") or {}
+    try:
+        return max(1, int(config.get("iterations") or 1))
+    except (TypeError, ValueError):
+        return 1
