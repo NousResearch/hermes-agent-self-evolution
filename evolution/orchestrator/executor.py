@@ -17,6 +17,7 @@ from typing import Any
 
 from evolution.artifacts.store import ArtifactStore
 from evolution.db.store import EvolutionStore
+from evolution.evaluation.rubric import score_candidate_with_rubric
 from evolution.models.compare import ModelConfigError, compare_chat_models
 from evolution.optimizers.dspy_gepa import DSpyGepaConfig, run_dspy_gepa_skill_optimizer
 from evolution.skills.skill_module import load_skill, reassemble_skill
@@ -39,6 +40,8 @@ def execute_skill_run(
     temperature: float = 0.0,
     timeout: float = 60.0,
     extra_body: dict[str, Any] | None = None,
+    scoring_strategy: str = "deterministic-rubric",
+    judge_model: str | None = None,
     dspy_model_prefix: str | None = None,
     gepa_max_full_evals: int | None = None,
     gepa_reflection_minibatch_size: int = 3,
@@ -81,6 +84,8 @@ def execute_skill_run(
             temperature=temperature,
             timeout=timeout,
             extra_body=extra_body,
+            scoring_strategy=scoring_strategy,
+            judge_model=judge_model,
             dspy_model_prefix=dspy_model_prefix,
             gepa_max_full_evals=gepa_max_full_evals,
             gepa_reflection_minibatch_size=gepa_reflection_minibatch_size,
@@ -113,6 +118,8 @@ def _execute_skill_run_with_strategy(
     temperature: float,
     timeout: float,
     extra_body: dict[str, Any] | None,
+    scoring_strategy: str,
+    judge_model: str | None,
     dspy_model_prefix: str | None,
     gepa_max_full_evals: int | None,
     gepa_reflection_minibatch_size: int,
@@ -186,9 +193,24 @@ def _execute_skill_run_with_strategy(
     )
 
     evaluations = []
+    resolved_judge_model = judge_model or eval_model or optimizer_model
     for candidate, text in [(baseline_candidate, baseline_full), (evolved_candidate, evolved_full)]:
         for example in examples:
-            score, details = _keyword_overlap_score(text, example["expected_behavior"])
+            rubric = score_candidate_with_rubric(
+                candidate_text=text,
+                example=example,
+                candidate_role=candidate["role"],
+                strategy=scoring_strategy,
+                provider=provider,
+                judge_model=resolved_judge_model,
+                base_url=base_url,
+                api_key_env=api_key_env,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout=timeout,
+                extra_body=extra_body,
+                client_factory=client_factory,
+            )
             evaluations.append(
                 store.add_evaluation(
                     run_id=run_id,
@@ -196,11 +218,10 @@ def _execute_skill_run_with_strategy(
                     dataset_id=dataset_id,
                     split=example["split"],
                     example_id=example["id"],
-                    metric_name="keyword_overlap",
-                    score=score,
+                    metric_name=rubric.metric_name,
+                    score=rubric.score,
                     details={
-                        **details,
-                        "candidate_role": candidate["role"],
+                        **rubric.details,
                         "strategy": strategy,
                     },
                 )
@@ -214,6 +235,10 @@ def _execute_skill_run_with_strategy(
         "engine": run["engine"],
         "execution_strategy": strategy,
         "optimizer": optimizer_metadata,
+        "scoring": {
+            "strategy": scoring_strategy,
+            "judge_model": resolved_judge_model,
+        },
         "dataset_id": dataset_id,
         "dataset": {
             "source": dataset["source"],

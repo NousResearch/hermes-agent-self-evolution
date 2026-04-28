@@ -22,12 +22,13 @@ def test_cli_run_gate_persists_decision_for_executed_run(tmp_path):
     execute_result = runner.invoke(main, ["--root", str(root), "run", "execute", run_id])
     assert execute_result.exit_code == 0, execute_result.output
 
-    gate_result = runner.invoke(main, ["--root", str(root), "run", "gate", run_id])
+    gate_result = runner.invoke(main, ["--root", str(root), "run", "gate", run_id, "--preferred-metric", "rubric_score"])
 
     assert gate_result.exit_code == 0, gate_result.output
     assert f"Gate run {run_id}" in gate_result.output
     assert "decision=" in gate_result.output
     assert "candidate=candidate_" in gate_result.output
+    assert "metric=rubric_score" in gate_result.output
 
     show_result = runner.invoke(main, ["--root", str(root), "runs", "show", run_id])
     assert show_result.exit_code == 0, show_result.output

@@ -15,6 +15,7 @@ def evaluate_run_gate(
     root: str | Path,
     run_id: str,
     min_holdout_improvement: float = 0.0,
+    preferred_metric: str = "rubric_score",
 ) -> dict[str, Any]:
     """Evaluate whether a completed run's evolved candidate is review-ready.
 
@@ -33,8 +34,9 @@ def evaluate_run_gate(
 
     baseline_evaluations = store.list_evaluations(run_id, candidate_id=baseline["id"])
     evolved_evaluations = store.list_evaluations(run_id, candidate_id=evolved["id"])
-    baseline_holdout = _average_split(baseline_evaluations, "holdout")
-    evolved_holdout = _average_split(evolved_evaluations, "holdout")
+    baseline_holdout = _average_split(baseline_evaluations, "holdout", preferred_metric)
+    evolved_holdout = _average_split(evolved_evaluations, "holdout", preferred_metric)
+    metric_name = _selected_metric_name([*baseline_evaluations, *evolved_evaluations], preferred_metric)
 
     reasons: list[str] = []
     if baseline_holdout is None or evolved_holdout is None:
@@ -66,6 +68,8 @@ def evaluate_run_gate(
         reasons.append("holdout_leak_detected")
 
     metrics = {
+        "metric_name": metric_name,
+        "preferred_metric": preferred_metric,
         "baseline_holdout_score": baseline_holdout,
         "evolved_holdout_score": evolved_holdout,
         "holdout_improvement": holdout_improvement,
@@ -113,11 +117,22 @@ def _candidate_by_role(candidates: list[dict[str, Any]], role: str) -> dict[str,
     return matches[-1]
 
 
-def _average_split(evaluations: list[dict[str, Any]], split: str) -> float | None:
-    scores = [float(evaluation["score"]) for evaluation in evaluations if evaluation["split"] == split]
+def _average_split(evaluations: list[dict[str, Any]], split: str, preferred_metric: str | None = None) -> float | None:
+    split_rows = [evaluation for evaluation in evaluations if evaluation["split"] == split]
+    preferred_rows = [evaluation for evaluation in split_rows if evaluation["metric_name"] == preferred_metric]
+    selected_rows = preferred_rows or split_rows
+    scores = [float(evaluation["score"]) for evaluation in selected_rows]
     if not scores:
         return None
     return round(sum(scores) / len(scores), 10)
+
+
+def _selected_metric_name(evaluations: list[dict[str, Any]], preferred_metric: str | None = None) -> str | None:
+    if preferred_metric and any(evaluation["metric_name"] == preferred_metric for evaluation in evaluations):
+        return preferred_metric
+    for evaluation in evaluations:
+        return evaluation["metric_name"]
+    return None
 
 
 def _artifact_text(store: EvolutionStore, artifact_id: str) -> str:

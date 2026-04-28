@@ -517,6 +517,8 @@ def run_skill(ctx: click.Context, target_ref: str, dataset_id: str, engine: str,
 @click.option("--temperature", default=0.0, show_default=True, type=float)
 @click.option("--timeout", default=60.0, show_default=True, type=float)
 @click.option("--extra-body-json", default=None, help="Provider-specific OpenAI SDK extra_body JSON.")
+@click.option("--scoring-strategy", default="deterministic-rubric", type=click.Choice(["deterministic-rubric", "keyword-overlap", "model-rubric"]), show_default=True)
+@click.option("--judge-model", default=None, help="Judge model for model-rubric scoring. Defaults to --eval-model or --optimizer-model.")
 @click.option("--dspy-model-prefix", default=None, help="DSPy/LiteLLM provider prefix for bare OpenAI-compatible model IDs, e.g. openai.")
 @click.option("--gepa-max-full-evals", default=None, type=int, help="GEPA max_full_evals budget. Defaults to run iterations.")
 @click.option("--gepa-reflection-minibatch-size", default=3, show_default=True, type=int)
@@ -535,6 +537,8 @@ def run_execute(
     temperature: float,
     timeout: float,
     extra_body_json: str | None,
+    scoring_strategy: str,
+    judge_model: str | None,
     dspy_model_prefix: str | None,
     gepa_max_full_evals: int | None,
     gepa_reflection_minibatch_size: int,
@@ -557,6 +561,8 @@ def run_execute(
             temperature=temperature,
             timeout=timeout,
             extra_body=extra_body,
+            scoring_strategy=scoring_strategy,
+            judge_model=judge_model,
             dspy_model_prefix=dspy_model_prefix,
             gepa_max_full_evals=gepa_max_full_evals,
             gepa_reflection_minibatch_size=gepa_reflection_minibatch_size,
@@ -575,8 +581,9 @@ def run_execute(
 @run_group.command("gate")
 @click.argument("run_id")
 @click.option("--min-holdout-improvement", default=0.0, show_default=True, type=float)
+@click.option("--preferred-metric", default="rubric_score", show_default=True, help="Metric to prefer for holdout gate; falls back to available scores.")
 @click.pass_context
-def run_gate(ctx: click.Context, run_id: str, min_holdout_improvement: float):
+def run_gate(ctx: click.Context, run_id: str, min_holdout_improvement: float, preferred_metric: str):
     """Evaluate benchmark/constraint gate for a completed run."""
     try:
         result = evaluate_run_gate(
@@ -584,6 +591,7 @@ def run_gate(ctx: click.Context, run_id: str, min_holdout_improvement: float):
             root=ctx.obj["root"],
             run_id=run_id,
             min_holdout_improvement=min_holdout_improvement,
+            preferred_metric=preferred_metric,
         )
     except (ValueError, FileNotFoundError) as exc:
         raise click.ClickException(str(exc)) from exc
@@ -592,6 +600,7 @@ def run_gate(ctx: click.Context, run_id: str, min_holdout_improvement: float):
     click.echo(
         f"Gate run {run_id} decision={result['decision']} "
         f"candidate={result['candidate_id']} "
+        f"metric={result['metrics']['metric_name']} "
         f"holdout_improvement={result['metrics']['holdout_improvement']} "
         f"reasons={reasons}"
     )
