@@ -103,6 +103,30 @@ def test_cli_traces_import_list_and_dataset_build(tmp_path):
     assert all(example["metadata_json"]["trace_id"].startswith("trace_") for example in examples)
 
 
+def test_cli_traces_import_reports_invalid_json_without_traceback(tmp_path):
+    runner, root = _setup_trace_target(tmp_path)
+    trace_file = tmp_path / "invalid.jsonl"
+    trace_file.write_text("{not-json}\n")
+
+    result = runner.invoke(
+        main,
+        [
+            "--root", str(root),
+            "traces", "import",
+            "--target", "skill:test-skill",
+            "--source", "hermes-session",
+            "--path", str(trace_file),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid JSON on line 1" in result.output
+    assert "Traceback" not in result.output
+    store = EvolutionStore(root / "evolution.db")
+    target = store.get_target_by_name("skill", "test-skill")
+    assert store.list_attempt_traces(target_id=target["id"]) == []
+
+
 def test_cli_traces_import_blocks_secret_values_without_persisting(tmp_path):
     runner, root = _setup_trace_target(tmp_path)
     trace_file = tmp_path / "traces.jsonl"

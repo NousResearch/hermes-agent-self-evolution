@@ -269,7 +269,10 @@ def traces_import(ctx: click.Context, target_ref: str, source: str, trace_path: 
     if not target:
         raise click.ClickException(f"Target not found: {target_ref}. Run targets scan first.")
 
-    traces = load_trace_jsonl(trace_path, default_source=source)
+    try:
+        traces = load_trace_jsonl(trace_path, default_source=source)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     scan_report = scan_traces_for_secrets(traces)
     if scan_report["status"] != "passed":
         raise click.ClickException(f"secret scan failed: {scan_report['matches']}")
