@@ -574,6 +574,28 @@ def evolve(
     improvement = avg_evolved - avg_baseline
     successful_improvement = _is_successful_improvement(skill["raw"], evolved_full, improvement)
 
+    # ── 8b. MAD confidence on per-example deltas ───────────────────────
+    # Median Absolute Deviation tells us whether the improvement is
+    # statistically meaningful or within the noise of the LLM judge.
+    mad_label = ""
+    mad_confidence = None
+    mad_delta_value = None
+    if len(baseline_scores) >= 2:
+        from evolution.core.mad_scoring import compute_mad
+
+        deltas = [e - b for e, b in zip(evolved_scores, baseline_scores)]
+        mad_delta_value = compute_mad(deltas)
+        if mad_delta_value > 0:
+            mad_confidence = abs(improvement) / mad_delta_value
+        else:
+            mad_confidence = float("inf") if abs(improvement) > 0 else 0.0
+        if mad_confidence >= 2.0:
+            mad_label = "likely real"
+        elif mad_confidence >= 1.0:
+            mad_label = "marginal"
+        else:
+            mad_label = "within noise"
+
     # ── 9. Report results ──────────────────────────────────────────────
     table = Table(title="Evolution Results")
     table.add_column("Metric", style="bold")
@@ -596,6 +618,21 @@ def evolve(
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
+    if mad_confidence is not None:
+        confidence_color = (
+            "green" if mad_label == "likely real"
+            else "yellow" if mad_label == "marginal"
+            else "red"
+        )
+        confidence_display = (
+            f"{mad_confidence:.2f}x" if mad_confidence != float("inf") else "∞"
+        )
+        table.add_row(
+            "MAD Confidence",
+            "",
+            f"[{confidence_color}]{confidence_display} ({mad_label})[/{confidence_color}]",
+            "",
+        )
 
     console.print()
     console.print(table)
@@ -630,6 +667,9 @@ def evolve(
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
         "test_suite_passed": getattr(test_result, "passed", None) if test_result else None,
+        "mad_confidence": mad_confidence if mad_confidence not in (None, float("inf")) else None,
+        "mad_delta": mad_delta_value,
+        "mad_label": mad_label or None,
     }
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
     console.print(f"\n  Output saved to {run_dir}/")
