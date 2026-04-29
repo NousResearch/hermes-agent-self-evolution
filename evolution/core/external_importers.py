@@ -78,10 +78,28 @@ SECRET_PATTERNS = re.compile(
     r'|SG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}'
     # Mailgun
     r'|key-[a-f0-9]{32}'
+    # Databricks
+    r'|dapi[a-f0-9]{32}'
+    # DigitalOcean
+    r'|dop_v1_[a-f0-9]{64}'
+    # npm
+    r'|npm_[A-Za-z0-9]{36}'
+    # PyPI
+    r'|pypi-[A-Za-z0-9_\-]{16,}'
+    # Hashicorp Vault
+    r'|hvs\.[A-Za-z0-9_\-]{24,}'
+    # Telegram bot tokens
+    r'|\d{8,10}:[A-Za-z0-9_\-]{35}'
+    # Supabase
+    r'|sbp_[A-Za-z0-9]{40,}'
+    # Vercel
+    r'|vercel_[A-Za-z0-9_\-]{24,}'
     # Generic Bearer / private key / JWT
     r'|Bearer\s+\S{20,}'
-    r'|-----BEGIN\s+(?:[A-Z]+\s+)?PRIVATE\s+KEY-----'   # any algo or none
+    r'|-----BEGIN\s+(?:(?:RSA|DSA|EC|OPENSSH|PGP)\s+)?PRIVATE\s+KEY-----'
     r'|eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+'   # JWT (3-part)
+    # Connection strings with embedded credentials
+    r'|(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://[^\s:]+:[^\s@]+@\S+'
     # Known env var names — flag presence even without a value, so a transcript
     # describing key handling does not slip through.
     r'|\b(?:'
@@ -97,6 +115,21 @@ SECRET_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# PII patterns — applied as a second-pass filter alongside secret detection.
+# Catches personal data that SECRET_PATTERNS intentionally does not cover.
+PII_PATTERNS = re.compile(
+    r'('
+    # Email addresses
+    r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}'
+    # IPv4 addresses (not 127.0.0.1 or 0.0.0.0 which are benign)
+    r'|(?<!\d)(?!127\.0\.0\.1|0\.0\.0\.0)(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)(?!\d)'
+    # Phone numbers (international formats)
+    r'|(?:\+\d{1,3}[\s\-]?)?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}'
+    # SSN-like patterns (US)
+    r'|\b\d{3}-\d{2}-\d{4}\b'
+    r')',
+)
+
 
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 
@@ -104,19 +137,21 @@ MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
 
 
 def _contains_secret(text: str) -> bool:
-    """Check if text contains potential API keys or tokens."""
-    return bool(SECRET_PATTERNS.search(text))
+    """Check if text contains potential API keys, tokens, or PII."""
+    return bool(SECRET_PATTERNS.search(text)) or bool(PII_PATTERNS.search(text))
 
 
 def scrub_secrets(text: str, replacement: str = "[REDACTED]") -> str:
-    """Replace any matched secret patterns with a placeholder.
+    """Replace any matched secret or PII patterns with a placeholder.
 
     Defence-in-depth scan on artifacts about to be persisted to disk (evolved
     skill bodies, error messages, log lines). Not a substitute for the
     `_contains_secret` ingest filter — this is the last-resort layer for
     content the model may have paraphrased into plausible secret-shaped text.
     """
-    return SECRET_PATTERNS.sub(replacement, text)
+    text = SECRET_PATTERNS.sub(replacement, text)
+    text = PII_PATTERNS.sub(replacement, text)
+    return text
 
 
 def _validate_eval_example(
@@ -218,12 +253,14 @@ class ClaudeCodeImporter:
     PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
     @staticmethod
-    def extract_messages(limit: int = 0, source: str = "auto") -> list[dict]:
+    def extract_messages(limit: int = 0, source: str = "auto", project_filter: Optional[str] = None) -> list[dict]:
         """Read messages from Claude Code session storage.
 
         Args:
             limit: Maximum messages to return (0 = no limit).
             source: "auto" (default), "projects", or "history".
+            project_filter: If set, only mine sessions from project dirs
+                whose name contains this substring (encoded CWD matching).
 
         Returns:
             List of dicts. Always include ``source``, ``task_input``,
@@ -236,7 +273,7 @@ class ClaudeCodeImporter:
             )
 
         if source in ("auto", "projects"):
-            messages = ClaudeCodeImporter._extract_from_projects(limit)
+            messages = ClaudeCodeImporter._extract_from_projects(limit, project_filter=project_filter)
             if messages or source == "projects":
                 return messages
 
@@ -278,8 +315,14 @@ class ClaudeCodeImporter:
         return messages
 
     @staticmethod
-    def _extract_from_projects(limit: int = 0) -> list[dict]:
-        """Read paired user/assistant turns from project session transcripts."""
+    def _extract_from_projects(limit: int = 0, project_filter: Optional[str] = None) -> list[dict]:
+        """Read paired user/assistant turns from project session transcripts.
+
+        Args:
+            limit: Maximum messages to return (0 = no limit).
+            project_filter: If set, only mine sessions from project dirs
+                whose encoded name contains this substring.
+        """
         if not ClaudeCodeImporter.PROJECTS_DIR.exists():
             return []
 
@@ -290,6 +333,8 @@ class ClaudeCodeImporter:
         messages: list[dict] = []
         for session_path in session_files:
             project = session_path.parent.name
+            if project_filter and project_filter not in project:
+                continue
             messages.extend(_parse_claude_code_session(session_path, project))
             if limit and len(messages) >= limit:
                 messages = messages[:limit]
@@ -775,6 +820,7 @@ def build_dataset_from_external(
     output_path: Path,
     model: str,
     max_examples: int = 50,
+    source_project: Optional[str] = None,
 ) -> EvalDataset:
     """Extract messages from external tools, filter for relevance, and save.
 
@@ -788,6 +834,8 @@ def build_dataset_from_external(
         output_path: Directory to write train/val/holdout JSONL files.
         model: LiteLLM model string for relevance scoring.
         max_examples: Maximum eval examples to generate.
+        source_project: If set, limit Claude Code mining to sessions whose
+            project directory name contains this substring.
 
     Returns:
         EvalDataset with train/val/holdout splits.
@@ -805,7 +853,11 @@ def build_dataset_from_external(
             continue
         label, importer_cls = importers[source]
         console.print(f"\n[bold]Importing from {label}...[/bold]")
-        msgs = importer_cls.extract_messages()
+        if source == "claude-code" and source_project:
+            console.print(f"  Filtering to projects matching: {source_project!r}")
+            msgs = importer_cls.extract_messages(project_filter=source_project)
+        else:
+            msgs = importer_cls.extract_messages()
         console.print(f"  Found {len(msgs)} messages")
         all_messages.extend(msgs)
 
@@ -858,6 +910,9 @@ def build_dataset_from_external(
     return dataset
 
 
+_SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
 def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tuple[str, str]:
     """Load skill text from the installed Hermes skills directory.
 
@@ -874,7 +929,14 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
 
     Raises:
         FileNotFoundError: If no SKILL.md found for the given name.
+        ValueError: If skill_name contains path separators or shell metacharacters.
     """
+    if not skill_name or not _SKILL_NAME_RE.match(skill_name):
+        raise ValueError(
+            f"Invalid skill name {skill_name!r} — must match [A-Za-z0-9_.-]+ "
+            "(no path separators or shell metacharacters)"
+        )
+
     if skills_dir is None:
         skills_dir = Path.home() / ".hermes" / "skills"
 
@@ -905,13 +967,41 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
               help="LiteLLM model string for relevance scoring")
 @click.option("--max-examples", default=50, help="Max eval examples to generate")
 @click.option("--dry-run", is_flag=True, help="Show message counts without LLM scoring")
-def main(source, skill, output, model, max_examples, dry_run):
+@click.option(
+    "--consent-external-ingest",
+    is_flag=True,
+    help=(
+        "Required. Acknowledges that local chat transcripts from ~/.claude, "
+        "~/.copilot, and ~/.hermes will be read and sent to the configured "
+        "LLM for relevance scoring."
+    ),
+)
+@click.option(
+    "--source-project",
+    default=None,
+    help="Limit Claude Code mining to sessions from this project directory name only",
+)
+def main(source, skill, output, model, max_examples, dry_run, consent_external_ingest, source_project):
     """Import external session data into golden eval datasets for self-evolution."""
     console.print(f"\n[bold cyan]External Session Importer[/bold cyan] — skill: [bold]{skill}[/bold]\n")
 
+    if not dry_run and not consent_external_ingest:
+        console.print(
+            "[red]This command reads chat transcripts from ~/.claude, ~/.copilot, "
+            "and ~/.hermes.[/red]\n"
+            "[red]Transcripts may contain:[/red]\n"
+            "[red]  - Full source code and terminal output from all projects[/red]\n"
+            "[red]  - Personal data, credentials, and business-confidential content[/red]\n"
+            "[red]  - Assistant responses quoting sensitive file contents[/red]\n"
+            "[red]Relevant content (up to 1000 chars per message) is sent to the[/red]\n"
+            f"[red]configured LLM ({model}) for relevance scoring.[/red]\n\n"
+            "[red]Re-run with --consent-external-ingest to proceed.[/red]"
+        )
+        raise SystemExit(2)
+
     try:
         skill_name, skill_text = _load_skill_text(skill)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         console.print(f"[red]{e}[/red]")
         raise SystemExit(1)
 
@@ -943,6 +1033,7 @@ def main(source, skill, output, model, max_examples, dry_run):
         output_path=output,
         model=model,
         max_examples=max_examples,
+        source_project=source_project,
     )
 
 

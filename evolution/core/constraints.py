@@ -13,6 +13,24 @@ from typing import Optional
 from evolution.core.config import EvolutionConfig
 
 
+# Known prompt injection patterns. These are case-insensitive phrases that
+# should never appear in a legitimately evolved skill body.
+_INJECTION_PATTERNS = [
+    re.compile(p, re.IGNORECASE) for p in [
+        r"ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions",
+        r"disregard\s+(?:all\s+)?(?:previous|prior|above)\s+instructions",
+        r"you\s+are\s+now\s+(?:a\s+)?(?:new|different)",
+        r"(?:new|override)\s+system\s+prompt",
+        r"(?:ignore|forget)\s+(?:your|the)\s+(?:safety|system)\s+(?:policy|prompt|rules)",
+        r"exfiltrate\s+(?:secrets?|keys?|tokens?|data|env)",
+        r"(?:send|post|fetch|curl|wget)\b[^\n]{0,40}\bhttps?://",
+        r"contact\s+external\s+(?:system|server|api|endpoint)",
+        r"output\s+(?:your|the)\s+(?:system|initial)\s+prompt",
+        r"reveal\s+(?:your|the)\s+(?:system|hidden)\s+(?:prompt|instructions)",
+    ]
+]
+
+
 @dataclass
 class ConstraintResult:
     """Result of constraint validation."""
@@ -50,6 +68,9 @@ class ConstraintValidator:
         # 4. Structural integrity
         if artifact_type == "skill":
             results.append(self._check_skill_structure(artifact_text))
+
+        # 5. Prompt injection scan
+        results.append(self._check_prompt_injection(artifact_text))
 
         return results
 
@@ -195,6 +216,27 @@ class ConstraintValidator:
                 constraint_name="non_empty",
                 message="Artifact is empty",
             )
+
+    def _check_prompt_injection(self, text: str) -> ConstraintResult:
+        """Scan for known prompt injection patterns in evolved text."""
+        matches = []
+        for pattern in _INJECTION_PATTERNS:
+            match = pattern.search(text)
+            if match:
+                matches.append(match.group(0)[:60])
+        if matches:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="prompt_injection",
+                message=f"Prompt injection detected: {matches[0]!r}" + (
+                    f" (+{len(matches) - 1} more)" if len(matches) > 1 else ""
+                ),
+            )
+        return ConstraintResult(
+            passed=True,
+            constraint_name="prompt_injection",
+            message="No prompt injection patterns found",
+        )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
         """Check that a skill has valid frontmatter and/or meaningful body structure.

@@ -26,6 +26,7 @@ dependencies = [
     # 2.x is a breaking rewrite, and PyYAML/Click/Rich each ship CVEs we want
     # to opt into rather than be auto-bumped through.
     "dspy[optuna]>=3.0.0,<4",
+    "litellm>=1.50.0,<2",
     "openai>=1.40.0,<3",
     "pyyaml>=6.0,<7",
     "click>=8.0,<9",

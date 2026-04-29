@@ -1,6 +1,7 @@
 """Configuration and hermes-agent repo discovery."""
 
 import os
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, TYPE_CHECKING
@@ -17,6 +18,41 @@ MINIMAX_MODELS = (
 )
 
 MINIMAX_BASE_URL = "https://api.minimax.io/v1"
+
+# Known LLM provider prefixes. Model strings must start with one of these
+# or be a bare model ID (no slashes). Prevents SSRF via litellm's custom
+# endpoint routing accepting arbitrary URLs as model strings.
+_KNOWN_PROVIDERS = (
+    "openai/", "anthropic/", "openrouter/", "minimax/",
+    "azure/", "bedrock/", "vertex_ai/", "cohere/",
+    "huggingface/", "ollama/", "together_ai/", "replicate/",
+    "deepinfra/", "groq/", "fireworks_ai/", "anyscale/",
+    "mistral/", "perplexity/", "ai21/",
+)
+
+_MODEL_STRING_RE = re.compile(r"^[A-Za-z0-9_./:@\-]+$")
+
+
+def validate_model_string(model: str) -> str:
+    """Validate that a model string is safe for litellm routing.
+
+    Rejects URLs, shell metacharacters, and unknown provider prefixes.
+    """
+    if not model or not _MODEL_STRING_RE.match(model):
+        raise ValueError(
+            f"Invalid model string {model!r} — contains disallowed characters"
+        )
+    if "://" in model:
+        raise ValueError(
+            f"Model string {model!r} looks like a URL — pass a provider/model-id "
+            "string instead (e.g. 'openai/gpt-4.1')"
+        )
+    if "/" in model and not any(model.startswith(p) for p in _KNOWN_PROVIDERS):
+        raise ValueError(
+            f"Unknown provider prefix in {model!r} — known providers: "
+            + ", ".join(p.rstrip("/") for p in _KNOWN_PROVIDERS[:8]) + ", ..."
+        )
+    return model
 
 
 @dataclass
@@ -36,7 +72,7 @@ class EvolutionConfig:
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
 
     # MiniMax provider configuration
-    minimax_api_key: str = field(default_factory=lambda: os.getenv("MINIMAX_API_KEY", ""))
+    minimax_api_key: str = field(default_factory=lambda: os.getenv("MINIMAX_API_KEY", ""), repr=False)
     minimax_base_url: str = MINIMAX_BASE_URL
 
     # Constraints
@@ -71,6 +107,8 @@ class EvolutionConfig:
         OpenAI / OpenRouter / LiteLLM strings continue to work.
         """
         import dspy
+
+        validate_model_string(model)
 
         # Strip any provider prefix (e.g. "openai/", "minimax/") to get the bare ID
         bare = model.split("/")[-1]

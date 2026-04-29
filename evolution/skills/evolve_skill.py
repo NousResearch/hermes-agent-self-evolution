@@ -10,7 +10,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import click
@@ -19,7 +19,7 @@ import litellm
 from rich.console import Console
 from rich.table import Table
 
-from evolution.core.config import EvolutionConfig, MINIMAX_MODELS
+from evolution.core.config import EvolutionConfig, MINIMAX_MODELS, validate_model_string
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external, scrub_secrets
 from evolution.core.fitness import skill_fitness_metric, init_fitness_metric, reset_fitness_metric
@@ -35,6 +35,24 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+_DATASET_STALE_DAYS = 7
+
+
+def _warn_stale_datasets(dataset_dir: Path) -> None:
+    """Warn if existing JSONL dataset files are older than _DATASET_STALE_DAYS."""
+    if not dataset_dir.exists():
+        return
+    now = datetime.now()
+    for jsonl in dataset_dir.glob("*.jsonl"):
+        age = now - datetime.fromtimestamp(jsonl.stat().st_mtime)
+        if age > timedelta(days=_DATASET_STALE_DAYS):
+            console.print(
+                f"[yellow]⚠ {jsonl.name} is {age.days} days old — may contain "
+                f"stale transcript-derived content. Consider deleting "
+                f"{dataset_dir}/ and re-mining.[/yellow]"
+            )
+            break
 
 
 # Default per-request timeout for every LLM call DSPy makes. Without an
@@ -245,8 +263,18 @@ def evolve(
     create_pr: bool = False,
     consent_external_ingest: bool = False,
     output_dir: Optional[str] = None,
+    source_project: Optional[str] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
+
+    # ── Validate user-supplied model strings ──────────────────────────
+    for label, m in [("optimizer", optimizer_model), ("eval", eval_model), ("judge", judge_model)]:
+        if m is not None:
+            try:
+                validate_model_string(m)
+            except ValueError as exc:
+                console.print(f"[red]✗ Invalid --{label}-model: {exc}[/red]")
+                sys.exit(1)
 
     # ── Resolve model defaults ──────────────────────────────────────────
     # `--use-minimax` only sets defaults for models the user did not specify.
@@ -298,13 +326,23 @@ def evolve(
     if eval_source == "sessiondb" and not consent_external_ingest:
         console.print(
             "[red]✗ --eval-source sessiondb reads chat transcripts from "
-            "~/.claude, ~/.copilot, and ~/.hermes and forwards relevant "
-            "snippets to the eval / judge LLMs.[/red]"
+            "~/.claude, ~/.copilot, and ~/.hermes.[/red]\n"
+            "[red]  This includes ALL projects in those directories, not just the current one.[/red]\n"
+            "[red]  Transcripts may contain:[/red]\n"
+            "[red]    - Full source code and terminal output[/red]\n"
+            "[red]    - Personal data, credentials, and business-confidential content[/red]\n"
+            "[red]    - Assistant responses quoting sensitive file contents[/red]\n"
+            "[red]  Up to 1000 chars per message will be sent to the configured LLMs[/red]\n"
+            f"[red]  for relevance scoring, optimization, and holdout evaluation ({eval_model}).[/red]\n"
         )
+        if use_minimax:
+            console.print(
+                "[red]  ⚠ --use-minimax is active: data will be sent to api.minimax.io[/red]\n"
+                "[red]    (MiniMax, a Chinese-jurisdiction provider).[/red]\n"
+            )
         console.print(
-            "[red]  Re-run with --consent-external-ingest to acknowledge that "
-            "private session content will be sent to the configured eval and "
-            f"judge models ({eval_model}).[/red]"
+            "[red]  Re-run with --consent-external-ingest to proceed.[/red]\n"
+            "[red]  Use --source-project <name> to limit mining to a specific project.[/red]"
         )
         sys.exit(2)
 
@@ -327,12 +365,14 @@ def evolve(
             if dataset_path
             else config.output_dir / "datasets" / "skills" / skill_name
         )
+        _warn_stale_datasets(save_path)
         dataset = build_dataset_from_external(
             skill_name=skill_name,
             skill_text=skill["raw"],
             sources=["claude-code", "copilot", "hermes"],
             output_path=save_path,
             model=eval_model,
+            source_project=source_project,
         )
         if not dataset.all_examples:
             console.print("[red]✗ No relevant examples found from session history[/red]")
@@ -655,6 +695,11 @@ def _score_value(pred) -> float:
     help="Required when --eval-source sessiondb; acknowledges that local chat transcripts will be sent to the eval/judge LLM",
 )
 @click.option("--output-dir", default=None, help="Override output directory (default: ./output)")
+@click.option(
+    "--source-project",
+    default=None,
+    help="Limit Claude Code transcript mining to sessions from this project directory name",
+)
 def main(**kwargs):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(skill_name=kwargs.pop("skill"), **kwargs)
