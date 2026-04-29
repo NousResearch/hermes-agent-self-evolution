@@ -632,10 +632,26 @@ class HermesSessionImporter:
 class RelevanceFilter:
     """Use LLM-as-judge to determine which messages are relevant to a skill.
 
-    Two-stage pipeline:
-      1. Cheap heuristic pre-filter (_is_relevant_to_skill)
-      2. LLM scoring for final relevance + eval metadata generation
+    Three-stage pipeline:
+      1. LLM-expanded keywords (one call) — generates 30-50 synonyms/phrases
+      2. Substring pre-filter against the entire corpus using expanded keywords
+      3. LLM scoring for final relevance + eval metadata generation
     """
+
+    class ExpandKeywords(dspy.Signature):
+        """Generate relevance keywords/phrases for a skill.
+
+        List 30-50 words and short phrases that indicate a user message is
+        relevant to this skill's domain. Include synonyms, abbreviations
+        (e.g., "PR" for "pull request"), action verbs ("review", "audit"),
+        and concrete artifacts (file types, tools, commands).
+
+        Output as a JSON array of lowercase strings. No explanation, no code fences.
+        """
+
+        skill_name: str = dspy.InputField(desc="Name of the skill")
+        skill_text: str = dspy.InputField(desc="Full SKILL.md content")
+        keywords: str = dspy.OutputField(desc="JSON array of 30-50 lowercase keyword strings")
 
     class ScoreRelevance(dspy.Signature):
         """Score whether a user message is relevant to a specific agent skill.
@@ -653,8 +669,58 @@ class RelevanceFilter:
         scoring: str = dspy.OutputField(desc="JSON object with: relevant, expected_behavior, difficulty, category")
 
     def __init__(self, model: str):
+        self.expander = dspy.ChainOfThought(self.ExpandKeywords)
         self.scorer = dspy.ChainOfThought(self.ScoreRelevance)
         self.model = model
+
+    def _expand_keywords(self, skill_name: str, skill_text: str) -> list[str]:
+        """Ask the LLM for skill-specific keywords/phrases (one call)."""
+        lm = dspy.LM(self.model)
+        keywords: list[str] = []
+        try:
+            with dspy.context(lm=lm):
+                result = self.expander(
+                    skill_name=skill_name,
+                    skill_text=skill_text[:6000],
+                )
+            raw = (result.keywords or "").strip()
+            # Try direct JSON-array parse first
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    keywords = [str(k).lower().strip() for k in parsed if isinstance(k, str) and str(k).strip()]
+            except json.JSONDecodeError:
+                # Fall back to extracting first [...] block
+                start = raw.find("[")
+                end = raw.rfind("]")
+                if start != -1 and end > start:
+                    try:
+                        parsed = json.loads(raw[start:end + 1])
+                        if isinstance(parsed, list):
+                            keywords = [
+                                str(k).lower().strip()
+                                for k in parsed
+                                if isinstance(k, str) and str(k).strip()
+                            ]
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as exc:
+            console.print(f"[yellow]Keyword expansion failed ({exc}); falling back to skill-name tokens[/yellow]")
+
+        # Always seed with tokens from the skill name so absurd LLM output cannot
+        # collapse the candidate pool to zero.
+        for token in skill_name.lower().replace("-", " ").replace("_", " ").split():
+            if token and token not in keywords:
+                keywords.append(token)
+
+        # Keep meaningful keywords (length > 2) and de-dupe while preserving order
+        seen: set[str] = set()
+        cleaned: list[str] = []
+        for k in keywords:
+            if len(k) > 2 and k not in seen:
+                seen.add(k)
+                cleaned.append(k)
+        return cleaned
 
     def filter_and_score(
         self,
@@ -679,21 +745,41 @@ class RelevanceFilter:
         # Stage 0: drop messages missing required fields
         messages = [m for m in messages if m.get("task_input") and m.get("source")]
 
-        # Stage 1: cheap heuristic pre-filter
-        candidates = [
-            m for m in messages
-            if _is_relevant_to_skill(m["task_input"], skill_name, skill_text)
-        ]
+        # Stage 1: LLM-expanded keywords (one call)
+        console.print(f"  Expanding skill keywords with LLM ({self.model})...")
+        keywords = self._expand_keywords(skill_name, skill_text)
+        if keywords:
+            preview = ", ".join(keywords[:6])
+            console.print(f"  Using {len(keywords)} relevance keywords (e.g. {preview}...)")
+        else:
+            console.print("[yellow]  No keywords generated; falling back to heuristic pre-filter[/yellow]")
 
-        # If heuristics found too few, sample remaining messages
-        if len(candidates) < max_examples:
+        # Stage 2: substring pre-filter against the ENTIRE corpus using expanded keywords.
+        # Falls back to the heuristic when keyword expansion produced nothing.
+        if keywords:
+            candidates = []
+            for m in messages:
+                text_lower = m["task_input"].lower()
+                if any(kw in text_lower for kw in keywords):
+                    candidates.append(m)
+        else:
+            candidates = [
+                m for m in messages
+                if _is_relevant_to_skill(m["task_input"], skill_name, skill_text)
+            ]
+
+        # Cap the LLM scoring budget — sample if pre-filter produced too many,
+        # widen if it produced too few. 8x overscan gives the LLM room to
+        # reject borderline cases without losing real positives.
+        llm_budget = max_examples * 8
+        if len(candidates) > llm_budget:
+            random.shuffle(candidates)
+            candidates = candidates[:llm_budget]
+        elif len(candidates) < max_examples:
             candidate_ids = {id(m) for m in candidates}
             remaining = [m for m in messages if id(m) not in candidate_ids]
             random.shuffle(remaining)
-            candidates.extend(remaining[:max_examples * 2])
-
-        # Cap candidates to control LLM costs
-        candidates = candidates[:max_examples * 3]
+            candidates.extend(remaining[: max_examples * 2])
 
         console.print(f"  Pre-filtered to {len(candidates)} candidates (from {len(messages)} total)")
 

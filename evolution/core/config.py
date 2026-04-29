@@ -75,6 +75,12 @@ class EvolutionConfig:
     minimax_api_key: str = field(default_factory=lambda: os.getenv("MINIMAX_API_KEY", ""), repr=False)
     minimax_base_url: str = MINIMAX_BASE_URL
 
+    # Custom endpoint for local models (vLLM, Ollama, any LiteLLM-compatible API).
+    # Pair with a bare model ID (e.g. "Qwen2.5-Coder") so validate_model_string
+    # accepts it without requiring a known provider prefix.
+    api_base: Optional[str] = None  # e.g., "http://localhost:8000/v1"
+    api_key: Optional[str] = field(default=None, repr=False)
+
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
     max_tool_desc_size: int = 500  # chars
@@ -125,7 +131,14 @@ class EvolutionConfig:
                 temperature=1.0,  # MiniMax requires temperature in (0.0, 1.0]
             )
 
-        return dspy.LM(model)
+        # Custom endpoint (vLLM, Ollama, LiteLLM-compatible). Only forward
+        # when explicitly set so the default OpenAI/Anthropic path is unchanged.
+        kwargs = {}
+        if self.api_base:
+            kwargs["api_base"] = self.api_base
+        if self.api_key:
+            kwargs["api_key"] = self.api_key
+        return dspy.LM(model, **kwargs) if kwargs else dspy.LM(model)
 
 
 def get_hermes_agent_path() -> Path:

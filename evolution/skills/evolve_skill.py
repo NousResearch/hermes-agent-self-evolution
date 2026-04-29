@@ -25,6 +25,7 @@ from evolution.core.external_importers import build_dataset_from_external, scrub
 from evolution.core.fitness import skill_fitness_metric, init_fitness_metric, reset_fitness_metric
 from evolution.core.constraints import ConstraintValidator
 from evolution.core.benchmark_gate import BenchmarkGate
+from evolution.monitor.progress import start_run, log_event, complete_run, fail_run
 from evolution.skills.skill_module import (
     SkillModule,
     SKILL_BODY_START,
@@ -264,6 +265,8 @@ def evolve(
     consent_external_ingest: bool = False,
     output_dir: Optional[str] = None,
     source_project: Optional[str] = None,
+    api_base: Optional[str] = None,
+    api_key: Optional[str] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -298,11 +301,17 @@ def evolve(
         judge_model=judge_model,
         run_pytest=run_tests,
         create_pr=create_pr,
+        api_base=api_base,
+        api_key=api_key,
     )
     if hermes_repo:
         config.hermes_agent_path = Path(hermes_repo).expanduser()
     if output_dir:
         config.output_dir = Path(output_dir).expanduser()
+
+    # ── 0. Register run in progress DB ──────────────────────────────────
+    run_meta = start_run(skill_name, config)
+    run_id = run_meta["run_id"]
 
     # ── 1. Find and load the skill ──────────────────────────────────────
     console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]\n")
@@ -312,6 +321,7 @@ def evolve(
         console.print(
             f"[red]✗ Skill '{skill_name}' not found in {config.hermes_agent_path / 'skills'}[/red]"
         )
+        fail_run(run_id, f"Skill '{skill_name}' not found")
         sys.exit(1)
 
     skill = load_skill(skill_path)
@@ -319,6 +329,7 @@ def evolve(
     console.print(f"  Name: {skill['name']}")
     console.print(f"  Size: {len(skill['raw']):,} chars")
     console.print(f"  Description: {skill['description'][:80]}...")
+    log_event(run_id, "loading", f"Loaded {skill_path.name} ({len(skill['raw']):,} chars)")
 
     # ── 1b. Consent gate for external ingest ───────────────────────────
     # Enforced before --dry-run so users learn about the requirement during
@@ -351,6 +362,7 @@ def evolve(
         console.print(f"  Would generate eval dataset (source: {eval_source})")
         console.print(f"  Would run GEPA optimization ({iterations} iterations)")
         console.print(f"  Would validate constraints, run benchmarks, write proposal (create_pr={create_pr})")
+        complete_run(run_id, {"scoring_method": "dry_run", "constraints_passed": 0})
         return
 
     # ── 2. Build or load evaluation dataset ────────────────────────────
@@ -394,6 +406,11 @@ def evolve(
 
     console.print(
         f"  Split: {len(dataset.train)} train / {len(dataset.val)} val / {len(dataset.holdout)} holdout"
+    )
+    log_event(
+        run_id,
+        "dataset_built",
+        f"source={eval_source} train={len(dataset.train)} val={len(dataset.val)} holdout={len(dataset.holdout)}",
     )
 
     # ── 3. Validate constraints on baseline ────────────────────────────
@@ -465,6 +482,7 @@ def evolve(
 
     elapsed = time.time() - start_time
     console.print(f"\n  Optimization completed in {elapsed:.1f}s using {optimizer_used}")
+    log_event(run_id, "optimization_complete", f"completed in {elapsed:.1f}s using {optimizer_used}")
 
     # ── 6. Extract evolved skill text ──────────────────────────────────
     extraction = _extract_evolved_body(optimized_module, baseline_body=skill["body"])
@@ -532,6 +550,7 @@ def evolve(
         failed_dir.mkdir(parents=True, exist_ok=True)
         (failed_dir / "evolved_skill.md").write_text(evolved_full)
         console.print(f"  Saved failed variant to {failed_dir}/evolved_skill.md")
+        fail_run(run_id, "Evolved skill failed gates")
         return
 
     # ── 8. Evaluate on holdout set ─────────────────────────────────────
@@ -640,6 +659,16 @@ def evolve(
     # Always reset global judge state so subsequent calls / tests start clean.
     reset_fitness_metric()
 
+    complete_run(run_id, {
+        "baseline_score": avg_baseline,
+        "evolved_score": avg_evolved,
+        "improvement": improvement,
+        "baseline_size": len(skill["body"]),
+        "evolved_size": len(evolved_body),
+        "constraints_passed": 1 if all_pass else 0,
+        "scoring_method": "llm_judge" if use_llm_judge else "deterministic_multi_signal",
+    })
+
     if successful_improvement:
         console.print(
             f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} "
@@ -699,6 +728,16 @@ def _score_value(pred) -> float:
     "--source-project",
     default=None,
     help="Limit Claude Code transcript mining to sessions from this project directory name",
+)
+@click.option(
+    "--api-base",
+    default=None,
+    help="Custom API base URL for local models (vLLM, Ollama, LiteLLM-compatible endpoints)",
+)
+@click.option(
+    "--api-key",
+    default=None,
+    help="API key for the custom --api-base endpoint",
 )
 def main(**kwargs):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
