@@ -264,7 +264,7 @@ class TestClaudeCodeImporter:
         )
 
         with patch.object(ClaudeCodeImporter, "HISTORY_PATH", history):
-            messages = ClaudeCodeImporter.extract_messages()
+            messages = ClaudeCodeImporter.extract_messages(source="history")
 
         # 1 valid message (second too short, third has secret)
         assert len(messages) == 1
@@ -274,7 +274,7 @@ class TestClaudeCodeImporter:
 
     def test_handles_missing_file(self, tmp_path):
         with patch.object(ClaudeCodeImporter, "HISTORY_PATH", tmp_path / "nonexistent.jsonl"):
-            messages = ClaudeCodeImporter.extract_messages()
+            messages = ClaudeCodeImporter.extract_messages(source="history")
         assert messages == []
 
     def test_respects_limit(self, tmp_path):
@@ -286,7 +286,7 @@ class TestClaudeCodeImporter:
         history.write_text("\n".join(lines) + "\n")
 
         with patch.object(ClaudeCodeImporter, "HISTORY_PATH", history):
-            messages = ClaudeCodeImporter.extract_messages(limit=5)
+            messages = ClaudeCodeImporter.extract_messages(limit=5, source="history")
 
         assert len(messages) == 5
 
@@ -299,7 +299,7 @@ class TestClaudeCodeImporter:
         )
 
         with patch.object(ClaudeCodeImporter, "HISTORY_PATH", history):
-            messages = ClaudeCodeImporter.extract_messages()
+            messages = ClaudeCodeImporter.extract_messages(source="history")
 
         assert len(messages) == 1
 
@@ -312,9 +312,248 @@ class TestClaudeCodeImporter:
         )
 
         with patch.object(ClaudeCodeImporter, "HISTORY_PATH", history):
-            messages = ClaudeCodeImporter.extract_messages()
+            messages = ClaudeCodeImporter.extract_messages(source="history")
 
         assert len(messages) == 1
+
+    def test_rejects_invalid_source(self):
+        with pytest.raises(ValueError):
+            ClaudeCodeImporter.extract_messages(source="bogus")
+
+
+def _write_session(path: Path, events: list[dict]) -> None:
+    """Write a list of session events as JSONL."""
+    path.write_text("\n".join(json.dumps(e) for e in events) + "\n")
+
+
+def _user(text: str) -> dict:
+    return {"type": "user", "message": {"role": "user", "content": text}}
+
+
+def _assistant_text(text: str) -> dict:
+    return {
+        "type": "assistant",
+        "message": {"role": "assistant", "content": [{"type": "text", "text": text}]},
+    }
+
+
+def _assistant_tool_use(name: str = "Bash") -> dict:
+    return {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "name": name, "input": {}}],
+        },
+    }
+
+
+def _user_tool_result(text: str = "ok") -> dict:
+    return {
+        "type": "user",
+        "message": {"role": "user", "content": [{"type": "tool_result", "content": text}]},
+    }
+
+
+class TestClaudeCodeProjectsImporter:
+    """Parse paired user/assistant turns from ~/.claude/projects/<cwd>/<id>.jsonl."""
+
+    def test_parses_paired_turns(self, tmp_path):
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        _write_session(projects / "abc.jsonl", [
+            {"type": "permission-mode", "permissionMode": "default"},
+            _user("explain how this codebase routes requests"),
+            _assistant_text("It uses Express middleware for routing."),
+            _user("now refactor it to use Fastify"),
+            _assistant_text("Here's the refactor plan."),
+        ])
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+
+        assert len(messages) == 2
+        assert messages[0]["task_input"] == "explain how this codebase routes requests"
+        assert messages[0]["assistant_response"] == "It uses Express middleware for routing."
+        assert messages[0]["source"] == "claude-code"
+        assert messages[0]["project"] == "-Users-test"
+        assert messages[0]["session_id"] == "abc"
+        assert messages[1]["task_input"] == "now refactor it to use Fastify"
+
+    def test_concatenates_multiple_assistant_text_blocks(self, tmp_path):
+        """Assistant turns may span tool calls; text blocks across them concat."""
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        _write_session(projects / "abc.jsonl", [
+            _user("run the tests and tell me what failed"),
+            _assistant_text("Running them now."),
+            _assistant_tool_use("Bash"),
+            _user_tool_result("FAILED: 2 tests"),
+            _assistant_text("Two integration tests failed in auth_test.py."),
+        ])
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+
+        assert len(messages) == 1
+        assert "Running them now." in messages[0]["assistant_response"]
+        assert "Two integration tests failed" in messages[0]["assistant_response"]
+
+    def test_skips_user_with_array_content(self, tmp_path):
+        """user records with array content are tool results, not real prompts."""
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        _write_session(projects / "abc.jsonl", [
+            _user_tool_result("dangling result without preceding prompt"),
+            _user("the actual question with enough length"),
+            _assistant_text("the actual answer"),
+        ])
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+
+        assert len(messages) == 1
+        assert messages[0]["task_input"] == "the actual question with enough length"
+
+    def test_drops_pair_with_secret_in_user_or_assistant(self, tmp_path):
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        _write_session(projects / "leak.jsonl", [
+            _user("here is sk-ant-api03-SECRETKEY123456789012345678 use it"),
+            _assistant_text("noted thanks"),
+            _user("now a clean question with enough length"),
+            _assistant_text("ANTHROPIC_API_KEY=sk-foo leaked in the response"),
+            _user("fully safe question with enough length here"),
+            _assistant_text("safe response"),
+        ])
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+
+        # Only the third pair survives — secrets in either side reject the pair.
+        assert len(messages) == 1
+        assert messages[0]["task_input"].startswith("fully safe question")
+
+    def test_drops_short_user_prompts(self, tmp_path):
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        _write_session(projects / "abc.jsonl", [
+            _user("hi"),
+            _assistant_text("hello"),
+            _user("now a substantive question with enough length"),
+            _assistant_text("a substantive answer"),
+        ])
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+
+        assert len(messages) == 1
+        assert messages[0]["task_input"].startswith("now a substantive question")
+
+    def test_drops_pair_without_assistant_text(self, tmp_path):
+        """A user prompt followed only by tool_use / no text yields no pair."""
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        _write_session(projects / "abc.jsonl", [
+            _user("a real user prompt with enough length"),
+            _assistant_tool_use("Bash"),
+        ])
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+
+        assert messages == []
+
+    def test_skips_malformed_jsonl_lines(self, tmp_path):
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        (projects / "abc.jsonl").write_text(
+            "not json\n"
+            + json.dumps(_user("a real prompt with enough length to count")) + "\n"
+            + "{broken\n"
+            + json.dumps(_assistant_text("the response")) + "\n"
+        )
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+
+        assert len(messages) == 1
+
+    def test_walks_multiple_sessions_and_projects(self, tmp_path):
+        proj1 = tmp_path / "projects" / "-Users-a"
+        proj2 = tmp_path / "projects" / "-Users-b"
+        proj1.mkdir(parents=True)
+        proj2.mkdir(parents=True)
+        _write_session(proj1 / "s1.jsonl", [
+            _user("question one with enough length"),
+            _assistant_text("answer one"),
+        ])
+        _write_session(proj2 / "s2.jsonl", [
+            _user("question two with enough length"),
+            _assistant_text("answer two"),
+        ])
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+
+        assert len(messages) == 2
+        projects_seen = {m["project"] for m in messages}
+        assert projects_seen == {"-Users-a", "-Users-b"}
+
+    def test_respects_limit(self, tmp_path):
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        events = []
+        for i in range(10):
+            events.append(_user(f"question number {i} with enough length"))
+            events.append(_assistant_text(f"answer number {i}"))
+        _write_session(projects / "abc.jsonl", events)
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"):
+            messages = ClaudeCodeImporter.extract_messages(limit=3, source="projects")
+
+        assert len(messages) == 3
+
+    def test_handles_missing_projects_dir(self, tmp_path):
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "nope"):
+            messages = ClaudeCodeImporter.extract_messages(source="projects")
+        assert messages == []
+
+    def test_auto_prefers_projects_over_history(self, tmp_path):
+        """When projects/ has data, history.jsonl is ignored."""
+        projects = tmp_path / "projects" / "-Users-test"
+        projects.mkdir(parents=True)
+        _write_session(projects / "abc.jsonl", [
+            _user("real transcript prompt with enough length"),
+            _assistant_text("real transcript response"),
+        ])
+        history = tmp_path / "history.jsonl"
+        history.write_text(json.dumps(
+            {"display": "history-only message", "timestamp": 1, "project": "/x", "sessionId": "h"}
+        ) + "\n")
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", tmp_path / "projects"), \
+             patch.object(ClaudeCodeImporter, "HISTORY_PATH", history):
+            messages = ClaudeCodeImporter.extract_messages()  # auto
+
+        assert len(messages) == 1
+        assert "real transcript prompt" in messages[0]["task_input"]
+        assert messages[0]["assistant_response"] == "real transcript response"
+
+    def test_auto_falls_back_to_history(self, tmp_path):
+        """When projects/ is missing or empty, auto reads history.jsonl."""
+        empty_projects = tmp_path / "no-projects"
+        history = tmp_path / "history.jsonl"
+        history.write_text(json.dumps(
+            {"display": "fallback message with enough length", "timestamp": 1, "project": "/x", "sessionId": "h"}
+        ) + "\n")
+
+        with patch.object(ClaudeCodeImporter, "PROJECTS_DIR", empty_projects), \
+             patch.object(ClaudeCodeImporter, "HISTORY_PATH", history):
+            messages = ClaudeCodeImporter.extract_messages()  # auto
+
+        assert len(messages) == 1
+        assert messages[0]["task_input"] == "fallback message with enough length"
+        assert "assistant_response" not in messages[0]
 
 
 # ── Copilot Importer ────────────────────────────────────────────────────────

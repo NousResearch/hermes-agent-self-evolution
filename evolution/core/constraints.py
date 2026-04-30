@@ -4,12 +4,31 @@ Every candidate variant must pass ALL constraints before it can be
 considered valid. Failed constraints = immediate rejection.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 
 from evolution.core.config import EvolutionConfig
+
+
+# Known prompt injection patterns. These are case-insensitive phrases that
+# should never appear in a legitimately evolved skill body.
+_INJECTION_PATTERNS = [
+    re.compile(p, re.IGNORECASE) for p in [
+        r"ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions",
+        r"disregard\s+(?:all\s+)?(?:previous|prior|above)\s+instructions",
+        r"you\s+are\s+now\s+(?:a\s+)?(?:new|different)",
+        r"(?:new|override)\s+system\s+prompt",
+        r"(?:ignore|forget)\s+(?:your|the)\s+(?:safety|system)\s+(?:policy|prompt|rules)",
+        r"exfiltrate\s+(?:secrets?|keys?|tokens?|data|env)",
+        r"(?:send|post|fetch|curl|wget)\b[^\n]{0,40}\bhttps?://",
+        r"contact\s+external\s+(?:system|server|api|endpoint)",
+        r"output\s+(?:your|the)\s+(?:system|initial)\s+prompt",
+        r"reveal\s+(?:your|the)\s+(?:system|hidden)\s+(?:prompt|instructions)",
+    ]
+]
 
 
 @dataclass
@@ -40,7 +59,7 @@ class ConstraintValidator:
         results.append(self._check_size(artifact_text, artifact_type))
 
         # 2. Growth limit (if baseline provided)
-        if baseline_text:
+        if baseline_text is not None:
             results.append(self._check_growth(artifact_text, baseline_text, artifact_type))
 
         # 3. Non-empty
@@ -50,10 +69,60 @@ class ConstraintValidator:
         if artifact_type == "skill":
             results.append(self._check_skill_structure(artifact_text))
 
+        # 5. Prompt injection scan
+        results.append(self._check_prompt_injection(artifact_text))
+
         return results
 
     def run_test_suite(self, hermes_repo: Path) -> ConstraintResult:
-        """Run the full hermes-agent test suite. Must pass 100%."""
+        """Run the full hermes-agent test suite. Must pass 100%.
+
+        Refuses to run if `hermes_repo` does not look like a real hermes-agent
+        checkout. Pytest auto-discovers and executes `conftest.py`, so pointing
+        at an untrusted tree is equivalent to executing arbitrary Python.
+        """
+        try:
+            hermes_repo = Path(hermes_repo).resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message=f"hermes-agent path is invalid: {exc}",
+            )
+
+        # Sanity-check the path looks like a hermes-agent checkout. We do not
+        # try to fully validate authenticity — that is a tree-of-trust problem
+        # — but we do reject obvious mistakes like pointing at /etc or at an
+        # unrelated project.
+        pyproject = hermes_repo / "pyproject.toml"
+        tests_dir = hermes_repo / "tests"
+        if not pyproject.exists() or not tests_dir.exists():
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message=(
+                    f"{hermes_repo} does not look like a hermes-agent checkout "
+                    "(missing pyproject.toml or tests/ directory)."
+                ),
+            )
+        try:
+            project_meta = pyproject.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message=f"Cannot read {pyproject}: {exc}",
+            )
+        if "hermes-agent" not in project_meta and "hermes_agent" not in project_meta:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message=(
+                    f"{pyproject} does not reference hermes-agent — refusing "
+                    "to run pytest in an unrelated project."
+                ),
+            )
+
         try:
             result = subprocess.run(
                 ["python", "-m", "pytest", "tests/", "-q", "--tb=no"],
@@ -61,6 +130,7 @@ class ConstraintValidator:
                 text=True,
                 timeout=300,
                 cwd=str(hermes_repo),
+                check=False,
             )
 
             if result.returncode == 0:
@@ -147,28 +217,92 @@ class ConstraintValidator:
                 message="Artifact is empty",
             )
 
-    def _check_skill_structure(self, text: str) -> ConstraintResult:
-        """Check that a skill file has valid YAML frontmatter and markdown body."""
-        has_frontmatter = text.strip().startswith("---")
-        has_name = "name:" in text[:500] if has_frontmatter else False
-        has_description = "description:" in text[:500] if has_frontmatter else False
-
-        if has_frontmatter and has_name and has_description:
+    def _check_prompt_injection(self, text: str) -> ConstraintResult:
+        """Scan for known prompt injection patterns in evolved text."""
+        matches = []
+        for pattern in _INJECTION_PATTERNS:
+            match = pattern.search(text)
+            if match:
+                matches.append(match.group(0)[:60])
+        if matches:
             return ConstraintResult(
-                passed=True,
-                constraint_name="skill_structure",
-                message="Skill has valid frontmatter (name + description)",
+                passed=False,
+                constraint_name="prompt_injection",
+                message=f"Prompt injection detected: {matches[0]!r}" + (
+                    f" (+{len(matches) - 1} more)" if len(matches) > 1 else ""
+                ),
             )
+        return ConstraintResult(
+            passed=True,
+            constraint_name="prompt_injection",
+            message="No prompt injection patterns found",
+        )
+
+    def _check_skill_structure(self, text: str) -> ConstraintResult:
+        """Check that a skill has valid frontmatter and/or meaningful body structure.
+
+        `validate_skill_constraints()` passes a full SKILL.md here for structural
+        validation while keeping size/growth checks on the mutable body. Keep this
+        method backward-compatible with direct full-file callers from the original
+        test suite, and reject body-only text when called directly so a full skill
+        file still requires frontmatter.
+        """
+        stripped = text.strip()
+        has_frontmatter = stripped.startswith("---")
+        body = stripped
+
+        if has_frontmatter:
+            parts = stripped.split("---", 2)
+            frontmatter = parts[1] if len(parts) >= 3 else ""
+            body = parts[2].strip() if len(parts) >= 3 else ""
+            has_name = "name:" in frontmatter
+            has_description = "description:" in frontmatter
+            if not (has_name and has_description):
+                missing = []
+                if not has_name:
+                    missing.append("name field")
+                if not has_description:
+                    missing.append("description field")
+                return ConstraintResult(
+                    passed=False,
+                    constraint_name="skill_structure",
+                    message=f"Skill missing: {', '.join(missing)}",
+                )
         else:
-            missing = []
-            if not has_frontmatter:
-                missing.append("YAML frontmatter (---)")
-            if not has_name:
-                missing.append("name field")
-            if not has_description:
-                missing.append("description field")
             return ConstraintResult(
                 passed=False,
                 constraint_name="skill_structure",
-                message=f"Skill missing: {', '.join(missing)}",
+                message="Skill missing: YAML frontmatter (---)",
+            )
+
+        has_headings = bool(re.search(r'^#+\s', body, re.MULTILINE))
+        has_steps = any(marker in body.lower() for marker in ['step', '1.', 'procedure', 'how to', 'instructions'])
+        has_substantial_content = len(body.strip()) > 100
+        has_any_content = bool(body.strip())
+
+        checks = {
+            'headings': has_headings,
+            'procedural content': has_steps,
+            'substantial content': has_substantial_content,
+        }
+        # Existing tests allow a small but valid skill file with frontmatter,
+        # heading, and body text. Richer evolved skills still need at least two
+        # structural signals unless they are a valid minimal full SKILL.md.
+        passed = (has_headings and has_any_content) or sum(checks.values()) >= 2
+
+        if passed:
+            found = [k for k, v in checks.items() if v]
+            if has_any_content and not found:
+                found = ["body content"]
+            return ConstraintResult(
+                passed=True,
+                constraint_name="skill_structure",
+                message=f"Skill has valid structure ({', '.join(found)})",
+            )
+        else:
+            missing = [k for k, v in checks.items() if not v]
+            return ConstraintResult(
+                passed=False,
+                constraint_name="skill_structure",
+                message=f"Skill body missing: {', '.join(missing)}",
             )

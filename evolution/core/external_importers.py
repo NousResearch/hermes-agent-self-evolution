@@ -41,32 +41,93 @@ console = Console()
 
 # Patterns that indicate secrets — NEVER include these in datasets.
 # Each pattern is intentionally anchored to known key formats to minimize
-# false positives on normal prose.
+# false positives on normal prose. This is a defence-in-depth heuristic, not
+# an authoritative scanner — pair with detect-secrets/gitleaks for production
+# scans of any output that ships externally.
 SECRET_PATTERNS = re.compile(
     r'('
-    r'sk-ant-api\S+'           # Anthropic API keys
-    r'|sk-or-v1-\S+'          # OpenRouter API keys
-    r'|sk-\S{20,}'            # Generic OpenAI-style keys (20+ chars after sk-)
-    r'|ghp_\S+'               # GitHub personal access tokens
-    r'|ghu_\S+'               # GitHub user tokens
-    r'|xoxb-\S+'              # Slack bot tokens
-    r'|xapp-\S+'              # Slack app tokens
-    r'|ntn_\S+'               # Notion integration tokens
-    r'|AKIA[0-9A-Z]{16}'      # AWS access key IDs
-    r'|Bearer\s+\S{20,}'      # Bearer auth headers (20+ char tokens)
-    r'|-----BEGIN\s+(RSA\s+)?PRIVATE\sKEY-----'  # PEM private keys
-    r'|ANTHROPIC_API_KEY'      # Known env var names (exact match)
-    r'|OPENAI_API_KEY'
-    r'|OPENROUTER_API_KEY'
-    r'|SLACK_BOT_TOKEN'
-    r'|GITHUB_TOKEN'
-    r'|AWS_SECRET_ACCESS_KEY'
-    r'|DATABASE_URL'
-    r'|\bpassword\s*[=:]\s*\S+' # password assignments (password=xxx, password: xxx)
-    r'|\bsecret\s*[=:]\s*\S+'   # secret assignments (secret=xxx, secret: xxx)
-    r'|\btoken\s*[=:]\s*\S{10,}' # token assignments with 10+ char values
+    # OpenAI / Anthropic / OpenRouter
+    r'sk-ant-api\S+'                                    # Anthropic
+    r'|sk-or-v1-\S+'                                    # OpenRouter
+    r'|sk-\S{8,}'                                       # OpenAI-style (and Stripe sk_)
+    # GitHub — keep prefix-based detection loose so short tokens still trip
+    r'|gh[pousr]_\S+'                                   # PAT / user / oauth / server / refresh
+    # GitLab
+    r'|glpat-[A-Za-z0-9_\-]{20,}'
+    # Slack — separate alternations so xapp- / xoxb- / xoxp- all match
+    r'|xoxb-\S+'
+    r'|xoxp-\S+'
+    r'|xoxa-\S+'
+    r'|xoxr-\S+'
+    r'|xoxs-\S+'
+    r'|xapp-\S+'
+    # Notion (modern + legacy)
+    r'|ntn_[A-Za-z0-9]+'
+    r'|secret_[A-Za-z0-9]{43}'
+    # AWS
+    r'|AKIA[0-9A-Z]{16}'                                # access key id
+    r'|ASIA[0-9A-Z]{16}'                                # session/temporary access key id
+    # Google API key
+    r'|AIza[0-9A-Za-z_\-]{35}'
+    # Stripe — explicit live/test variants (also covered by sk-\S{8,} above)
+    r'|rk_(?:live|test)_[A-Za-z0-9]{20,}'
+    r'|pk_(?:live|test)_[A-Za-z0-9]{20,}'
+    # Twilio
+    r'|AC[a-f0-9]{32}'
+    # SendGrid
+    r'|SG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}'
+    # Mailgun
+    r'|key-[a-f0-9]{32}'
+    # Databricks
+    r'|dapi[a-f0-9]{32}'
+    # DigitalOcean
+    r'|dop_v1_[a-f0-9]{64}'
+    # npm
+    r'|npm_[A-Za-z0-9]{36}'
+    # PyPI
+    r'|pypi-[A-Za-z0-9_\-]{16,}'
+    # Hashicorp Vault
+    r'|hvs\.[A-Za-z0-9_\-]{24,}'
+    # Telegram bot tokens
+    r'|\d{8,10}:[A-Za-z0-9_\-]{35}'
+    # Supabase
+    r'|sbp_[A-Za-z0-9]{40,}'
+    # Vercel
+    r'|vercel_[A-Za-z0-9_\-]{24,}'
+    # Generic Bearer / private key / JWT
+    r'|Bearer\s+\S{20,}'
+    r'|-----BEGIN\s+(?:(?:RSA|DSA|EC|OPENSSH|PGP)\s+)?PRIVATE\s+KEY-----'
+    r'|eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+'   # JWT (3-part)
+    # Connection strings with embedded credentials
+    r'|(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://[^\s:]+:[^\s@]+@\S+'
+    # Known env var names — flag presence even without a value, so a transcript
+    # describing key handling does not slip through.
+    r'|\b(?:'
+    r'ANTHROPIC_API_KEY|OPENAI_API_KEY|OPENROUTER_API_KEY|MINIMAX_API_KEY'
+    r'|SLACK_BOT_TOKEN|GITHUB_TOKEN|AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID'
+    r'|DATABASE_URL|REDIS_URL|MONGO_URI|HF_TOKEN|HUGGINGFACE_TOKEN'
+    r'|STRIPE_SECRET_KEY|TWILIO_AUTH_TOKEN|SENDGRID_API_KEY'
+    r')\b'
+    # Generic key/secret/password assignments — last so prefixed patterns win.
+    r'|\b(?:password|passwd|pwd)\s*[=:]\s*\S+'
+    r'|\b(?:api[_-]?key|secret|token|credential)\s*[=:]\s*\S{10,}'
     r')',
     re.IGNORECASE,
+)
+
+# PII patterns — applied as a second-pass filter alongside secret detection.
+# Catches personal data that SECRET_PATTERNS intentionally does not cover.
+PII_PATTERNS = re.compile(
+    r'('
+    # Email addresses
+    r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}'
+    # IPv4 addresses (not 127.0.0.1 or 0.0.0.0 which are benign)
+    r'|(?<!\d)(?!127\.0\.0\.1|0\.0\.0\.0)(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)(?!\d)'
+    # Phone numbers (international formats)
+    r'|(?:\+\d{1,3}[\s\-]?)?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}'
+    # SSN-like patterns (US)
+    r'|\b\d{3}-\d{2}-\d{4}\b'
+    r')',
 )
 
 
@@ -76,8 +137,21 @@ MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
 
 
 def _contains_secret(text: str) -> bool:
-    """Check if text contains potential API keys or tokens."""
-    return bool(SECRET_PATTERNS.search(text))
+    """Check if text contains potential API keys, tokens, or PII."""
+    return bool(SECRET_PATTERNS.search(text)) or bool(PII_PATTERNS.search(text))
+
+
+def scrub_secrets(text: str, replacement: str = "[REDACTED]") -> str:
+    """Replace any matched secret or PII patterns with a placeholder.
+
+    Defence-in-depth scan on artifacts about to be persisted to disk (evolved
+    skill bodies, error messages, log lines). Not a substitute for the
+    `_contains_secret` ingest filter — this is the last-resort layer for
+    content the model may have paraphrased into plausible secret-shaped text.
+    """
+    text = SECRET_PATTERNS.sub(replacement, text)
+    text = PII_PATTERNS.sub(replacement, text)
+    return text
 
 
 def _validate_eval_example(
@@ -155,25 +229,59 @@ def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
 
 
 class ClaudeCodeImporter:
-    """Import user prompts from Claude Code history.jsonl.
+    """Import sessions from Claude Code.
 
-    Claude Code stores a flat JSONL of user messages at ~/.claude/history.jsonl.
-    Each line has: display (user text), timestamp, project, sessionId.
-    Only user inputs are available — no assistant responses.
+    Claude Code stores data in two locations:
+
+    1. ``~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`` — full session
+       transcripts. Each line is one event (``user``, ``assistant``,
+       ``attachment``, ``permission-mode``, etc.). When present these yield
+       paired ``(task_input, assistant_response)`` examples comparable to the
+       Copilot/Hermes importers.
+
+    2. ``~/.claude/history.jsonl`` — flat log of user prompts only. Used as a
+       fallback when ``projects/`` is empty or missing (older Claude Code
+       installations, or fresh machines).
+
+    The default behaviour is ``source="auto"``: prefer rich project transcripts
+    when available, fall back to ``history.jsonl`` otherwise. Pass
+    ``source="history"`` to force the legacy user-only path, or
+    ``source="projects"`` to read transcripts only.
     """
 
     HISTORY_PATH = Path.home() / ".claude" / "history.jsonl"
+    PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
     @staticmethod
-    def extract_messages(limit: int = 0) -> list[dict]:
-        """Read user messages from Claude Code history.
+    def extract_messages(limit: int = 0, source: str = "auto", project_filter: Optional[str] = None) -> list[dict]:
+        """Read messages from Claude Code session storage.
 
         Args:
             limit: Maximum messages to return (0 = no limit).
+            source: "auto" (default), "projects", or "history".
+            project_filter: If set, only mine sessions from project dirs
+                whose name contains this substring (encoded CWD matching).
 
         Returns:
-            List of dicts with keys: source, task_input, project, session_id, timestamp.
+            List of dicts. Always include ``source``, ``task_input``,
+            ``project``, ``session_id``, ``timestamp``. Project transcripts
+            additionally include ``assistant_response``.
         """
+        if source not in ("auto", "projects", "history"):
+            raise ValueError(
+                f"source must be 'auto', 'projects', or 'history' (got {source!r})"
+            )
+
+        if source in ("auto", "projects"):
+            messages = ClaudeCodeImporter._extract_from_projects(limit, project_filter=project_filter)
+            if messages or source == "projects":
+                return messages
+
+        return ClaudeCodeImporter._extract_from_history(limit)
+
+    @staticmethod
+    def _extract_from_history(limit: int = 0) -> list[dict]:
+        """Read user prompts from the flat ``history.jsonl`` log."""
         if not ClaudeCodeImporter.HISTORY_PATH.exists():
             return []
 
@@ -203,6 +311,34 @@ class ClaudeCodeImporter:
 
                 if limit and len(messages) >= limit:
                     break
+
+        return messages
+
+    @staticmethod
+    def _extract_from_projects(limit: int = 0, project_filter: Optional[str] = None) -> list[dict]:
+        """Read paired user/assistant turns from project session transcripts.
+
+        Args:
+            limit: Maximum messages to return (0 = no limit).
+            project_filter: If set, only mine sessions from project dirs
+                whose encoded name contains this substring.
+        """
+        if not ClaudeCodeImporter.PROJECTS_DIR.exists():
+            return []
+
+        session_files = sorted(ClaudeCodeImporter.PROJECTS_DIR.rglob("*.jsonl"))
+        if not session_files:
+            return []
+
+        messages: list[dict] = []
+        for session_path in session_files:
+            project = session_path.parent.name
+            if project_filter and project_filter not in project:
+                continue
+            messages.extend(_parse_claude_code_session(session_path, project))
+            if limit and len(messages) >= limit:
+                messages = messages[:limit]
+                break
 
         return messages
 
@@ -268,6 +404,80 @@ def _read_copilot_workspace(workspace_path: Path) -> str:
     except Exception:
         pass
     return ""
+
+
+def _parse_claude_code_session(session_path: Path, project: str) -> list[dict]:
+    """Parse one Claude Code session JSONL into (user, assistant) pairs.
+
+    Claude Code project transcripts interleave many record types. We keep only
+    real user prompts (``type == "user"`` with string content — array content
+    means a tool result, which we skip) and concatenate the text blocks of all
+    assistant turns that follow until the next user prompt.
+
+    Records lacking ``type``, malformed JSON, or events containing detected
+    secrets are skipped. A session that yields no clean pairs returns an empty
+    list rather than raising.
+    """
+    pairs: list[dict] = []
+    current_user: Optional[str] = None
+    current_assistant_parts: list[str] = []
+
+    session_id = session_path.stem
+
+    def flush() -> None:
+        if current_user and current_assistant_parts:
+            assistant = "\n".join(current_assistant_parts).strip()
+            if assistant and not _contains_secret(current_user) and not _contains_secret(assistant):
+                pairs.append({
+                    "source": "claude-code",
+                    "task_input": current_user,
+                    "assistant_response": assistant,
+                    "project": project,
+                    "session_id": session_id,
+                    "timestamp": 0,
+                })
+
+    try:
+        with open(session_path) as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                event_type = event.get("type")
+                message = event.get("message") or {}
+
+                if event_type == "user":
+                    content = message.get("content")
+                    # array content == tool_result, skip it
+                    if not isinstance(content, str):
+                        continue
+                    text = content.strip()
+                    if len(text) < 10:
+                        continue
+                    # close out the previous turn before starting a new one
+                    flush()
+                    current_user = text
+                    current_assistant_parts = []
+
+                elif event_type == "assistant" and current_user is not None:
+                    content = message.get("content")
+                    if not isinstance(content, list):
+                        continue
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "").strip()
+                            if text:
+                                current_assistant_parts.append(text)
+
+        flush()
+    except OSError as e:
+        console.print(f"[dim]Skipped {session_path.name}: {e}[/dim]")
+
+    return pairs
 
 
 def _parse_copilot_events(
@@ -422,10 +632,26 @@ class HermesSessionImporter:
 class RelevanceFilter:
     """Use LLM-as-judge to determine which messages are relevant to a skill.
 
-    Two-stage pipeline:
-      1. Cheap heuristic pre-filter (_is_relevant_to_skill)
-      2. LLM scoring for final relevance + eval metadata generation
+    Three-stage pipeline:
+      1. LLM-expanded keywords (one call) — generates 30-50 synonyms/phrases
+      2. Substring pre-filter against the entire corpus using expanded keywords
+      3. LLM scoring for final relevance + eval metadata generation
     """
+
+    class ExpandKeywords(dspy.Signature):
+        """Generate relevance keywords/phrases for a skill.
+
+        List 30-50 words and short phrases that indicate a user message is
+        relevant to this skill's domain. Include synonyms, abbreviations
+        (e.g., "PR" for "pull request"), action verbs ("review", "audit"),
+        and concrete artifacts (file types, tools, commands).
+
+        Output as a JSON array of lowercase strings. No explanation, no code fences.
+        """
+
+        skill_name: str = dspy.InputField(desc="Name of the skill")
+        skill_text: str = dspy.InputField(desc="Full SKILL.md content")
+        keywords: str = dspy.OutputField(desc="JSON array of 30-50 lowercase keyword strings")
 
     class ScoreRelevance(dspy.Signature):
         """Score whether a user message is relevant to a specific agent skill.
@@ -443,8 +669,58 @@ class RelevanceFilter:
         scoring: str = dspy.OutputField(desc="JSON object with: relevant, expected_behavior, difficulty, category")
 
     def __init__(self, model: str):
+        self.expander = dspy.ChainOfThought(self.ExpandKeywords)
         self.scorer = dspy.ChainOfThought(self.ScoreRelevance)
         self.model = model
+
+    def _expand_keywords(self, skill_name: str, skill_text: str) -> list[str]:
+        """Ask the LLM for skill-specific keywords/phrases (one call)."""
+        lm = dspy.LM(self.model)
+        keywords: list[str] = []
+        try:
+            with dspy.context(lm=lm):
+                result = self.expander(
+                    skill_name=skill_name,
+                    skill_text=skill_text[:6000],
+                )
+            raw = (result.keywords or "").strip()
+            # Try direct JSON-array parse first
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    keywords = [str(k).lower().strip() for k in parsed if isinstance(k, str) and str(k).strip()]
+            except json.JSONDecodeError:
+                # Fall back to extracting first [...] block
+                start = raw.find("[")
+                end = raw.rfind("]")
+                if start != -1 and end > start:
+                    try:
+                        parsed = json.loads(raw[start:end + 1])
+                        if isinstance(parsed, list):
+                            keywords = [
+                                str(k).lower().strip()
+                                for k in parsed
+                                if isinstance(k, str) and str(k).strip()
+                            ]
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as exc:
+            console.print(f"[yellow]Keyword expansion failed ({exc}); falling back to skill-name tokens[/yellow]")
+
+        # Always seed with tokens from the skill name so absurd LLM output cannot
+        # collapse the candidate pool to zero.
+        for token in skill_name.lower().replace("-", " ").replace("_", " ").split():
+            if token and token not in keywords:
+                keywords.append(token)
+
+        # Keep meaningful keywords (length > 2) and de-dupe while preserving order
+        seen: set[str] = set()
+        cleaned: list[str] = []
+        for k in keywords:
+            if len(k) > 2 and k not in seen:
+                seen.add(k)
+                cleaned.append(k)
+        return cleaned
 
     def filter_and_score(
         self,
@@ -469,21 +745,41 @@ class RelevanceFilter:
         # Stage 0: drop messages missing required fields
         messages = [m for m in messages if m.get("task_input") and m.get("source")]
 
-        # Stage 1: cheap heuristic pre-filter
-        candidates = [
-            m for m in messages
-            if _is_relevant_to_skill(m["task_input"], skill_name, skill_text)
-        ]
+        # Stage 1: LLM-expanded keywords (one call)
+        console.print(f"  Expanding skill keywords with LLM ({self.model})...")
+        keywords = self._expand_keywords(skill_name, skill_text)
+        if keywords:
+            preview = ", ".join(keywords[:6])
+            console.print(f"  Using {len(keywords)} relevance keywords (e.g. {preview}...)")
+        else:
+            console.print("[yellow]  No keywords generated; falling back to heuristic pre-filter[/yellow]")
 
-        # If heuristics found too few, sample remaining messages
-        if len(candidates) < max_examples:
+        # Stage 2: substring pre-filter against the ENTIRE corpus using expanded keywords.
+        # Falls back to the heuristic when keyword expansion produced nothing.
+        if keywords:
+            candidates = []
+            for m in messages:
+                text_lower = m["task_input"].lower()
+                if any(kw in text_lower for kw in keywords):
+                    candidates.append(m)
+        else:
+            candidates = [
+                m for m in messages
+                if _is_relevant_to_skill(m["task_input"], skill_name, skill_text)
+            ]
+
+        # Cap the LLM scoring budget — sample if pre-filter produced too many,
+        # widen if it produced too few. 8x overscan gives the LLM room to
+        # reject borderline cases without losing real positives.
+        llm_budget = max_examples * 8
+        if len(candidates) > llm_budget:
+            random.shuffle(candidates)
+            candidates = candidates[:llm_budget]
+        elif len(candidates) < max_examples:
             candidate_ids = {id(m) for m in candidates}
             remaining = [m for m in messages if id(m) not in candidate_ids]
             random.shuffle(remaining)
-            candidates.extend(remaining[:max_examples * 2])
-
-        # Cap candidates to control LLM costs
-        candidates = candidates[:max_examples * 3]
+            candidates.extend(remaining[: max_examples * 2])
 
         console.print(f"  Pre-filtered to {len(candidates)} candidates (from {len(messages)} total)")
 
@@ -610,6 +906,7 @@ def build_dataset_from_external(
     output_path: Path,
     model: str,
     max_examples: int = 50,
+    source_project: Optional[str] = None,
 ) -> EvalDataset:
     """Extract messages from external tools, filter for relevance, and save.
 
@@ -623,6 +920,8 @@ def build_dataset_from_external(
         output_path: Directory to write train/val/holdout JSONL files.
         model: LiteLLM model string for relevance scoring.
         max_examples: Maximum eval examples to generate.
+        source_project: If set, limit Claude Code mining to sessions whose
+            project directory name contains this substring.
 
     Returns:
         EvalDataset with train/val/holdout splits.
@@ -640,7 +939,11 @@ def build_dataset_from_external(
             continue
         label, importer_cls = importers[source]
         console.print(f"\n[bold]Importing from {label}...[/bold]")
-        msgs = importer_cls.extract_messages()
+        if source == "claude-code" and source_project:
+            console.print(f"  Filtering to projects matching: {source_project!r}")
+            msgs = importer_cls.extract_messages(project_filter=source_project)
+        else:
+            msgs = importer_cls.extract_messages()
         console.print(f"  Found {len(msgs)} messages")
         all_messages.extend(msgs)
 
@@ -693,6 +996,9 @@ def build_dataset_from_external(
     return dataset
 
 
+_SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
 def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tuple[str, str]:
     """Load skill text from the installed Hermes skills directory.
 
@@ -709,7 +1015,14 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
 
     Raises:
         FileNotFoundError: If no SKILL.md found for the given name.
+        ValueError: If skill_name contains path separators or shell metacharacters.
     """
+    if not skill_name or not _SKILL_NAME_RE.match(skill_name):
+        raise ValueError(
+            f"Invalid skill name {skill_name!r} — must match [A-Za-z0-9_.-]+ "
+            "(no path separators or shell metacharacters)"
+        )
+
     if skills_dir is None:
         skills_dir = Path.home() / ".hermes" / "skills"
 
@@ -740,13 +1053,41 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
               help="LiteLLM model string for relevance scoring")
 @click.option("--max-examples", default=50, help="Max eval examples to generate")
 @click.option("--dry-run", is_flag=True, help="Show message counts without LLM scoring")
-def main(source, skill, output, model, max_examples, dry_run):
+@click.option(
+    "--consent-external-ingest",
+    is_flag=True,
+    help=(
+        "Required. Acknowledges that local chat transcripts from ~/.claude, "
+        "~/.copilot, and ~/.hermes will be read and sent to the configured "
+        "LLM for relevance scoring."
+    ),
+)
+@click.option(
+    "--source-project",
+    default=None,
+    help="Limit Claude Code mining to sessions from this project directory name only",
+)
+def main(source, skill, output, model, max_examples, dry_run, consent_external_ingest, source_project):
     """Import external session data into golden eval datasets for self-evolution."""
     console.print(f"\n[bold cyan]External Session Importer[/bold cyan] — skill: [bold]{skill}[/bold]\n")
 
+    if not dry_run and not consent_external_ingest:
+        console.print(
+            "[red]This command reads chat transcripts from ~/.claude, ~/.copilot, "
+            "and ~/.hermes.[/red]\n"
+            "[red]Transcripts may contain:[/red]\n"
+            "[red]  - Full source code and terminal output from all projects[/red]\n"
+            "[red]  - Personal data, credentials, and business-confidential content[/red]\n"
+            "[red]  - Assistant responses quoting sensitive file contents[/red]\n"
+            "[red]Relevant content (up to 1000 chars per message) is sent to the[/red]\n"
+            f"[red]configured LLM ({model}) for relevance scoring.[/red]\n\n"
+            "[red]Re-run with --consent-external-ingest to proceed.[/red]"
+        )
+        raise SystemExit(2)
+
     try:
         skill_name, skill_text = _load_skill_text(skill)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         console.print(f"[red]{e}[/red]")
         raise SystemExit(1)
 
@@ -778,6 +1119,7 @@ def main(source, skill, output, model, max_examples, dry_run):
         output_path=output,
         model=model,
         max_examples=max_examples,
+        source_project=source_project,
     )
 
 
