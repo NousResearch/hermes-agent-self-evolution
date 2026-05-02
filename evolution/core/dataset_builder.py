@@ -135,14 +135,21 @@ class SyntheticDatasetBuilder:
         # Parse the generated test cases
         try:
             cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
+        except json.JSONDecodeError as e:
+            # Try non-greedy extraction first (avoids capturing trailing LLM reasoning)
             import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
+            # Try to find a JSON array with non-greedy match (stops at first complete array)
+            match = re.search(r'\[.*?\]', result.test_cases, re.DOTALL)
             if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+                try:
+                    cases_raw = json.loads(match.group())
+                except json.JSONDecodeError:
+                    # Try stripping markdown code fences
+                    cleaned = re.sub(r'^```json\s*', '', match.group(), flags=re.MULTILINE)
+                    cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE)
+                    cases_raw = json.loads(cleaned)
+            if not match or not cases_raw:
+                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:500]}")
 
         examples = [
             EvalExample(
