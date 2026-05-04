@@ -5,6 +5,7 @@ Usage:
     python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
 """
 
+import inspect
 import json
 import sys
 import time
@@ -31,6 +32,51 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+
+def build_gepa_kwargs(iterations: int, optimizer_model: Optional[str] = None) -> dict:
+    """Build DSPy GEPA kwargs across DSPy API versions.
+
+    hermes-agent-self-evolution originally used ``max_steps``. DSPy 3.x
+    removed that parameter in favor of budget-style knobs such as
+    ``max_metric_calls`` / ``max_full_evals``. Keep compatibility without
+    forcing a MIPROv2 fallback.
+    """
+    params = inspect.signature(dspy.GEPA).parameters
+    kwargs = {"metric": skill_fitness_metric}
+    budget = max(1, int(iterations))
+
+    if "max_steps" in params:
+        kwargs["max_steps"] = budget
+    elif "max_full_evals" in params:
+        kwargs["max_full_evals"] = budget
+    elif "max_metric_calls" in params:
+        kwargs["max_metric_calls"] = budget
+
+    if optimizer_model and "reflection_lm" in params:
+        kwargs["reflection_lm"] = dspy.LM(optimizer_model)
+
+    return kwargs
+
+
+def validate_evolved_skill(
+    validator: ConstraintValidator,
+    skill: dict,
+    evolved_body: str,
+) -> tuple[str, list]:
+    """Reassemble and validate a complete SKILL.md candidate.
+
+    The optimizer mutates only the Markdown body. Constraint validation for a
+    skill, however, expects full YAML frontmatter plus body. Validate the full
+    candidate and compare growth against the full baseline to avoid false
+    failures for body-only text.
+    """
+    evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
+    return evolved_full, validator.validate_all(
+        evolved_full,
+        "skill",
+        baseline_text=skill["raw"],
+    )
 
 
 def evolve(
@@ -119,7 +165,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -154,10 +200,7 @@ def evolve(
     start_time = time.time()
 
     try:
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
-        )
+        optimizer = dspy.GEPA(**build_gepa_kwargs(iterations, optimizer_model=optimizer_model))
 
         optimized_module = optimizer.compile(
             baseline_module,
@@ -182,11 +225,10 @@ def evolve(
     # ── 6. Extract evolved skill text ───────────────────────────────────
     # The optimized module's instructions contain the evolved skill text
     evolved_body = optimized_module.skill_text
-    evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
+    evolved_full, evolved_constraints = validate_evolved_skill(validator, skill, evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
