@@ -25,6 +25,13 @@ def load_skill(skill_path: Path) -> dict:
             "description": str,
         }
     """
+    # If skill_path is a directory, find SKILL.md inside it
+    if skill_path.is_dir():
+        skill_md = skill_path / "SKILL.md"
+        if not skill_md.exists():
+            raise FileNotFoundError(f"No SKILL.md found in {skill_path}")
+        skill_path = skill_md
+
     raw = skill_path.read_text()
 
     # Parse YAML frontmatter

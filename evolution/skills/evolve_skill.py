@@ -186,7 +186,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -204,27 +204,32 @@ def evolve(
         console.print(f"  Saved failed variant to {output_path}")
         return
 
-    # ── 8. Evaluate on holdout set ──────────────────────────────────────
+    # ── 8. Evaluate on holdout set ───────────────────────────────────────
     console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
 
     holdout_examples = dataset.to_dspy_examples("holdout")
 
     baseline_scores = []
     evolved_scores = []
-    for ex in holdout_examples:
-        # Score baseline
-        with dspy.context(lm=lm):
-            baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
-            baseline_scores.append(baseline_score)
+    try:
+        for ex in holdout_examples:
+            # Score baseline
+            with dspy.context(lm=lm):
+                baseline_pred = baseline_module(task_input=ex.task_input)
+                baseline_score = skill_fitness_metric(ex, baseline_pred)
+                baseline_scores.append(baseline_score)
 
-            evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
-            evolved_scores.append(evolved_score)
-
-    avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
-    avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
-    improvement = avg_evolved - avg_baseline
+                evolved_pred = optimized_module(task_input=ex.task_input)
+                evolved_score = skill_fitness_metric(ex, evolved_pred)
+                evolved_scores.append(evolved_score)
+    except Exception as e:
+        console.print(f"[yellow]⚠ Holdout evaluation failed (DSPy adapter error): {e}[/yellow]")
+        console.print("  Constraints passed — skill is valid but holdout scores unavailable.")
+        avg_baseline = avg_evolved = improvement = 0.0
+    else:
+        avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
+        avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
+        improvement = avg_evolved - avg_baseline
 
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
