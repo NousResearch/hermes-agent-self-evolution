@@ -17,7 +17,12 @@ datasets/**/*.json
 
 # Evolution snapshots
 snapshots/
+output/
+logs/
 *.pkl
+
+# Local Hermes planning artifacts
+.hermes/
 
 # IDE
 .idea/

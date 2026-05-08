@@ -1,0 +1,86 @@
+version: 1
+
+owner_profile: lovelace
+state_file: /home/w0lf/.hermes/skill-evolution-state.json
+
+cadence:
+  cron: "0 3 * * *"
+  run_days: ["Mon", "Thu"]
+  max_runs_per_week: 2
+  min_days_between_same_target: 21
+
+models:
+  eval: openai/gpt-4.1
+  optimizer: openai/gpt-4.1
+  fallback_eval: openai/gpt-4.1-mini
+  fallback_optimizer: openai/gpt-4.1-mini
+
+budget:
+  iterations: 5
+  timeout_seconds: 1700
+
+evaluation:
+  source: synthetic
+
+environment:
+  env_files:
+    - /home/w0lf/.hermes/profiles/lovelace/.env
+    - /home/w0lf/.hermes/.env
+  keys:
+    - OPENAI_API_KEY
+    - OPENROUTER_API_KEY
+    - ANTHROPIC_API_KEY
+    - ANTHROPIC_TOKEN
+  alias_keys:
+    ANTHROPIC_API_KEY: ANTHROPIC_TOKEN
+
+profiles:
+  babbage:
+    root: /home/w0lf/.hermes
+    title: Chief of Staff
+    domain: personal
+    enabled: false
+    manual_only: true
+    domains: [personal]
+  lovelace:
+    root: /home/w0lf/.hermes/profiles/lovelace
+    title: Chief of Ops
+    domain: operational
+    enabled: true
+    manual_only: false
+    domains: [operational]
+  turing:
+    root: /home/w0lf/.hermes/profiles/turing
+    title: Chief Tech Op
+    domain: code
+    enabled: false
+    manual_only: true
+    domains: [code]
+
+skills:
+  operational:
+    - hermes-operations
+    - native-mcp
+    - dogfood
+  code:
+    - systematic-debugging
+    - test-driven-development
+    - github-code-review
+    - github-pr-workflow
+    - github-issues
+    - subagent-driven-development
+  personal:
+    - plan
+    - writing-plans
+
+gates:
+  require_positive_improvement: true
+  min_improvement: 0.02
+  max_growth_pct: 20
+  run_tests: false
+  auto_apply: false
+
+reporting:
+  report_on_run: true
+  report_on_failure: true
+  report_on_skip: false
