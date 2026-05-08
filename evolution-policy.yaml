@@ -10,10 +10,10 @@ cadence:
   min_days_between_same_target: 21
 
 models:
-  eval: openai/gpt-4.1
-  optimizer: openai/gpt-4.1
-  fallback_eval: openai/gpt-4.1-mini
-  fallback_optimizer: openai/gpt-4.1-mini
+  eval: openai/gpt-5.4-mini
+  optimizer: openai/gpt-5.4-mini
+  fallback_eval: openai/gpt-5.4-mini
+  fallback_optimizer: openai/gpt-5.4-mini
 
 budget:
   iterations: 5

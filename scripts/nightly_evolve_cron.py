@@ -319,8 +319,8 @@ def run_evolution(repo_root: Path, policy: dict[str, Any], env: dict[str, str], 
     timeout = int(budget.get("timeout_seconds", 1700) or 1700)
     iterations = str(int(budget.get("iterations", 5) or 5))
     eval_source = str(eval_cfg.get("source", "synthetic"))
-    eval_model = str(models.get("eval", "openai/gpt-4.1"))
-    optimizer_model = str(models.get("optimizer", "openai/gpt-4.1"))
+    eval_model = str(models.get("eval", "openai/gpt-5.4-mini"))
+    optimizer_model = str(models.get("optimizer", "openai/gpt-5.4-mini"))
 
     child_env = env.copy()
     child_env["HERMES_AGENT_REPO"] = str(target.profile_root)
