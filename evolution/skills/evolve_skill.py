@@ -185,8 +185,13 @@ def evolve(
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
+    # Pass `evolved_full` (frontmatter + body) so the `skill_structure`
+    # constraint can verify the YAML frontmatter / name / description.
+    # Passing `evolved_body` here causes that constraint to always fail and
+    # routes valid evolutions into the FAILED path even when the assembled
+    # skill is well-formed (and gets saved correctly on line ~206).
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["body"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
