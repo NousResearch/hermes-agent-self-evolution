@@ -1,4 +1,5 @@
-"""LM-call observability: timing + heartbeat warnings + per-attempt failures.
+"""LM-call observability: timing + heartbeat warnings + per-attempt failures
+plus cache-aware token + cost accounting.
 
 Surfaces LM-call latency, mid-call heartbeats on stalls, and per-attempt
 failures (which DSPy's BaseCallback hides behind tenacity retries).
@@ -6,7 +7,7 @@ Required for diagnosing OpenAI capacity degradation, GEPA reflection-LM
 stalls, and silent retry behavior — without this, hung calls are
 indistinguishable from "still optimizing" until hours pass.
 
-Two surfaces:
+Three surfaces:
 
 1. `LMTimingCallback` — DSPy `BaseCallback` registered globally via
    `dspy.configure(callbacks=[...])`. Logs every LM call's start/end
@@ -17,6 +18,14 @@ Two surfaces:
    into `litellm.failure_callback` so each retry attempt is logged
    (BaseCallback only fires once per logical call, hiding retries).
    Idempotent + lock-guarded against TOCTOU on concurrent imports.
+3. `CostLedger` + `register_litellm_cost_callback()` — installs a
+   success-callback into `litellm.success_callback` that captures
+   `usage.prompt_tokens_details.cached_tokens` and aggregates per-model
+   token + cost totals. Cost dollars come from
+   `litellm.completion_cost(completion_response=...)`, which honors
+   OpenAI's cache_read_input_token_cost. The DSPy `on_lm_end` callback
+   can NOT see the raw response (DSPy parses it to a list of strings
+   before the callback fires), so this hooks litellm directly instead.
 """
 
 from __future__ import annotations
@@ -24,7 +33,8 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Callable
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional
 
 import litellm
 from dspy.utils.callback import BaseCallback
@@ -156,3 +166,155 @@ def register_litellm_failure_callback() -> None:
         callbacks = litellm.failure_callback or []
         if _log_litellm_failure not in callbacks:
             litellm.failure_callback = callbacks + [_log_litellm_failure]
+
+
+@dataclass
+class _ModelCostRow:
+    tokens_in_uncached: int = 0
+    tokens_in_cached: int = 0
+    tokens_out: int = 0
+    reasoning_tokens: int = 0
+    cost_usd: float = 0.0
+    calls: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        prompt_total = self.tokens_in_uncached + self.tokens_in_cached
+        return {
+            "tokens_in_uncached": self.tokens_in_uncached,
+            "tokens_in_cached": self.tokens_in_cached,
+            "tokens_out": self.tokens_out,
+            "reasoning_tokens": self.reasoning_tokens,
+            "cost_usd": round(self.cost_usd, 6),
+            "calls": self.calls,
+            "cache_hit_rate": (
+                self.tokens_in_cached / prompt_total if prompt_total > 0 else 0.0
+            ),
+        }
+
+
+class CostLedger:
+    """Per-model token + cost aggregator, fed by the litellm success callback.
+
+    Cost dollars come from `litellm.completion_cost(...)` — that helper
+    honors `cache_read_input_token_cost` for OpenAI, so we don't maintain
+    a parallel price table that would drift with each litellm release.
+    Token counts are captured separately so we can report cache-hit rate
+    as a diagnostic; a hit-rate that drops near zero mid-campaign signals
+    that a prompt change has busted the cache.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._by_model: dict[str, _ModelCostRow] = {}
+
+    def reset(self) -> None:
+        with self._lock:
+            self._by_model.clear()
+
+    def record(
+        self,
+        *,
+        model: str,
+        prompt_tokens: int,
+        cached_tokens: int,
+        completion_tokens: int,
+        reasoning_tokens: int,
+        cost_usd: float,
+    ) -> None:
+        # Single critical section over dict-insert + counter-increment so
+        # concurrent dspy.Evaluate threads can't observe a half-updated
+        # row or race the model-key creation.
+        with self._lock:
+            row = self._by_model.setdefault(model, _ModelCostRow())
+            row.tokens_in_uncached += max(0, prompt_tokens - cached_tokens)
+            row.tokens_in_cached += cached_tokens
+            row.tokens_out += completion_tokens
+            row.reasoning_tokens += reasoning_tokens
+            row.cost_usd += cost_usd
+            row.calls += 1
+
+    def summary(self) -> dict[str, Any]:
+        with self._lock:
+            by_model = {model: row.to_dict() for model, row in self._by_model.items()}
+        total_usd = round(sum(row["cost_usd"] for row in by_model.values()), 6)
+        return {"total_usd": total_usd, "by_model": by_model}
+
+
+# Module-level singleton so the litellm success callback (a free function,
+# not a method) can find the ledger. `evolve()` calls reset() at the start
+# of each run; tests can construct their own CostLedger and bypass this.
+COST_LEDGER = CostLedger()
+
+
+def _extract_usage_fields(
+    completion_response: Any,
+) -> tuple[int, int, int, int]:
+    """Extract (prompt, cached, completion, reasoning) tokens defensively.
+
+    litellm normalizes `usage` to a Pydantic-ish object but fields are
+    `None` on streaming aggregates and on non-supporting providers.
+    Returns zeros for any missing field so the caller never sees None.
+    """
+    usage = getattr(completion_response, "usage", None)
+    if usage is None:
+        return 0, 0, 0, 0
+    prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+    completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+    pdt = getattr(usage, "prompt_tokens_details", None)
+    cached_tokens = (getattr(pdt, "cached_tokens", 0) or 0) if pdt else 0
+    cdt = getattr(usage, "completion_tokens_details", None)
+    reasoning_tokens = (getattr(cdt, "reasoning_tokens", 0) or 0) if cdt else 0
+    return int(prompt_tokens), int(cached_tokens), int(completion_tokens), int(reasoning_tokens)
+
+
+def _log_litellm_cost(
+    kwargs: dict[str, Any],
+    completion_response: Any,
+    start_time: Any,
+    end_time: Any,
+    ledger: Optional[CostLedger] = None,
+) -> None:
+    """litellm success_callback: capture per-call usage + cost into the
+    ledger. The DSPy `on_lm_end` hook can't reach this layer because DSPy
+    has already parsed `completion_response` to text by the time it fires.
+    """
+    target_ledger = ledger if ledger is not None else COST_LEDGER
+    model = kwargs.get("model") or getattr(completion_response, "model", "<unknown>")
+    prompt_t, cached_t, completion_t, reasoning_t = _extract_usage_fields(
+        completion_response
+    )
+    try:
+        cost = float(litellm.completion_cost(completion_response=completion_response))
+    except Exception as exc:  # noqa: BLE001 — litellm raises a wide range
+        logger.debug(
+            "litellm.completion_cost failed for model=%s: %s — recording 0.0",
+            model, exc,
+        )
+        cost = 0.0
+    target_ledger.record(
+        model=model,
+        prompt_tokens=prompt_t,
+        cached_tokens=cached_t,
+        completion_tokens=completion_t,
+        reasoning_tokens=reasoning_t,
+        cost_usd=cost,
+    )
+    logger.info(
+        "[LM cost] model=%s tokens=%d+%d(cached=%d)→%d cost=$%.6f",
+        model, prompt_t - cached_t, cached_t, cached_t, completion_t, cost,
+    )
+
+
+def register_litellm_cost_callback() -> None:
+    """Install `_log_litellm_cost` into `litellm.success_callback`,
+    idempotently. Lock-guarded against TOCTOU on concurrent first-call.
+
+    Call this once per `evolve()` invocation alongside
+    `register_litellm_failure_callback`. Both are scoped via the same
+    module-level lock since they mutate sibling globals on the same
+    library.
+    """
+    with _register_lock:
+        callbacks = litellm.success_callback or []
+        if _log_litellm_cost not in callbacks:
+            litellm.success_callback = callbacks + [_log_litellm_cost]

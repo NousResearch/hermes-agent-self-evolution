@@ -7,6 +7,7 @@ Usage:
 
 import json
 import logging
+import random
 import sys
 import time
 import traceback
@@ -36,7 +37,9 @@ from evolution.core.stats import paired_bootstrap
 from evolution.core.fitness import LLMJudge, make_skill_fitness_metric
 from evolution.core.constraints import ConstraintValidator, resolve_decision_rule
 from evolution.core.lm_timing_callback import (
+    COST_LEDGER,
     LMTimingCallback,
+    register_litellm_cost_callback,
     register_litellm_failure_callback,
 )
 from evolution.skills.budget_aware_proposer import BudgetAwareProposer
@@ -180,6 +183,63 @@ def _holdout_evaluate_with_metric(module, holdout_examples, metric, lm) -> tuple
     mean = float(result.score) / 100.0
     per_example = [float(s) for _, _, s in result.results]
     return mean, per_example
+
+
+_BAND_HOLDOUT_SUBSAMPLE_CAP = 100
+
+
+def _evaluate_band_on_holdout(
+    *,
+    knee_pick: CandidatePick,
+    candidates: list,
+    holdout_examples: list,
+    metric: Any,
+    lm: Any,
+    output_dir: Path,
+    seed: int,
+    subsample_cap: int = _BAND_HOLDOUT_SUBSAMPLE_CAP,
+) -> Path:
+    """Re-evaluate every candidate in the knee-point band on the holdout.
+
+    Inline because GEPA's candidate programs are not persisted: a true
+    post-run script can read `band_roster` from `gate_decision.json` but
+    cannot reach the candidate programs once `evolve()` returns. This
+    runs while the GEPA `details.candidates` list is still alive.
+
+    Caps the holdout slice at `subsample_cap` examples (deterministic via
+    `seed`) to bound cost when callers crank `--eval-dataset-size` to 400.
+    Each candidate sees the same subsample so per-candidate scores are
+    directly comparable.
+    """
+    if len(holdout_examples) > subsample_cap:
+        rng = random.Random(seed)
+        eval_examples = rng.sample(holdout_examples, subsample_cap)
+    else:
+        eval_examples = holdout_examples
+
+    candidate_results: list[dict[str, Any]] = []
+    for entry in knee_pick.band_roster:
+        idx = entry["idx"]
+        candidate_module = candidates[idx]
+        holdout_score, holdout_per_example = _holdout_evaluate_with_metric(
+            candidate_module, eval_examples, metric, lm,
+        )
+        candidate_results.append({
+            "idx": idx,
+            "val_score": entry["val_score"],
+            "body_chars": entry["body_chars"],
+            "holdout_score": holdout_score,
+            "holdout_per_example": holdout_per_example,
+        })
+
+    payload = {
+        "epsilon": knee_pick.epsilon,
+        "holdout_subsample_size": len(eval_examples),
+        "candidates": candidate_results,
+    }
+    path = output_dir / "band_holdout.json"
+    path.write_text(json.dumps(payload, indent=2))
+    return path
 
 
 def _resolve_budget(iterations: int, budget: Optional[str]) -> str:
@@ -332,6 +392,19 @@ def _build_optimizer_and_compile(
             raise ie from gepa_exc
 
 
+_BAP_SAFETY_MARGIN_DEFAULT = 0.10
+
+
+def _resolve_bap_safety_margin(value: Optional[float]) -> float:
+    """Resolve `--bap-safety-margin` to BudgetAwareProposer's `safety_margin`.
+
+    `None` (sentinel: "user didn't set the flag") maps to the documented
+    default. A user-provided `0.0` is preserved verbatim — without this
+    helper the constructor's own default would silently re-apply 0.10.
+    """
+    return _BAP_SAFETY_MARGIN_DEFAULT if value is None else value
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -355,6 +428,10 @@ def evolve(
     bootstrap_n_resamples: Optional[int] = None,
     knee_point_epsilon: Optional[float] = None,
     knee_point_strategy: str = "val-best",
+    bap_safety_margin: Optional[float] = None,
+    eval_dataset_size: Optional[int] = None,
+    holdout_ratio: Optional[float] = None,
+    evaluate_band_on_holdout: bool = False,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -393,6 +470,10 @@ def evolve(
         config_kwargs["bootstrap_confidence"] = bootstrap_confidence
     if bootstrap_n_resamples is not None:
         config_kwargs["bootstrap_n_resamples"] = bootstrap_n_resamples
+    if eval_dataset_size is not None:
+        config_kwargs["eval_dataset_size"] = eval_dataset_size
+    if holdout_ratio is not None:
+        config_kwargs["holdout_ratio"] = holdout_ratio
     config = EvolutionConfig(**config_kwargs)
     explicit_dirs = [Path(d) for d in (skill_source_dirs or [])]
     if explicit_dirs:
@@ -442,6 +523,10 @@ def evolve(
     ))
     logging.getLogger().addHandler(file_handler)
     register_litellm_failure_callback()
+    register_litellm_cost_callback()
+    # Module-level singleton: reset between runs so metrics.json reflects
+    # this run only, not whatever previous evolve() call(s) accumulated.
+    COST_LEDGER.reset()
     console.print(f"  Run log: {run_log_path}")
 
     console.print(f"\n[bold]Building evaluation dataset[/bold] (source: {eval_source})")
@@ -554,6 +639,7 @@ def evolve(
     proposer = BudgetAwareProposer(
         baseline_chars=len(skill["body"]),
         max_growth=config.growth_free_threshold,
+        safety_margin=_resolve_bap_safety_margin(bap_safety_margin),
     )
 
     optimized_module, optimizer_name = _build_optimizer_and_compile(
@@ -651,6 +737,22 @@ def evolve(
         optimized_module, holdout_examples, metric, lm,
     )
     improvement = avg_evolved - avg_baseline
+
+    if evaluate_band_on_holdout and knee_pick is not None:
+        console.print(
+            f"\n[bold]Re-evaluating {knee_pick.band_size} band candidate(s) on holdout[/bold] "
+            "[dim](calibration telemetry; only enabled with --evaluate-band-on-holdout)[/dim]"
+        )
+        band_path = _evaluate_band_on_holdout(
+            knee_pick=knee_pick,
+            candidates=details.candidates,
+            holdout_examples=holdout_examples,
+            metric=metric,
+            lm=lm,
+            output_dir=output_dir,
+            seed=config.seed,
+        )
+        console.print(f"  Wrote {band_path.name}")
 
     console.print(f"\n[bold]Validating growth against holdout improvement[/bold]")
     bootstrap = paired_bootstrap(
@@ -755,6 +857,7 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "cost": COST_LEDGER.summary(),
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
@@ -888,12 +991,47 @@ def evolve(
     "parsimony — picks the smallest body regardless of val cost; "
     "available for users explicitly chasing compression.",
 )
+@click.option(
+    "--bap-safety-margin",
+    default=None,
+    type=float,
+    help="Advanced: override BudgetAwareProposer's safety_margin (default "
+    "0.10). The proposer asks the reflection LM for a target tighter than "
+    "the validator's bar to absorb the LM's observed +8-9% overshoot. "
+    "Setting to 0.0 disables the cushion — useful for calibration runs that "
+    "want the LM to push toward the actual gate.",
+)
+@click.option(
+    "--eval-dataset-size",
+    default=None,
+    type=int,
+    help="Advanced: override EvolutionConfig.eval_dataset_size (default "
+    "150). Total examples generated; train/val/holdout splits are derived "
+    "via the configured ratios.",
+)
+@click.option(
+    "--holdout-ratio",
+    default=None,
+    type=float,
+    help="Advanced: override EvolutionConfig.holdout_ratio (default 0.50). "
+    "Fraction of the dataset reserved for the deploy-gate's holdout "
+    "evaluation, after train/val are taken.",
+)
+@click.option(
+    "--evaluate-band-on-holdout/--no-evaluate-band-on-holdout",
+    default=False,
+    help="Calibration telemetry: after the picked candidate is selected, "
+    "re-evaluate every candidate in the knee-point band on the holdout "
+    "and write band_holdout.json. Off by default — adds judge calls "
+    "proportional to band size × holdout examples (capped at 100).",
+)
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflection_model,
          eval_model, skill_source_dir, run_tests, dry_run, seed, budget, no_fallback,
          quality_gate, growth_free_threshold,
          growth_quality_slope, max_absolute_chars, inferiority_tolerance,
          bootstrap_confidence, bootstrap_resamples, knee_point_epsilon,
-         knee_point_strategy):
+         knee_point_strategy, bap_safety_margin, eval_dataset_size,
+         holdout_ratio, evaluate_band_on_holdout):
     """Evolve an agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -918,6 +1056,10 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
         bootstrap_n_resamples=bootstrap_resamples,
         knee_point_epsilon=knee_point_epsilon,
         knee_point_strategy=knee_point_strategy,
+        bap_safety_margin=bap_safety_margin,
+        eval_dataset_size=eval_dataset_size,
+        holdout_ratio=holdout_ratio,
+        evaluate_band_on_holdout=evaluate_band_on_holdout,
     )
 
 
