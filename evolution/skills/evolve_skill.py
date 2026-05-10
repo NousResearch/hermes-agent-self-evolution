@@ -154,9 +154,11 @@ def evolve(
     start_time = time.time()
 
     try:
+        # DSPy 3.2+ renamed max_steps; use a reflection model + max_full_evals.
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
+            reflection_lm=dspy.LM(model=config.optimizer_model, max_tokens=4096),
         )
 
         optimized_module = optimizer.compile(
