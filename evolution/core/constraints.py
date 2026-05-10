@@ -21,6 +21,23 @@ class ConstraintResult:
     details: Optional[str] = None
 
 
+# How much the absolute-char ceiling scales with baseline size. The
+# effective ceiling is max(config.max_absolute_chars, multiplier ×
+# baseline_chars). A 1.5× multiplier matches the lenient preset's
+# growth_free_threshold (0.30) plus headroom for the bootstrap to land
+# on a slightly larger evolved variant — empirically: linear at 11185
+# chars needs ~16778 to fit observed +30% compression-direction
+# variants without auto-rejecting on absolute size.
+_BASELINE_CEILING_MULTIPLIER = 1.5
+
+
+def effective_absolute_char_ceiling(static_ceiling: int, baseline_chars: int) -> int:
+    """Per-run ceiling: the larger of the static config floor and a
+    baseline-relative scale. The static value remains a backstop for
+    skills with tiny baselines; scaling kicks in for larger skills."""
+    return max(static_ceiling, int(_BASELINE_CEILING_MULTIPLIER * baseline_chars))
+
+
 def resolve_decision_rule(config: EvolutionConfig, growth_pct: float) -> str:
     """Single source of truth for which gate decision rule applies.
 
@@ -82,7 +99,7 @@ class ConstraintValidator:
             self._check_growth_with_quality_gate(
                 artifact_text, baseline_text, bootstrap_result
             ),
-            self._check_absolute_chars(artifact_text),
+            self._check_absolute_chars(artifact_text, len(baseline_text)),
         ]
 
     def run_test_suite(self, repo_path: Path) -> ConstraintResult:
@@ -259,15 +276,22 @@ class ConstraintValidator:
             ),
         )
 
-    def _check_absolute_chars(self, text: str) -> ConstraintResult:
+    def _check_absolute_chars(self, text: str, baseline_chars: int) -> ConstraintResult:
         """Hard absolute-char ceiling on the evolved artifact.
 
         Independent of growth. Backstops runaway absolute size that the
         relative growth curve can't catch (e.g., a 200-char baseline
         growing to 1500 chars is +650% but only 1500 chars absolute).
+
+        Ceiling scales with baseline size — a 10000-char baseline gets
+        a 15000-char effective ceiling, not the static 5000 floor. The
+        static config value remains a hard backstop for tiny baselines
+        where 1.5× would shrink below the floor.
         """
         size = len(text)
-        ceiling = self.config.max_absolute_chars
+        ceiling = effective_absolute_char_ceiling(
+            self.config.max_absolute_chars, baseline_chars,
+        )
         if size <= ceiling:
             return ConstraintResult(
                 passed=True,

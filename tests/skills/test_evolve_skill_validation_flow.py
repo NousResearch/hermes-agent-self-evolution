@@ -22,6 +22,7 @@ from evolution.skills.evolve_skill import (
     _evaluate_band_on_holdout,
     _holdout_evaluate_with_metric,
     _knee_point_payload,
+    _resolve_bap_max_growth,
     _resolve_bap_safety_margin,
     _write_gate_decision,
     main as evolve_skill_cli,
@@ -158,8 +159,11 @@ class TestGrowthGateDecisionSchema:
             "baseline_chars": 1000,
             "evolved_chars": 1300,
             "absolute_char_ceiling": 5000,
+            "effective_absolute_char_ceiling": 5000,
             "growth_free_threshold": 0.20,
             "growth_quality_slope": 0.30,
+            "bap_max_growth": 0.20,
+            "bap_safety_margin": 0.10,
             "baseline_per_example": [0.5, 0.6, 0.7],
             "evolved_per_example": [0.51, 0.61, 0.71],
             "avg_baseline": 0.6,
@@ -454,6 +458,25 @@ class TestResolveBapSafetyMargin:
 
     def test_explicit_nonzero_is_preserved(self):
         assert _resolve_bap_safety_margin(0.05) == 0.05
+
+
+class TestResolveBapMaxGrowth:
+    """`--bap-max-growth` decouples the proposer's growth target from the
+    gate's `growth_free_threshold`. None falls back to the per-config
+    fallback (preserving today's coupled behavior); 0.0 must be preserved
+    as a legitimate user-supplied "no headroom" target."""
+
+    def test_none_resolves_to_fallback(self):
+        assert _resolve_bap_max_growth(None, 0.20) == 0.20
+
+    def test_explicit_zero_is_preserved(self):
+        # Critical: the resolver must use `is None`, not a truthiness
+        # check. `0.0 or fallback` would silently collapse 0.0 to 0.20
+        # and the user's "no headroom" intent would be lost.
+        assert _resolve_bap_max_growth(0.0, 0.20) == 0.0
+
+    def test_explicit_nonzero_is_preserved(self):
+        assert _resolve_bap_max_growth(0.10, 0.20) == 0.10
 
 
 class TestCliFlagPropagationToConfig:

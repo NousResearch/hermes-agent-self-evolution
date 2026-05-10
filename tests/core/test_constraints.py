@@ -346,27 +346,38 @@ class TestResolveDecisionRule:
 
 class TestAbsoluteCharCeiling:
     def test_under_ceiling_passes(self, validator):
-        result = validator._check_absolute_chars("x" * 4000)
+        # Tiny baseline → static 5000 floor applies. 4000 < 5000.
+        result = validator._check_absolute_chars("x" * 4000, baseline_chars=1000)
         assert result.passed
 
     def test_over_ceiling_fails(self, validator):
-        # Default max_absolute_chars=5000.
-        result = validator._check_absolute_chars("x" * 6000)
+        # Tiny baseline → static 5000 floor applies. 6000 > 5000 fails.
+        result = validator._check_absolute_chars("x" * 6000, baseline_chars=1000)
         assert not result.passed
         assert "1000 over" in result.message
 
-    def test_ceiling_independent_of_growth(self, validator):
-        # An artifact with low growth (+3.4%) but huge absolute size
-        # still fails the absolute ceiling — escape hatch wouldn't apply.
-        baseline = "x" * 5800
-        evolved = "x" * 6000  # +3.4%, would pass quality gate even at 0 improvement
-        # Quality gate: passes (no_regression branch, mean ≥ 0).
-        bootstrap = TestGrowthQualityGate._bootstrap(mean=0.0, lower=-0.05)
-        gate = validator._check_growth_with_quality_gate(evolved, baseline, bootstrap)
-        assert gate.passed
-        # Absolute ceiling: fails.
-        ceiling = validator._check_absolute_chars(evolved)
-        assert not ceiling.passed
+    def test_static_floor_holds_for_small_baselines(self, validator):
+        # 100-char baseline × 1.5 = 150, but the static 5000 floor wins.
+        # Without this, a tiny baseline could blow up to 4900 chars
+        # despite the absolute ceiling — defeating the backstop.
+        result = validator._check_absolute_chars("x" * 4500, baseline_chars=100)
+        assert result.passed
+        assert "5000" in result.message  # the static floor, not 150
+
+    def test_ceiling_scales_with_large_baseline(self, validator):
+        # 10000-char baseline × 1.5 = 15000. A 12000-char artifact
+        # passes that wouldn't have passed at the static 5000 floor.
+        result = validator._check_absolute_chars("x" * 12000, baseline_chars=10000)
+        assert result.passed
+        assert "15000" in result.message
+
+    def test_scaled_ceiling_still_rejects_runaway(self, validator):
+        # 10000-char baseline × 1.5 = 15000 effective ceiling. A 16000-
+        # char artifact still rejects — scaling caps at 1.5×, not infinity.
+        result = validator._check_absolute_chars("x" * 16000, baseline_chars=10000)
+        assert not result.passed
+        assert "1000 over" in result.message
+        assert "15000" in result.message
 
 
 class TestValidateGrowthWithQuality:
@@ -382,11 +393,17 @@ class TestValidateGrowthWithQuality:
         assert "absolute_char_ceiling" in names
 
     def test_absolute_ceiling_blocks_even_when_growth_ok(self, validator):
-        # +200% growth from a tiny baseline that would normally need
-        # significant improvement, but absolute size is what kills it.
+        # +5900% growth from a tiny baseline. With baseline=100 the
+        # dynamic ceiling (1.5 × 100 = 150) collapses to the static
+        # 5000 floor; 6000 chars exceeds 5000 → reject on the floor.
         baseline = "x" * 100
-        evolved = "x" * 6000  # +5900%; absolute ceiling 5000 fails.
+        evolved = "x" * 6000
         bootstrap = TestGrowthQualityGate._bootstrap(mean=0.0, lower=-0.05)
         results = validator.validate_growth_with_quality(evolved, baseline, bootstrap)
-        # Both fail in this case (huge growth + huge size).
-        assert any(not r.passed for r in results)
+        ceiling_result = next(r for r in results if r.constraint_name == "absolute_char_ceiling")
+        assert not ceiling_result.passed
+        # Pin which ceiling fired: the static floor, not the dynamic
+        # scale-up. A future regression that silently swaps which value
+        # drives the rejection (e.g., dropping the static-floor backstop)
+        # gets caught here.
+        assert "5000" in ceiling_result.message
