@@ -136,6 +136,27 @@ def _dataset_payload(dataset: EvalDataset) -> dict[str, Any]:
     }
 
 
+def _compute_win_loss(
+    baseline_per_example: list[float],
+    evolved_per_example: list[float],
+) -> dict[str, Any]:
+    """Decompose per-example deltas into a win/loss summary.
+
+    The aggregate mean lift hides operational risk: a variant scoring +0.10
+    on 60% of examples and -0.04 on 40% nets the same mean as a variant
+    scoring +0.04 on every example, but the first carries a 40% regression
+    rate. This block surfaces that distinction in gate_decision.json.
+    """
+    deltas = [e - b for b, e in zip(baseline_per_example, evolved_per_example)]
+    return {
+        "n_wins": sum(1 for d in deltas if d > 0),
+        "n_losses": sum(1 for d in deltas if d < 0),
+        "n_ties": sum(1 for d in deltas if d == 0),
+        "worst_regression": min(deltas) if deltas else 0.0,
+        "worst_improvement": max(deltas) if deltas else 0.0,
+    }
+
+
 def _knee_point_payload(knee_pick: Optional[CandidatePick]) -> dict[str, Any]:
     """Serialize a CandidatePick (or its absence) for gate_decision.json.
 
@@ -740,6 +761,17 @@ def evolve(
             "messages": [c.message for c in static_constraints if not c.passed],
             "knee_point": _knee_point_payload(knee_pick),
             "dataset": _dataset_payload(dataset),
+            "run_inputs": {
+                "seed": config.seed,
+                "iterations": iterations,
+                "optimizer_model": optimizer_model,
+                "reflection_model": config.reflection_model,
+                "eval_model": config.eval_model,
+                "eval_dataset_size": config.eval_dataset_size,
+                "holdout_ratio": config.holdout_ratio,
+                "quality_gate_preset": quality_gate,
+                "eval_source": eval_source,
+            },
         })
         console.print(f"  Saved failed variant to {failed_path}")
         return
@@ -828,10 +860,22 @@ def evolve(
         "avg_baseline": avg_baseline,
         "avg_evolved": avg_evolved,
         "bootstrap": bootstrap,
+        "win_loss": _compute_win_loss(baseline_per_example, evolved_per_example),
         "failed_constraints": [c.constraint_name for c in growth_constraints if not c.passed],
         "messages": [c.message for c in growth_constraints if not c.passed],
         "knee_point": _knee_point_payload(knee_pick),
         "dataset": _dataset_payload(dataset),
+        "run_inputs": {
+            "seed": config.seed,
+            "iterations": iterations,
+            "optimizer_model": optimizer_model,
+            "reflection_model": config.reflection_model,
+            "eval_model": config.eval_model,
+            "eval_dataset_size": config.eval_dataset_size,
+            "holdout_ratio": config.holdout_ratio,
+            "quality_gate_preset": quality_gate,
+            "eval_source": eval_source,
+        },
     }
     gate_path = _write_gate_decision(output_dir, decision_payload)
     console.print(f"  [dim]Gate decision logged to {gate_path}[/dim]")

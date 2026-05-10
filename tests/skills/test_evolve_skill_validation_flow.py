@@ -18,6 +18,7 @@ import pytest
 from click.testing import CliRunner
 
 from evolution.skills.evolve_skill import (
+    _compute_win_loss,
     _dataset_payload,
     _evaluate_band_on_holdout,
     _holdout_evaluate_with_metric,
@@ -202,6 +203,24 @@ class TestGrowthGateDecisionSchema:
                 "size_holdout": 53,
                 "sources": {"synthetic": 150},
             },
+            "run_inputs": {
+                "seed": 42,
+                "iterations": 10,
+                "optimizer_model": "openai/gpt-4.1",
+                "reflection_model": None,
+                "eval_model": "openai/gpt-4.1-mini",
+                "eval_dataset_size": 150,
+                "holdout_ratio": 0.5,
+                "quality_gate_preset": "default",
+                "eval_source": "synthetic",
+            },
+            "win_loss": {
+                "n_wins": 2,
+                "n_losses": 1,
+                "n_ties": 0,
+                "worst_regression": -0.05,
+                "worst_improvement": 0.10,
+            },
         }
         path = _write_gate_decision(tmp_path, payload)
         loaded = json.loads(path.read_text())
@@ -239,6 +258,82 @@ class TestGrowthGateDecisionSchema:
             assert required_in_dataset in loaded["dataset"], (
                 f"missing dataset.{required_in_dataset}"
             )
+
+
+class TestRunInputsBlock:
+    """The `run_inputs` block records the inputs that produced the run so a
+    third party with the gate_decision.json artifact alone can reproduce
+    the result. Lock the shape so future refactors can't silently drop a key.
+    """
+
+    def test_run_inputs_present_in_decision(self, tmp_path: Path):
+        payload = {
+            "schema_version": "4",
+            "decision": "deploy",
+            "run_inputs": {
+                "seed": 42,
+                "iterations": 10,
+                "optimizer_model": "openai/gpt-4.1",
+                "reflection_model": "openai/gpt-4.1",
+                "eval_model": "openai/gpt-4.1-mini",
+                "eval_dataset_size": 150,
+                "holdout_ratio": 0.5,
+                "quality_gate_preset": "default",
+                "eval_source": "synthetic",
+            },
+        }
+        path = _write_gate_decision(tmp_path, payload)
+        loaded = json.loads(path.read_text())
+
+        assert "run_inputs" in loaded
+        for required in (
+            "seed",
+            "iterations",
+            "optimizer_model",
+            "reflection_model",
+            "eval_model",
+            "eval_dataset_size",
+            "holdout_ratio",
+            "quality_gate_preset",
+            "eval_source",
+        ):
+            assert required in loaded["run_inputs"], (
+                f"missing run_inputs.{required}"
+            )
+        assert len(loaded["run_inputs"]) == 9
+
+
+class TestWinLossDecomposition:
+    """`_compute_win_loss` summarizes the per-example delta distribution
+    behind the aggregate mean. The deploy/reject logic does NOT use it —
+    it's purely an information lens for users.
+    """
+
+    def test_wins_losses_ties_count_correctly(self):
+        baseline = [0.5, 0.7, 0.8, 0.4]
+        evolved = [0.6, 0.7, 0.7, 0.5]
+        result = _compute_win_loss(baseline, evolved)
+        assert result["n_wins"] == 2
+        assert result["n_losses"] == 1
+        assert result["n_ties"] == 1
+
+    def test_worst_regression_and_improvement(self):
+        baseline = [0.5, 0.7, 0.8, 0.4]
+        evolved = [0.6, 0.7, 0.7, 0.5]
+        result = _compute_win_loss(baseline, evolved)
+        # Deltas: +0.1, 0.0, -0.1, +0.1
+        assert result["worst_regression"] == pytest.approx(-0.1)
+        assert result["worst_improvement"] == pytest.approx(0.1)
+
+    def test_handles_empty_arrays_gracefully(self):
+        result = _compute_win_loss([], [])
+        assert result == {
+            "n_wins": 0,
+            "n_losses": 0,
+            "n_ties": 0,
+            "worst_regression": 0.0,
+            "worst_improvement": 0.0,
+        }
 
 
 class TestKneePointPayloadHelper:
