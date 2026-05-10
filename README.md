@@ -1,5 +1,7 @@
 # 🧬 Agent Self-Evolution
 
+[![tests](https://github.com/jramos/agent-self-evolution/actions/workflows/tests.yml/badge.svg)](https://github.com/jramos/agent-self-evolution/actions/workflows/tests.yml)
+
 **Evolutionary self-improvement for agent skills.**
 
 Agent Self-Evolution evolves and optimizes agent skills, tool descriptions, system prompts, and code — producing measurably better versions through reflective evolutionary search. Built on DSPy + GEPA (Genetic-Pareto Prompt Evolution), with extra safeguards on top so what ships is reliably better than the original.
@@ -22,17 +24,19 @@ flowchart LR
     G --> H[PR against<br/>source repo]
 ```
 
-GEPA reads execution traces to understand *why* things fail (not just that they failed), then proposes targeted improvements. ICLR 2026 Oral, MIT licensed.
+GEPA reads execution traces to understand *why* things fail (not just that they failed), then proposes targeted improvements. [ICLR 2026 Oral](https://arxiv.org/abs/2507.19457), MIT licensed.
 
-## Why this isn't just DSPy + GEPA
+### Why this isn't just DSPy + GEPA
 
-DSPy + GEPA is the optimizer underneath, but raw GEPA is tuned for benchmarks with hundreds of validation examples per task. SKILL.md evolution lives at N=20-60, where the standard error of an aggregate validation score swamps the typical gap between rank-1 and rank-2 candidates — argmax-on-val becomes a coin flip. This framework adds three layers on top of stock GEPA so the candidate that ships is statistically defensible, not just argmax-of-noise:
+GEPA was designed against benchmarks with hundreds of validation examples per task. Skill evolution typically has 20-60 examples, which is small enough that picking the highest-scoring candidate often picks one that won by chance — there's a real risk of shipping a "winner" that just got lucky on the eval set.
 
-- **Knee-point Pareto selection** — picks from candidates within an ε-band of the best validation score instead of GEPA's raw argmax, breaking ties on body size. Avoids "won by 1 example out of 30" coin flips.
-- **Paired-bootstrap deploy gate** — a candidate must beat baseline on a held-out split with a paired-bootstrap CI before it ships, with three selectable rules including a Decagon-style non-inferiority option. Stops cosmetic regressions from shipping.
-- **Composite LLM-as-judge fitness** — correctness, procedure, and conciseness scored separately with a length penalty, instead of one binary score. Gives GEPA's reflection step useful gradient.
+This framework adds three checks on top of GEPA so the candidate that ships is one that genuinely improved the skill:
 
-If you're optimizing on N≥300 with crisp programmatic metrics, raw GEPA is fine and you don't need the extra machinery. For the small-N skill-evolution regime — see [docs/framework_advantages.md](docs/framework_advantages.md) for the full argument with citations.
+- **Knee-point selection** — instead of strictly the highest-scoring candidate, looks at every candidate close to the top score and prefers shorter ones. Filters out wins that came from a single lucky example.
+- **Held-out deploy check** — before a candidate ships, it's compared against the baseline on examples it never saw during optimization. Several rules available, including a lenient one that's appropriate for compression-style refactors.
+- **Three-dimensional scoring** — instead of pass/fail, the LLM judge rates each output on correctness, whether it followed the right procedure, and how concise it is. GEPA's reflection step uses these as feedback to guide the next mutation.
+
+If you have hundreds of validation examples and a programmatic correctness metric (exact match, unit-test pass), raw GEPA is the right tool. The framework's extra layers earn their keep when validation is small and the metric is LLM-judged. See [docs/framework_advantages.md](docs/framework_advantages.md) for the deeper argument.
 
 ## Quick Start
 
@@ -42,8 +46,6 @@ git clone https://github.com/jramos/agent-self-evolution.git
 cd agent-self-evolution
 uv sync
 ```
-
-`uv sync` creates `.venv/`, installs the project in editable mode, and pulls in the `dev` group (pytest). Run project commands via `uv run` (e.g. `uv run pytest`, `uv run python -m evolution.skills.evolve_skill ...`) — no manual `source .venv/bin/activate` required.
 
 ### Skill discovery
 
@@ -102,16 +104,14 @@ Pulls real usage from Claude Code (`~/.claude/history.jsonl`), Copilot, and Herm
 The LLM-as-judge scores agent outputs on three dimensions (correctness, procedure-following, conciseness). `--fitness-profile` selects how those dimensions are weighted in the composite:
 
 ```bash
-# Default: 0.5 correctness / 0.3 procedure / 0.2 conciseness — general-purpose.
-uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile balanced
-
-# 0.4 / 0.2 / 0.4 — upweights conciseness when explicitly shrinking a skill.
-uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile compression
-
-# 0.6 / 0.4 / 0.0 — drops conciseness so a skill that legitimately needs to grow
-# isn't penalized for adding necessary capabilities.
-uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile growth
+uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile <profile>
 ```
+
+| Profile | Correctness | Procedure | Conciseness | Use when |
+|---|---|---|---|---|
+| `balanced` (default) | 0.5 | 0.3 | 0.2 | General-purpose evolution. |
+| `compression` | 0.4 | 0.2 | 0.4 | Explicitly shrinking an over-long skill. |
+| `growth` | 0.6 | 0.4 | 0.0 | The baseline is missing capabilities and needs to add them. |
 
 The chosen profile is recorded in `gate_decision.json` so any deployed variant can be traced back to the weighting that produced it.
 
