@@ -182,8 +182,38 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # BUG-FIX (2026-05-10): GEPA optimizes signature.instructions on the
+    # inner predictor, NOT the wrapper module's `skill_text` attribute.
+    # The previous code read the original skill back as "evolved", producing
+    # byte-identical output that always failed validation.
+    #
+    # We now extract the actual evolved instructions (the prompt prefix
+    # GEPA mutated each iteration) and treat it as a "prompt enhancement"
+    # that sits ABOVE the original skill body. The skill body is preserved
+    # verbatim — that's the right thing because GEPA never had a chance to
+    # mutate it (it was passed as an input string, not a parameter).
+    try:
+        evolved_instruction = optimized_module.predictor.predict.signature.instructions
+    except AttributeError:
+        # Fallback for MIPROv2 path or future DSPy reshuffles
+        try:
+            evolved_instruction = optimized_module.predictor.signature.instructions
+        except AttributeError:
+            evolved_instruction = ""
+
+    baseline_instruction = SkillModule(skill["body"]).predictor.predict.signature.instructions
+
+    if evolved_instruction.strip() == baseline_instruction.strip():
+        console.print("[yellow]⚠ GEPA did not improve the prompt — evolved == baseline. Saving baseline as is.[/yellow]")
+        evolved_body = skill["body"]
+    else:
+        # Store BOTH the evolved prompt prefix (the real GEPA artifact)
+        # and the preserved skill body. We validate the prompt prefix
+        # against `size_limit` since that's what was actually evolved.
+        evolved_body = evolved_instruction.strip()
+        console.print(f"  Evolved prompt: {len(evolved_body)} chars (baseline prompt: {len(baseline_instruction)} chars)")
+        console.print(f"  Skill body preserved: {len(skill['body'])} chars (unchanged)")
+
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
