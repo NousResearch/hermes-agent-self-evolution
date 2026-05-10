@@ -32,6 +32,8 @@ The primary user-facing interface.
 | `--eval-source {synthetic,golden,sessiondb}` | `synthetic` | Where eval examples come from. |
 | `--dataset-path <dir>` | — | Required for `golden`; optional override for `sessiondb` output dir. |
 | `--skill-source-dir <path>` | — | Repeatable. Adds a `LocalDirSkillSource` ahead of auto-discovered sources. |
+| `--eval-dataset-size <int>` | `EvolutionConfig.eval_dataset_size` (150) | Total examples generated; train/val/holdout splits derived via the configured ratios. The synthetic generator treats this as a soft target — actual count may be lower for small skills. |
+| `--holdout-ratio <float>` | `EvolutionConfig.holdout_ratio` (0.50) | Fraction of the dataset reserved for the holdout split (after train/val are taken). Higher → tighter bootstrap CI, smaller train+val. |
 
 ### Quality gate
 | Flag | Default | Notes |
@@ -47,6 +49,12 @@ The primary user-facing interface.
 | `--knee-point-strategy {val-best,smallest}` | `val-best` | Within the ε-band, which candidate to pick. `val-best` (default): highest val score wins, smallest body as tiebreak. `smallest`: greedy parsimony — picks the smallest body in the band regardless of val cost; available for users explicitly chasing compression. |
 | `--fitness-profile {balanced,compression,growth}` | `balanced` | Composite fitness weighting profile for the LLM judge. `balanced` (0.5/0.3/0.2 for correctness/procedure/conciseness) is general-purpose. `compression` (0.4/0.2/0.4) upweights conciseness for shrink-direction work. `growth` (0.6/0.4/0.0) drops conciseness so the optimizer doesn't punish necessary additions. Recorded in `gate_decision.json`. |
 
+### Proposer
+| Flag | Default | Notes |
+|---|---|---|
+| `--bap-max-growth <float>` | `EvolutionConfig.bap_max_growth` (0.20) | `BudgetAwareProposer`'s prompt target for the reflection LM — the growth fraction the proposer asks the LM to aim for. Decoupled from `--growth-free-threshold` so the gate parameter and the proposer's prompt can be tuned independently. A user-supplied `0.0` is preserved as "no headroom" (the proposer floors at zero). |
+| `--bap-safety-margin <float>` | `0.10` | Cushion subtracted from `max_growth` to absorb the reflection LM's overshoot tendency (~+8-9% observed empirically). Lower this (e.g. `0.0`) when explicitly calibrating against the gate's bar. |
+
 ### Delivery
 | Flag | Default | Notes |
 |---|---|---|
@@ -60,6 +68,7 @@ Both delivery flags are no-ops on a reject decision and emit a one-line stderr n
 |---|---|---|
 | `--run-tests` | off | Run target repo's pytest suite as a constraint gate (not used by default). |
 | `--dry-run` | off | Validate setup; don't run optimization. |
+| `--evaluate-band-on-holdout / --no-evaluate-band-on-holdout` | off | Calibration telemetry: after the picked candidate is selected, re-evaluate every candidate in the knee-point band on the holdout and write `band_holdout.json` alongside `gate_decision.json`. Adds judge calls proportional to band size × holdout examples (subsampled to ≤100). Off by default to keep production runs cheap. |
 
 ### Exit conditions
 - `sys.exit(1)` if skill not found across all `SkillSource`s — prints available skills per source.
@@ -91,26 +100,34 @@ from evolution.skills.evolve_skill import evolve
 evolve(
     skill_name="github-code-review",
     iterations=10,
-    eval_source="synthetic",        # synthetic | golden | sessiondb
+    eval_source="synthetic",          # synthetic | golden | sessiondb
     dataset_path=None,
     optimizer_model="openai/gpt-4.1",
     eval_model="openai/gpt-4.1-mini",
     reflection_model="openai/gpt-5-mini",
-    skill_source_dirs=None,         # list[str]
+    skill_source_dirs=None,           # list[str]
     run_tests=False,
     dry_run=False,
     seed=42,
-    budget=None,                    # "light" | "medium" | "heavy"
+    budget=None,                      # "light" | "medium" | "heavy"
     no_fallback=False,
-    quality_gate="default",         # "strict" | "default" | "lenient" | "off" | "non-inferiority"
+    quality_gate="default",           # "strict" | "default" | "lenient" | "off" | "non-inferiority"
     growth_free_threshold=None,
     growth_quality_slope=None,
     max_absolute_chars=None,
-    inferiority_tolerance=None,     # float, only meaningful with quality_gate="non-inferiority"
+    inferiority_tolerance=None,       # float, only meaningful with quality_gate="non-inferiority"
     bootstrap_confidence=None,
     bootstrap_n_resamples=None,
     knee_point_epsilon=None,
-    knee_point_strategy="val-best", # "val-best" | "smallest"
+    knee_point_strategy="val-best",   # "val-best" | "smallest"
+    bap_safety_margin=None,           # None falls back to BAP's 0.10 default
+    bap_max_growth=None,              # None falls back to EvolutionConfig.bap_max_growth (0.20)
+    eval_dataset_size=None,           # None falls back to EvolutionConfig.eval_dataset_size (150)
+    holdout_ratio=None,               # None falls back to EvolutionConfig.holdout_ratio (0.50)
+    evaluate_band_on_holdout=False,
+    fitness_profile="balanced",       # "balanced" | "compression" | "growth"
+    apply_in_place=False,             # --apply: copy evolved over source SKILL.md on deploy
+    emit_patch=False,                 # --patch: emit unified diff to stdout on deploy
 )
 ```
 
