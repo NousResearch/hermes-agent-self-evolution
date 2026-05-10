@@ -15,6 +15,13 @@ from evolution.core.config import EvolutionConfig
 logger = logging.getLogger(__name__)
 
 
+_PROFILE_WEIGHTS: dict[str, tuple[float, float, float]] = {
+    "balanced": (0.5, 0.3, 0.2),
+    "compression": (0.4, 0.2, 0.4),
+    "growth": (0.6, 0.4, 0.0),
+}
+
+
 @dataclass
 class FitnessScore:
     """Multi-dimensional fitness score. All sub-scores are in [0, 1]."""
@@ -23,14 +30,16 @@ class FitnessScore:
     conciseness: float = 0.0
     length_penalty: float = 0.0
     feedback: str = ""
+    profile: str = "balanced"
 
     @property
     def composite(self) -> float:
         """Weighted composite. Length penalty is subtracted, then floored at 0."""
+        w_correctness, w_procedure, w_conciseness = _PROFILE_WEIGHTS[self.profile]
         raw = (
-            0.5 * self.correctness
-            + 0.3 * self.procedure_following
-            + 0.2 * self.conciseness
+            w_correctness * self.correctness
+            + w_procedure * self.procedure_following
+            + w_conciseness * self.conciseness
         )
         return max(0.0, raw - self.length_penalty)
 
@@ -63,7 +72,13 @@ class LLMJudge:
         feedback: str = dspy.OutputField(desc="Specific, actionable feedback on what could be improved")
 
     def __init__(self, config: EvolutionConfig):
+        if config.fitness_profile not in _PROFILE_WEIGHTS:
+            raise ValueError(
+                f"Unknown fitness_profile {config.fitness_profile!r}; "
+                f"expected one of {sorted(_PROFILE_WEIGHTS)}"
+            )
         self.config = config
+        self.profile = config.fitness_profile
         self.judge = dspy.ChainOfThought(self.JudgeSignature)
 
     def score(
@@ -104,6 +119,7 @@ class LLMJudge:
             conciseness=conciseness,
             length_penalty=length_penalty,
             feedback=str(result.feedback),
+            profile=self.profile,
         )
 
 

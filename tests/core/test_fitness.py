@@ -5,7 +5,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import dspy
+import pytest
 
+from evolution.core.config import EvolutionConfig
 from evolution.core.fitness import (
     FitnessScore,
     LLMJudge,
@@ -224,6 +226,60 @@ class TestPredTraceFeedback:
         )
 
         assert "[BUDGET]" not in result.feedback
+
+
+class TestFitnessProfile:
+    """Profile-driven composite weighting for the LLM judge's score.
+
+    'balanced' preserves the legacy (0.5/0.3/0.2) split. 'compression'
+    upweights conciseness; 'growth' drops it so the optimizer doesn't
+    punish necessary additions.
+    """
+
+    def test_balanced_profile_matches_legacy_formula(self):
+        score = FitnessScore(
+            correctness=1.0,
+            procedure_following=1.0,
+            conciseness=1.0,
+            profile="balanced",
+        )
+        assert score.composite == pytest.approx(0.5 + 0.3 + 0.2)
+
+    def test_compression_profile_upweights_conciseness(self):
+        # All-1.0 still sums to 1.0 (weights sum to 1).
+        all_ones = FitnessScore(
+            correctness=1.0,
+            procedure_following=1.0,
+            conciseness=1.0,
+            profile="compression",
+        )
+        assert all_ones.composite == pytest.approx(0.4 + 0.2 + 0.4)
+        # Per-dimension probe: correctness=1.0 alone returns the
+        # compression weight (0.4), not the balanced weight (0.5).
+        only_correctness = FitnessScore(
+            correctness=1.0,
+            procedure_following=0.0,
+            conciseness=0.0,
+            profile="compression",
+        )
+        assert only_correctness.composite == pytest.approx(0.4)
+
+    def test_growth_profile_drops_conciseness(self):
+        score = FitnessScore(
+            correctness=0.0,
+            procedure_following=0.0,
+            conciseness=1.0,
+            profile="growth",
+        )
+        assert score.composite == 0.0
+
+    def test_invalid_profile_raises(self):
+        config = EvolutionConfig(fitness_profile="bogus")
+        with pytest.raises(ValueError):
+            LLMJudge(config)
+
+    def test_default_profile_is_balanced(self):
+        assert FitnessScore().profile == "balanced"
 
 
 class TestClampToUnit:

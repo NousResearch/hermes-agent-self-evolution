@@ -449,6 +449,7 @@ def evolve(
     eval_dataset_size: Optional[int] = None,
     holdout_ratio: Optional[float] = None,
     evaluate_band_on_holdout: bool = False,
+    fitness_profile: str = "balanced",
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -482,6 +483,7 @@ def evolve(
         max_absolute_chars=int(resolved_abs),
         gate_mode=resolved_gate_mode,
         inferiority_tolerance=float(resolved_tolerance),
+        fitness_profile=fitness_profile,
     )
     if bootstrap_confidence is not None:
         config_kwargs["bootstrap_confidence"] = bootstrap_confidence
@@ -817,6 +819,7 @@ def evolve(
             config.max_absolute_chars, len(skill["raw"]),
         ),
         "growth_free_threshold": config.growth_free_threshold,
+        "fitness_profile": config.fitness_profile,
         "growth_quality_slope": config.growth_quality_slope,
         "bap_max_growth": resolved_bap_max_growth,
         "bap_safety_margin": resolved_bap_safety_margin,
@@ -1061,13 +1064,23 @@ def evolve(
     "and write band_holdout.json. Off by default — adds judge calls "
     "proportional to band size × holdout examples (capped at 100).",
 )
+@click.option(
+    "--fitness-profile",
+    default="balanced",
+    type=click.Choice(["balanced", "compression", "growth"]),
+    help="Composite fitness weighting profile. 'balanced' (default) is "
+    "general-purpose. 'compression' upweights conciseness for shrinking "
+    "skills. 'growth' drops conciseness so the optimizer doesn't punish "
+    "necessary additions.",
+)
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflection_model,
          eval_model, skill_source_dir, run_tests, dry_run, seed, budget, no_fallback,
          quality_gate, growth_free_threshold,
          growth_quality_slope, max_absolute_chars, inferiority_tolerance,
          bootstrap_confidence, bootstrap_resamples, knee_point_epsilon,
          knee_point_strategy, bap_safety_margin, bap_max_growth,
-         eval_dataset_size, holdout_ratio, evaluate_band_on_holdout):
+         eval_dataset_size, holdout_ratio, evaluate_band_on_holdout,
+         fitness_profile):
     """Evolve an agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -1097,6 +1110,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
         eval_dataset_size=eval_dataset_size,
         holdout_ratio=holdout_ratio,
         evaluate_band_on_holdout=evaluate_band_on_holdout,
+        fitness_profile=fitness_profile,
     )
 
 

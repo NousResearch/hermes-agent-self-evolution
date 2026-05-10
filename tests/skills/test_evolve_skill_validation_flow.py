@@ -161,6 +161,7 @@ class TestGrowthGateDecisionSchema:
             "absolute_char_ceiling": 5000,
             "effective_absolute_char_ceiling": 5000,
             "growth_free_threshold": 0.20,
+            "fitness_profile": "balanced",
             "growth_quality_slope": 0.30,
             "bap_max_growth": 0.20,
             "bap_safety_margin": 0.10,
@@ -583,3 +584,58 @@ class TestCliFlagPropagationToConfig:
         assert result.exit_code == 0, result.output
         assert "eval_dataset_size" not in captured
         assert "holdout_ratio" not in captured
+
+
+class TestFitnessProfilePropagation:
+    """`--fitness-profile` must reach EvolutionConfig with the user value."""
+
+    def _seed_skill(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "skills" / "test-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: test-skill\ndescription: a test skill for CLI propagation\n---\n"
+            "Body content for evolution testing."
+        )
+        os.environ["SKILL_SOURCES_HERMES_REPO"] = str(tmp_path)
+
+    def test_growth_profile_lands_on_config(self, tmp_path: Path):
+        self._seed_skill(tmp_path)
+        captured = {}
+        from evolution.skills import evolve_skill as module
+
+        original_config_cls = module.EvolutionConfig
+
+        def capturing_config(**kwargs):
+            captured.update(kwargs)
+            return original_config_cls(**kwargs)
+
+        with patch.object(module, "EvolutionConfig", side_effect=capturing_config):
+            runner = CliRunner()
+            result = runner.invoke(
+                evolve_skill_cli,
+                ["--skill", "test-skill", "--dry-run", "--fitness-profile", "growth"],
+                catch_exceptions=False,
+            )
+        assert result.exit_code == 0, result.output
+        assert captured.get("fitness_profile") == "growth"
+
+    def test_default_is_balanced(self, tmp_path: Path):
+        self._seed_skill(tmp_path)
+        captured = {}
+        from evolution.skills import evolve_skill as module
+
+        original_config_cls = module.EvolutionConfig
+
+        def capturing_config(**kwargs):
+            captured.update(kwargs)
+            return original_config_cls(**kwargs)
+
+        with patch.object(module, "EvolutionConfig", side_effect=capturing_config):
+            runner = CliRunner()
+            result = runner.invoke(
+                evolve_skill_cli,
+                ["--skill", "test-skill", "--dry-run"],
+                catch_exceptions=False,
+            )
+        assert result.exit_code == 0, result.output
+        assert captured.get("fitness_profile") == "balanced"

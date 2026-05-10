@@ -51,6 +51,7 @@ class EvolutionConfig:
     # tiny effects).
     gate_mode: str = "no_regression"
     inferiority_tolerance: float = 0.0
+    fitness_profile: str = "balanced"
     # Basic (reverse percentile) bootstrap is the literature-recommended
     # method when N is small. BCa is the upgrade path once N≥20 routinely.
     bootstrap_confidence: float = 0.90
