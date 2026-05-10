@@ -47,7 +47,7 @@ from evolution.core.lm_timing_callback import (
     register_litellm_cost_callback,
     register_litellm_failure_callback,
 )
-from evolution.skills.budget_aware_proposer import BudgetAwareProposer
+from evolution.skills.budget_aware_proposer import BudgetAwareProposer, ProposerMode
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -432,6 +432,16 @@ def _resolve_bap_safety_margin(value: Optional[float]) -> float:
     return _BAP_SAFETY_MARGIN_DEFAULT if value is None else value
 
 
+def _resolve_proposer_mode(fitness_profile: str) -> ProposerMode:
+    """Map the user's fitness profile to a proposer mode.
+
+    Only `growth` switches the proposer; `compression` and `balanced` stay
+    on compression-mode (current behavior). A future PR adds a third
+    neutral-mode prompt for `balanced`.
+    """
+    return "growth" if fitness_profile == "growth" else "compression"
+
+
 def _resolve_bap_max_growth(value: Optional[float], fallback: float) -> float:
     """Resolve `--bap-max-growth` to BudgetAwareProposer's `max_growth`.
 
@@ -738,10 +748,12 @@ def evolve(
         bap_max_growth, config.bap_max_growth,
     )
     resolved_bap_safety_margin = _resolve_bap_safety_margin(bap_safety_margin)
+    proposer_mode = _resolve_proposer_mode(config.fitness_profile)
     proposer = BudgetAwareProposer(
         baseline_chars=len(skill["body"]),
         max_growth=resolved_bap_max_growth,
         safety_margin=resolved_bap_safety_margin,
+        mode=proposer_mode,
     )
 
     optimized_module, optimizer_name = _build_optimizer_and_compile(
@@ -910,6 +922,7 @@ def evolve(
         ),
         "growth_free_threshold": config.growth_free_threshold,
         "fitness_profile": config.fitness_profile,
+        "proposer_mode": proposer_mode,
         "growth_quality_slope": config.growth_quality_slope,
         "bap_max_growth": resolved_bap_max_growth,
         "bap_safety_margin": resolved_bap_safety_margin,

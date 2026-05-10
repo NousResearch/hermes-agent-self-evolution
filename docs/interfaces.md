@@ -47,7 +47,7 @@ The primary user-facing interface.
 | `--bootstrap-resamples <int>` | `2000` | Bootstrap iterations. |
 | `--knee-point-epsilon <float>` | `1/n_val` | ε for knee-point Pareto band. Override only with calibrated reason. |
 | `--knee-point-strategy {val-best,smallest}` | `val-best` | Within the ε-band, which candidate to pick. `val-best` (default): highest val score wins, smallest body as tiebreak. `smallest`: greedy parsimony — picks the smallest body in the band regardless of val cost; available for users explicitly chasing compression. |
-| `--fitness-profile {balanced,compression,growth}` | `balanced` | Composite fitness weighting profile for the LLM judge. `balanced` (0.5/0.3/0.2 for correctness/procedure/conciseness) is general-purpose. `compression` (0.4/0.2/0.4) upweights conciseness for shrink-direction work. `growth` (0.6/0.4/0.0) drops conciseness so the optimizer doesn't punish necessary additions. Recorded in `gate_decision.json`. |
+| `--fitness-profile {balanced,compression,growth}` | `balanced` | Composite fitness weighting profile for the LLM judge. `balanced` (0.5/0.3/0.2 for correctness/procedure/conciseness) is general-purpose. `compression` (0.4/0.2/0.4) upweights conciseness for shrink-direction work. `growth` (0.6/0.4/0.0) drops conciseness so the optimizer doesn't punish necessary additions. Also switches the `BudgetAwareProposer` to growth-mode (add only what feedback identifies as missing) when set to `growth`; `compression` and `balanced` use compression-mode. Both the profile and the resolved proposer mode are recorded in `gate_decision.json`. |
 
 ### Proposer
 | Flag | Default | Notes |

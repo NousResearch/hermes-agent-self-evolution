@@ -17,11 +17,13 @@ need to inherit.
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 import dspy
 
 logger = logging.getLogger(__name__)
+
+ProposerMode = Literal["compression", "growth"]
 
 
 class _BudgetAwareInstructionProposal(dspy.Signature):
@@ -77,6 +79,78 @@ Steps:
 Output the new instruction text only — no preamble, no markdown fences, no explanation."""
 
 
+# Growth-mode template: for runs where the baseline has a real omission and
+# the proposer needs to add a missing capability rather than compress what's
+# there. Structural anti-hallucination guards (see plan):
+#   - Hard-constraint preamble + recency restatement at the end.
+#   - Three-branch decision rubric including a (c) neither / skip branch so
+#     non-actionable failures don't get force-fit into "add an instruction."
+#   - Grounding-citation requirement: every change must point to a feedback
+#     phrase.
+#   - Reasoning trace embedded in the one-shot example so the model learns
+#     to apply the rubric, not just emit the surface diff.
+#   - Empty-feedback sentinel returns the input unchanged (anti-improvise).
+_GROWTH_EXAMPLE_BEFORE = """\
+Cancel a subscription via the API.
+
+POST /subscriptions/<id>/cancel — returns 204.
+Always pass `confirm=true` in the body."""
+
+
+_GROWTH_EXAMPLE_AFTER = """\
+Cancel a subscription via the API.
+
+POST /subscriptions/<id>/cancel — returns 204.
+Always pass `confirm=true` in the body.
+
+If the user paid mid-cycle and asks for a refund, the cancel does NOT issue one.
+Refund the unused portion separately: POST /refunds, body `{{"subscription_id": "<id>", "type": "prorated"}}`."""
+
+
+_BUDGET_AWARE_INSTRUCTIONS_GROWTH = """\
+Length budget: up to {target_chars} characters. Add only what the failures require — no more, no less. Use the full budget if needed; under-fill if a small fix suffices.
+The current baseline instruction is {baseline_chars} characters; you are revising it.
+
+Hard constraint: every addition or refinement must quote or paraphrase a specific phrase from the feedback. If you cannot point to such a phrase, do not change anything for that failure.
+
+Example of expanding an instruction to add a missing capability:
+
+BEFORE ({example_before_chars} chars):
+\"\"\"
+{growth_example_before}
+\"\"\"
+
+AFTER ({example_after_chars} chars):
+\"\"\"
+{growth_example_after}
+\"\"\"
+
+Reasoning trace for the example:
+- Failure: "the assistant said the cancel API would refund the user's mid-cycle payment"
+  Classification: (b) lacked an instruction — the baseline doesn't say cancellation is non-refunding.
+  Action: add a paragraph describing the separate refund endpoint.
+- Failure: "the assistant returned 200 instead of 204"
+  Classification: (c) neither — the baseline already says "returns 204"; this is a model error, not an instruction gap.
+  Action: skip.
+
+Your task: rewrite the current instruction to fix the failures shown below.
+
+Steps:
+1. Read each failure mode in the feedback below. Classify each one as:
+   (a) the assistant misapplied an existing instruction → refine that instruction's wording, OR
+   (b) the assistant lacked an instruction it needed → add a new one, OR
+   (c) neither — the failure is not actionable from instruction text (model error, judge disagreement, out-of-distribution input). Skip it.
+2. Apply changes only for (a) and (b). For each change, name the specific feedback phrase that grounded it.
+3. Keep all existing instructions intact unless the feedback says they are wrong. Preserve domain-specific facts and exact commands verbatim.
+4. New content uses the same imperative, terse style. No preamble, no extra headings unless the existing instruction already uses them.
+
+If the feedback below is empty or contains no concrete failures, return the current instruction unchanged.
+
+Reminder: do not invent additions the feedback didn't explicitly request. If you cannot ground an addition in a specific feedback phrase, leave that failure to the next iteration.
+
+Output the new instruction text only — no preamble, no markdown fences, no explanation."""
+
+
 class BudgetAwareProposer:
     """GEPA-compatible ProposalFn that enforces a per-skill char budget.
 
@@ -99,19 +173,34 @@ class BudgetAwareProposer:
         baseline_chars: int,
         max_growth: float = 0.2,
         safety_margin: float = 0.10,
+        mode: ProposerMode = "compression",
     ):
+        if mode not in ("compression", "growth"):
+            raise ValueError(
+                f"BudgetAwareProposer.mode must be 'compression' or 'growth', got {mode!r}"
+            )
         self.baseline_chars = baseline_chars
+        self.mode = mode
         prompt_growth = max(0.0, max_growth - safety_margin)
         # Floor at 1 so the LM never gets handed a literal 0; baseline_chars=0
         # is the documented "disable the budget" case anyway.
         self.target_chars = max(1, int(baseline_chars * (1 + prompt_growth)))
-        signature = _BudgetAwareInstructionProposal.with_instructions(
-            _BUDGET_AWARE_INSTRUCTIONS.format(
+        if mode == "growth":
+            instructions = _BUDGET_AWARE_INSTRUCTIONS_GROWTH.format(
+                baseline_chars=baseline_chars,
+                target_chars=self.target_chars,
+                example_before_chars=len(_GROWTH_EXAMPLE_BEFORE),
+                example_after_chars=len(_GROWTH_EXAMPLE_AFTER),
+                growth_example_before=_GROWTH_EXAMPLE_BEFORE,
+                growth_example_after=_GROWTH_EXAMPLE_AFTER,
+            )
+        else:
+            instructions = _BUDGET_AWARE_INSTRUCTIONS.format(
                 baseline_chars=baseline_chars,
                 target_chars=self.target_chars,
                 tight_example=_TIGHT_INSTRUCTION_EXAMPLE,
             )
-        )
+        signature = _BudgetAwareInstructionProposal.with_instructions(instructions)
         self.propose = dspy.Predict(signature)
 
     def __call__(

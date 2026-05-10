@@ -16,6 +16,9 @@ import pytest
 
 from evolution.skills.budget_aware_proposer import (
     _BUDGET_AWARE_INSTRUCTIONS,
+    _BUDGET_AWARE_INSTRUCTIONS_GROWTH,
+    _GROWTH_EXAMPLE_AFTER,
+    _GROWTH_EXAMPLE_BEFORE,
     _TIGHT_INSTRUCTION_EXAMPLE,
     BudgetAwareProposer,
 )
@@ -238,3 +241,91 @@ class TestExampleFormatting:
     def test_handles_empty_dataset(self):
         proposer = BudgetAwareProposer(baseline_chars=100, max_growth=0.2)
         assert proposer._format_examples([]) == ""
+
+
+class TestProposerMode:
+    """Mode dispatch: compression-mode (default) and growth-mode.
+
+    The mode parameter controls which static instruction template gets baked
+    into the DSPy Signature at construction time. Only the prompt template
+    differs; budget arithmetic, callable surface, and feedback formatting
+    are mode-independent.
+    """
+
+    def test_default_mode_is_compression(self):
+        proposer = BudgetAwareProposer(baseline_chars=1000)
+        assert proposer.mode == "compression"
+        assert "Cut redundant phrasing" in proposer.propose.signature.instructions
+
+    def test_growth_mode_uses_growth_template(self):
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="growth")
+        instructions = proposer.propose.signature.instructions
+        assert proposer.mode == "growth"
+        # Hard-constraint phrase that defines the growth-mode contract.
+        assert (
+            "every addition or refinement must quote or paraphrase a specific phrase from the feedback"
+            in instructions
+        )
+        # And the compression-only phrasing is NOT present in growth mode.
+        assert "Cut redundant phrasing" not in instructions
+
+    def test_compression_mode_signature_unchanged(self):
+        # Regression guard: any refactor that drops the literature-backed
+        # compression phrasing should fail this assertion.
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="compression")
+        instructions = proposer.propose.signature.instructions
+        assert "Cut redundant phrasing" in instructions
+        assert "at most" in instructions
+        assert "wasted" in instructions
+
+    def test_invalid_mode_raises(self):
+        with pytest.raises(ValueError, match="must be 'compression' or 'growth'"):
+            BudgetAwareProposer(baseline_chars=1000, mode="bogus")
+
+    def test_target_chars_independent_of_mode(self):
+        # Same budget arithmetic produces same target_chars regardless of
+        # which prompt template gets baked in.
+        compression = BudgetAwareProposer(
+            baseline_chars=1264, max_growth=0.2, safety_margin=0.10, mode="compression",
+        )
+        growth = BudgetAwareProposer(
+            baseline_chars=1264, max_growth=0.2, safety_margin=0.10, mode="growth",
+        )
+        assert compression.target_chars == growth.target_chars == 1390
+
+    def test_growth_mode_includes_neither_branch_in_rubric(self):
+        # The (c) "neither — skip" branch is the structural anti-hallucination
+        # move. Force-fitting non-actionable failures into "add an instruction"
+        # is the failure mode this branch prevents.
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="growth")
+        instructions = proposer.propose.signature.instructions
+        assert "(c) neither" in instructions
+        assert "the failure is not actionable from instruction text" in instructions
+
+    def test_growth_mode_includes_empty_feedback_sentinel(self):
+        # Without a sentinel the LM has no anchor under empty feedback and
+        # tends to invent.
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="growth")
+        instructions = proposer.propose.signature.instructions
+        assert (
+            "If the feedback below is empty or contains no concrete failures, return the current instruction unchanged"
+            in instructions
+        )
+
+    def test_growth_template_format_keys_render_cleanly(self):
+        # The template uses more format keys than compression
+        # (example_before_chars / example_after_chars / two example bodies).
+        # If a key gets renamed without updating __init__, format() raises;
+        # surface that as a test rather than a runtime error.
+        formatted = _BUDGET_AWARE_INSTRUCTIONS_GROWTH.format(
+            baseline_chars=100,
+            target_chars=120,
+            example_before_chars=len(_GROWTH_EXAMPLE_BEFORE),
+            example_after_chars=len(_GROWTH_EXAMPLE_AFTER),
+            growth_example_before=_GROWTH_EXAMPLE_BEFORE,
+            growth_example_after=_GROWTH_EXAMPLE_AFTER,
+        )
+        assert "100" in formatted
+        assert "120" in formatted
+        assert _GROWTH_EXAMPLE_BEFORE in formatted
+        assert _GROWTH_EXAMPLE_AFTER in formatted

@@ -27,6 +27,7 @@ from evolution.skills.evolve_skill import (
     _knee_point_payload,
     _resolve_bap_max_growth,
     _resolve_bap_safety_margin,
+    _resolve_proposer_mode,
     _write_gate_decision,
     main as evolve_skill_cli,
 )
@@ -165,6 +166,7 @@ class TestGrowthGateDecisionSchema:
             "effective_absolute_char_ceiling": 5000,
             "growth_free_threshold": 0.20,
             "fitness_profile": "balanced",
+            "proposer_mode": "compression",
             "growth_quality_slope": 0.30,
             "bap_max_growth": 0.20,
             "bap_safety_margin": 0.10,
@@ -736,6 +738,31 @@ class TestFitnessProfilePropagation:
             )
         assert result.exit_code == 0, result.output
         assert captured.get("fitness_profile") == "balanced"
+
+
+class TestResolveProposerMode:
+    """`--fitness-profile` selects which proposer template runs. Today only
+    'growth' switches modes; 'compression' and 'balanced' both stay on
+    compression-mode. The mapping lives in _resolve_proposer_mode so the
+    contract is testable without driving the full evolve() pipeline."""
+
+    def test_growth_profile_maps_to_growth_mode(self):
+        assert _resolve_proposer_mode("growth") == "growth"
+
+    def test_compression_profile_maps_to_compression_mode(self):
+        assert _resolve_proposer_mode("compression") == "compression"
+
+    def test_balanced_profile_maps_to_compression_mode(self):
+        # Documented limitation in this PR — default-path users still get
+        # compression-mode proposals. A future PR adds a neutral-mode
+        # prompt for balanced.
+        assert _resolve_proposer_mode("balanced") == "compression"
+
+    def test_unknown_profile_falls_back_to_compression(self):
+        # Defensive: an unrecognized profile should not produce growth-mode
+        # by accident. The CLI already validates the choice via
+        # click.Choice, but the resolver is the safe fallback.
+        assert _resolve_proposer_mode("nonsense") == "compression"
 
 
 class TestDeployAutomation:

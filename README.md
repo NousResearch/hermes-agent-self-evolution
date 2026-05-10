@@ -115,6 +115,8 @@ uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile <prof
 
 The chosen profile is recorded in `gate_decision.json` so any deployed variant can be traced back to the weighting that produced it.
 
+`--fitness-profile growth` also switches the reflection-prompt proposer to **growth-mode**: instead of telling the LM to cut redundancy, the prompt asks it to add only what the failure feedback explicitly identifies as missing. `compression` and `balanced` keep the existing compression-mode proposer.
+
 ### Ship the evolved skill back to source
 
 By default, the evolved skill lands in `output/<skill>/<timestamp>/evolved_skill.md` and stops there. Two opt-in flags automate the next step:
