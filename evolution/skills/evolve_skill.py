@@ -413,10 +413,9 @@ def _resolve_bap_safety_margin(value: Optional[float]) -> float:
 def _resolve_bap_max_growth(value: Optional[float], fallback: float) -> float:
     """Resolve `--bap-max-growth` to BudgetAwareProposer's `max_growth`.
 
-    `None` falls back to the per-config value (currently
-    `growth_free_threshold`, preserving today's coupled behavior across
-    all `--quality-gate` presets). A user-provided `0.0` is preserved —
-    it's a legitimate "no headroom" target; the proposer's
+    `None` falls back to `EvolutionConfig.bap_max_growth` (passed by the
+    caller). A user-provided `0.0` is preserved — it's a legitimate
+    "no headroom" target; the proposer's
     `prompt_growth = max(0.0, max_growth - safety_margin)` handles it.
     """
     return fallback if value is None else value
@@ -655,7 +654,7 @@ def evolve(
     # own propose_new_texts (gepa/api.py:317-321). instruction_proposer
     # is DSPy's documented extension point.
     resolved_bap_max_growth = _resolve_bap_max_growth(
-        bap_max_growth, config.growth_free_threshold,
+        bap_max_growth, config.bap_max_growth,
     )
     resolved_bap_safety_margin = _resolve_bap_safety_margin(bap_safety_margin)
     proposer = BudgetAwareProposer(
@@ -1036,7 +1035,7 @@ def evolve(
     "target the proposer prompts the reflection LM toward. Decoupled from "
     "the gate's growth_free_threshold so calibration runs can test proposer "
     "behavior independently. Default (None): falls back to "
-    "growth_free_threshold for backward compatibility.",
+    "EvolutionConfig.bap_max_growth (default 0.20).",
 )
 @click.option(
     "--eval-dataset-size",

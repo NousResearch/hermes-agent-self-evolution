@@ -39,6 +39,7 @@ class EvolutionConfig:
     # required(growth) = max(0, slope * (growth - free)).
     growth_free_threshold: float = 0.20
     growth_quality_slope: float = 0.30
+    bap_max_growth: float = 0.20
     # Backstop for short baselines that legitimately need expansion —
     # a 200-char baseline growing to 1500 is +650% but only 1500 absolute.
     max_absolute_chars: int = 5000

@@ -463,8 +463,8 @@ class TestResolveBapSafetyMargin:
 class TestResolveBapMaxGrowth:
     """`--bap-max-growth` decouples the proposer's growth target from the
     gate's `growth_free_threshold`. None falls back to the per-config
-    fallback (preserving today's coupled behavior); 0.0 must be preserved
-    as a legitimate user-supplied "no headroom" target."""
+    fallback (`config.bap_max_growth`); 0.0 must be preserved as a
+    legitimate user-supplied "no headroom" target."""
 
     def test_none_resolves_to_fallback(self):
         assert _resolve_bap_max_growth(None, 0.20) == 0.20
@@ -477,6 +477,30 @@ class TestResolveBapMaxGrowth:
 
     def test_explicit_nonzero_is_preserved(self):
         assert _resolve_bap_max_growth(0.10, 0.20) == 0.10
+
+
+class TestBapMaxGrowthConfigDecoupling:
+    """The proposer's `max_growth` lives on EvolutionConfig as its own
+    field, NOT derived from `growth_free_threshold`. Changing the gate
+    parameter must not change the proposer's prompt target."""
+
+    def test_default_is_independent_constant(self):
+        from evolution.core.config import EvolutionConfig
+        assert EvolutionConfig().bap_max_growth == 0.20
+
+    def test_changing_growth_free_threshold_does_not_change_bap_max_growth(self):
+        # The previous behavior coupled these — lowering the gate's
+        # free threshold inadvertently tightened the proposer's prompt
+        # target. After Stage 3, they're independent.
+        from evolution.core.config import EvolutionConfig
+        config = EvolutionConfig(growth_free_threshold=0.30)
+        assert config.bap_max_growth == 0.20
+
+    def test_explicit_bap_max_growth_overrides_default(self):
+        from evolution.core.config import EvolutionConfig
+        config = EvolutionConfig(bap_max_growth=0.10)
+        assert config.bap_max_growth == 0.10
+        assert config.growth_free_threshold == 0.20  # unchanged
 
 
 class TestCliFlagPropagationToConfig:
