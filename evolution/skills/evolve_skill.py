@@ -5,6 +5,7 @@ Usage:
     python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
 """
 
+import difflib
 import json
 import logging
 import random
@@ -442,6 +443,61 @@ def _resolve_bap_max_growth(value: Optional[float], fallback: float) -> float:
     return fallback if value is None else value
 
 
+_CLAUDE_CODE_PLUGIN_CACHE_MARKER = (".claude", "plugins", "cache")
+
+
+def _is_claude_code_plugin_cache_path(path: Path) -> bool:
+    """Detect paths under ``~/.claude/plugins/cache`` (Claude Code's plugin cache).
+
+    Plugin caches are managed externally by Claude Code; writing into them
+    silently is wrong. Match by looking for the three-segment marker
+    anywhere in the resolved path so the check works for both the user's
+    home directory and tmp_path-rooted test layouts.
+    """
+    parts = path.resolve().parts
+    marker = _CLAUDE_CODE_PLUGIN_CACHE_MARKER
+    for i in range(len(parts) - len(marker) + 1):
+        if parts[i:i + len(marker)] == marker:
+            return True
+    return False
+
+
+def _emit_patch(baseline_text: str, evolved_text: str, path: Path) -> str:
+    """Return a unified diff of (baseline -> evolved) labelled with `path`.
+
+    The labels are ``a/<path>`` and ``b/<path>`` so the output is consumable
+    by ``patch -p1`` or ``git apply``.
+    """
+    label = str(path)
+    diff_lines = difflib.unified_diff(
+        baseline_text.splitlines(keepends=True),
+        evolved_text.splitlines(keepends=True),
+        fromfile=f"a/{label}",
+        tofile=f"b/{label}",
+    )
+    return "".join(diff_lines)
+
+
+def _apply_in_place(skill_path: Path, evolved_full: str) -> bool:
+    """Overwrite ``skill_path`` with ``evolved_full``.
+
+    Returns True on success, False when the destination is under
+    ``~/.claude/plugins/cache`` (Claude Code's plugin cache, which is
+    externally managed) — in that case the file is left untouched and a
+    warning is logged.
+    """
+    if _is_claude_code_plugin_cache_path(skill_path):
+        logging.getLogger(__name__).warning(
+            "--apply skipped: %s is under a Claude Code plugin cache "
+            "(~/.claude/plugins/cache); plugin caches are managed by "
+            "Claude Code and writing to them is unsafe.",
+            skill_path,
+        )
+        return False
+    skill_path.write_text(evolved_full)
+    return True
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -471,6 +527,8 @@ def evolve(
     holdout_ratio: Optional[float] = None,
     evaluate_band_on_holdout: bool = False,
     fitness_profile: str = "balanced",
+    apply_in_place: bool = False,
+    emit_patch: bool = False,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -885,6 +943,17 @@ def evolve(
         failed_path = output_dir / "evolved_FAILED.md"
         failed_path.write_text(evolved_full)
         console.print(f"  Saved failed variant to {failed_path}")
+        reject_reason = decision_payload.get("reason", "growth_quality_gate")
+        if apply_in_place:
+            print(
+                f"--apply skipped: gate rejected (decision: reject, reason: {reject_reason})",
+                file=sys.stderr,
+            )
+        if emit_patch:
+            print(
+                f"--patch skipped: gate rejected (decision: reject, reason: {reject_reason})",
+                file=sys.stderr,
+            )
         return
 
     table = Table(title="Evolution Results")
@@ -912,7 +981,8 @@ def evolve(
     console.print()
     console.print(table)
 
-    (output_dir / "evolved_skill.md").write_text(evolved_full)
+    evolved_skill_path = output_dir / "evolved_skill.md"
+    evolved_skill_path.write_text(evolved_full)
     (output_dir / "baseline_skill.md").write_text(skill["raw"])
     metrics = {
         "skill_name": skill_name,
@@ -935,6 +1005,17 @@ def evolve(
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
+
+    if growth_pass:
+        if emit_patch:
+            patch_text = _emit_patch(skill["raw"], evolved_full, skill_path)
+            sys.stdout.write(patch_text)
+            if patch_text and not patch_text.endswith("\n"):
+                sys.stdout.write("\n")
+        if apply_in_place:
+            applied = _apply_in_place(skill_path, evolved_full)
+            if applied:
+                console.print(f"  --apply: wrote evolved skill to {skill_path}")
 
     if improvement > 0:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
@@ -1117,6 +1198,23 @@ def evolve(
     "skills. 'growth' drops conciseness so the optimizer doesn't punish "
     "necessary additions.",
 )
+@click.option(
+    "--apply",
+    is_flag=True,
+    default=False,
+    help="On a deploy decision, copy evolved_skill.md over the source SKILL.md "
+         "in place. No git operations — leaves workflow to the user. No-op on "
+         "reject. No-op (with warning) when the skill source is read-only "
+         "(e.g., Claude Code plugin cache).",
+)
+@click.option(
+    "--patch",
+    is_flag=True,
+    default=False,
+    help="On a deploy decision, emit a unified diff of (baseline → evolved) to "
+         "stdout, labeled with the source path. Pipe to `patch`, `git apply`, "
+         "or a code review tool. No-op on reject.",
+)
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflection_model,
          eval_model, skill_source_dir, run_tests, dry_run, seed, budget, no_fallback,
          quality_gate, growth_free_threshold,
@@ -1124,7 +1222,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          bootstrap_confidence, bootstrap_resamples, knee_point_epsilon,
          knee_point_strategy, bap_safety_margin, bap_max_growth,
          eval_dataset_size, holdout_ratio, evaluate_band_on_holdout,
-         fitness_profile):
+         fitness_profile, apply, patch):
     """Evolve an agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -1155,6 +1253,8 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
         holdout_ratio=holdout_ratio,
         evaluate_band_on_holdout=evaluate_band_on_holdout,
         fitness_profile=fitness_profile,
+        apply_in_place=apply,
+        emit_patch=patch,
     )
 
 

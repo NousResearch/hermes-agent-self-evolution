@@ -18,8 +18,10 @@ import pytest
 from click.testing import CliRunner
 
 from evolution.skills.evolve_skill import (
+    _apply_in_place,
     _compute_win_loss,
     _dataset_payload,
+    _emit_patch,
     _evaluate_band_on_holdout,
     _holdout_evaluate_with_metric,
     _knee_point_payload,
@@ -734,3 +736,58 @@ class TestFitnessProfilePropagation:
             )
         assert result.exit_code == 0, result.output
         assert captured.get("fitness_profile") == "balanced"
+
+
+class TestDeployAutomation:
+    """`--patch` and `--apply` ship the evolved skill back to its source
+    on a deploy decision. Tested via small helpers so the assertions don't
+    have to drive the full evolve() pipeline."""
+
+    def test_patch_emits_unified_diff(self):
+        baseline = "line one\nshared\n"
+        evolved = "line one\nchanged\n"
+        diff = _emit_patch(baseline, evolved, Path("skills/foo/SKILL.md"))
+
+        assert diff.startswith("--- a/skills/foo/SKILL.md")
+        assert "+++ b/skills/foo/SKILL.md" in diff
+        assert "@@" in diff
+        assert "-shared" in diff
+        assert "+changed" in diff
+
+    def test_patch_helper_uses_source_path_label(self):
+        path = Path("/abs/path/to/SKILL.md")
+        diff = _emit_patch("a\n", "b\n", path)
+
+        assert f"--- a/{path}" in diff
+        assert f"+++ b/{path}" in diff
+
+    def test_apply_writes_to_source_path_on_deploy(self, tmp_path: Path):
+        source = tmp_path / "skills" / "demo" / "SKILL.md"
+        source.parent.mkdir(parents=True)
+        source.write_text("original body\n")
+
+        ok = _apply_in_place(source, "evolved body\n")
+
+        assert ok is True
+        assert source.read_text() == "evolved body\n"
+
+    def test_apply_skips_claude_code_cache(self, tmp_path: Path):
+        cache_path = (
+            tmp_path
+            / ".claude"
+            / "plugins"
+            / "cache"
+            / "vendor"
+            / "plugin"
+            / "v1"
+            / "skills"
+            / "x"
+            / "SKILL.md"
+        )
+        cache_path.parent.mkdir(parents=True)
+        cache_path.write_text("original")
+
+        ok = _apply_in_place(cache_path, "evolved")
+
+        assert ok is False
+        assert cache_path.read_text() == "original"
