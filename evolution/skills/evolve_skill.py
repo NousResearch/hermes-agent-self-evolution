@@ -214,7 +214,10 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    # Validate the FULL reassembled skill (frontmatter + body), not just
+    # the body. skill_structure check requires YAML frontmatter which only
+    # exists after reassemble_skill() prepends it.
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["body"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
