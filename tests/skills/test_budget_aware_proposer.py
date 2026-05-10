@@ -361,6 +361,27 @@ class TestProposerMode:
             in instructions
         )
 
+    def test_growth_mode_uses_at_most_phrasing(self):
+        # Growth mode now uses the same "at most N" countdown framing as
+        # compression mode, replacing the soft "up to N" target. The LM
+        # treats "up to" as a suggestion when feedback density calls for
+        # many additions; "at most" lands as a ceiling.
+        instructions = BudgetAwareProposer(1000, mode="growth").propose.signature.instructions
+        assert "at most" in instructions
+
+    def test_growth_mode_uses_loss_frame(self):
+        # "Each character above N is wasted" turns brevity into a directly
+        # costed resource. Parallel with compression-mode's loss frame.
+        instructions = BudgetAwareProposer(1000, mode="growth").propose.signature.instructions
+        assert "wasted" in instructions
+
+    def test_growth_mode_has_deferral_instruction(self):
+        # When feedback calls for more additions than fit, the LM should
+        # defer rather than overshoot. GEPA reruns with the updated
+        # baseline, so leftovers get a second pass.
+        instructions = BudgetAwareProposer(1000, mode="growth").propose.signature.instructions
+        assert "leave the rest for the next iteration" in instructions
+
     def test_growth_template_format_keys_render_cleanly(self):
         # The template uses more format keys than compression
         # (example_before_chars / example_after_chars / two example bodies).

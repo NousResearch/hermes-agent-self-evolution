@@ -108,7 +108,8 @@ Refund the unused portion separately: POST /refunds, body `{{"subscription_id": 
 
 
 _BUDGET_AWARE_INSTRUCTIONS_GROWTH = """\
-Length budget: up to {target_chars} characters. Add only what the failures require — no more, no less. Use the full budget if needed; under-fill if a small fix suffices.
+Length budget: at most {target_chars} characters. Each character above {target_chars} is wasted.
+Add only what the failures require — no more, no less. Use less than the full budget when a small fix suffices.
 The current baseline instruction is {baseline_chars} characters; you are revising it.
 
 Hard constraint: every addition or refinement must quote or paraphrase a specific phrase from the feedback. If you cannot point to such a phrase, do not change anything for that failure.
@@ -143,6 +144,7 @@ Steps:
 2. Apply changes only for (a) and (b). For each change, name the specific feedback phrase that grounded it.
 3. Keep all existing instructions intact unless the feedback says they are wrong. Preserve domain-specific facts and exact commands verbatim.
 4. New content uses the same imperative, terse style. No preamble, no extra headings unless the existing instruction already uses them.
+5. If the failures call for more additions than fit within {target_chars}, address the most-grounded failures first; leave the rest for the next iteration. GEPA will run again with the updated baseline.
 
 If the feedback below is empty or contains no concrete failures, return the current instruction unchanged.
 
