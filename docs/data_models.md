@@ -190,9 +190,13 @@ Written when any `validate_static` check fails on the evolved artifact (short-ci
   "required_improvement": 0.013,                 // max(0, slope * (growth - free))
   "baseline_chars": 1264,
   "evolved_chars": 1570,
-  "absolute_char_ceiling": 5000,
+  "absolute_char_ceiling": 5000,                 // static config value (EvolutionConfig.max_absolute_chars)
+  "effective_absolute_char_ceiling": 5000,       // max(static_floor, 1.5 × baseline_chars) — what was actually enforced
   "growth_free_threshold": 0.20,
   "growth_quality_slope": 0.30,
+  "bap_max_growth": 0.20,                        // BudgetAwareProposer's prompt target for the reflection LM
+  "bap_safety_margin": 0.10,                     // BAP's safety cushion (default 0.10; lower for calibration)
+  "fitness_profile": "balanced",                 // "balanced" | "compression" | "growth"
   "baseline_per_example": [0.5, 0.6, /* ... */],  // float per holdout example
   "evolved_per_example":  [0.51, 0.61, /* ... */],
   "avg_baseline": 0.6,
@@ -204,6 +208,24 @@ Written when any `validate_static` check fails on the evolved artifact (short-ci
     "n_examples":   22,
     "n_resamples":  2000,
     "confidence":   0.90
+  },
+  "win_loss": {
+    "n_wins":             14,                     // count of holdout examples where evolved > baseline
+    "n_losses":            5,
+    "n_ties":              3,
+    "worst_regression":  -0.30,                   // most-negative per-example delta (evolved - baseline)
+    "worst_improvement":  0.45                    // most-positive per-example delta
+  },
+  "run_inputs": {
+    "seed":                42,
+    "iterations":          10,
+    "optimizer_model":     "openai/gpt-4.1",
+    "reflection_model":    "openai/gpt-5-mini",
+    "eval_model":          "openai/gpt-4.1-mini",
+    "eval_dataset_size":   150,
+    "holdout_ratio":       0.50,
+    "quality_gate_preset": "default",
+    "eval_source":         "synthetic"
   },
   "failed_constraints": [],                       // names from ConstraintResult.constraint_name
   "messages": [],                                 // human-readable summaries
@@ -232,6 +254,26 @@ Written when any `validate_static` check fails on the evolved artifact (short-ci
   }
 }
 ```
+
+### Effective absolute-char ceiling
+
+`absolute_char_ceiling` records the static `EvolutionConfig.max_absolute_chars` value (default 5000). `effective_absolute_char_ceiling` records `max(static_floor, 1.5 × baseline_chars)` — what the validator actually enforced. The two are equal for skills with baseline ≤ ~3300 chars; for larger skills the effective ceiling scales with baseline so artifacts that already exceed 5000 don't auto-reject pre-gate.
+
+### BAP-related fields
+
+`bap_max_growth` is the proposer's prompt target for the reflection LM (decoupled from `growth_free_threshold`; see `EvolutionConfig.bap_max_growth`, default 0.20). `bap_safety_margin` is the cushion the proposer subtracts from `max_growth` to absorb the LM's overshoot tendency (default 0.10).
+
+### `fitness_profile`
+
+Records which composite-weighting profile the LLM judge used: `balanced` (default, 0.5/0.3/0.2 for correctness/procedure/conciseness), `compression` (0.4/0.2/0.4), or `growth` (0.6/0.4/0.0).
+
+### `win_loss` block
+
+Per-example win/loss decomposition computed from `baseline_per_example` and `evolved_per_example`. The deploy/reject logic does not consume this block — it's pure information for users who want to see the distribution behind the aggregate mean (e.g., "60% wins / 40% losses" vs. "100% small wins" can have the same mean lift but very different operational risk).
+
+### `run_inputs` block
+
+Records the inputs to the run so a third party with the artifact alone can reproduce the result: seed, iterations, model versions (optimizer/reflection/eval), dataset size + holdout ratio, the resolved `--quality-gate` preset name, and the eval source.
 
 ### Decision rule mapping
 - `decision_rule_used == "no_regression_only"` ⟺ `required_improvement == 0.0` AND `gate_mode == "no_regression"` (default). Pass requires `bootstrap.mean >= 0`.

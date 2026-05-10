@@ -97,6 +97,39 @@ uv run python -m evolution.skills.evolve_skill \
 
 Pulls real usage from Claude Code (`~/.claude/history.jsonl`), Copilot, and Hermes session logs.
 
+### Tune the fitness weighting
+
+The LLM-as-judge scores agent outputs on three dimensions (correctness, procedure-following, conciseness). `--fitness-profile` selects how those dimensions are weighted in the composite:
+
+```bash
+# Default: 0.5 correctness / 0.3 procedure / 0.2 conciseness — general-purpose.
+uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile balanced
+
+# 0.4 / 0.2 / 0.4 — upweights conciseness when explicitly shrinking a skill.
+uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile compression
+
+# 0.6 / 0.4 / 0.0 — drops conciseness so a skill that legitimately needs to grow
+# isn't penalized for adding necessary capabilities.
+uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile growth
+```
+
+The chosen profile is recorded in `gate_decision.json` so any deployed variant can be traced back to the weighting that produced it.
+
+### Ship the evolved skill back to source
+
+By default, the evolved skill lands in `output/<skill>/<timestamp>/evolved_skill.md` and stops there. Two opt-in flags automate the next step:
+
+```bash
+# Copy evolved_skill.md over the source SKILL.md in place on a deploy decision.
+# No git operations; the user's workflow stays in their hands.
+uv run python -m evolution.skills.evolve_skill --skill X --apply
+
+# Emit a unified diff to stdout instead — pipe to patch, git apply, or a review tool.
+uv run python -m evolution.skills.evolve_skill --skill X --patch | git apply
+```
+
+Both flags are no-ops on a reject decision (with a stderr notice). `--apply` also skips with a warning when the source path is under Claude Code's plugin cache (read-only by design).
+
 ## What It Optimizes
 
 | Phase | Target | Engine | Status |

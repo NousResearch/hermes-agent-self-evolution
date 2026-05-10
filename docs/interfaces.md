@@ -45,6 +45,15 @@ The primary user-facing interface.
 | `--bootstrap-resamples <int>` | `2000` | Bootstrap iterations. |
 | `--knee-point-epsilon <float>` | `1/n_val` | ε for knee-point Pareto band. Override only with calibrated reason. |
 | `--knee-point-strategy {val-best,smallest}` | `val-best` | Within the ε-band, which candidate to pick. `val-best` (default): highest val score wins, smallest body as tiebreak. `smallest`: greedy parsimony — picks the smallest body in the band regardless of val cost; available for users explicitly chasing compression. |
+| `--fitness-profile {balanced,compression,growth}` | `balanced` | Composite fitness weighting profile for the LLM judge. `balanced` (0.5/0.3/0.2 for correctness/procedure/conciseness) is general-purpose. `compression` (0.4/0.2/0.4) upweights conciseness for shrink-direction work. `growth` (0.6/0.4/0.0) drops conciseness so the optimizer doesn't punish necessary additions. Recorded in `gate_decision.json`. |
+
+### Delivery
+| Flag | Default | Notes |
+|---|---|---|
+| `--apply` | off | On a deploy decision, copy `evolved_skill.md` over the source `SKILL.md` in place. No git operations — leaves workflow to the user. No-op (with warning) when the skill source is read-only (Claude Code plugin cache under `~/.claude/plugins/cache`). |
+| `--patch` | off | On a deploy decision, emit a unified diff of (baseline → evolved) to stdout, labelled with the source path. Pipe to `patch`, `git apply`, or a code-review tool. |
+
+Both delivery flags are no-ops on a reject decision and emit a one-line stderr notice in that case. Both default off; they only fire when the user opts in.
 
 ### Misc
 | Flag | Default | Notes |
