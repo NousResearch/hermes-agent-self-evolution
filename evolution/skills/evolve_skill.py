@@ -92,7 +92,8 @@ _QUALITY_GATE_PRESETS: dict[str, dict[str, Any]] = {
         "growth_quality_slope": 0.0,
         "max_absolute_chars": 100_000,
         "gate_mode": "non_inferiority",
-        "inferiority_tolerance": 0.02,
+        # See reports/calibration_findings.md for the tolerance sweep.
+        "inferiority_tolerance": 0.05,
     },
 }
 
@@ -958,7 +959,7 @@ def evolve(
     type=float,
     help="Tolerance for the non-inferiority gate: pass when bootstrap "
     "lower bound > -tolerance. Only meaningful with "
-    "--quality-gate non-inferiority (default tolerance there: 0.02).",
+    "--quality-gate non-inferiority (default tolerance there: 0.05).",
 )
 @click.option(
     "--bootstrap-confidence",
