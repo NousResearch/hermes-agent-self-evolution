@@ -435,11 +435,15 @@ def _resolve_bap_safety_margin(value: Optional[float]) -> float:
 def _resolve_proposer_mode(fitness_profile: str) -> ProposerMode:
     """Map the user's fitness profile to a proposer mode.
 
-    Only `growth` switches the proposer; `compression` and `balanced` stay
-    on compression-mode (current behavior). A future PR adds a third
-    neutral-mode prompt for `balanced`.
+    Each profile selects its own template: `growth` swings the proposer toward
+    additions, `compression` toward cuts, and `balanced` toward direction-agnostic
+    revisions. Unknown values fall back to compression-mode defensively.
     """
-    return "growth" if fitness_profile == "growth" else "compression"
+    if fitness_profile == "growth":
+        return "growth"
+    if fitness_profile == "balanced":
+        return "balanced"
+    return "compression"  # compression profile, plus defensive fallback for unknown
 
 
 def _resolve_bap_max_growth(value: Optional[float], fallback: float) -> float:

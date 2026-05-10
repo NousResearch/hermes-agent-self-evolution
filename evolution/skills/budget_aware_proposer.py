@@ -23,7 +23,7 @@ import dspy
 
 logger = logging.getLogger(__name__)
 
-ProposerMode = Literal["compression", "growth"]
+ProposerMode = Literal["compression", "balanced", "growth"]
 
 
 class _BudgetAwareInstructionProposal(dspy.Signature):
@@ -151,6 +151,43 @@ Reminder: do not invent additions the feedback didn't explicitly request. If you
 Output the new instruction text only — no preamble, no markdown fences, no explanation."""
 
 
+# Balanced-mode template: the default for `--fitness-profile balanced`. Reuses
+# growth-mode's anti-hallucination architecture (hard-constraint preamble,
+# three-branch rubric, empty-feedback sentinel, grounding-citation requirement)
+# but without directional prescription — the steps don't say "cut redundancy"
+# (compression's bias) or "add capabilities" (growth's bias). Reuses
+# compression's _TIGHT_INSTRUCTION_EXAMPLE rather than introducing a new
+# BEFORE/AFTER pair: the tight example demonstrates target length without
+# implying a direction.
+_BUDGET_AWARE_INSTRUCTIONS_BALANCED = """\
+Length budget: stay near {target_chars} characters. Variations of ±20% are acceptable.
+The current baseline instruction is {baseline_chars} characters; you are revising it.
+
+Hard constraint: every addition or refinement must quote or paraphrase a specific phrase from the feedback. If you cannot point to such a phrase, do not change anything for that failure.
+
+Example of an instruction near the target length:
+\"\"\"
+{tight_example}
+\"\"\"
+
+Your task: rewrite the current instruction to fix the failures shown below.
+
+Steps:
+1. Read each failure mode in the feedback below. Classify each one as:
+   (a) the assistant misapplied an existing instruction → refine that instruction's wording, OR
+   (b) the assistant lacked an instruction it needed → add a new one, OR
+   (c) neither — the failure is not actionable from instruction text (model error, judge disagreement, out-of-distribution input). Skip it.
+2. Apply changes only for (a) and (b). For each change, name the specific feedback phrase that grounded it.
+3. Keep all existing instructions intact unless the feedback says they are wrong. Preserve domain-specific facts and exact commands verbatim.
+4. New content uses the same imperative, terse style as the rest of the instruction.
+
+If the feedback below is empty or contains no concrete failures, return the current instruction unchanged.
+
+Reminder: do not invent additions the feedback didn't explicitly request.
+
+Output the new instruction text only — no preamble, no markdown fences, no explanation."""
+
+
 class BudgetAwareProposer:
     """GEPA-compatible ProposalFn that enforces a per-skill char budget.
 
@@ -175,9 +212,9 @@ class BudgetAwareProposer:
         safety_margin: float = 0.10,
         mode: ProposerMode = "compression",
     ):
-        if mode not in ("compression", "growth"):
+        if mode not in ("compression", "balanced", "growth"):
             raise ValueError(
-                f"BudgetAwareProposer.mode must be 'compression' or 'growth', got {mode!r}"
+                f"BudgetAwareProposer.mode must be 'compression', 'balanced', or 'growth', got {mode!r}"
             )
         self.baseline_chars = baseline_chars
         self.mode = mode
@@ -194,7 +231,13 @@ class BudgetAwareProposer:
                 growth_example_before=_GROWTH_EXAMPLE_BEFORE,
                 growth_example_after=_GROWTH_EXAMPLE_AFTER,
             )
-        else:
+        elif mode == "balanced":
+            instructions = _BUDGET_AWARE_INSTRUCTIONS_BALANCED.format(
+                baseline_chars=baseline_chars,
+                target_chars=self.target_chars,
+                tight_example=_TIGHT_INSTRUCTION_EXAMPLE,
+            )
+        else:  # compression
             instructions = _BUDGET_AWARE_INSTRUCTIONS.format(
                 baseline_chars=baseline_chars,
                 target_chars=self.target_chars,

@@ -279,8 +279,57 @@ class TestProposerMode:
         assert "wasted" in instructions
 
     def test_invalid_mode_raises(self):
-        with pytest.raises(ValueError, match="must be 'compression' or 'growth'"):
+        with pytest.raises(ValueError, match="must be 'compression', 'balanced', or 'growth'"):
             BudgetAwareProposer(baseline_chars=1000, mode="bogus")
+
+    def test_invalid_mode_still_raises(self):
+        # Regression guard: after expanding the dispatch to three branches,
+        # an unknown mode must still raise rather than silently falling
+        # through to one of the valid templates.
+        with pytest.raises(ValueError):
+            BudgetAwareProposer(baseline_chars=1000, mode="bogus")
+
+    def test_balanced_mode_uses_balanced_template(self):
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="balanced")
+        instructions = proposer.propose.signature.instructions
+        assert proposer.mode == "balanced"
+        # Balanced-specific budget framing: soft target with ±20% tolerance.
+        assert "Variations of ±20% are acceptable" in instructions
+        # Compression-only phrase must NOT leak into balanced.
+        assert "Cut redundant phrasing" not in instructions
+        # Growth-only example markers must NOT leak into balanced.
+        assert "BEFORE (" not in instructions
+        assert "AFTER (" not in instructions
+
+    def test_balanced_mode_includes_neither_branch_in_rubric(self):
+        # Same load-bearing (c) "skip" branch as growth-mode; prevents the LM
+        # from force-fitting non-actionable failures into "add an instruction."
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="balanced")
+        instructions = proposer.propose.signature.instructions
+        assert "(c) neither" in instructions
+
+    def test_balanced_mode_includes_empty_feedback_sentinel(self):
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="balanced")
+        instructions = proposer.propose.signature.instructions
+        assert (
+            "If the feedback below is empty or contains no concrete failures, return the current instruction unchanged"
+            in instructions
+        )
+
+    def test_balanced_mode_includes_grounding_citation_requirement(self):
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="balanced")
+        instructions = proposer.propose.signature.instructions
+        assert (
+            "every addition or refinement must quote or paraphrase a specific phrase from the feedback"
+            in instructions
+        )
+
+    def test_balanced_mode_does_not_use_growth_directional_framing(self):
+        # Growth-mode opens with "Add only what the failures require..."
+        # Balanced is direction-agnostic and must not adopt that bias.
+        proposer = BudgetAwareProposer(baseline_chars=1000, mode="balanced")
+        instructions = proposer.propose.signature.instructions
+        assert "Add only what the failures require" not in instructions
 
     def test_target_chars_independent_of_mode(self):
         # Same budget arithmetic produces same target_chars regardless of

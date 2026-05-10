@@ -109,13 +109,13 @@ uv run python -m evolution.skills.evolve_skill --skill X --fitness-profile <prof
 
 | Profile | Correctness | Procedure | Conciseness | Use when |
 |---|---|---|---|---|
-| `balanced` (default) | 0.5 | 0.3 | 0.2 | General-purpose evolution. |
-| `compression` | 0.4 | 0.2 | 0.4 | Explicitly shrinking an over-long skill. |
-| `growth` | 0.6 | 0.4 | 0.0 | The baseline is missing capabilities and needs to add them. |
+| `balanced` (default) | 0.5 | 0.3 | 0.2 | General-purpose evolution. Uses balanced-mode proposer (handles both directions without bias). |
+| `compression` | 0.4 | 0.2 | 0.4 | Explicitly shrinking an over-long skill. Uses compression-mode proposer. |
+| `growth` | 0.6 | 0.4 | 0.0 | The baseline is missing capabilities and needs to add them. Uses growth-mode proposer. |
 
 The chosen profile is recorded in `gate_decision.json` so any deployed variant can be traced back to the weighting that produced it.
 
-`--fitness-profile growth` also switches the reflection-prompt proposer to **growth-mode**: instead of telling the LM to cut redundancy, the prompt asks it to add only what the failure feedback explicitly identifies as missing. `compression` and `balanced` keep the existing compression-mode proposer.
+Each profile also selects a reflection-prompt proposer template. `compression` tells the LM to cut redundancy under a tight char budget; `growth` tells it to add only what the failure feedback explicitly identifies as missing; `balanced` (the default) is direction-agnostic — it asks the LM to fix the failures without prescribing cuts or additions, and uses a soft "stay near N characters, ±20%" budget. All three share the same anti-hallucination guardrails: every change must ground in a specific feedback phrase, and empty feedback returns the instruction unchanged.
 
 ### Ship the evolved skill back to source
 

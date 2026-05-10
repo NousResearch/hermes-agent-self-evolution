@@ -197,7 +197,7 @@ Written when any `validate_static` check fails on the evolved artifact (short-ci
   "bap_max_growth": 0.20,                        // BudgetAwareProposer's prompt target for the reflection LM
   "bap_safety_margin": 0.10,                     // BAP's safety cushion (default 0.10; lower for calibration)
   "fitness_profile": "balanced",                 // "balanced" | "compression" | "growth"
-  "proposer_mode": "compression",                // "compression" | "growth" — which BudgetAwareProposer template ran
+  "proposer_mode": "balanced",                   // "compression" | "balanced" | "growth" — which BudgetAwareProposer template ran
   "baseline_per_example": [0.5, 0.6, /* ... */],  // float per holdout example
   "evolved_per_example":  [0.51, 0.61, /* ... */],
   "avg_baseline": 0.6,
@@ -270,7 +270,7 @@ Records which composite-weighting profile the LLM judge used: `balanced` (defaul
 
 ### `proposer_mode`
 
-Which `BudgetAwareProposer` prompt template generated the candidates: `compression` (cut redundancy, stay under budget) or `growth` (add only what feedback identifies as missing). Today's mapping: `fitness_profile == "growth"` → `proposer_mode == "growth"`; everything else → `proposer_mode == "compression"`. Recorded explicitly so historical runs stay analysable if the mapping changes in the future.
+Which `BudgetAwareProposer` prompt template generated the candidates: `compression` (cut redundancy, stay under budget), `balanced` (direction-agnostic, soft target with ±20% tolerance), or `growth` (add only what feedback identifies as missing). Mapping: `fitness_profile == "growth"` → `proposer_mode == "growth"`; `fitness_profile == "balanced"` → `proposer_mode == "balanced"`; `fitness_profile == "compression"` (and any unrecognized value) → `proposer_mode == "compression"`. Recorded explicitly so historical runs stay analysable if the mapping changes in the future.
 
 ### `win_loss` block
 

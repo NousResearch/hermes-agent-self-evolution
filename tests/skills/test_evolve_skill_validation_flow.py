@@ -166,7 +166,7 @@ class TestGrowthGateDecisionSchema:
             "effective_absolute_char_ceiling": 5000,
             "growth_free_threshold": 0.20,
             "fitness_profile": "balanced",
-            "proposer_mode": "compression",
+            "proposer_mode": "balanced",
             "growth_quality_slope": 0.30,
             "bap_max_growth": 0.20,
             "bap_safety_margin": 0.10,
@@ -741,10 +741,10 @@ class TestFitnessProfilePropagation:
 
 
 class TestResolveProposerMode:
-    """`--fitness-profile` selects which proposer template runs. Today only
-    'growth' switches modes; 'compression' and 'balanced' both stay on
-    compression-mode. The mapping lives in _resolve_proposer_mode so the
-    contract is testable without driving the full evolve() pipeline."""
+    """`--fitness-profile` selects which proposer template runs. Each profile
+    maps to its own template — `growth` → growth-mode, `balanced` → balanced-mode,
+    `compression` → compression-mode. The mapping lives in _resolve_proposer_mode
+    so the contract is testable without driving the full evolve() pipeline."""
 
     def test_growth_profile_maps_to_growth_mode(self):
         assert _resolve_proposer_mode("growth") == "growth"
@@ -752,11 +752,10 @@ class TestResolveProposerMode:
     def test_compression_profile_maps_to_compression_mode(self):
         assert _resolve_proposer_mode("compression") == "compression"
 
-    def test_balanced_profile_maps_to_compression_mode(self):
-        # Documented limitation in this PR — default-path users still get
-        # compression-mode proposals. A future PR adds a neutral-mode
-        # prompt for balanced.
-        assert _resolve_proposer_mode("balanced") == "compression"
+    def test_balanced_profile_maps_to_balanced_mode(self):
+        # Default-path users get the balanced-mode proposer — a third
+        # template that handles both directions without bias.
+        assert _resolve_proposer_mode("balanced") == "balanced"
 
     def test_unknown_profile_falls_back_to_compression(self):
         # Defensive: an unrecognized profile should not produce growth-mode
