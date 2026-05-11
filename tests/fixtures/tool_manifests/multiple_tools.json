@@ -1,0 +1,92 @@
+{
+  "_evolution_metadata": {
+    "confusable_neighbors": {
+      "search_files": "grep_in_terminal",
+      "grep_in_terminal": "search_files",
+      "read_file": "cat_in_terminal",
+      "cat_in_terminal": "read_file",
+      "list_directory": "ls_in_terminal",
+      "ls_in_terminal": "list_directory"
+    }
+  },
+  "tools": [
+    {
+      "name": "search_files",
+      "description": "Find things.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pattern": {"type": "string", "description": "File name pattern"}
+        },
+        "required": ["pattern"]
+      }
+    },
+    {
+      "name": "grep_in_terminal",
+      "description": "Run grep over file contents in a terminal context. Use for line-by-line content search inside files.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pattern": {"type": "string", "description": "Regex pattern"},
+          "path": {"type": "string", "description": "Directory or file path"}
+        },
+        "required": ["pattern"]
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "Read the full contents of a file by path. Returns the file's text content.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "File path"}
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "cat_in_terminal",
+      "description": "Run cat in a terminal to display a file's contents. Same effect as read_file but via shell.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "File path"}
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "list_directory",
+      "description": "List the entries (files and subdirectories) of a directory.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Directory path"}
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "ls_in_terminal",
+      "description": "Run ls in a terminal to display directory contents. Same effect as list_directory but via shell.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Directory path"}
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "compute_sha256",
+      "description": "Compute the SHA-256 checksum of a file at the given path. Returns the hex digest.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "File path"}
+        },
+        "required": ["path"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Echo the input back unchanged.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {"type": "string"}
+        },
+        "required": ["text"]
+      }
+    }
+  ]
+}
