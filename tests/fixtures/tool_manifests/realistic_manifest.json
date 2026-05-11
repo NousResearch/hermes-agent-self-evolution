@@ -1,0 +1,244 @@
+{
+  "_evolution_metadata": {
+    "confusable_neighbors": {
+      "search_files": "grep_content",
+      "grep_content": "search_files",
+      "read_file": "head_file",
+      "head_file": "read_file",
+      "list_directory": "find_files",
+      "find_files": "list_directory",
+      "git_diff": "git_log",
+      "git_log": "git_diff",
+      "run_command": "exec_in_terminal",
+      "exec_in_terminal": "run_command",
+      "fetch_url": "http_request",
+      "http_request": "fetch_url",
+      "find_symbol": "find_references",
+      "find_references": "find_symbol"
+    }
+  },
+  "tools": [
+    {
+      "name": "search_files",
+      "description": "Locate files in the codebase.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "What to find"}
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "grep_content",
+      "description": "Search inside file contents for a regex or literal pattern. Returns matching lines with surrounding context across the project.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pattern": {"type": "string", "description": "Regex or literal text to match line-by-line"},
+          "path": {"type": "string", "description": "Optional directory or file path to restrict the search"}
+        },
+        "required": ["pattern"]
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "Read the full contents of a file at the given path. Returns the file's text as a single string.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Absolute or repo-relative file path"}
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "head_file",
+      "description": "Return only the first N lines of a file. Useful for sampling large files without loading them entirely into memory.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Absolute or repo-relative file path"},
+          "lines": {"type": "integer", "description": "Number of leading lines to return"}
+        },
+        "required": ["path", "lines"]
+      }
+    },
+    {
+      "name": "list_directory",
+      "description": "List the immediate children (files and subdirectories) of a directory. Non-recursive; one level only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Directory path"}
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "find_files",
+      "description": "Recursively walk a directory tree and return paths matching an optional glob pattern. Honors .gitignore.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "root": {"type": "string", "description": "Root directory to walk"},
+          "glob": {"type": "string", "description": "Optional glob filter, e.g. '**/*.py'"}
+        },
+        "required": ["root"]
+      }
+    },
+    {
+      "name": "git_status",
+      "description": "Show the working tree status: staged, unstaged, and untracked changes in the current repository.",
+      "inputSchema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+      "name": "git_diff",
+      "description": "Show line-level differences between the working tree and the index, or between two specified revisions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ref": {"type": "string", "description": "Optional revision or revision range, e.g. 'HEAD~3..HEAD'"}
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "git_log",
+      "description": "Show the commit history of the current branch, including author, date, and commit message for each commit.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {"type": "integer", "description": "Maximum number of commits to return"}
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "git_commit",
+      "description": "Record a new commit with the staged changes and the supplied commit message. Fails if there are no staged changes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "message": {"type": "string", "description": "Commit message"}
+        },
+        "required": ["message"]
+      }
+    },
+    {
+      "name": "run_command",
+      "description": "Execute a single command without a shell and return stdout, stderr, and the exit code. No pipes, no globbing, no shell expansion.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "argv": {"type": "array", "items": {"type": "string"}, "description": "Command and its arguments as a list"}
+        },
+        "required": ["argv"]
+      }
+    },
+    {
+      "name": "exec_in_terminal",
+      "description": "Run a command through a full shell so pipes, redirections, globs, and environment-variable expansion all work as expected.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string", "description": "Shell command string"}
+        },
+        "required": ["command"]
+      }
+    },
+    {
+      "name": "fetch_url",
+      "description": "Make an HTTP GET request to a URL and return the response body as text. Follows redirects.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string", "description": "Target URL"}
+        },
+        "required": ["url"]
+      }
+    },
+    {
+      "name": "http_request",
+      "description": "Make an arbitrary HTTP request with configurable method, headers, and body. Returns status code, response headers, and body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string", "description": "Target URL"},
+          "method": {"type": "string", "description": "HTTP method, e.g. GET, POST, PUT"},
+          "headers": {"type": "object", "description": "Header name to value map"},
+          "body": {"type": "string", "description": "Optional request body"}
+        },
+        "required": ["url", "method"]
+      }
+    },
+    {
+      "name": "download_file",
+      "description": "Download a file from a URL to a local path. Streams large files to disk without loading them into memory.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string", "description": "Source URL"},
+          "destination": {"type": "string", "description": "Local file path to write to"}
+        },
+        "required": ["url", "destination"]
+      }
+    },
+    {
+      "name": "find_symbol",
+      "description": "Locate a code symbol (function, class, variable) by name across the project. Returns the defining file path and line number.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "description": "Symbol name to locate"}
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "find_references",
+      "description": "Find all usage sites of a given symbol across the project. Returns file paths and line numbers for every reference.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "description": "Symbol name whose references to enumerate"}
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "rename_symbol",
+      "description": "Rename a symbol across every file in the project, updating both its definition and all references atomically.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "old_name": {"type": "string", "description": "Current symbol name"},
+          "new_name": {"type": "string", "description": "Replacement symbol name"}
+        },
+        "required": ["old_name", "new_name"]
+      }
+    },
+    {
+      "name": "format_file",
+      "description": "Auto-format a file according to the project's configured formatter (e.g. black for Python, prettier for JavaScript).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "File to format in place"}
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "compute_sha256",
+      "description": "Compute the SHA-256 hex digest of a file at the given path. Useful for content integrity checks and cache keys.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "File path"}
+        },
+        "required": ["path"]
+      }
+    }
+  ]
+}
