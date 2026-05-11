@@ -1,4 +1,10 @@
-"""Tool description evolution — manifest data model, DSPy module, judge, and proposer."""
+"""Tool description evolution — manifest data model, DSPy module, judge, proposer, and orchestrator.
+
+The orchestrator (``evolve``) and its CLI live in ``evolution.tools.evolve_tool``;
+import them from there directly rather than from this package, so ``python -m
+evolution.tools.evolve_tool`` doesn't re-import the module as both
+``evolution.tools.evolve_tool`` and ``__main__``.
+"""
 
 from evolution.tools.tool_judge import (
     ToolJudgeSignature,

@@ -75,6 +75,8 @@ class ConstraintValidator:
         results.append(self._check_non_empty(artifact_text))
         if artifact_type == "skill":
             results.append(self._check_skill_structure(artifact_text))
+        if artifact_type == "tool_description":
+            results.append(self._check_no_leading_whitespace(artifact_text))
         return results
 
     def validate_growth_with_quality(
@@ -317,6 +319,19 @@ class ConstraintValidator:
                 constraint_name="non_empty",
                 message="Artifact is empty",
             )
+
+    def _check_no_leading_whitespace(self, text: str) -> ConstraintResult:
+        if text and text[0].isspace():
+            return ConstraintResult(
+                passed=False,
+                constraint_name="no_leading_whitespace",
+                message="Tool description starts with whitespace",
+            )
+        return ConstraintResult(
+            passed=True,
+            constraint_name="no_leading_whitespace",
+            message="No leading whitespace",
+        )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
         """Check that a skill file has valid YAML frontmatter and markdown body."""

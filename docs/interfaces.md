@@ -77,6 +77,33 @@ Both delivery flags are no-ops on a reject decision and emit a one-line stderr n
 - `sys.exit(1)` if holdout split has fewer than `min_holdout_size` (default 10) examples.
 - Returns normally (rejection path) if static or growth-quality gate fails — `evolved_FAILED.md` + `gate_decision.json` are written.
 
+## CLI: `python -m evolution.tools.evolve_tool`
+
+Evolves one tool's top-level `description` field inside an MCP-shape manifest. The agent sees the full rendered manifest at evaluation time, so cross-tool regressions surface through the deploy gate.
+
+### Required flags
+| Flag | Purpose |
+|---|---|
+| `--tool <name>` | Tool name to evolve. Must match a `name` in the manifest. |
+| `--manifest <path>` | Path to the MCP-`list_tools()`-shape JSON file. |
+
+### Optional flags
+| Flag | Default | Notes |
+|---|---|---|
+| `--iterations <int>` | `5` | GEPA `max_full_evals`. |
+| `--fitness-profile {compression,balanced,growth}` | `balanced` | Same composite-weighting profile as `evolve_skill`. Maps to `BudgetAwareToolProposer` mode via `resolve_proposer_mode`. |
+| `--quality-gate {strict,default,lenient,off,non-inferiority}` | `default` | Same preset semantics as `evolve_skill`. |
+| `--max-absolute-chars <int>` | preset value | Override the description's absolute-length ceiling. |
+| `--apply` | off | Rewrite the source manifest file in place with the evolved description on a deploy decision. Preserves every non-target tool's description, `inputSchema`, and any `_evolution_metadata` block. No-op (with stderr notice) when the manifest is under `~/.claude/plugins/cache`. Mutually exclusive with `--patch`. |
+| `--patch` | off | Emit a unified diff of (baseline → evolved) manifest JSON to stdout. Mutually exclusive with `--apply`. |
+| `--seed <int>` | `42` | RNG seed for dataset splitting. |
+
+Both `--apply` and `--patch` are no-ops on a reject decision and emit a one-line stderr notice in that case.
+
+### Exit conditions
+- `sys.exit(1)` if the holdout split has fewer than `min_holdout_size` (default 10) examples.
+- Returns normally (rejection path) if static or growth-quality gate fails — `evolved_FAILED.json` + `gate_decision.json` are written.
+
 ## CLI: `python -m evolution.core.external_importers`
 
 Standalone session-history importer. Useful for previewing what `--eval-source sessiondb` would produce without running the full evolution.

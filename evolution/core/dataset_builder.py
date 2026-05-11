@@ -7,14 +7,21 @@ C) Golden sets — hand-curated JSONL files
 """
 
 import json
+import logging
 import random
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import dspy
 
 from evolution.core.config import EvolutionConfig
+
+if TYPE_CHECKING:
+    from evolution.tools.tool_source import ToolManifest
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -193,6 +200,229 @@ class SyntheticDatasetBuilder:
             train_ratio=self.config.train_ratio,
             val_ratio=self.config.val_ratio,
             holdout_ratio=self.config.holdout_ratio,
+        )
+
+    def generate_tool_selection(
+        self,
+        manifest: "ToolManifest",
+        target_tool: str,
+        num_cases: int,
+    ) -> list[EvalExample]:
+        """Generate a tool-selection eval dataset via three per-bucket LM calls.
+
+        Buckets:
+        - 50% target-correct: target tool is the unambiguous best choice.
+        - 30% confusable-neighbor: target competes with the manifest's declared
+          near-neighbor (read from manifest.confusable_neighbor_for(target)).
+        - 20% regression-detection: some other tool is correct.
+
+        Degenerate manifest (only the target tool): the other two buckets are
+        skipped with a WARNING; all num_cases come from the target-correct bucket.
+
+        Anti-trivial filter: tasks whose normalized lowercase text contains
+        any tool's name are dropped. If a bucket loses >30% to the filter, it
+        retries once with a "do not name tools" reminder.
+
+        Raises RuntimeError if the combined result is empty.
+        """
+        other_tools = [t.name for t in manifest.tools if t.name != target_tool]
+        if not other_tools:
+            logger.warning(
+                "generate_tool_selection: manifest contains only the target tool %r; "
+                "skipping confusable and regression buckets",
+                target_tool,
+            )
+            return self._call_bucket_with_filter(
+                manifest, target_tool,
+                bucket="target_correct", count=num_cases,
+                previously_generated=[],
+            )
+
+        n_target = round(0.50 * num_cases)
+        n_confusable = round(0.30 * num_cases)
+        n_regression = num_cases - n_target - n_confusable
+
+        examples_target = self._call_bucket_with_filter(
+            manifest, target_tool,
+            bucket="target_correct", count=n_target,
+            previously_generated=[],
+        )
+        examples_confusable = self._call_bucket_with_filter(
+            manifest, target_tool,
+            bucket="confusable_neighbor", count=n_confusable,
+            previously_generated=[e.task_input for e in examples_target],
+        )
+        examples_regression = self._call_bucket_with_filter(
+            manifest, target_tool,
+            bucket="regression_detection", count=n_regression,
+            previously_generated=[
+                e.task_input for e in examples_target + examples_confusable
+            ],
+        )
+
+        all_examples = examples_target + examples_confusable + examples_regression
+        if not all_examples:
+            raise RuntimeError(
+                "synthetic dataset generator produced 0 examples; the manifest "
+                "may have tool names that dominate the generated text"
+            )
+        return all_examples
+
+    def _call_bucket_with_filter(
+        self,
+        manifest: "ToolManifest",
+        target_tool: str,
+        bucket: str,
+        count: int,
+        previously_generated: list[str],
+    ) -> list[EvalExample]:
+        """Call the LM for one bucket, filter trivial tasks, retry if too many drop."""
+        if count <= 0:
+            return []
+        response = self._call_lm_for_bucket(
+            manifest=manifest, target_tool=target_tool, bucket=bucket, count=count,
+            previously_generated=previously_generated, with_reminder=False,
+        )
+        raw_tasks = response.get("tasks", [])
+        filtered = self._filter_trivial_tasks(raw_tasks, manifest)
+        if raw_tasks and len(filtered) < 0.7 * len(raw_tasks):
+            # >30% dropped — retry with a reminder.
+            response = self._call_lm_for_bucket(
+                manifest=manifest, target_tool=target_tool, bucket=bucket, count=count,
+                previously_generated=previously_generated, with_reminder=True,
+            )
+            filtered = self._filter_trivial_tasks(response.get("tasks", []), manifest)
+
+        return [
+            EvalExample(
+                task_input=t["task"],
+                expected_behavior=t["correct_tool"],
+                category=bucket,
+                source="synthetic",
+            )
+            for t in filtered
+        ]
+
+    def _call_lm_for_bucket(
+        self,
+        manifest: "ToolManifest",
+        target_tool: str,
+        bucket: str,
+        count: int,
+        previously_generated: list[str],
+        with_reminder: bool,
+    ) -> dict:
+        """One per-bucket LM call.
+
+        Tests mock this method directly to avoid LM dependence.
+        """
+        bucket_directives = {
+            "target_correct": (
+                f"All {count} tasks should have {target_tool!r} as the unambiguous correct choice."
+            ),
+            "confusable_neighbor": (
+                f"All {count} tasks should have {target_tool!r} as the correct choice "
+                f"but {manifest.confusable_neighbor_for(target_tool)!r} as a plausible-looking alternative."
+            ),
+            "regression_detection": (
+                f"All {count} tasks should have a tool OTHER than {target_tool!r} as the "
+                f"correct choice. Pick from: {[t.name for t in manifest.tools if t.name != target_tool]}"
+            ),
+        }
+        reminder = (
+            "\n\nIMPORTANT: do not name any tool by name in the task text. "
+            "Tasks reference the action ('find files', 'read contents') not the tool name."
+            if with_reminder else ""
+        )
+        anti_dup = (
+            f"\n\nDo not produce tasks semantically similar to these: {previously_generated[:10]}"
+            if previously_generated else ""
+        )
+
+        prompt = self._render_bucket_prompt(
+            manifest=manifest, target_tool=target_tool,
+            directive=bucket_directives[bucket],
+            anti_dup_context=anti_dup, reminder=reminder, count=count,
+        )
+
+        lm = dspy.LM(
+            self.config.judge_model,
+            temperature=0.7,
+            max_tokens=16000,
+            request_timeout=120,
+            num_retries=5,
+        )
+        with dspy.context(lm=lm):
+            raw = lm(prompt=prompt)
+
+        text = raw[0] if isinstance(raw, list) else raw
+        return self._parse_bucket_json(text)
+
+    @staticmethod
+    def _parse_bucket_json(text: str) -> dict:
+        """Parse a JSON object from a bucket LM response, tolerating prose around it."""
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            import re
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                return json.loads(match.group())
+            raise ValueError(
+                f"Could not parse bucket JSON from LLM output: {text[:200]}"
+            )
+
+    @staticmethod
+    def _filter_trivial_tasks(
+        tasks: list[dict],
+        manifest: "ToolManifest",
+    ) -> list[dict]:
+        """Drop tasks whose text names any tool from the manifest.
+
+        Both sides are normalized symmetrically before comparison: lowercased and
+        with ``-`` replaced by ``_``. So ``read_file`` in the manifest matches a
+        task that says ``read-file`` and vice versa.
+
+        Matching uses word boundaries so the plural form (``read_files``) and the
+        compound form (``read_filemap``) are NOT flagged as containing the tool
+        name — only standalone occurrences are.
+        """
+        from evolution.tools.tool_source import _normalize_tool_name
+
+        forbidden_names: set[str] = set()
+        for t in manifest.tools:
+            forbidden_names.add(_normalize_tool_name(t.name).lower())
+        forbidden_names.discard("")
+
+        # Pre-compile word-boundary patterns once per call.
+        patterns = [re.compile(rf"\b{re.escape(name)}\b") for name in forbidden_names]
+
+        kept = []
+        for task in tasks:
+            raw_text = task.get("task", "")
+            normalized_text = raw_text.lower().replace("-", "_")
+            if any(p.search(normalized_text) for p in patterns):
+                continue
+            kept.append(task)
+        return kept
+
+    @staticmethod
+    def _render_bucket_prompt(
+        manifest: "ToolManifest",
+        target_tool: str,
+        directive: str,
+        anti_dup_context: str,
+        reminder: str,
+        count: int,
+    ) -> str:
+        """Render the per-bucket synthetic-generation prompt."""
+        tool_list = "\n".join(f"- {t.name}: {t.description}" for t in manifest.tools)
+        return (
+            f"Generate {count} tool-selection tasks.\n\n"
+            f"Available tools:\n{tool_list}\n\n"
+            f"Bucket directive: {directive}"
+            f"{anti_dup_context}{reminder}\n\n"
+            f"Output JSON: {{\"tasks\": [{{\"task\": \"...\", \"correct_tool\": \"...\"}}, ...]}}"
         )
 
 

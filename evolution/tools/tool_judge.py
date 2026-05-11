@@ -10,10 +10,11 @@ to score 0.0 with diagnostic feedback.
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from typing import Any, Callable, Optional
 
 import dspy
 
+from evolution.core.fitness import _augment_feedback_with_pred_trace
 from evolution.tools.tool_source import ToolManifest
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ def make_tool_fitness_metric(
     manifest: ToolManifest,
     target_tool_name: str,
     max_growth: float,
+    text_extractor: Optional[Callable[[Any], str]] = None,
 ) -> Callable:
     """Construct a GEPA-shaped 5-arg fitness metric.
 
@@ -86,8 +88,16 @@ def make_tool_fitness_metric(
     and feeds (task, expected_tool, chosen_tool, reasoning) to the judge.
     Unparseable outputs and nonexistent-tool choices short-circuit before
     reaching the judge.
+
+    ``text_extractor`` is the predictor-text extractor passed to
+    ``_augment_feedback_with_pred_trace`` so the [BUDGET] reflection line
+    measures the description region between sentinels rather than the
+    full rendered manifest. Without it the budget framing is wrong by an
+    order of magnitude on multi-tool manifests.
     """
     available_names = sorted(t.name for t in manifest.tools)
+    baseline_len = len(baseline_description or "")
+    target_len = int(baseline_len * (1 + max_growth)) if baseline_len else 0
 
     def metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
         raw_chosen = getattr(pred, "chosen_tool", "") or ""
@@ -120,6 +130,13 @@ def make_tool_fitness_metric(
             artifact_size=None,
             max_size=None,
         )
-        return dspy.Prediction(score=score.composite, feedback=score.feedback)
+        feedback = _augment_feedback_with_pred_trace(
+            score.feedback,
+            pred_trace,
+            baseline_len=baseline_len,
+            target_len=target_len,
+            text_extractor=text_extractor,
+        )
+        return dspy.Prediction(score=score.composite, feedback=feedback)
 
     return metric

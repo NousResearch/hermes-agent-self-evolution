@@ -295,3 +295,78 @@ class TestDefensive:
                 [_FakeModule("x")], [1.0],
                 n_val=0, static_validator=_all_pass, gepa_default_idx=0,
             )
+
+
+def test_text_extractor_callable_replaces_default():
+    """When text_extractor is provided, parsimony tiebreaker uses len(text_extractor(c))
+    rather than the default attribute.
+    """
+    class FakeCandidate:
+        def __init__(self, val_score: float, full_text: str, description: str):
+            self.val_score = val_score
+            self.skill_text = full_text
+            self._description = description
+
+    cand_a = FakeCandidate(0.8, "x" * 1000, "short desc")
+    cand_b = FakeCandidate(0.8, "x" * 1000, "much much much longer description text")
+
+    pick = select_knee_point(
+        candidates=[cand_a, cand_b],
+        val_aggregate_scores=[0.8, 0.8],
+        n_val=10,
+        static_validator=lambda text: [_FakeResult(passed=True)],
+        gepa_default_idx=0,
+        text_extractor=lambda c: c._description,
+    )
+    # The shorter-description candidate should win the parsimony tiebreaker.
+    assert pick.body_chars == len("short desc")
+    assert pick.picked_idx == 0
+
+
+def test_text_extractor_routes_static_validator_input():
+    """The static_validator should be called with the extracted text, not the
+    raw skill_text. This guards against a refactor that splits the routing.
+    """
+    class FakeCandidate:
+        def __init__(self, val_score: float, full_text: str, description: str):
+            self.val_score = val_score
+            self.skill_text = full_text
+            self._description = description
+
+    cand = FakeCandidate(0.9, full_text="x" * 1000, description="my description")
+
+    seen: list[str] = []
+
+    def spy_validator(text: str):
+        seen.append(text)
+        return [_FakeResult(passed=True)]
+
+    select_knee_point(
+        candidates=[cand],
+        val_aggregate_scores=[0.9],
+        n_val=10,
+        static_validator=spy_validator,
+        gepa_default_idx=0,
+        text_extractor=lambda c: c._description,
+    )
+    assert seen == ["my description"], (
+        "static_validator received {seen!r}, expected the extracted "
+        "description rather than the full skill_text"
+    ).format(seen=seen)
+
+
+def test_text_extractor_default_uses_skill_text():
+    """Without text_extractor, default behavior reads `.skill_text` (regression guard)."""
+    # Two equal-val candidates; default tiebreak is smallest skill_text body.
+    cand_a = _FakeModule("x" * 500)
+    cand_b = _FakeModule("x" * 100)
+    pick = select_knee_point(
+        candidates=[cand_a, cand_b],
+        val_aggregate_scores=[0.9, 0.9],
+        n_val=6,
+        static_validator=_all_pass,
+        gepa_default_idx=0,
+    )
+    # Default tiebreak picks idx 1 (smaller skill_text body).
+    assert pick.picked_idx == 1
+    assert pick.body_chars == 100

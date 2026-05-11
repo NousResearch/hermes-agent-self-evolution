@@ -188,6 +188,88 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 
 **`timer_factory` is injectable** so tests use a `FakeTimer.advance(seconds)` double instead of monkeypatching intervals + `time.sleep(0.2)` — deterministic, sub-millisecond, not flaky on slow CI.
 
-## evolution/{prompts, tools, code, monitor}/ — planned, empty
+## evolution/core/quality_gate.py — artifact-agnostic deploy-gate helpers
 
-These packages exist as empty stubs anchoring the planned tier-2/3/4/5 work. See `PLAN.md` for the design.
+**Owns:** the preset table, proposer-mode resolution, and gate-decision persistence shared across pipelines.
+
+**Public surface:**
+- `QUALITY_GATE_PRESETS` — `strict` / `default` / `lenient` / `off` / `non-inferiority`. Each preset bundles `growth_free_threshold`, `growth_quality_slope`, `max_absolute_chars`, and optionally `gate_mode` + `inferiority_tolerance`.
+- `resolve_proposer_mode(fitness_profile) -> ProposerMode` — `growth` → `growth`, `balanced` → `balanced`, anything else (including unknown values) → `compression`.
+- `write_gate_decision(output_dir, decision) -> Path` — writes `gate_decision.json` under `output_dir` and returns the path.
+
+**Implementation note:** extracted from `evolve_skill.py` to be reusable by the tool pipeline. `evolve_skill.py` keeps back-compat aliases under the original underscored names (`_QUALITY_GATE_PRESETS`, `_resolve_proposer_mode`, `_write_gate_decision`) so existing test surfaces keep working.
+
+## evolution/tools/tool_source.py — tool-manifest data model + discovery
+
+**Owns:** the tool-pipeline analog of `skill_sources.py` — loading manifests, validating tool names, and modeling the manifest as an immutable dataclass.
+
+**Public surface:**
+- `ToolSource` Protocol with `name: str`, `find_manifest(path_or_name) -> ToolManifest | None`.
+- `MCPManifestSource(root)` — reads a static JSON file in MCP `list_tools()` shape; paths are resolved against `root` if relative.
+- `ToolManifest` (frozen dataclass): `tools: tuple[ToolEntry, ...]`, `confusable_neighbors: dict[str, str]`. Helpers `from_json_file(path)`, `find_tool(name)`, `confusable_neighbor_for(name)`, `replace_description(name, new_description) -> ToolManifest`.
+- `ToolEntry` (frozen dataclass): `name`, `description`, `input_schema`.
+- `SentinelParseError(ValueError)` — raised by sentinel parsing in `tool_module.py` / `tool_proposer.py`; defined here so callers can import it without pulling DSPy.
+- `discover_tool_sources(explicit_dirs=None) -> list[ToolSource]`.
+
+**Implementation note (load-bearing):** tool names are validated against `^[a-zA-Z0-9_-]{1,128}$` at load. Names outside this set break sentinel parsing (regex metacharacters, embedded `-->`, etc.) and are rejected with a clear error. Normalization collisions (`read-file` vs `read_file`, which both lowercase + underscore-normalize to `read_file`) are also rejected at load — sentinel matching uses the original casing but lookup robustness relies on normalization being injective.
+
+## evolution/tools/tool_module.py — DSPy module + sentinel rendering
+
+**Owns:** the manifest-rendered prompt that lives in the predictor's signature instructions, plus the sentinel parser that recovers the target description from a mutated candidate.
+
+**Public surface:**
+- `ToolModule(target_tool_name, manifest, target_description)` — `dspy.Module` exposing one `selector` predictor (`dspy.ChainOfThought(ToolSelectionSignature)`). `.description_text` property reads the current target description from the predictor's instructions via sentinel parsing.
+- `ToolSelectionSignature` — DSPy signature: `task` input, `reasoning` + `chosen_tool` outputs.
+- `_render_manifest_for_prompt(manifest, target_name, target_description)` — alphabetical-by-name rendering with sentinel markers (`<!-- TARGET:<name> -->` … `<!-- /TARGET:<name> -->`) around the target description. All non-target slots are byte-identical regardless of which target description is plugged in.
+- `_extract_description_from_sentinels(instructions, target_name)` — inverse parser. Raises `SentinelParseError` on missing, duplicated, or reversed markers.
+
+**Implementation note (load-bearing):** like `SkillModule`, `ToolModule.__init__` overwrites `self.selector.predict.signature` via `with_instructions(rendered_manifest)` so GEPA's `named_predictors()` walk finds the manifest in `Predict.signature.instructions`. The signature's class docstring is intentionally a placeholder.
+
+## evolution/tools/tool_proposer.py — sentinel-constrained reflection prompt
+
+**Owns:** the GEPA `instruction_proposer` that mutates only the sentinel-delimited region of the rendered manifest.
+
+**Public surface:**
+- `BudgetAwareToolProposer(target_tool_name, manifest, target_description, baseline_chars, max_growth=0.2, safety_margin=0.10)` — subclasses `BudgetAwareProposer` for budget infrastructure but installs a tool-specific reflection template (sentinel-preservation hard constraint, sentinel-preserving BEFORE/AFTER one-shot, budget framed against the description not the full manifest).
+- `extract_and_rebuild(candidate, manifest, target_name) -> str` — pure function: parse the sentinel-delimited region, re-render the full manifest with that description plugged in. Testable without LM mocks.
+
+**Implementation note (load-bearing):** on `SentinelParseError`, `__call__` logs `WARNING`, increments `self.sentinel_failures`, and **re-raises**. GEPA's `reflective_mutation.py` catches the exception and skips the iteration. Returning a baseline-unchanged candidate would instead create a phantom duplicate-score entry that pollutes the knee-point Pareto pool.
+
+## evolution/tools/tool_judge.py — tool-flavored LLM judge + fitness metric
+
+**Owns:** the 3-dim judge specialized for tool-selection outputs, and the GEPA-shaped 5-arg metric closure.
+
+**Public surface:**
+- `ToolJudgeSignature` — DSPy signature with inputs `task`, `expected_tool`, `chosen_tool`, `reasoning`; outputs `correctness`, `procedure_following`, `conciseness`, `feedback` (all typed `str`, same rationale as `JudgeSignature`).
+- `make_tool_fitness_metric(judge, baseline_description, manifest, target_tool_name, max_growth, text_extractor=None) -> callable` — returns the GEPA-shaped 5-arg metric.
+
+**Implementation note (load-bearing):** the metric parses `pred.chosen_tool` with generous normalization before reaching the judge — lowercased, stripped of quotes/backticks/whitespace, hyphens replaced with underscores. Short-circuits to `dspy.Prediction(score=0.0, feedback=...)` for unparseable outputs (blank or contains internal whitespace) and for outputs that parse to a name not in the manifest. The judge is only called on a parseable, in-manifest choice.
+
+`text_extractor` is forwarded into `_augment_feedback_with_pred_trace` so the `[BUDGET]` reflection line measures the description region between sentinels rather than the full rendered manifest — without it, the budget framing is wrong by an order of magnitude on multi-tool manifests.
+
+## evolution/tools/evolve_tool.py — CLI + orchestrator
+
+**Owns:** the end-to-end `evolve()` flow and the Click CLI (`main`) for tool description evolution.
+
+**Public surface:**
+- `main()` — Click command. CLI flags map onto `evolve()` kwargs.
+- `evolve(tool_name, manifest_path, ...) -> dict` — orchestrator function. Importable and used directly by tests.
+
+**Phases inside `evolve()`** mirror `evolve_skill.evolve()`'s 10-step structure with three substituted steps:
+1. Load manifest from JSON + pick target tool (replaces "find + load SKILL.md").
+2. Build eval dataset via `SyntheticDatasetBuilder.generate_tool_selection` (three buckets: `target_correct`, `confusable_neighbor`, `regression_detection`).
+3. Validate baseline static constraints (warn-only).
+4. Configure DSPy LM + `LMTimingCallback`; build `LLMJudge` + tool fitness metric.
+5. Run GEPA with `BudgetAwareToolProposer` as `instruction_proposer`.
+5b. Knee-point Pareto selection — `text_extractor` measures description length, not full rendered-manifest length, so parsimony tracks the artifact the user actually evolves.
+6. Reassemble evolved manifest (`ToolManifest.replace_description`).
+7. Static constraints on the evolved description — short-circuit reject before holdout if any fail.
+8. `dspy.Evaluate` baseline + evolved against holdout.
+9. `paired_bootstrap` → `validate_growth_with_quality` → `write_gate_decision`. Growth + ceiling check is on the description, not the rendered manifest.
+10. On deploy: write `evolved_manifest.json`, `baseline_manifest.json`, `metrics.json`. Optional `--apply` rewrites the source manifest in place (refuses to write into a Claude Code plugin cache); `--patch` emits a unified diff of the manifest to stdout.
+
+**`gate_decision.json` additions:** every tool-path decision carries `artifact_type: "tool_description"`, `target_tool: <name>`, `manifest_neighbor_count: len(manifest.tools) - 1`, and `sentinel_failures: <count>` (number of reflection-LM outputs the proposer rejected for failing sentinel preservation).
+
+## evolution/{prompts, code, monitor}/ — planned, empty
+
+These packages exist as empty stubs anchoring the planned tier-3/4/5 work. See `PLAN.md` for the design.

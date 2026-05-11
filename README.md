@@ -88,6 +88,21 @@ uv run python -m evolution.skills.evolve_skill \
     --eval-source synthetic
 ```
 
+### Evolve a tool description
+
+For agents using MCP, Anthropic tool-use, OpenAI function calling, or any custom registry that can be exported to MCP's `list_tools()` JSON shape:
+
+```bash
+uv run python -m evolution.tools.evolve_tool \
+    --tool search_files \
+    --manifest /path/to/your/mcp-tools.json \
+    --iterations 5
+```
+
+Reads the static MCP-shape manifest, evolves one tool's top-level `description` field via GEPA, and writes the result to `output/tools/<tool>/<timestamp>/`. `--apply` rewrites the source manifest in place (every non-target tool's description, `inputSchema`, and any `_evolution_metadata` block are preserved verbatim); `--patch` emits a unified diff to stdout instead.
+
+At evaluation time the agent sees the full rendered manifest, so cross-tool regressions (the evolved description "stealing" selections from a confusable neighbor) surface naturally through the deploy gate.
+
 ### Mine real session history for evals
 
 ```bash
@@ -137,7 +152,7 @@ Both flags are no-ops on a reject decision (with a stderr notice). `--apply` als
 | Phase | Target | Engine | Status |
 |-------|--------|--------|--------|
 | **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
-| **Phase 2** | Tool descriptions | DSPy + GEPA | 🔲 Planned |
+| **Phase 2** | Tool descriptions | DSPy + GEPA | ✅ Implemented |
 | **Phase 3** | System prompt sections | DSPy + GEPA | 🔲 Planned |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |

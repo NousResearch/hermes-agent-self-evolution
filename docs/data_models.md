@@ -73,6 +73,8 @@ class EvalExample:
 
 `source` is consumed by `_dataset_payload()` to bucket per-source counts in `gate_decision.json`. Empty/None source is bucketed as `"unknown"`.
 
+`category` defaults to `"general"` on skill datasets. Tool-selection datasets produced by `SyntheticDatasetBuilder.generate_tool_selection` populate it with one of `"target_correct"` (target is the correct tool), `"confusable_neighbor"` (a known-confusable neighbor is the correct tool — surfaces cross-tool regressions), or `"regression_detection"` (an unrelated tool is correct — guards against the evolved description "stealing" selections). Bucketed per-category counts are recorded in `gate_decision.json.dataset.categories` on tool-path runs.
+
 `to_dict()` and `from_dict()` round-trip through JSONL. The on-disk format is one example per line:
 
 ```jsonl
@@ -155,6 +157,55 @@ class CandidatePick:
 ```
 
 Frozen for safety — once selected, the pick + diagnostics shouldn't be mutated. `band_roster` is sorted by descending `val_score`, ties broken by `idx`.
+
+## ToolEntry (`evolution/tools/tool_source.py`)
+
+```python
+@dataclass(frozen=True)
+class ToolEntry:
+    name: str
+    description: str
+    input_schema: dict[str, Any] = field(default_factory=dict)
+```
+
+Validated at load by `ToolEntry.from_dict()`: `name` must match `^[a-zA-Z0-9_-]{1,128}$`. Names outside this set break sentinel parsing (regex metacharacters, embedded `-->`) and are rejected with a clear error. `from_dict` reads `inputSchema` (MCP shape) into `input_schema`.
+
+Frozen at the dataclass level — the attribute itself can't be rebound — but `input_schema` is not deep-frozen. Mutating it in place corrupts any other `ToolEntry` / `ToolManifest` that shares the reference (by design: `ToolManifest.replace_description` preserves the original reference).
+
+## ToolManifest (`evolution/tools/tool_source.py`)
+
+```python
+@dataclass(frozen=True)
+class ToolManifest:
+    tools: tuple[ToolEntry, ...]
+    confusable_neighbors: dict[str, str] = field(default_factory=dict)
+```
+
+Helpers:
+- `from_json_file(path) -> ToolManifest` — reads an MCP `list_tools()`-shape file. `_evolution_metadata.confusable_neighbors` is optional metadata for cross-tool regression evaluation.
+- `find_tool(name) -> ToolEntry` — raises `KeyError` listing available tools on miss.
+- `confusable_neighbor_for(name) -> str | None`.
+- `replace_description(name, new_description) -> ToolManifest` — returns a new manifest with the named tool's description swapped; every other tool's `description` and `input_schema` are preserved by reference.
+
+Rejects at load: an empty `tools` tuple, and normalization collisions (`read-file` vs `read_file`, which both lowercase + underscore-normalize to `read_file`). Sentinel matching uses original casing but lookup robustness relies on normalization being injective.
+
+## Evolved manifest output JSON
+
+`output/tools/<tool>/<timestamp>/evolved_manifest.json` (deploy) and `evolved_FAILED.json` (reject) have the same shape as the input MCP-shape manifest:
+
+```json
+{
+  "tools": [
+    {"name": "search_files", "description": "<evolved description>", "inputSchema": {...}},
+    {"name": "grep_in_terminal", "description": "<unchanged>", "inputSchema": {...}}
+  ],
+  "_evolution_metadata": {
+    "confusable_neighbors": {"search_files": "grep_in_terminal"}
+  }
+}
+```
+
+Only the target tool's `description` is changed; every other tool's `description`, `inputSchema`, and any `_evolution_metadata` block are preserved verbatim. With `--apply`, the source manifest file is rewritten in place with the same preservation guarantees. With `--patch`, a unified diff of (baseline → evolved) manifest JSON is written to stdout.
 
 ## gate_decision.json (schema_version "4")
 
@@ -288,6 +339,19 @@ Records the inputs to the run so a third party with the artifact alone can repro
 ### Knee-point applied/skipped
 - `knee_point.applied: false` lands when MIPROv2 fallback fired (no `detailed_results` on the optimized module).
 - `knee_point.applied: true` always carries the full diagnostic block.
+
+### Tool-path additions (`artifact_type == "tool_description"`)
+
+Runs of `evolution.tools.evolve_tool` write the same schema with four extra top-level fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `artifact_type` | `"skill" \| "tool_description"` | Present on every gate decision. Skill runs always set `"skill"`. |
+| `target_tool` | `str \| None` | Set only when `artifact_type == "tool_description"`. The tool whose description was optimized. |
+| `manifest_neighbor_count` | `int \| None` | Set only on tool runs. Equals `len(manifest.tools) - 1` — the number of confusable peers the selector had to disambiguate against. |
+| `sentinel_failures` | `int \| None` | Set only on tool runs. Count of reflection-LM outputs the proposer rejected for failing sentinel preservation. A high count signals the reflection LM is struggling with the constraint and the run may be wasting iterations. |
+
+`dataset.categories` (`{"target_correct": N, "confusable_neighbor": N, "regression_detection": N}`) is populated on tool runs; on skill runs it's `{"general": N}`.
 
 ## metrics.json (deploy-only summary)
 

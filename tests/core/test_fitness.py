@@ -11,6 +11,7 @@ from evolution.core.config import EvolutionConfig
 from evolution.core.fitness import (
     FitnessScore,
     LLMJudge,
+    _augment_feedback_with_pred_trace,
     _clamp_to_unit,
     make_skill_fitness_metric,
 )
@@ -280,6 +281,47 @@ class TestFitnessProfile:
 
     def test_default_profile_is_balanced(self):
         assert FitnessScore().profile == "balanced"
+
+
+class TestAugmentFeedbackWithPredTraceTextExtractor:
+    """Optional text_extractor lets a caller measure the [BUDGET] line's
+    `current_len` against a sub-field of the predictor (e.g. a tool
+    description) instead of the full `signature.instructions` blob.
+    """
+
+    def _pred_trace(self, instructions: str, reasoning: str = ""):
+        signature = SimpleNamespace(instructions=instructions)
+        predictor = SimpleNamespace(signature=signature)
+        output = SimpleNamespace(reasoning=reasoning, output="answer")
+        return [(predictor, {"task_input": "t"}, output)]
+
+    def test_default_extractor_uses_full_instructions(self):
+        pred_trace = self._pred_trace(instructions="x" * 100)
+        result = _augment_feedback_with_pred_trace(
+            base_feedback="base feedback",
+            pred_trace=pred_trace,
+            baseline_len=50,
+            target_len=60,
+        )
+        # [BUDGET] line should report current_len=100 (full instructions).
+        assert "[BUDGET]" in result
+        budget_line = [line for line in result.split("\n") if "[BUDGET]" in line][0]
+        assert "100 chars" in budget_line
+
+    def test_custom_text_extractor_overrides_default(self):
+        pred_trace = self._pred_trace(instructions="x" * 100)
+        result = _augment_feedback_with_pred_trace(
+            base_feedback="base feedback",
+            pred_trace=pred_trace,
+            baseline_len=50,
+            target_len=60,
+            text_extractor=lambda p: "y" * 25,
+        )
+        # [BUDGET] should report 25 (extracted), not 100 (full instructions).
+        assert "[BUDGET]" in result
+        budget_line = [line for line in result.split("\n") if "[BUDGET]" in line][0]
+        assert "25 chars" in budget_line
+        assert "100 chars" not in budget_line
 
 
 class TestClampToUnit:

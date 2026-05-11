@@ -54,12 +54,14 @@ def select_knee_point(
     gepa_default_idx: int,
     epsilon: Optional[float] = None,
     strategy: str = "val-best",
+    text_extractor: Optional[Callable[[Any], str]] = None,
 ) -> CandidatePick:
     """Pick a candidate within ε of best valset score.
 
     Args:
         candidates: GEPA-built modules (DspyGEPAResult.candidates). Each
-            must expose a `skill_text` property.
+            must expose a `skill_text` property unless `text_extractor` is
+            provided.
         val_aggregate_scores: one float per candidate (DspyGEPAResult
             .val_aggregate_scores).
         n_val: size of the valset that produced those scores. Used for the
@@ -81,6 +83,13 @@ def select_knee_point(
                 smallest body in the band regardless of val cost. Available
                 via --knee-point-strategy for users explicitly chasing
                 compression even at val cost.
+        text_extractor: optional ``candidate -> str`` callable used to read
+            the text that drives both the parsimony metric (``body_chars``)
+            and the ``static_validator`` input. Defaults to reading
+            ``candidate.skill_text``. Pass a custom extractor when the
+            parsimony-relevant text is a sub-field of the candidate (for
+            example, the description portion of a rendered tool manifest)
+            rather than the full ``skill_text`` artifact.
 
     Returns:
         CandidatePick with the chosen module + diagnostics. fallback field
@@ -104,6 +113,10 @@ def select_knee_point(
 
     eps = float(epsilon) if epsilon is not None else 1.0 / n_val
 
+    extractor: Callable[[Any], str] = (
+        text_extractor if text_extractor is not None else (lambda c: c.skill_text)
+    )
+
     best_score = max(val_aggregate_scores)
     band_threshold = best_score - eps
 
@@ -120,7 +133,7 @@ def select_knee_point(
         for rank, idx in enumerate(band_roster_by_score)
     }
 
-    body_chars_by_idx = {i: len(candidates[i].skill_text) for i in band_indices}
+    body_chars_by_idx = {i: len(extractor(candidates[i])) for i in band_indices}
 
     band_roster = [
         {
@@ -154,10 +167,10 @@ def select_knee_point(
             ),
         )
 
-    gepa_default_chars = len(candidates[gepa_default_idx].skill_text)
+    gepa_default_chars = len(extractor(candidates[gepa_default_idx]))
 
     for picked_idx in sorted_for_pick:
-        text = candidates[picked_idx].skill_text
+        text = extractor(candidates[picked_idx])
         results = static_validator(text)
         if all(r.passed for r in results):
             return CandidatePick(
@@ -175,7 +188,7 @@ def select_knee_point(
                 band_roster=band_roster,
             )
 
-    default_text = candidates[gepa_default_idx].skill_text
+    default_text = extractor(candidates[gepa_default_idx])
     return CandidatePick(
         module=candidates[gepa_default_idx],
         skill_text=default_text,

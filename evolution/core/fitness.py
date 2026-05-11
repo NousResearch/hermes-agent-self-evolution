@@ -6,7 +6,7 @@ Supports length penalties and multi-dimensional scoring.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Callable, Optional
 
 import dspy
 
@@ -190,12 +190,19 @@ def _augment_feedback_with_pred_trace(
     pred_trace,
     baseline_len: int,
     target_len: int,
+    text_extractor: Optional[Callable[[Any], str]] = None,
 ) -> str:
     """Append [BUDGET] + [REASONING] context when pred_trace is set.
 
     GEPA passes ``pred_trace=None`` from its Evaluate-over-valset path and
     a one-tuple ``[(predictor, inputs, output)]`` from its reflective
     feedback path. The feedback is enriched only in the latter case.
+
+    ``text_extractor`` is an optional ``predictor -> str`` callable used to
+    pick the budget-relevant text. Defaults to reading
+    ``predictor.signature.instructions``. Pass a custom extractor when the
+    budget-relevant text is a sub-field of the predictor (e.g. a tool
+    description) rather than the full instruction string.
     """
     if not pred_trace:
         return base_feedback
@@ -209,7 +216,10 @@ def _augment_feedback_with_pred_trace(
 
     if baseline_len > 0:
         try:
-            current_text = predictor.signature.instructions or ""
+            if text_extractor is not None:
+                current_text = text_extractor(predictor) or ""
+            else:
+                current_text = predictor.signature.instructions or ""
         except AttributeError:
             current_text = ""
         if current_text:
