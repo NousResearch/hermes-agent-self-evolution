@@ -23,6 +23,11 @@ from rich.panel import Panel
 from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.quality_gate import (
+    QUALITY_GATE_PRESETS,
+    resolve_proposer_mode,
+    write_gate_decision,
+)
 from evolution.core.skill_sources import discover_skill_sources
 
 # Without this, the BudgetAwareProposer + LMTimingCallback logs stay
@@ -62,58 +67,11 @@ console = Console()
 _BUDGET_BY_ITERATIONS = {1: "light", 2: "medium", 3: "heavy"}
 
 
-# `default` is calibrated against the obsidian deploy (+24.2% growth,
-# ~+0.07 expected improvement). `off` disables the slope/ceiling checks
-# but still enforces bootstrap.mean ≥ 0 — see deprecation warning when
-# users select it. `non-inferiority` is the recommended preset for
-# compression-focused runs: it ships variants statistically not-worse-
-# than-baseline by more than ``inferiority_tolerance``.
-#
-# Type widens to ``Any`` because ``gate_mode`` is a string and
-# ``inferiority_tolerance`` is a float — no longer a uniform float dict.
-_QUALITY_GATE_PRESETS: dict[str, dict[str, Any]] = {
-    "strict": {
-        "growth_free_threshold": 0.10,
-        "growth_quality_slope": 0.50,
-        "max_absolute_chars": 3000,
-    },
-    "default": {
-        "growth_free_threshold": 0.20,
-        "growth_quality_slope": 0.30,
-        "max_absolute_chars": 5000,
-    },
-    "lenient": {
-        "growth_free_threshold": 0.30,
-        "growth_quality_slope": 0.20,
-        "max_absolute_chars": 8000,
-    },
-    "off": {
-        "growth_free_threshold": 100.0,
-        "growth_quality_slope": 0.0,
-        "max_absolute_chars": 100_000,
-    },
-    "non-inferiority": {
-        "growth_free_threshold": 100.0,
-        "growth_quality_slope": 0.0,
-        "max_absolute_chars": 100_000,
-        "gate_mode": "non_inferiority",
-        # See reports/calibration_findings.md for the tolerance sweep.
-        "inferiority_tolerance": 0.05,
-    },
-}
-
-
-def _write_gate_decision(output_dir: Path, decision: dict[str, Any]) -> Path:
-    """Persist the deploy-gate's structured decision for future calibration.
-
-    Each run writes one of these regardless of outcome (deploy or reject).
-    Recalibrating the curve is then `jq -s '...' output/*/*/gate_decision.json`
-    rather than parsing free-form failure notes.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / "gate_decision.json"
-    path.write_text(json.dumps(decision, indent=2))
-    return path
+# Back-compat aliases so existing tests and external imports that reference
+# the underscored names continue to work after the move to evolution.core.
+_QUALITY_GATE_PRESETS = QUALITY_GATE_PRESETS
+_resolve_proposer_mode = resolve_proposer_mode
+_write_gate_decision = write_gate_decision
 
 
 def _dataset_payload(dataset: EvalDataset) -> dict[str, Any]:
@@ -432,20 +390,6 @@ def _resolve_bap_safety_margin(value: Optional[float]) -> float:
     return _BAP_SAFETY_MARGIN_DEFAULT if value is None else value
 
 
-def _resolve_proposer_mode(fitness_profile: str) -> ProposerMode:
-    """Map the user's fitness profile to a proposer mode.
-
-    Each profile selects its own template: `growth` swings the proposer toward
-    additions, `compression` toward cuts, and `balanced` toward direction-agnostic
-    revisions. Unknown values fall back to compression-mode defensively.
-    """
-    if fitness_profile == "growth":
-        return "growth"
-    if fitness_profile == "balanced":
-        return "balanced"
-    return "compression"  # compression profile, plus defensive fallback for unknown
-
-
 def _resolve_bap_max_growth(value: Optional[float], fallback: float) -> float:
     """Resolve `--bap-max-growth` to BudgetAwareProposer's `max_growth`.
 
@@ -546,7 +490,7 @@ def evolve(
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
-    preset = _QUALITY_GATE_PRESETS[quality_gate]
+    preset = QUALITY_GATE_PRESETS[quality_gate]
     if quality_gate == "off":
         logging.getLogger(__name__).warning(
             '--quality-gate off still enforces a regression check (mean ≥ 0). '
@@ -752,7 +696,7 @@ def evolve(
         bap_max_growth, config.bap_max_growth,
     )
     resolved_bap_safety_margin = _resolve_bap_safety_margin(bap_safety_margin)
-    proposer_mode = _resolve_proposer_mode(config.fitness_profile)
+    proposer_mode = resolve_proposer_mode(config.fitness_profile)
     proposer = BudgetAwareProposer(
         baseline_chars=len(skill["body"]),
         max_growth=resolved_bap_max_growth,
@@ -827,7 +771,7 @@ def evolve(
         console.print("[red]✗ Evolved skill FAILED static constraints — not deploying[/red]")
         failed_path = output_dir / "evolved_FAILED.md"
         failed_path.write_text(evolved_full)
-        _write_gate_decision(output_dir, {
+        write_gate_decision(output_dir, {
             "schema_version": "4",
             "decision": "reject",
             "reason": "static_constraint_failure",
@@ -952,7 +896,7 @@ def evolve(
             "eval_source": eval_source,
         },
     }
-    gate_path = _write_gate_decision(output_dir, decision_payload)
+    gate_path = write_gate_decision(output_dir, decision_payload)
     console.print(f"  [dim]Gate decision logged to {gate_path}[/dim]")
 
     if not growth_pass:

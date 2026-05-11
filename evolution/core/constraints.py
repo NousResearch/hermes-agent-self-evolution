@@ -41,7 +41,7 @@ def effective_absolute_char_ceiling(static_ceiling: int, baseline_chars: int) ->
 def resolve_decision_rule(config: EvolutionConfig, growth_pct: float) -> str:
     """Single source of truth for which gate decision rule applies.
 
-    Both ``_check_growth_with_quality_gate`` and ``evolve_skill._write_gate_decision``
+    Both ``_check_growth_with_quality_gate`` and ``quality_gate.write_gate_decision``
     must agree on the rule name; computing it in one place avoids the float-equality
     drift that otherwise creeps in between the constraint and the payload writer.
     """
