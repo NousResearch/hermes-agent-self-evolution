@@ -204,14 +204,38 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 **Owns:** the tool-pipeline analog of `skill_sources.py` — loading manifests, validating tool names, and modeling the manifest as an immutable dataclass.
 
 **Public surface:**
-- `ToolSource` Protocol with `name: str`, `find_manifest(path_or_name) -> ToolManifest | None`.
-- `MCPManifestSource(root)` — reads a static JSON file in MCP `list_tools()` shape; paths are resolved against `root` if relative.
-- `ToolManifest` (frozen dataclass): `tools: tuple[ToolEntry, ...]`, `confusable_neighbors: dict[str, str]`. Helpers `from_json_file(path)`, `find_tool(name)`, `confusable_neighbor_for(name)`, `replace_description(name, new_description) -> ToolManifest`.
-- `ToolEntry` (frozen dataclass): `name`, `description`, `input_schema`.
+- `ToolSource` Protocol with `name: str`, `supports(path) -> bool`, `find_manifest(path_or_name) -> ToolManifest | None`, and `apply_evolved(source_path, evolved_manifest, target_tool, new_description) -> None`. Read and write both live on the adapter so the orchestrator can dispatch by `supports()` without knowing which backing store it's hitting.
+- `MCPManifestSource(root)` — reads a static JSON file in MCP `list_tools()` shape; paths are resolved against `root` if relative. `supports()` returns True for existing `.json` files. `apply_evolved()` rewrites the source manifest atomically (tempfile + `os.replace`), preserving every non-target tool's `description`, `inputSchema`, and any `_evolution_metadata` block.
+- `ToolManifest` (frozen dataclass): `tools: tuple[ToolEntry, ...]`, `confusable_neighbors: dict[str, str]`, `dropped_tools: tuple[tuple[str, str], ...]`. Helpers `from_json_file(path)`, `find_tool(name)`, `confusable_neighbor_for(name)`, `replace_description(name, new_description) -> ToolManifest`.
+- `ToolEntry` (frozen dataclass): `name`, `description`, `input_schema`, `source_kind`, `source_location`. The last two are optional adapter-state fields populated by source-walking adapters (HermesToolSource); they're `None` for JSON-backed manifests.
 - `SentinelParseError(ValueError)` — raised by sentinel parsing in `tool_module.py` / `tool_proposer.py`; defined here so callers can import it without pulling DSPy.
-- `discover_tool_sources(explicit_dirs=None) -> list[ToolSource]`.
+- `discover_tool_sources(explicit_dirs=None) -> list[ToolSource]` — returns both `MCPManifestSource(d)` and `HermesToolSource(d)` per directory, with `MCPManifestSource` first (its `supports()` is the cheaper check).
 
 **Implementation note (load-bearing):** tool names are validated against `^[a-zA-Z0-9_-]{1,128}$` at load. Names outside this set break sentinel parsing (regex metacharacters, embedded `-->`, etc.) and are rejected with a clear error. Normalization collisions (`read-file` vs `read_file`, which both lowercase + underscore-normalize to `read_file`) are also rejected at load — sentinel matching uses the original casing but lookup robustness relies on normalization being injective.
+
+## evolution/tools/hermes_source.py — Python-source tool adapter
+
+**Owns:** the read-and-write adapter for tools defined as Python `*_SCHEMA` / `*_SCHEMAS` dicts (Hermes Agent's pattern). Pure AST — no module execution — so it tolerates schemas whose sibling fields use Name refs, function calls, or lists.
+
+**Public surface:**
+- `HermesToolSource(root)` — `name = "hermes_source"`. Implements the full `ToolSource` Protocol.
+- `supports(path) -> bool` — True iff `path` is a directory containing at least one top-level `Assign` whose target id matches `^_?[A-Z][A-Z0-9_]*_(SCHEMA|SCHEMAS)$`.
+- `find_manifest(path) -> ToolManifest | None` — walks `path` recursively, collects every parseable schema, and returns a `ToolManifest` whose tools are alphabetically sorted. Skipped schemas appear in `manifest.dropped_tools` as `(name_hint, reason)` pairs.
+- `apply_evolved(source_path, evolved_manifest, target_tool, new_description)` — splices the new description into the source file's bytes at the AST-derived span and atomically replaces the file. For `name_ref` tools, modifies the resolved constant's assignment rather than the schema dict's `"description"` key. Refuses to rewrite `joined_str` (f-string) descriptions.
+
+**Tool shapes handled:**
+1. `*_SCHEMA = {"name": "tool_a", "description": "...", ...}` — single tool dict.
+2. `*_SCHEMAS = [{...}, {...}]` — list of tool dicts at module top level.
+3. Schemas with non-literal sibling fields (e.g., `"input_schema": some_func()`) — captured as long as the `name` and `description` fields are statically reachable.
+4. Name-ref descriptions — `"description": TOOL_DESCRIPTION` where `TOOL_DESCRIPTION = "..."` is a top-level string constant; `source_kind = "name_ref"` and `source_location` points at the constant.
+5. Multi-line parenthesized concatenation — `("first " "second " "third")` collapsed by the parser into a single Constant; `source_location` spans the parenthesized block.
+6. f-string descriptions — surfaced as `source_kind = "joined_str"` for read but rejected on write (the caller must convert to a literal first).
+
+**`source_kind` annotation:** every emitted `ToolEntry` carries one of `"literal"`, `"name_ref"`, or `"joined_str"` so the write path can dispatch correctly. `source_location` is `(file_path, lineno, col_offset, end_lineno, end_col_offset)` of the description string node.
+
+**Byte-precise write path:** `apply_evolved` does NOT serialize the dict back through `ast.unparse` (that would canonicalize formatting and lose comments). It computes byte offsets from `(lineno, col_offset)` into the source text and splices `repr(new_description)` (single-line) or a triple-quoted string with re-indented continuation lines (multi-line) into place. Bytes outside the target span are preserved verbatim.
+
+**Sidecar metadata:** `<root>/_evolution_metadata.json` — if present, its `confusable_neighbors` mapping is loaded into the manifest. Missing or malformed sidecars are ignored (with a warning).
 
 ## evolution/tools/tool_module.py — DSPy module + sentinel rendering
 

@@ -52,7 +52,12 @@ from evolution.tools.tool_module import (
     _extract_description_from_sentinels,
 )
 from evolution.tools.tool_proposer import BudgetAwareToolProposer
-from evolution.tools.tool_source import SentinelParseError, ToolManifest
+from evolution.tools.tool_source import (
+    SentinelParseError,
+    ToolManifest,
+    ToolSource,
+    discover_tool_sources,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -107,7 +112,11 @@ def _build_examples(eval_examples: list, *, for_module: bool) -> list[dspy.Examp
     return out
 
 
-def _dataset_payload(dataset: EvalDataset) -> dict[str, Any]:
+def _dataset_payload(
+    dataset: EvalDataset,
+    *,
+    dropped_tools: tuple[tuple[str, str], ...] = (),
+) -> dict[str, Any]:
     sources: dict[str, int] = {}
     categories: dict[str, int] = {}
     for ex in dataset.all_examples:
@@ -120,6 +129,10 @@ def _dataset_payload(dataset: EvalDataset) -> dict[str, Any]:
         "size_holdout": len(dataset.holdout),
         "sources": sources,
         "categories": categories,
+        # Surface adapter-dropped tools (e.g., function-built schemas the
+        # Hermes adapter couldn't parse statically). Empty list on the MCP
+        # path. Serialized as a list of 2-lists for JSON compatibility.
+        "dropped_tools": [list(pair) for pair in dropped_tools],
     }
 
 
@@ -192,45 +205,22 @@ def _emit_patch(baseline_text: str, evolved_text: str, path: Path) -> str:
     return "".join(diff_lines)
 
 
-_CLAUDE_CODE_PLUGIN_CACHE_MARKER = (".claude", "plugins", "cache")
+def _resolve_source(manifest_path: Path) -> ToolSource:
+    """Pick the first ToolSource adapter that claims support for ``manifest_path``.
 
-
-def _is_claude_code_plugin_cache_path(path: Path) -> bool:
-    parts = path.resolve().parts
-    marker = _CLAUDE_CODE_PLUGIN_CACHE_MARKER
-    for i in range(len(parts) - len(marker) + 1):
-        if parts[i:i + len(marker)] == marker:
-            return True
-    return False
-
-
-def _apply_in_place(
-    manifest_path: Path,
-    manifest: ToolManifest,
-    target_tool_name: str,
-    evolved_description: str,
-) -> bool:
-    """Rewrite `manifest_path` in place with the evolved description.
-
-    Preserves any `_evolution_metadata` block in the source file. Refuses
-    to write into Claude Code's plugin cache.
+    Discovery returns adapters per directory; we hand each its own dir
+    (the file's parent when path is a file, the path itself when it's a
+    directory) so each adapter has a stable root.
     """
-    if _is_claude_code_plugin_cache_path(manifest_path):
-        logging.getLogger(__name__).warning(
-            "--apply skipped: %s is under a Claude Code plugin cache "
-            "(~/.claude/plugins/cache); plugin caches are managed by "
-            "Claude Code and writing to them is unsafe.",
-            manifest_path,
-        )
-        return False
-
-    source = json.loads(manifest_path.read_text())
-    for entry in source.get("tools", []):
-        if entry.get("name") == target_tool_name:
-            entry["description"] = evolved_description
-            break
-    manifest_path.write_text(json.dumps(source, indent=2) + "\n")
-    return True
+    root = manifest_path.parent if manifest_path.is_file() else manifest_path
+    sources = discover_tool_sources([root])
+    for source in sources:
+        if source.supports(manifest_path):
+            return source
+    raise ValueError(
+        f"no ToolSource supports {manifest_path}; "
+        f"expected a .json file (MCP manifest) or a directory of .py files (Hermes tools)"
+    )
 
 
 def _manifest_to_dict(manifest: ToolManifest) -> dict[str, Any]:
@@ -275,7 +265,13 @@ def evolve(
     Returns a dict summary of the run (mirrors metrics.json).
     """
     manifest_path = Path(manifest_path)
-    manifest = ToolManifest.from_json_file(manifest_path)
+    source = _resolve_source(manifest_path)
+    manifest = source.find_manifest(manifest_path)
+    if manifest is None:
+        raise ValueError(
+            f"ToolSource {source.name!r} accepted {manifest_path} via supports() "
+            f"but find_manifest returned None"
+        )
     target = manifest.find_tool(tool_name)
     baseline_description = target.description
 
@@ -500,7 +496,7 @@ def evolve(
                 "failed_constraints": [c.constraint_name for c in static_constraints if not c.passed],
                 "messages": [c.message for c in static_constraints if not c.passed],
                 "knee_point": _knee_point_payload(knee_pick),
-                "dataset": _dataset_payload(dataset),
+                "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools),
                 "run_inputs": run_inputs,
                 **tool_payload_fields,
             })
@@ -576,7 +572,7 @@ def evolve(
             "failed_constraints": [c.constraint_name for c in growth_constraints if not c.passed],
             "messages": [c.message for c in growth_constraints if not c.passed],
             "knee_point": _knee_point_payload(knee_pick),
-            "dataset": _dataset_payload(dataset),
+            "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools),
             "run_inputs": run_inputs,
             **tool_payload_fields,
         }
@@ -663,9 +659,13 @@ def evolve(
                 sys.stdout.write("\n")
 
         if apply:
-            applied = _apply_in_place(manifest_path, manifest, tool_name, evolved_description)
-            if applied:
-                console.print(f"  --apply: wrote evolved description to {manifest_path}")
+            source.apply_evolved(
+                source_path=manifest_path,
+                evolved_manifest=evolved_manifest,
+                target_tool=tool_name,
+                new_description=evolved_description,
+            )
+            console.print(f"  --apply: wrote evolved description to {manifest_path}")
 
         if improvement > 0:
             console.print(
@@ -689,8 +689,12 @@ def evolve(
     "--manifest",
     "manifest_path",
     required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Path to the MCP-list_tools-shaped manifest JSON file",
+    type=click.Path(exists=True, dir_okay=True, file_okay=True, path_type=Path),
+    help=(
+        "Path to either an MCP-list_tools-shaped manifest JSON file or a "
+        "directory of Python source files containing Hermes-style "
+        "``*_SCHEMA`` declarations."
+    ),
 )
 @click.option("--iterations", default=5, type=int, help="GEPA max_full_evals")
 @click.option(

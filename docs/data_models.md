@@ -166,9 +166,17 @@ class ToolEntry:
     name: str
     description: str
     input_schema: dict[str, Any] = field(default_factory=dict)
+    source_kind: Literal["literal", "name_ref", "joined_str"] | None = None
+    source_location: tuple[Path, int, int, int, int] | None = None
 ```
 
 Validated at load by `ToolEntry.from_dict()`: `name` must match `^[a-zA-Z0-9_-]{1,128}$`. Names outside this set break sentinel parsing (regex metacharacters, embedded `-->`) and are rejected with a clear error. `from_dict` reads `inputSchema` (MCP shape) into `input_schema`.
+
+`source_kind` and `source_location` are **optional adapter-state fields** populated by source-walking adapters (`HermesToolSource`). They tell the write path how to splice the evolved description back in:
+- `source_kind` is `"literal"` for plain string-constant descriptions, `"name_ref"` for descriptions that reference a top-level string constant (the write path edits the constant rather than the schema dict), and `"joined_str"` for f-string descriptions (write path refuses; the caller must convert to a literal first).
+- `source_location` is `(file_path, lineno, col_offset, end_lineno, end_col_offset)` of the description string node. For `name_ref`, it points at the resolved constant.
+
+Both fields are `None` for JSON-backed manifests (`MCPManifestSource`) — the MCP write path doesn't need a span because it round-trips the full JSON dict.
 
 Frozen at the dataclass level — the attribute itself can't be rebound — but `input_schema` is not deep-frozen. Mutating it in place corrupts any other `ToolEntry` / `ToolManifest` that shares the reference (by design: `ToolManifest.replace_description` preserves the original reference).
 
@@ -179,6 +187,7 @@ Frozen at the dataclass level — the attribute itself can't be rebound — but 
 class ToolManifest:
     tools: tuple[ToolEntry, ...]
     confusable_neighbors: dict[str, str] = field(default_factory=dict)
+    dropped_tools: tuple[tuple[str, str], ...] = ()
 ```
 
 Helpers:
@@ -186,6 +195,8 @@ Helpers:
 - `find_tool(name) -> ToolEntry` — raises `KeyError` listing available tools on miss.
 - `confusable_neighbor_for(name) -> str | None`.
 - `replace_description(name, new_description) -> ToolManifest` — returns a new manifest with the named tool's description swapped; every other tool's `description` and `input_schema` are preserved by reference.
+
+`dropped_tools` is a tuple of `(name_hint, reason)` pairs surfaced by source-walking adapters for schemas they couldn't parse statically (e.g., dicts built from function calls, or descriptions that aren't literal strings, name refs, or f-strings). Empty for JSON manifests; populated by `HermesToolSource` when an `*_SCHEMA` assignment can't be reached via pure AST. The pairs are echoed into `gate_decision.json.dataset.dropped_tools` so users see what was excluded.
 
 Rejects at load: an empty `tools` tuple, and normalization collisions (`read-file` vs `read_file`, which both lowercase + underscore-normalize to `read_file`). Sentinel matching uses original casing but lookup robustness relies on normalization being injective.
 
@@ -352,6 +363,8 @@ Runs of `evolution.tools.evolve_tool` write the same schema with four extra top-
 | `sentinel_failures` | `int \| None` | Set only on tool runs. Count of reflection-LM outputs the proposer rejected for failing sentinel preservation. A high count signals the reflection LM is struggling with the constraint and the run may be wasting iterations. |
 
 `dataset.categories` (`{"target_correct": N, "confusable_neighbor": N, "regression_detection": N}`) is populated on tool runs; on skill runs it's `{"general": N}`.
+
+`dataset.dropped_tools` is a list of `[name_hint, reason]` 2-lists naming schemas the source adapter saw but couldn't parse statically (e.g., dicts built from function calls, descriptions that aren't literal strings / name refs / f-strings). Empty `[]` on the MCP-JSON path where nothing is dropped; populated on the Hermes Python-source path so users see what was excluded from evaluation.
 
 ## metrics.json (deploy-only summary)
 

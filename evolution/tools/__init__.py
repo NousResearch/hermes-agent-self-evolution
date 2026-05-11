@@ -6,6 +6,7 @@ evolution.tools.evolve_tool`` doesn't re-import the module as both
 ``evolution.tools.evolve_tool`` and ``__main__``.
 """
 
+from evolution.tools.hermes_source import HermesToolSource
 from evolution.tools.tool_judge import (
     ToolJudgeSignature,
     make_tool_fitness_metric,
@@ -29,6 +30,7 @@ from evolution.tools.tool_source import (
 
 __all__ = [
     "BudgetAwareToolProposer",
+    "HermesToolSource",
     "MCPManifestSource",
     "SentinelParseError",
     "ToolEntry",

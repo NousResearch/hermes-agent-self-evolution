@@ -242,6 +242,20 @@ class SyntheticDatasetBuilder:
         n_confusable = round(0.30 * num_cases)
         n_regression = num_cases - n_target - n_confusable
 
+        # If no neighbor is declared for target, the confusable bucket would
+        # interpolate "None" into the LM directive, producing garbage cases.
+        # Reallocate the confusable count to target_correct so num_cases is
+        # preserved.
+        if manifest.confusable_neighbor_for(target_tool) is None and n_confusable > 0:
+            logger.warning(
+                "no confusable neighbor declared for target tool %r; "
+                "reallocating %d examples to the target_correct bucket",
+                target_tool,
+                n_confusable,
+            )
+            n_target += n_confusable
+            n_confusable = 0
+
         examples_target = self._call_bucket_with_filter(
             manifest, target_tool,
             bucket="target_correct", count=n_target,

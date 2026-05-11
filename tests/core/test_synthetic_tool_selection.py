@@ -76,6 +76,45 @@ class TestGenerateToolSelection:
                 )
 
 
+class TestNoDeclaredNeighborGuard:
+    def test_no_declared_neighbor_skips_confusable_bucket(self):
+        """When the manifest has tools but no confusable_neighbor declared for
+        the target, the confusable bucket is skipped and its allocation rolls
+        into target_correct so total cases stay correct.
+        """
+        # multiple_tools.json declares no neighbor for compute_sha256 but it's
+        # one of seven tools, so the regression bucket still has candidates.
+        manifest = ToolManifest.from_json_file(FIXTURES / "multiple_tools.json")
+        assert manifest.confusable_neighbor_for("compute_sha256") is None
+
+        # num_cases=10 → 5 target + 3 confusable + 2 regression. With the
+        # neighbor missing, n_confusable=3 rolls into target_correct so we
+        # expect 8 target + 0 confusable + 2 regression.
+        target_correct = [
+            {"task": f"task t{i}", "correct_tool": "compute_sha256"} for i in range(8)
+        ]
+        regression = [
+            {"task": f"task r{i}", "correct_tool": "read_file"} for i in range(2)
+        ]
+        responses = iter([{"tasks": target_correct}, {"tasks": regression}])
+
+        with patch.object(
+            SyntheticDatasetBuilder, "_call_lm_for_bucket",
+            side_effect=lambda *a, **k: next(responses),
+        ) as mock_call:
+            builder = SyntheticDatasetBuilder(config=MagicMock())
+            examples = builder.generate_tool_selection(
+                manifest=manifest, target_tool="compute_sha256", num_cases=10,
+            )
+
+        # Confusable bucket was skipped entirely.
+        assert mock_call.call_count == 2
+        bucket_kwargs = [call.kwargs.get("bucket") for call in mock_call.call_args_list]
+        assert "confusable_neighbor" not in bucket_kwargs
+        assert bucket_kwargs == ["target_correct", "regression_detection"]
+        assert len(examples) == 10
+
+
 class TestGenerateToolSelectionDegenerate:
     def test_single_tool_manifest_skips_neighbor_and_regression_buckets(self):
         manifest = ToolManifest.from_json_file(FIXTURES / "single_tool.json")

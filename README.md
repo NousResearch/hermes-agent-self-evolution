@@ -103,6 +103,21 @@ Reads the static MCP-shape manifest, evolves one tool's top-level `description` 
 
 At evaluation time the agent sees the full rendered manifest, so cross-tool regressions (the evolved description "stealing" selections from a confusable neighbor) surface naturally through the deploy gate.
 
+#### Hermes Agent tools
+
+For agents whose tools are defined as Python `*_SCHEMA` dicts (Hermes Agent's pattern), point `--manifest` at the tools directory:
+
+```bash
+uv run python -m evolution.tools.evolve_tool \
+    --tool read_file \
+    --manifest /path/to/hermes-agent/tools \
+    --fitness-profile balanced --iterations 5
+```
+
+The framework parses every `*_SCHEMA = {...}` and `*_SCHEMAS = [...]` declaration via AST, handles literal-string descriptions and one-hop Name references (constants like `TERMINAL_TOOL_DESCRIPTION`), and refuses to apply changes to f-string-built descriptions (rewrite the tool to a literal description first). Tools that can't be parsed statically (e.g., schemas built from function calls) appear in `gate_decision.json.dataset.dropped_tools` so you see what's excluded.
+
+With `--apply`, the evolved description is spliced into the source file's bytes at the original position — comments, formatting, and unrelated tools are untouched. Multi-line parenthesized concatenations collapse to a single triple-quoted string at the same indent.
+
 ### Mine real session history for evals
 
 ```bash

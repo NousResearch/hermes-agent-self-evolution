@@ -1,0 +1,8 @@
+{
+  "confusable_neighbors": {
+    "simple_tool": "list_tool_a",
+    "list_tool_a": "simple_tool",
+    "name_ref_tool": "multi_line_concat",
+    "multi_line_concat": "name_ref_tool"
+  }
+}
