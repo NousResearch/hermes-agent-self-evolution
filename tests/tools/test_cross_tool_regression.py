@@ -23,8 +23,9 @@ import dspy
 import pytest
 
 from evolution.core.dataset_builder import SyntheticDatasetBuilder
-from evolution.core.fitness import FitnessScore, LLMJudge
+from evolution.core.fitness import FitnessScore
 from evolution.tools.evolve_tool import evolve
+from evolution.tools.tool_judge import ToolJudge
 from evolution.tools.tool_module import ToolModule
 from evolution.tools.tool_source import ToolManifest
 
@@ -115,14 +116,9 @@ def _cross_tool_stealing_forward(self, task):
     return dspy.Prediction(chosen_tool="compute_sha256", reasoning="baseline picks wrong")
 
 
-def _scripted_judge_score(self, *, task_input, expected_behavior, agent_output, **_):
+def _scripted_judge_score(self, *, task, expected_tool, chosen_tool, reasoning, **_):
     """Binary judge: correctness=1.0 if chosen matches expected, else 0.0."""
-    chosen = ""
-    for line in agent_output.splitlines():
-        if line.startswith("chosen_tool:"):
-            chosen = line.split(":", 1)[1].strip()
-            break
-    correct = chosen == expected_behavior
+    correct = chosen_tool == expected_tool
     s = 1.0 if correct else 0.0
     return FitnessScore(
         correctness=s,
@@ -163,7 +159,7 @@ class TestCrossToolStealingRejected:
                     )
                 ),
             ),
-            patch.object(LLMJudge, "score", new=_scripted_judge_score),
+            patch.object(ToolJudge, "score", new=_scripted_judge_score),
             patch.object(ToolModule, "forward", new=_cross_tool_stealing_forward),
         ):
             result = evolve(
@@ -213,7 +209,7 @@ class TestCrossToolStealingRejected:
                     )
                 ),
             ),
-            patch.object(LLMJudge, "score", new=_scripted_judge_score),
+            patch.object(ToolJudge, "score", new=_scripted_judge_score),
             patch.object(ToolModule, "forward", new=_cross_tool_stealing_forward),
         ):
             evolve(

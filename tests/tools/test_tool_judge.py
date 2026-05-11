@@ -1,11 +1,14 @@
 """Tests for evolution.tools.tool_judge — tool-flavored judge + metric."""
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
+from evolution.core.fitness import FitnessScore
 from evolution.tools.tool_judge import (
+    ToolJudge,
     ToolJudgeSignature,
     make_tool_fitness_metric,
     _normalize_tool_name_for_match,
@@ -136,3 +139,121 @@ class TestMakeToolFitnessMetric:
         assert score == 0.0
         assert "search_files" in feedback
         judge.score.assert_not_called()
+
+    def test_judge_called_with_four_field_kwargs(self):
+        """make_tool_fitness_metric must call judge.score with the
+        ToolJudgeSignature kwargs (task/expected_tool/chosen_tool/reasoning),
+        not the legacy three-field skill-judge shape."""
+        judge = MagicMock()
+        judge.score.return_value = FitnessScore(
+            correctness=1.0,
+            procedure_following=1.0,
+            conciseness=1.0,
+            length_penalty=0.0,
+            feedback="",
+            profile="balanced",
+        )
+        metric = make_tool_fitness_metric(
+            judge=judge,
+            baseline_description="Find things.",
+            manifest=ToolManifest.from_json_file(FIXTURES / "multiple_tools.json"),
+            target_tool_name="search_files",
+            max_growth=0.2,
+        )
+
+        class FakePred:
+            chosen_tool = "search_files"
+            reasoning = "matched on filename"
+
+        class FakeGold:
+            task_input = "Find all Python files in src/"
+            expected_behavior = "search_files"
+
+        metric(FakeGold(), FakePred(), trace=None, pred_name=None, pred_trace=None)
+        judge.score.assert_called_once_with(
+            task="Find all Python files in src/",
+            expected_tool="search_files",
+            chosen_tool="search_files",
+            reasoning="matched on filename",
+        )
+
+
+class TestToolJudge:
+    def test_construction(self):
+        config = MagicMock()
+        config.fitness_profile = "balanced"
+        # Doesn't raise.
+        judge = ToolJudge(config)
+        assert judge.profile == "balanced"
+        assert judge.config is config
+
+    def test_construction_rejects_unknown_profile(self):
+        config = MagicMock()
+        config.fitness_profile = "not_a_profile"
+        with pytest.raises(ValueError, match="Unknown fitness_profile"):
+            ToolJudge(config)
+
+    def test_score_returns_fitness_score_shape(self):
+        config = MagicMock()
+        config.fitness_profile = "balanced"
+        config.eval_model = "openai/gpt-4.1-mini"
+        judge = ToolJudge(config)
+
+        # Mock the inner ChainOfThought judge to return scripted scores.
+        judge.judge = MagicMock(
+            return_value=SimpleNamespace(
+                correctness="0.9",
+                procedure_following="0.8",
+                conciseness="0.7",
+                feedback="reasoning was a bit verbose",
+            )
+        )
+
+        result = judge.score(
+            task="Find all Python files in src/",
+            expected_tool="search_files",
+            chosen_tool="search_files",
+            reasoning="matched on filename glob",
+        )
+
+        assert isinstance(result, FitnessScore)
+        assert result.correctness == 0.9
+        assert result.procedure_following == 0.8
+        assert result.conciseness == 0.7
+        assert result.length_penalty == 0.0
+        assert result.feedback == "reasoning was a bit verbose"
+        assert result.profile == "balanced"
+
+    def test_score_does_not_accept_artifact_size_or_max_size(self):
+        """The vestigial length-penalty params are dropped — the tool path
+        never populated them, and length pressure lives in the proposer."""
+        config = MagicMock()
+        config.fitness_profile = "balanced"
+        config.eval_model = "openai/gpt-4.1-mini"
+        judge = ToolJudge(config)
+        judge.judge = MagicMock(
+            return_value=SimpleNamespace(
+                correctness="1.0",
+                procedure_following="1.0",
+                conciseness="1.0",
+                feedback="",
+            )
+        )
+
+        with pytest.raises(TypeError):
+            judge.score(
+                task="t",
+                expected_tool="search_files",
+                chosen_tool="search_files",
+                reasoning="r",
+                artifact_size=100,
+            )
+
+        with pytest.raises(TypeError):
+            judge.score(
+                task="t",
+                expected_tool="search_files",
+                chosen_tool="search_files",
+                reasoning="r",
+                max_size=200,
+            )

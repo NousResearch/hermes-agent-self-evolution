@@ -33,7 +33,6 @@ from evolution.core.dataset_builder import (
     SyntheticDatasetBuilder,
     split_examples,
 )
-from evolution.core.fitness import LLMJudge
 from evolution.core.lm_timing_callback import (
     COST_LEDGER,
     LMTimingCallback,
@@ -47,7 +46,7 @@ from evolution.core.quality_gate import (
 )
 from evolution.core.stats import paired_bootstrap
 from evolution.skills.knee_point import CandidatePick, select_knee_point
-from evolution.tools.tool_judge import make_tool_fitness_metric
+from evolution.tools.tool_judge import ToolJudge, make_tool_fitness_metric
 from evolution.tools.tool_module import (
     ToolModule,
     _extract_description_from_sentinels,
@@ -379,7 +378,7 @@ def evolve(
             callbacks=[LMTimingCallback()],
         )
 
-        judge = LLMJudge(config)
+        judge = ToolJudge(config)
         metric = make_tool_fitness_metric(
             judge=judge,
             baseline_description=baseline_description,

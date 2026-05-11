@@ -8,7 +8,7 @@ burning a real LM run:
 2. `dspy.GEPA` — a fake optimizer whose `compile()` returns a
    pre-built `ToolModule` carrying the desired evolved description plus
    a `detailed_results` namespace so the knee-point path runs.
-3. `LLMJudge.score` — returns scripted `FitnessScore`s. The metric
+3. `ToolJudge.score` — returns scripted `FitnessScore`s. The metric
    feeds these into the GEPA-shaped prediction the orchestrator's
    holdout-eval consumes.
 4. `ToolModule.forward` — short-circuits the inner LM call so the
@@ -31,8 +31,9 @@ import dspy
 import pytest
 
 from evolution.core.dataset_builder import SyntheticDatasetBuilder
-from evolution.core.fitness import FitnessScore, LLMJudge
+from evolution.core.fitness import FitnessScore
 from evolution.tools.evolve_tool import _description_from_predictor, evolve
+from evolution.tools.tool_judge import ToolJudge
 from evolution.tools.tool_module import ToolModule
 from evolution.tools.tool_source import ToolManifest
 
@@ -113,17 +114,10 @@ def _build_evolved_module(manifest: ToolManifest, description: str) -> ToolModul
 
 
 def _scripted_judge_score(*, target_score: float, regression_score: float):
-    """Build a side_effect for LLMJudge.score scripted by target tool."""
+    """Build a side_effect for ToolJudge.score scripted by target tool."""
 
-    def _score(self, *, task_input, expected_behavior, agent_output, **_):
-        # expected_behavior carries the correct_tool name for tool-selection examples.
-        # agent_output contains "chosen_tool: <name>\nreasoning: <text>"
-        chosen = ""
-        for line in agent_output.splitlines():
-            if line.startswith("chosen_tool:"):
-                chosen = line.split(":", 1)[1].strip()
-                break
-        correct = chosen == expected_behavior
+    def _score(self, *, task, expected_tool, chosen_tool, reasoning, **_):
+        correct = chosen_tool == expected_tool
         score = target_score if correct else regression_score
         return FitnessScore(
             correctness=score,
@@ -193,7 +187,7 @@ class TestGateDecisionSchemaOnDeploy:
                 ),
             ),
             patch.object(
-                LLMJudge,
+                ToolJudge,
                 "score",
                 new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
             ),
@@ -257,7 +251,7 @@ class TestApplyOverwritesSourceManifest:
                 ),
             ),
             patch.object(
-                LLMJudge,
+                ToolJudge,
                 "score",
                 new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
             ),
@@ -310,7 +304,7 @@ class TestPatchEmitsUnifiedDiff:
                 ),
             ),
             patch.object(
-                LLMJudge,
+                ToolJudge,
                 "score",
                 new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
             ),
@@ -368,7 +362,7 @@ class TestDefaultWritesEvolvedManifestToRunDir:
                 ),
             ),
             patch.object(
-                LLMJudge,
+                ToolJudge,
                 "score",
                 new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
             ),
@@ -424,7 +418,7 @@ class TestFileHandlerLifecycle:
                     ),
                 ),
                 patch.object(
-                    LLMJudge,
+                    ToolJudge,
                     "score",
                     new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
                 ),

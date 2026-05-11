@@ -14,7 +14,13 @@ from typing import Any, Callable, Optional
 
 import dspy
 
-from evolution.core.fitness import _augment_feedback_with_pred_trace
+from evolution.core.config import EvolutionConfig
+from evolution.core.fitness import (
+    FitnessScore,
+    _PROFILE_WEIGHTS,
+    _augment_feedback_with_pred_trace,
+    _clamp_to_unit,
+)
 from evolution.tools.tool_source import ToolManifest
 
 logger = logging.getLogger(__name__)
@@ -39,6 +45,62 @@ class ToolJudgeSignature(dspy.Signature):
     feedback: str = dspy.OutputField(
         desc="One-sentence diagnosis if any dimension is below 1.0; empty otherwise"
     )
+
+
+class ToolJudge:
+    """LLM-as-judge scorer for tool-selection outputs.
+
+    Mirrors the skill-shaped judge's contract but takes the four
+    tool-selection input fields (``task``, ``expected_tool``,
+    ``chosen_tool``, ``reasoning``) instead of the three skill-shaped
+    fields. Returns a ``FitnessScore`` with ``length_penalty=0.0`` —
+    length pressure on the tool path lives in the proposer's
+    budget-aware slope, not the judge.
+    """
+
+    def __init__(self, config: EvolutionConfig):
+        if config.fitness_profile not in _PROFILE_WEIGHTS:
+            raise ValueError(
+                f"Unknown fitness_profile {config.fitness_profile!r}; "
+                f"expected one of {sorted(_PROFILE_WEIGHTS)}"
+            )
+        self.config = config
+        self.profile = config.fitness_profile
+        self.judge = dspy.ChainOfThought(ToolJudgeSignature)
+
+    def score(
+        self,
+        task: str,
+        expected_tool: str,
+        chosen_tool: str,
+        reasoning: str,
+    ) -> FitnessScore:
+        """Score a tool-selection decision using LLM-as-judge."""
+
+        lm = dspy.LM(
+            self.config.eval_model,
+            temperature=0.0,
+            max_tokens=4000,
+            request_timeout=60,
+            num_retries=5,
+        )
+
+        with dspy.context(lm=lm):
+            result = self.judge(
+                task=task,
+                expected_tool=expected_tool,
+                chosen_tool=chosen_tool,
+                reasoning=reasoning,
+            )
+
+        return FitnessScore(
+            correctness=_clamp_to_unit(result.correctness),
+            procedure_following=_clamp_to_unit(result.procedure_following),
+            conciseness=_clamp_to_unit(result.conciseness),
+            length_penalty=0.0,
+            feedback=str(result.feedback),
+            profile=self.profile,
+        )
 
 
 def _normalize_tool_name_for_match(text: str) -> str:
@@ -124,11 +186,10 @@ def make_tool_fitness_metric(
             )
 
         score = judge.score(
-            task_input=gold.task_input,
-            expected_behavior=gold.expected_behavior,
-            agent_output=f"chosen_tool: {chosen}\nreasoning: {reasoning}",
-            artifact_size=None,
-            max_size=None,
+            task=gold.task_input,
+            expected_tool=gold.expected_behavior,
+            chosen_tool=chosen,
+            reasoning=reasoning,
         )
         feedback = _augment_feedback_with_pred_trace(
             score.feedback,

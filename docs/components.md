@@ -241,6 +241,7 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 
 **Public surface:**
 - `ToolJudgeSignature` — DSPy signature with inputs `task`, `expected_tool`, `chosen_tool`, `reasoning`; outputs `correctness`, `procedure_following`, `conciseness`, `feedback` (all typed `str`, same rationale as `JudgeSignature`).
+- `ToolJudge(config)` — LLM-as-judge wrapper around `ToolJudgeSignature`. `score(task, expected_tool, chosen_tool, reasoning) -> FitnessScore`. Mirrors `LLMJudge`'s contract but takes the four tool-selection input fields and always returns `length_penalty=0.0` (length pressure lives in the proposer's slope, not the judge).
 - `make_tool_fitness_metric(judge, baseline_description, manifest, target_tool_name, max_growth, text_extractor=None) -> callable` — returns the GEPA-shaped 5-arg metric.
 
 **Implementation note (load-bearing):** the metric parses `pred.chosen_tool` with generous normalization before reaching the judge — lowercased, stripped of quotes/backticks/whitespace, hyphens replaced with underscores. Short-circuits to `dspy.Prediction(score=0.0, feedback=...)` for unparseable outputs (blank or contains internal whitespace) and for outputs that parse to a name not in the manifest. The judge is only called on a parseable, in-manifest choice.
@@ -259,7 +260,7 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 1. Load manifest from JSON + pick target tool (replaces "find + load SKILL.md").
 2. Build eval dataset via `SyntheticDatasetBuilder.generate_tool_selection` (three buckets: `target_correct`, `confusable_neighbor`, `regression_detection`).
 3. Validate baseline static constraints (warn-only).
-4. Configure DSPy LM + `LMTimingCallback`; build `LLMJudge` + tool fitness metric.
+4. Configure DSPy LM + `LMTimingCallback`; build `ToolJudge` + tool fitness metric.
 5. Run GEPA with `BudgetAwareToolProposer` as `instruction_proposer`.
 5b. Knee-point Pareto selection — `text_extractor` measures description length, not full rendered-manifest length, so parsimony tracks the artifact the user actually evolves.
 6. Reassemble evolved manifest (`ToolManifest.replace_description`).
