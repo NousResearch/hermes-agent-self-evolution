@@ -210,11 +210,19 @@ class SyntheticDatasetBuilder:
     ) -> list[EvalExample]:
         """Generate a tool-selection eval dataset via three per-bucket LM calls.
 
-        Buckets:
+        Buckets (when ``config.enable_confusable_bucket`` is True):
         - 50% target-correct: target tool is the unambiguous best choice.
         - 30% confusable-neighbor: target competes with the manifest's declared
           near-neighbor (read from manifest.confusable_neighbor_for(target)).
         - 20% regression-detection: some other tool is correct.
+
+        Default (flag off): the confusable bucket's share rolls into
+        target-correct, producing an 80/0/20 split. The bucket is opt-in;
+        empirical evidence has not justified its share of the eval budget.
+
+        Safety net with the flag on: if the manifest declares no confusable
+        neighbor for the target, the bucket would interpolate "None" into the
+        LM directive; we reallocate the same way and log a WARNING.
 
         Degenerate manifest (only the target tool): the other two buckets are
         skipped with a WARNING; all num_cases come from the target-correct bucket.
@@ -242,11 +250,17 @@ class SyntheticDatasetBuilder:
         n_confusable = round(0.30 * num_cases)
         n_regression = num_cases - n_target - n_confusable
 
-        # If no neighbor is declared for target, the confusable bucket would
-        # interpolate "None" into the LM directive, producing garbage cases.
-        # Reallocate the confusable count to target_correct so num_cases is
-        # preserved.
-        if manifest.confusable_neighbor_for(target_tool) is None and n_confusable > 0:
+        if not self.config.enable_confusable_bucket and n_confusable > 0:
+            logger.info(
+                "confusable bucket disabled; reallocating %d examples to "
+                "the target_correct bucket",
+                n_confusable,
+            )
+            n_target += n_confusable
+            n_confusable = 0
+        elif manifest.confusable_neighbor_for(target_tool) is None and n_confusable > 0:
+            # Flag on but the manifest declares no neighbor: the bucket would
+            # interpolate "None" into the LM directive, producing garbage cases.
             logger.warning(
                 "no confusable neighbor declared for target tool %r; "
                 "reallocating %d examples to the target_correct bucket",

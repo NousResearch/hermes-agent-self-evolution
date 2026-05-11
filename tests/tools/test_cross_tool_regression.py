@@ -140,9 +140,10 @@ class TestCrossToolStealingRejected:
         manifest = ToolManifest.from_json_file(temp_manifest)
         run_dir = tmp_path / "run"
 
-        # 20-example holdout split: with bucket proportions 50/30/20 at N=40,
-        # buckets are 20/12/8 → holdout (~half) ~10/6/4. Enough confusable
-        # examples to drag the aggregate below baseline once stolen.
+        # 20-example holdout split: with bucket proportions 50/30/20 at N=40
+        # (the explicit opt-in via enable_confusable_bucket=True), buckets are
+        # 20/12/8 → holdout (~half) ~10/6/4. Enough confusable examples to
+        # drag the aggregate below baseline once stolen.
         with (
             patch.object(
                 SyntheticDatasetBuilder,
@@ -168,6 +169,7 @@ class TestCrossToolStealingRejected:
                 iterations=1,
                 eval_dataset_size=40,
                 holdout_ratio=0.5,
+                enable_confusable_bucket=True,
                 output_dir=run_dir,
             )
 
@@ -218,6 +220,7 @@ class TestCrossToolStealingRejected:
                 iterations=1,
                 eval_dataset_size=40,
                 holdout_ratio=0.5,
+                enable_confusable_bucket=True,
                 output_dir=run_dir,
             )
 

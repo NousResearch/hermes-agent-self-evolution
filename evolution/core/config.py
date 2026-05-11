@@ -68,6 +68,10 @@ class EvolutionConfig:
     # gate on. Raise eval_dataset_size or holdout_ratio rather than override.
     min_holdout_size: int = 10
 
+    # Off by default: the tool-selection dataset's confusable_neighbor bucket
+    # is opt-in. When False the bucket's allocation rolls into target_correct.
+    enable_confusable_bucket: bool = False
+
     run_pytest: bool = True
     run_tblite: bool = False
     tblite_regression_threshold: float = 0.02

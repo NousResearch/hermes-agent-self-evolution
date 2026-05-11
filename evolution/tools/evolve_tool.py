@@ -255,6 +255,7 @@ def evolve(
     seed: int = 42,
     eval_dataset_size: int = 150,
     holdout_ratio: float = 0.5,
+    enable_confusable_bucket: bool = False,
     output_dir: Optional[Path] = None,
     optimizer_model: str = "openai/gpt-4.1",
     reflection_model: Optional[str] = "openai/gpt-5-mini",
@@ -303,6 +304,7 @@ def evolve(
         fitness_profile=fitness_profile,
         eval_dataset_size=eval_dataset_size,
         holdout_ratio=holdout_ratio,
+        enable_confusable_bucket=enable_confusable_bucket,
     )
 
     console.print(
@@ -478,6 +480,7 @@ def evolve(
             "holdout_ratio": config.holdout_ratio,
             "quality_gate_preset": quality_gate,
             "fitness_profile": fitness_profile,
+            "enable_confusable_bucket": config.enable_confusable_bucket,
         }
         tool_payload_fields = {
             "artifact_type": "tool_description",
@@ -732,6 +735,17 @@ def evolve(
     default=False,
     help="On deploy, emit a unified diff of the manifest changes to stdout.",
 )
+@click.option(
+    "--enable-confusable-bucket",
+    "enable_confusable_bucket",
+    is_flag=True,
+    default=False,
+    help=(
+        "Allocate 30% of the synthetic eval dataset to the "
+        "confusable_neighbor bucket. Off by default; when off, the share "
+        "rolls into target_correct."
+    ),
+)
 def main(
     tool_name: str,
     manifest_path: Path,
@@ -742,6 +756,7 @@ def main(
     seed: int,
     apply_flag: bool,
     patch_flag: bool,
+    enable_confusable_bucket: bool,
 ) -> None:
     """Evolve one tool description in an MCP manifest using DSPy + GEPA."""
     if apply_flag and patch_flag:
@@ -756,6 +771,7 @@ def main(
         apply=apply_flag,
         patch=patch_flag,
         seed=seed,
+        enable_confusable_bucket=enable_confusable_bucket,
     )
 
 

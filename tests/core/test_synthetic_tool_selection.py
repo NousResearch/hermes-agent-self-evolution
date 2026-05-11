@@ -35,7 +35,7 @@ class TestGenerateToolSelection:
             SyntheticDatasetBuilder, "_call_lm_for_bucket",
             side_effect=lambda *a, **k: next(responses),
         ):
-            builder = SyntheticDatasetBuilder(config=MagicMock())
+            builder = SyntheticDatasetBuilder(config=MagicMock(enable_confusable_bucket=True))
             examples = builder.generate_tool_selection(
                 manifest=manifest, target_tool="search_files", num_cases=10,
             )
@@ -64,7 +64,7 @@ class TestGenerateToolSelection:
             SyntheticDatasetBuilder, "_call_lm_for_bucket",
             side_effect=lambda *a, **k: next(responses),
         ):
-            builder = SyntheticDatasetBuilder(config=MagicMock())
+            builder = SyntheticDatasetBuilder(config=MagicMock(enable_confusable_bucket=True))
             examples = builder.generate_tool_selection(
                 manifest=manifest, target_tool="search_files", num_cases=3,
             )
@@ -74,6 +74,40 @@ class TestGenerateToolSelection:
                 assert tool.name.lower() not in e.task_input.lower(), (
                     f"task {e.task_input!r} contains tool name {tool.name!r}"
                 )
+
+
+class TestConfusableBucketDefaultOff:
+    def test_off_by_default_reallocates_confusable_to_target(self):
+        """When the flag is off, the confusable bucket's share rolls into
+        target_correct even on a manifest that DOES declare a neighbor.
+        Proves the default path is independent of the no-neighbor safety net.
+        """
+        manifest = ToolManifest.from_json_file(FIXTURES / "multiple_tools.json")
+        assert manifest.confusable_neighbor_for("search_files") is not None
+
+        # num_cases=10 → without the flag, expect 8 target + 0 confusable + 2 regression.
+        target_correct = [
+            {"task": f"task t{i}", "correct_tool": "search_files"} for i in range(8)
+        ]
+        regression = [
+            {"task": f"task r{i}", "correct_tool": "read_file"} for i in range(2)
+        ]
+        responses = iter([{"tasks": target_correct}, {"tasks": regression}])
+
+        with patch.object(
+            SyntheticDatasetBuilder, "_call_lm_for_bucket",
+            side_effect=lambda *a, **k: next(responses),
+        ) as mock_call:
+            builder = SyntheticDatasetBuilder(config=MagicMock(enable_confusable_bucket=False))
+            examples = builder.generate_tool_selection(
+                manifest=manifest, target_tool="search_files", num_cases=10,
+            )
+
+        bucket_kwargs = [call.kwargs.get("bucket") for call in mock_call.call_args_list]
+        assert bucket_kwargs == ["target_correct", "regression_detection"]
+        assert len(examples) == 10
+        assert len([e for e in examples if e.category == "target_correct"]) == 8
+        assert len([e for e in examples if e.category == "regression_detection"]) == 2
 
 
 class TestNoDeclaredNeighborGuard:
@@ -102,7 +136,7 @@ class TestNoDeclaredNeighborGuard:
             SyntheticDatasetBuilder, "_call_lm_for_bucket",
             side_effect=lambda *a, **k: next(responses),
         ) as mock_call:
-            builder = SyntheticDatasetBuilder(config=MagicMock())
+            builder = SyntheticDatasetBuilder(config=MagicMock(enable_confusable_bucket=True))
             examples = builder.generate_tool_selection(
                 manifest=manifest, target_tool="compute_sha256", num_cases=10,
             )
@@ -125,7 +159,7 @@ class TestGenerateToolSelectionDegenerate:
             SyntheticDatasetBuilder, "_call_lm_for_bucket",
             side_effect=lambda *a, **k: next(responses),
         ):
-            builder = SyntheticDatasetBuilder(config=MagicMock())
+            builder = SyntheticDatasetBuilder(config=MagicMock(enable_confusable_bucket=True))
             examples = builder.generate_tool_selection(
                 manifest=manifest, target_tool="echo", num_cases=10,
             )
@@ -153,7 +187,7 @@ class TestGenerateToolSelectionDegenerate:
             SyntheticDatasetBuilder, "_call_lm_for_bucket",
             side_effect=lambda *a, **k: next(responses),
         ):
-            builder = SyntheticDatasetBuilder(config=MagicMock())
+            builder = SyntheticDatasetBuilder(config=MagicMock(enable_confusable_bucket=True))
             with pytest.raises(RuntimeError, match="0 examples"):
                 builder.generate_tool_selection(
                     manifest=manifest, target_tool="search_files", num_cases=10,

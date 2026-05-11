@@ -204,6 +204,7 @@ class TestGateDecisionSchemaOnDeploy:
                 eval_dataset_size=30,
                 holdout_ratio=0.5,
                 quality_gate="non-inferiority",
+                enable_confusable_bucket=True,
                 output_dir=run_dir,
             )
 
@@ -226,6 +227,10 @@ class TestGateDecisionSchemaOnDeploy:
             "knee_point", "dataset", "run_inputs",
         ):
             assert required in payload, f"missing {required}"
+
+        # The run's bucket-mix policy is recorded so downstream analyses
+        # can distinguish "flag off" from "no neighbor declared".
+        assert payload["run_inputs"]["enable_confusable_bucket"] is True
 
         # The result dict echoes the deploy decision.
         assert result["baseline_score"] < result["evolved_score"]
@@ -268,6 +273,7 @@ class TestApplyOverwritesSourceManifest:
                 eval_dataset_size=30,
                 holdout_ratio=0.5,
                 quality_gate="non-inferiority",
+                enable_confusable_bucket=True,
                 output_dir=run_dir,
                 apply=True,
             )
@@ -321,6 +327,7 @@ class TestPatchEmitsUnifiedDiff:
                 eval_dataset_size=30,
                 holdout_ratio=0.5,
                 quality_gate="non-inferiority",
+                enable_confusable_bucket=True,
                 output_dir=run_dir,
                 patch=True,
             )
@@ -379,6 +386,7 @@ class TestDefaultWritesEvolvedManifestToRunDir:
                 eval_dataset_size=30,
                 holdout_ratio=0.5,
                 quality_gate="non-inferiority",
+                enable_confusable_bucket=True,
                 output_dir=run_dir,
             )
 
@@ -435,6 +443,7 @@ class TestFileHandlerLifecycle:
                     eval_dataset_size=30,
                     holdout_ratio=0.5,
                     quality_gate="non-inferiority",
+                    enable_confusable_bucket=True,
                     output_dir=run_dir,
                 )
 
@@ -517,6 +526,7 @@ class TestRelativeManifestPath:
                 eval_dataset_size=30,
                 holdout_ratio=0.5,
                 quality_gate="non-inferiority",
+                enable_confusable_bucket=True,
                 output_dir=run_dir,
             )
 
