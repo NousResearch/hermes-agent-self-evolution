@@ -22,6 +22,7 @@ Together these let `evolve()` run end-to-end against the
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -31,7 +32,7 @@ import pytest
 
 from evolution.core.dataset_builder import SyntheticDatasetBuilder
 from evolution.core.fitness import FitnessScore, LLMJudge
-from evolution.tools.evolve_tool import evolve
+from evolution.tools.evolve_tool import _description_from_predictor, evolve
 from evolution.tools.tool_module import ToolModule
 from evolution.tools.tool_source import ToolManifest
 
@@ -395,3 +396,81 @@ class TestDefaultWritesEvolvedManifestToRunDir:
 
         # The source must be untouched byte-for-byte.
         assert temp_manifest.read_text() == original_source
+
+
+class TestFileHandlerLifecycle:
+    """The per-run FileHandler attached to the root logger must be removed
+    on every exit path. Two evolve() calls in one process used to leak two
+    handlers; the try/finally wrap inside evolve() keeps the count stable.
+    """
+
+    def test_evolve_does_not_leak_file_handlers(
+        self, temp_manifest: Path, tmp_path: Path
+    ):
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        before = len(logging.getLogger().handlers)
+
+        def _run_once(run_dir: Path) -> None:
+            with (
+                patch.object(
+                    SyntheticDatasetBuilder,
+                    "_call_lm_for_bucket",
+                    side_effect=_bucket_side_effect(15, 9, 6),
+                ),
+                patch(
+                    "evolution.tools.evolve_tool.dspy.GEPA",
+                    new=_make_fake_gepa(
+                        _build_evolved_module(manifest, EVOLVED_DESCRIPTION)
+                    ),
+                ),
+                patch.object(
+                    LLMJudge,
+                    "score",
+                    new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
+                ),
+                patch.object(
+                    ToolModule,
+                    "forward",
+                    new=_scripted_module_forward(expected_tool_for_evolved="search_files"),
+                ),
+            ):
+                evolve(
+                    tool_name="search_files",
+                    manifest_path=temp_manifest,
+                    iterations=1,
+                    eval_dataset_size=30,
+                    holdout_ratio=0.5,
+                    quality_gate="non-inferiority",
+                    output_dir=run_dir,
+                )
+
+        _run_once(tmp_path / "run_0")
+        _run_once(tmp_path / "run_1")
+
+        after = len(logging.getLogger().handlers)
+        assert after == before, (
+            f"evolve() leaked {after - before} root-logger handler(s) across two calls"
+        )
+
+
+class TestDescriptionExtractorSentinelFailure:
+    """The latent path inside `_description_from_predictor` catches
+    SentinelParseError and logs a warning; both names must be in scope.
+    """
+
+    def test_description_extractor_handles_sentinel_failure_without_NameError(
+        self, caplog: pytest.LogCaptureFixture
+    ):
+        fake_predictor = SimpleNamespace(
+            signature=SimpleNamespace(instructions="no sentinels here")
+        )
+
+        with caplog.at_level(logging.WARNING, logger="evolution.tools.evolve_tool"):
+            result = _description_from_predictor(fake_predictor, "search_files")
+
+        assert result == ""
+        assert any(
+            "could not extract description from predictor instructions"
+            in record.getMessage()
+            for record in caplog.records
+        ), f"expected warning not found in {[r.getMessage() for r in caplog.records]}"

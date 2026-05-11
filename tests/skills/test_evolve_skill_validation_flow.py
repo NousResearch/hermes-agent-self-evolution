@@ -8,6 +8,7 @@ order, right outputs persisted) without exercising the LM-heavy parts.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -29,9 +30,10 @@ from evolution.skills.evolve_skill import (
     _resolve_bap_safety_margin,
     _resolve_proposer_mode,
     _write_gate_decision,
+    evolve as evolve_skill,
     main as evolve_skill_cli,
 )
-from evolution.core.dataset_builder import EvalDataset, EvalExample
+from evolution.core.dataset_builder import EvalDataset, EvalExample, SyntheticDatasetBuilder
 from evolution.skills.knee_point import CandidatePick
 
 
@@ -817,3 +819,62 @@ class TestDeployAutomation:
 
         assert ok is False
         assert cache_path.read_text() == "original"
+
+
+class TestFileHandlerLifecycle:
+    """The per-run FileHandler attached to the root logger must be removed
+    on every exit path. Two evolve_skill.evolve() calls in one process used
+    to leak two handlers; the try/finally wrap inside evolve() keeps the
+    count stable across runs that exit via exception, return, or sys.exit.
+    """
+
+    def _seed_skill(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "skills" / "test-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: test-skill\ndescription: a test skill for handler-lifecycle\n---\n"
+            "Body content."
+        )
+        os.environ["SKILL_SOURCES_HERMES_REPO"] = str(tmp_path)
+
+    def test_evolve_does_not_leak_file_handlers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Drive evolve() through its exception-exit path to verify the
+        try/finally cleanup runs even when the body raises.
+
+        The skill side has no pre-existing end-to-end mocked test pattern to
+        mirror, so this exercises the exception path rather than the deploy
+        path. The exception-exit path is the more direct assertion for the
+        try/finally contract — only try/finally guarantees cleanup on raise.
+        """
+        self._seed_skill(tmp_path)
+        # Run evolve() from inside tmp_path so its "output/" dir doesn't
+        # collide with the repo's checked-in `output/` directory.
+        monkeypatch.chdir(tmp_path)
+
+        before = len(logging.getLogger().handlers)
+
+        def _raise_after_handler_attach(self, *args, **kwargs):
+            # Triggered after the FileHandler is attached but before any
+            # real LM work. The try/finally must still clean up.
+            raise RuntimeError("synthetic failure for handler-leak test")
+
+        for _ in range(2):
+            with patch.object(
+                SyntheticDatasetBuilder,
+                "generate",
+                _raise_after_handler_attach,
+            ):
+                with pytest.raises(RuntimeError, match="synthetic failure"):
+                    evolve_skill(
+                        skill_name="test-skill",
+                        iterations=1,
+                        eval_source="synthetic",
+                    )
+
+        after = len(logging.getLogger().handlers)
+        assert after == before, (
+            f"evolve_skill.evolve() leaked {after - before} root-logger "
+            f"handler(s) across two calls"
+        )
