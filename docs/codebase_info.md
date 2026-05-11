@@ -49,13 +49,19 @@ evolution/
 │   ├── lm_timing_callback.py            # LM-call observability
 │   ├── skill_sources.py                 # SkillSource protocol + 3 implementations
 │   └── stats.py                         # paired_bootstrap CI
-├── skills/                              # Tier 1: skill-file evolution (only tier implemented)
+├── skills/                              # Tier 1: skill-file evolution
 │   ├── budget_aware_proposer.py         # custom GEPA instruction proposer w/ char budget
 │   ├── evolve_skill.py                  # main CLI + orchestration
 │   ├── knee_point.py                    # Pareto-frontier knee-point selector
 │   └── skill_module.py                  # DSPy module wrapping a SKILL.md
+├── tools/                               # Tier 2: tool-description evolution
+│   ├── evolve_tool.py                   # CLI + orchestration
+│   ├── tool_source.py                   # ToolSource Protocol + MCPManifestSource + data model
+│   ├── hermes_source.py                 # AST adapter for Hermes-style *_SCHEMA Python files
+│   ├── tool_module.py                   # DSPy module rendering a sentinel-wrapped manifest
+│   ├── tool_proposer.py                 # sentinel-preserving GEPA instruction proposer
+│   └── tool_judge.py                    # tool-flavored LLMJudge + GEPA-shaped metric
 ├── prompts/                             # Tier 3: planned, empty package
-├── tools/                               # Tier 2: planned, empty package
 ├── code/                                # Tier 4: planned, empty package
 └── monitor/                             # planned, empty package
 ```
@@ -105,12 +111,12 @@ The README's table summarizes intent; reality:
 | Tier | Target | Engine | Status |
 |---|---|---|---|
 | 1 | Skill files (SKILL.md) | DSPy + GEPA | ✅ implemented in `evolution/skills/` |
-| 2 | Tool descriptions | DSPy + GEPA | 🔲 `evolution/tools/` package exists, empty |
+| 2 | Tool descriptions | DSPy + GEPA | ✅ implemented in `evolution/tools/` — MCP-JSON and Hermes-Python-AST adapters; one target tool per run |
 | 3 | System prompt sections | DSPy + GEPA | 🔲 `evolution/prompts/` package exists, empty |
 | 4 | Tool implementation code | Darwinian Evolver | 🔲 `evolution/code/` package exists, empty; `[darwinian]` extra reserves the dep |
 | 5 | Continuous improvement loop | Automated pipeline | 🔲 `evolution/monitor/` package exists, empty |
 
-Only Tier 1 has been built. The other packages exist as empty stubs to anchor the planned architecture.
+Tiers 1 and 2 are built. Tier 3-5 packages exist as empty stubs to anchor the planned architecture. See PLAN.md's per-phase "Deviations from plan" subsections for where the built tiers diverge from the original spec.
 
 ## Where state lives at runtime
 

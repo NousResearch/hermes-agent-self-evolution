@@ -29,7 +29,7 @@ Framework-agnostic at the optimizer layer: any agent that emits SKILL.md files (
 
 For *why this differs from raw DSPy + GEPA* (the small-N selection layer, the paired-bootstrap deploy gate, the composite judge fitness) see [docs/framework_advantages.md](docs/framework_advantages.md).
 
-Only **Tier 1 (skill files)** is implemented. Tiers 2-5 (tool descriptions, prompt sections, code, continuous loop) exist as empty package stubs. See `PLAN.md`.
+Tiers 1 and 2 are implemented: skill files in `evolution/skills/`, tool descriptions in `evolution/tools/` (with `MCPManifestSource` for MCP `list_tools()`-shape JSON and `HermesToolSource` for Python `*_SCHEMA` declarations resolved via AST). Tiers 3-5 (prompt sections, code, continuous loop) exist as empty package stubs. See `PLAN.md` for each phase's "Deviations from plan" subsection.
 
 ## Repo layout at a glance
 
@@ -39,17 +39,18 @@ Only **Tier 1 (skill files)** is implemented. Tiers 2-5 (tool descriptions, prom
 agent-self-evolution/
 ├── evolution/           # the package (only thing installed into the venv)
 │   ├── core/            # framework-agnostic infrastructure
-│   ├── skills/          # Tier 1 — skill-file evolution (only tier built)
+│   ├── skills/          # Tier 1 — skill-file evolution
+│   ├── tools/           # Tier 2 — tool-description evolution
 │   ├── prompts/         # Tier 3 stub
-│   ├── tools/           # Tier 2 stub
 │   ├── code/            # Tier 4 stub
 │   └── monitor/         # Tier 5 stub
 ├── tests/
 │   ├── core/            # mirrors evolution/core/
-│   └── skills/          # mirrors evolution/skills/
+│   ├── skills/          # mirrors evolution/skills/
+│   └── tools/           # mirrors evolution/tools/
 ├── datasets/
 │   ├── skills/<name>/   # train.jsonl, val.jsonl, holdout.jsonl
-│   └── tools/           # empty (planned)
+│   └── tools/           # tool eval data is generated per-run, not cached here
 ├── output/<skill>/<ts>/ # per-run artifacts (git-ignored)
 ├── experiments/         # spike writeups (markdown)
 ├── reports/             # validation PDFs + reports/<phase>_prose.yaml
@@ -239,7 +240,7 @@ PR description template (loose, but the existing PRs follow it):
 | Tier | Target | Status |
 |---|---|---|
 | 1 | Skill files (`SKILL.md`) | ✅ implemented (`evolution/skills/`) |
-| 2 | Tool descriptions | 🔲 stub (`evolution/tools/`) |
+| 2 | Tool descriptions | ✅ implemented (`evolution/tools/`) — MCP-JSON and Hermes-Python-AST adapters; one target tool per run |
 | 3 | System prompt sections | 🔲 stub (`evolution/prompts/`) |
 | 4 | Tool implementation code | 🔲 stub (`evolution/code/`); needs `[darwinian]` extra |
 | 5 | Continuous improvement loop | 🔲 stub (`evolution/monitor/`) |

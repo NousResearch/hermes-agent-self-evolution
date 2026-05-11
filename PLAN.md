@@ -263,6 +263,8 @@ If a phase doesn't produce meaningful improvements (evolved variants aren't bett
 
 ### Phase 1: Skill Evolution via DSPy+GEPA (Core Capability)
 
+**Status:** ✅ Complete. See "Deviations from plan" at the end of this section.
+
 **Goal:** The agent can optimize any SKILL.md file by running it through GEPA.
 
 **Week 1-2 (Build):**
@@ -366,9 +368,20 @@ The agent can self-invoke optimization:
 → Proposes the improved skill for human approval
 ```
 
+**Deviations from plan (Phase 1):**
+
+1. **Benchmark gating (TBLite/YC-Bench) was not wired.** The plan made "TBLite within 2%" the next-phase gate. The framework went framework-agnostic (any agent that emits `SKILL.md`), so the Hermes-specific benchmark suites no longer apply uniformly. The deploy gate is a paired-bootstrap CI on a held-out split of the skill's own eval set (`evolution/core/stats.py` + `_check_growth_with_quality_gate`), which catches per-run regression risk without coupling to one agent's benchmark infrastructure.
+2. **Eval datasets are larger than the planned 15–30 examples.** `eval_dataset_size=150` is the current default, sized so the bootstrap CI half-width can detect ±2% effects. Rationale and the supporting study live in `reports/calibration_findings.md`.
+3. **Source D (skill-specific auto-evaluation) was not built.** Synthetic, sessiondb-mining, and golden loaders are wired; planted-bug / known-paper / planted-issue harnesses are not. The plan itself framed Source D as a bonus rather than a requirement.
+4. **The selection and gating layer is much thicker than the plan anticipated.** Knee-point Pareto selection, a budget-aware reflection-prompt proposer with growth/balanced/compression modes, paired-bootstrap CI, non-inferiority gate option, and the `gate_decision.json` v4 audit schema were added on top of raw GEPA. Rationale: raw "ship the best valset candidate" overfits at small N. See `docs/framework_advantages.md`.
+5. **CLI shipped as `python -m evolution.skills.evolve_skill`, not a `hermes evolve skill` subcommand.** The framework rebranded out of Hermes-only branding so it could target any agent framework whose skills are `SKILL.md` files.
+6. **`--run-tests` (target-repo pytest as a hard gate) is off by default.** Skill text doesn't touch target-repo Python, so coupling the deploy decision to the target repo's test suite would gate on unrelated signal. The flag exists for callers who want it.
+
 ### Phase 2: Tool Description Optimization
 
 **Goal:** Optimize the natural language descriptions in tool schemas so the agent picks the right tools more reliably and uses them correctly.
+
+**Status:** ✅ Complete. See "Deviations from plan" at the end of this section.
 
 **Prerequisite:** Phase 1 gate passed — GEPA optimization loop proven to work on skills.
 
@@ -435,6 +448,15 @@ These descriptions are sent with every API call as part of the tool schema — e
 - Max 200 chars per parameter description
 - Must remain factually accurate (can't claim a tool does something it doesn't)
 - Schema structure (parameter names, types, required fields) is FROZEN — only text evolves
+
+**Deviations from plan (Phase 2):**
+
+1. **Per-parameter descriptions are not evolved.** Only the top-level `description` text is mutated. Per-param descriptions and parameter-correctness scoring are out of scope for now — top-level descriptions dominate both selection accuracy and per-API-call token spend.
+2. **One target tool per run, not joint optimization across all tools.** The plan called for evolving every tool description simultaneously with a manifest-wide selection-rate matrix. The framework addresses the same "stealing selections" risk with a three-bucket synthetic eval (50% target-correct, 30% confusable-neighbor against an explicit declared peer, 20% regression-detection where another tool is correct), and the agent sees the full rendered manifest at eval time so cross-tool effects surface naturally.
+3. **Eval is synthetic-only.** Plan also listed SessionDB-mined misselection patterns and benchmark-derived hard cases. Neither is wired for the tool path. Synthetic-first mirrors Phase 1's bootstrap.
+4. **Benchmark gating again absent.** Same as Phase 1 — the deploy gate is paired-bootstrap CI on the synthetic holdout, not "TBLite within 2%."
+5. **Eval triples are `(task, correct_tool)`, not `(task, correct_tool, correct_params)`.** Schema structure is frozen by design; parameter correctness is a separate concern from description quality.
+6. **Input surface is broader than planned.** The plan framed Phase 2 around Hermes' `tools/registry.py`. The build supports any agent that can emit an MCP `list_tools()`-shape JSON manifest *and* Hermes-style Python `*_SCHEMA` declarations (via `HermesToolSource`'s AST walker, with one-hop `Name`-reference resolution for cases like `TERMINAL_TOOL_DESCRIPTION`). This is a scope expansion, not a contraction.
 
 ### Phase 3: System Prompt Evolution
 
