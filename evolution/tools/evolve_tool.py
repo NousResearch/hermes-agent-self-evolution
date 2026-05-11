@@ -264,7 +264,9 @@ def evolve(
 
     Returns a dict summary of the run (mirrors metrics.json).
     """
-    manifest_path = Path(manifest_path)
+    # Absolute: downstream sources join relative paths against their root,
+    # which here is ``manifest_path.parent`` and would double-prefix.
+    manifest_path = Path(manifest_path).resolve()
     source = _resolve_source(manifest_path)
     manifest = source.find_manifest(manifest_path)
     if manifest is None:

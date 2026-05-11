@@ -468,3 +468,56 @@ class TestDescriptionExtractorSentinelFailure:
             in record.getMessage()
             for record in caplog.records
         ), f"expected warning not found in {[r.getMessage() for r in caplog.records]}"
+
+
+class TestRelativeManifestPath:
+    """A multi-component relative ``--manifest`` path used to crash with
+    ``find_manifest returned None``: ``_resolve_source`` would set the
+    adapter's root to ``manifest_path.parent`` and the adapter would then
+    re-join the original (still-relative) path under that root, doubling
+    the path components."""
+
+    def test_evolve_accepts_cwd_relative_manifest_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        manifest_file = tmp_path / "sub" / "manifest.json"
+        manifest_file.parent.mkdir()
+        manifest_file.write_text((FIXTURES / "multiple_tools.json").read_text())
+        manifest = ToolManifest.from_json_file(manifest_file)
+        monkeypatch.chdir(tmp_path)
+        run_dir = tmp_path / "run"
+
+        with (
+            patch.object(
+                SyntheticDatasetBuilder,
+                "_call_lm_for_bucket",
+                side_effect=_bucket_side_effect(15, 9, 6),
+            ),
+            patch(
+                "evolution.tools.evolve_tool.dspy.GEPA",
+                new=_make_fake_gepa(
+                    _build_evolved_module(manifest, EVOLVED_DESCRIPTION)
+                ),
+            ),
+            patch.object(
+                ToolJudge,
+                "score",
+                new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
+            ),
+            patch.object(
+                ToolModule,
+                "forward",
+                new=_scripted_module_forward(expected_tool_for_evolved="search_files"),
+            ),
+        ):
+            evolve(
+                tool_name="search_files",
+                manifest_path=Path("sub/manifest.json"),
+                iterations=1,
+                eval_dataset_size=30,
+                holdout_ratio=0.5,
+                quality_gate="non-inferiority",
+                output_dir=run_dir,
+            )
+
+        assert (run_dir / "gate_decision.json").exists()
