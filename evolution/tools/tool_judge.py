@@ -1,7 +1,7 @@
 """Tool-flavored LLM judge + fitness metric.
 
 ToolJudgeSignature mirrors the 3-dim output shape of JudgeSignature but
-its inputs are (task, expected_tool, chosen_tool, reasoning). The metric
+its inputs are (task, expected_tool, chosen_tool, agent_reasoning). The metric
 parses the agent's chosen_tool name (with normalization) before reaching
 the judge — unparseable outputs and nonexistent tool choices short-circuit
 to score 0.0 with diagnostic feedback.
@@ -27,11 +27,18 @@ logger = logging.getLogger(__name__)
 
 
 class ToolJudgeSignature(dspy.Signature):
-    """Judge the quality of a tool-selection decision on three dimensions."""
+    """Judge the quality of a tool-selection decision on three dimensions.
+
+    Note: the agent-reasoning input field is named ``agent_reasoning`` rather
+    than ``reasoning`` because ``dspy.ChainOfThought`` (which wraps this
+    signature in ``ToolJudge``) prepends its own ``reasoning`` *output*
+    field. A user input named ``reasoning`` would be shadowed and silently
+    dropped by ``dspy.Predict``'s kwarg validation.
+    """
     task: str = dspy.InputField(desc="The user task")
     expected_tool: str = dspy.InputField(desc="The correct tool name")
     chosen_tool: str = dspy.InputField(desc="The tool the agent picked")
-    reasoning: str = dspy.InputField(desc="The agent's stated reasoning")
+    agent_reasoning: str = dspy.InputField(desc="The agent's stated reasoning for its tool choice")
 
     correctness: str = dspy.OutputField(
         desc="0.0-1.0: was the chosen tool the correct or a defensibly-equivalent choice?"
@@ -52,10 +59,10 @@ class ToolJudge:
 
     Mirrors the skill-shaped judge's contract but takes the four
     tool-selection input fields (``task``, ``expected_tool``,
-    ``chosen_tool``, ``reasoning``) instead of the three skill-shaped
-    fields. Returns a ``FitnessScore`` with ``length_penalty=0.0`` —
-    length pressure on the tool path lives in the proposer's
-    budget-aware slope, not the judge.
+    ``chosen_tool``, ``agent_reasoning``) instead of the three
+    skill-shaped fields. Returns a ``FitnessScore`` with
+    ``length_penalty=0.0`` — length pressure on the tool path lives in
+    the proposer's budget-aware slope, not the judge.
     """
 
     def __init__(self, config: EvolutionConfig):
@@ -73,7 +80,7 @@ class ToolJudge:
         task: str,
         expected_tool: str,
         chosen_tool: str,
-        reasoning: str,
+        agent_reasoning: str,
     ) -> FitnessScore:
         """Score a tool-selection decision using LLM-as-judge."""
 
@@ -90,7 +97,7 @@ class ToolJudge:
                 task=task,
                 expected_tool=expected_tool,
                 chosen_tool=chosen_tool,
-                reasoning=reasoning,
+                agent_reasoning=agent_reasoning,
             )
 
         return FitnessScore(
@@ -147,7 +154,7 @@ def make_tool_fitness_metric(
     """Construct a GEPA-shaped 5-arg fitness metric.
 
     The returned callable runs the agent's prediction, parses chosen_tool,
-    and feeds (task, expected_tool, chosen_tool, reasoning) to the judge.
+    and feeds (task, expected_tool, chosen_tool, agent_reasoning) to the judge.
     Unparseable outputs and nonexistent-tool choices short-circuit before
     reaching the judge.
 
@@ -189,7 +196,7 @@ def make_tool_fitness_metric(
             task=gold.task_input,
             expected_tool=gold.expected_behavior,
             chosen_tool=chosen,
-            reasoning=reasoning,
+            agent_reasoning=reasoning,
         )
         feedback = _augment_feedback_with_pred_trace(
             score.feedback,

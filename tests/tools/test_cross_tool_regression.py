@@ -116,7 +116,7 @@ def _cross_tool_stealing_forward(self, task):
     return dspy.Prediction(chosen_tool="compute_sha256", reasoning="baseline picks wrong")
 
 
-def _scripted_judge_score(self, *, task, expected_tool, chosen_tool, reasoning, **_):
+def _scripted_judge_score(self, *, task, expected_tool, chosen_tool, agent_reasoning, **_):
     """Binary judge: correctness=1.0 if chosen matches expected, else 0.0."""
     correct = chosen_tool == expected_tool
     s = 1.0 if correct else 0.0

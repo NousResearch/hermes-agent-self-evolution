@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import dspy
 import pytest
 
 from evolution.core.fitness import FitnessScore
@@ -21,12 +22,45 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "tool_manifests"
 
 class TestToolJudgeSignature:
     def test_input_fields(self):
-        for field in ("task", "expected_tool", "chosen_tool", "reasoning"):
+        for field in ("task", "expected_tool", "chosen_tool", "agent_reasoning"):
             assert field in ToolJudgeSignature.input_fields
+        # The naming choice is load-bearing: a field literally named "reasoning"
+        # would collide with ChainOfThought's auto-added reasoning output and
+        # be silently dropped by dspy.Predict's kwarg validation.
+        assert "reasoning" not in ToolJudgeSignature.input_fields
 
     def test_output_fields(self):
         for field in ("correctness", "procedure_following", "conciseness", "feedback"):
             assert field in ToolJudgeSignature.output_fields
+
+
+class TestToolJudgeSignatureCoTBinding:
+    """Regression: dspy.ChainOfThought wraps the signature and prepends a
+    `reasoning` *output* field. If our signature also declared an input named
+    `reasoning`, dspy.Predict would silently drop the input kwarg (visible as
+    repeated WARNING dspy.predict.predict log lines). Verify the wrapped
+    signature exposes all four user inputs and CoT's own reasoning output
+    are both present.
+    """
+
+    def test_cot_wrapped_signature_keeps_all_four_user_inputs(self):
+        cot = dspy.ChainOfThought(ToolJudgeSignature)
+        actual = set(cot.predict.signature.input_fields.keys())
+        expected = {"task", "expected_tool", "chosen_tool", "agent_reasoning"}
+        # Pre-fix this asserted set was missing "reasoning" (CoT shadowed it
+        # as an output, dropping it from input_fields). The rename to
+        # "agent_reasoning" eliminates the collision.
+        assert actual == expected, (
+            f"missing inputs after CoT wrap: {expected - actual}; "
+            f"unexpected extras: {actual - expected}"
+        )
+
+    def test_cot_adds_its_own_reasoning_output(self):
+        # CoT's auto-added reasoning output is the trace we want from the
+        # judge itself; the rename preserves it (it never collided with
+        # anything on the output side).
+        cot = dspy.ChainOfThought(ToolJudgeSignature)
+        assert "reasoning" in cot.predict.signature.output_fields
 
 
 class TestNormalizeToolNameForMatch:
@@ -142,7 +176,7 @@ class TestMakeToolFitnessMetric:
 
     def test_judge_called_with_four_field_kwargs(self):
         """make_tool_fitness_metric must call judge.score with the
-        ToolJudgeSignature kwargs (task/expected_tool/chosen_tool/reasoning),
+        ToolJudgeSignature kwargs (task/expected_tool/chosen_tool/agent_reasoning),
         not the legacy three-field skill-judge shape."""
         judge = MagicMock()
         judge.score.return_value = FitnessScore(
@@ -174,7 +208,7 @@ class TestMakeToolFitnessMetric:
             task="Find all Python files in src/",
             expected_tool="search_files",
             chosen_tool="search_files",
-            reasoning="matched on filename",
+            agent_reasoning="matched on filename",
         )
 
 
@@ -213,7 +247,7 @@ class TestToolJudge:
             task="Find all Python files in src/",
             expected_tool="search_files",
             chosen_tool="search_files",
-            reasoning="matched on filename glob",
+            agent_reasoning="matched on filename glob",
         )
 
         assert isinstance(result, FitnessScore)
@@ -245,7 +279,7 @@ class TestToolJudge:
                 task="t",
                 expected_tool="search_files",
                 chosen_tool="search_files",
-                reasoning="r",
+                agent_reasoning="r",
                 artifact_size=100,
             )
 
@@ -254,6 +288,6 @@ class TestToolJudge:
                 task="t",
                 expected_tool="search_files",
                 chosen_tool="search_files",
-                reasoning="r",
+                agent_reasoning="r",
                 max_size=200,
             )

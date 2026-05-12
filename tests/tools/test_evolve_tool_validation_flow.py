@@ -13,7 +13,7 @@ burning a real LM run:
    holdout-eval consumes.
 4. `ToolModule.forward` — short-circuits the inner LM call so the
    holdout-evaluate loop walks deterministically through `(task,
-   chosen_tool, reasoning)` tuples scripted per-example.
+   chosen_tool, agent_reasoning)` tuples scripted per-example.
 
 Together these let `evolve()` run end-to-end against the
 `multiple_tools.json` fixture in <1s/test.
@@ -117,7 +117,7 @@ def _build_evolved_module(manifest: ToolManifest, description: str) -> ToolModul
 def _scripted_judge_score(*, target_score: float, regression_score: float):
     """Build a side_effect for ToolJudge.score scripted by target tool."""
 
-    def _score(self, *, task, expected_tool, chosen_tool, reasoning, **_):
+    def _score(self, *, task, expected_tool, chosen_tool, agent_reasoning, **_):
         correct = chosen_tool == expected_tool
         score = target_score if correct else regression_score
         return FitnessScore(
