@@ -464,7 +464,6 @@ def evolve(
     optimizer_model: str = "openai/gpt-4.1",
     eval_model: str = "openai/gpt-4.1-mini",
     skill_source_dirs: Optional[list[str]] = None,
-    run_tests: bool = False,
     dry_run: bool = False,
     seed: int = 42,
     budget: Optional[str] = None,
@@ -513,7 +512,6 @@ def evolve(
         reflection_model=reflection_model,
         eval_model=eval_model,
         judge_model=eval_model,  # Use same model for dataset generation
-        run_pytest=run_tests,
         seed=seed,
         growth_free_threshold=resolved_free,
         growth_quality_slope=resolved_slope,
@@ -1025,7 +1023,6 @@ def evolve(
     "explicit dirs take priority over auto-discovered Hermes/Claude Code "
     "sources. Use for Codex, openclaw, or any custom layout.",
 )
-@click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
 @click.option("--seed", default=42, type=int, help="RNG seed for dataset shuffles and DSPy optimizer")
 @click.option(
@@ -1182,7 +1179,7 @@ def evolve(
          "or a code review tool. No-op on reject.",
 )
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflection_model,
-         eval_model, skill_source_dir, run_tests, dry_run, seed, budget, no_fallback,
+         eval_model, skill_source_dir, dry_run, seed, budget, no_fallback,
          quality_gate, growth_free_threshold,
          growth_quality_slope, max_absolute_chars, inferiority_tolerance,
          bootstrap_confidence, bootstrap_resamples, knee_point_epsilon,
@@ -1199,7 +1196,6 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
         reflection_model=reflection_model,
         eval_model=eval_model,
         skill_source_dirs=list(skill_source_dir) if skill_source_dir else None,
-        run_tests=run_tests,
         dry_run=dry_run,
         seed=seed,
         budget=budget,

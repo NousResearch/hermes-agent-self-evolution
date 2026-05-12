@@ -4,7 +4,6 @@ Every candidate variant must pass ALL constraints before it can be
 considered valid. Failed constraints = immediate rejection.
 """
 
-import subprocess
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
@@ -103,45 +102,6 @@ class ConstraintValidator:
             ),
             self._check_absolute_chars(artifact_text, len(baseline_text)),
         ]
-
-    def run_test_suite(self, repo_path: Path) -> ConstraintResult:
-        """Run the target repo's full pytest suite. Must pass 100%."""
-        try:
-            result = subprocess.run(
-                ["python", "-m", "pytest", "tests/", "-q", "--tb=no"],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                cwd=str(repo_path),
-            )
-
-            if result.returncode == 0:
-                return ConstraintResult(
-                    passed=True,
-                    constraint_name="test_suite",
-                    message="All tests passed",
-                    details=result.stdout.strip().split("\n")[-1] if result.stdout else "",
-                )
-            else:
-                last_lines = result.stdout.strip().split("\n")[-5:] if result.stdout else []
-                return ConstraintResult(
-                    passed=False,
-                    constraint_name="test_suite",
-                    message="Test suite failed",
-                    details="\n".join(last_lines),
-                )
-        except subprocess.TimeoutExpired:
-            return ConstraintResult(
-                passed=False,
-                constraint_name="test_suite",
-                message="Test suite timed out (300s)",
-            )
-        except Exception as e:
-            return ConstraintResult(
-                passed=False,
-                constraint_name="test_suite",
-                message=f"Failed to run tests: {e}",
-            )
 
     def _check_size(self, text: str, artifact_type: str) -> ConstraintResult:
         size = len(text)

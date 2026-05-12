@@ -149,7 +149,6 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 - `ConstraintValidator(config)`:
   - `validate_static(artifact_text, artifact_type) -> list[ConstraintResult]` — size, non_empty, structure (skill only).
   - `validate_growth_with_quality(artifact_text, baseline_text, bootstrap_result) -> list[ConstraintResult]` — quality-gated growth + absolute char ceiling.
-  - `run_test_suite(repo_path) -> ConstraintResult` — `pytest -q` with 300s timeout. Wired but unused by `evolve_skill.py` by default (`--run-tests` flag).
 
 **Two-stage gate logic** (in `_check_growth_with_quality_gate`):
 - `required_improvement = max(0, slope * (growth - free))`

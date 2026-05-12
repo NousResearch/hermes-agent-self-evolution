@@ -102,10 +102,6 @@ If missing, the fallback raises `ImportError` (re-raised with the GEPA failure p
 
 Used pervasively. `typing.Protocol` + `runtime_checkable` for `SkillSource`.
 
-### `subprocess` (stdlib)
-
-`ConstraintValidator.run_test_suite` shells out to `python -m pytest tests/ -q --tb=no` with a 300s timeout. Wired but not used by `evolve_skill.py` by default (`--run-tests` flag).
-
 ## External services
 
 ### OpenAI API

@@ -72,10 +72,6 @@ class EvolutionConfig:
     # is opt-in. When False the bucket's allocation rolls into target_correct.
     enable_confusable_bucket: bool = False
 
-    run_pytest: bool = True
-    run_tblite: bool = False
-    tblite_regression_threshold: float = 0.02
-
     output_dir: Path = field(default_factory=lambda: Path("./output"))
     create_pr: bool = True
 

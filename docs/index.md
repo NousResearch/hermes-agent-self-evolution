@@ -56,8 +56,7 @@ The codebase is small (~3.5K LOC of source + ~12 test files) but architecturally
 |---|---|
 | [`../README.md`](../README.md) | User-facing quick start. Skill discovery, evolve-a-skill command, CLI examples. |
 | [`../AGENTS.md`](../AGENTS.md) | AI-assistant-focused condensed reference. Project context, dirs, conventions, test/PR guidance. **Read this first when picking up the codebase.** |
-| [`../PLAN.md`](../PLAN.md) | Full project roadmap. Tier 1 (skills) is implemented; Tiers 2-5 are planned. Read this for the long-term architecture vision. |
-| [`../experiments/`](../experiments/) | Spike writeups documenting load-bearing experiments and their findings. |
+| [`../PLAN.md`](../PLAN.md) | Full project roadmap. Tiers 1 and 2 (skills, tool descriptions) are implemented; Tiers 3-5 are planned. Each implemented phase carries a "Deviations from plan" subsection — load-bearing decisions documented in line. |
 
 ## Cross-cutting topics with multiple home documents
 

@@ -66,7 +66,6 @@ Both delivery flags are no-ops on a reject decision and emit a one-line stderr n
 ### Misc
 | Flag | Default | Notes |
 |---|---|---|
-| `--run-tests` | off | Run target repo's pytest suite as a constraint gate (not used by default). |
 | `--dry-run` | off | Validate setup; don't run optimization. |
 | `--evaluate-band-on-holdout / --no-evaluate-band-on-holdout` | off | Calibration telemetry: after the picked candidate is selected, re-evaluate every candidate in the knee-point band on the holdout and write `band_holdout.json` alongside `gate_decision.json`. Adds judge calls proportional to band size × holdout examples (subsampled to ≤100). Off by default to keep production runs cheap. |
 
@@ -136,7 +135,6 @@ evolve(
     eval_model="openai/gpt-4.1-mini",
     reflection_model="openai/gpt-5-mini",
     skill_source_dirs=None,           # list[str]
-    run_tests=False,
     dry_run=False,
     seed=42,
     budget=None,                      # "light" | "medium" | "heavy"

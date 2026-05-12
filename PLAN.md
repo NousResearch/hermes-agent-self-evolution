@@ -375,7 +375,7 @@ The agent can self-invoke optimization:
 3. **Source D (skill-specific auto-evaluation) was not built.** Synthetic, sessiondb-mining, and golden loaders are wired; planted-bug / known-paper / planted-issue harnesses are not. The plan itself framed Source D as a bonus rather than a requirement.
 4. **The selection and gating layer is much thicker than the plan anticipated.** Knee-point Pareto selection, a budget-aware reflection-prompt proposer with growth/balanced/compression modes, paired-bootstrap CI, non-inferiority gate option, and the `gate_decision.json` v4 audit schema were added on top of raw GEPA. Rationale: raw "ship the best valset candidate" overfits at small N. See `docs/framework_advantages.md`.
 5. **CLI shipped as `python -m evolution.skills.evolve_skill`, not a `hermes evolve skill` subcommand.** The framework rebranded out of Hermes-only branding so it could target any agent framework whose skills are `SKILL.md` files.
-6. **`--run-tests` (target-repo pytest as a hard gate) is off by default.** Skill text doesn't touch target-repo Python, so coupling the deploy decision to the target repo's test suite would gate on unrelated signal. The flag exists for callers who want it.
+6. **`--run-tests` (target-repo pytest as a hard gate) was specified but never wired and has been removed.** Skill text doesn't touch target-repo Python, so coupling the deploy decision to the target repo's test suite would gate on unrelated signal. The CLI flag set a config field that no code read. The unused `EvolutionConfig.run_pytest`, `run_tblite`, `tblite_regression_threshold` fields and `ConstraintValidator.run_test_suite()` method were removed alongside the flag.
 
 ### Phase 2: Tool Description Optimization
 

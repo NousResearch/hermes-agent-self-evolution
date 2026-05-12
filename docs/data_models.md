@@ -42,11 +42,6 @@ class EvolutionConfig:
     holdout_ratio: float = 0.50
     min_holdout_size: int = 10              # hard refuse-to-gate threshold
 
-    # Benchmarks
-    run_pytest: bool = True
-    run_tblite: bool = False                # opt-in (expensive)
-    tblite_regression_threshold: float = 0.02
-
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
     create_pr: bool = True

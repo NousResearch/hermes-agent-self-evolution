@@ -22,7 +22,6 @@ graph TD
     A[agent-self-evolution/] --> B[evolution/<br/>installable package]
     A --> C[tests/<br/>pytest suite]
     A --> D[datasets/<br/>generated + golden eval data]
-    A --> E[experiments/<br/>spike writeups]
     A --> F[output/<br/>per-run artifacts]
     A --> G[reports/<br/>validation PDFs + prose YAML]
     A --> H[docs/<br/>this knowledge base]

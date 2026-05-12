@@ -52,7 +52,6 @@ agent-self-evolution/
 │   ├── skills/<name>/   # train.jsonl, val.jsonl, holdout.jsonl
 │   └── tools/           # tool eval data is generated per-run, not cached here
 ├── output/<skill>/<ts>/ # per-run artifacts (git-ignored)
-├── experiments/         # spike writeups (markdown)
 ├── reports/             # validation PDFs + reports/<phase>_prose.yaml
 ├── assets/              # logo PNGs used by the report (e.g. dna.png)
 ├── docs/                # the knowledge base — start at docs/index.md
@@ -245,7 +244,7 @@ PR description template (loose, but the existing PRs follow it):
 | 4 | Tool implementation code | 🔲 stub (`evolution/code/`); needs `[darwinian]` extra |
 | 5 | Continuous improvement loop | 🔲 stub (`evolution/monitor/`) |
 
-Open questions deferred to future PRs (per `experiments/` writeups + `PLAN.md`):
+Open questions deferred to future PRs (per `PLAN.md` deviation notes):
 - GEPA Pareto-frontier checkpointing (so a `TimeoutError` mid-run doesn't lose all candidates)
 - Cost ceiling kill switch (`max_total_cost_usd`)
 - Skill-size-based reflection-LM timeout scaling
