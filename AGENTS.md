@@ -246,7 +246,6 @@ PR description template (loose, but the existing PRs follow it):
 
 Open questions deferred to future PRs (per `PLAN.md` deviation notes):
 - GEPA Pareto-frontier checkpointing (so a `TimeoutError` mid-run doesn't lose all candidates)
-- Cost ceiling kill switch (`max_total_cost_usd`)
 - Skill-size-based reflection-LM timeout scaling
 - BCa bootstrap upgrade once N≥20 routinely
 

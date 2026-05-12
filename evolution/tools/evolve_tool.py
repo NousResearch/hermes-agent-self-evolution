@@ -35,6 +35,7 @@ from evolution.core.dataset_builder import (
 )
 from evolution.core.lm_timing_callback import (
     COST_LEDGER,
+    CostCeilingExceeded,
     LMTimingCallback,
     register_litellm_cost_callback,
     register_litellm_failure_callback,
@@ -42,6 +43,8 @@ from evolution.core.lm_timing_callback import (
 from evolution.core.quality_gate import (
     QUALITY_GATE_PRESETS,
     resolve_proposer_mode,
+    run_benchmark_hook,
+    write_cost_ceiling_abort,
     write_gate_decision,
 )
 from evolution.core.stats import paired_bootstrap
@@ -275,6 +278,9 @@ def evolve(
     optimizer_model: str = "openai/gpt-4.1",
     reflection_model: Optional[str] = "openai/gpt-5-mini",
     eval_model: str = "openai/gpt-4.1-mini",
+    max_total_cost_usd: Optional[float] = None,
+    benchmark_cmd: Optional[str] = None,
+    benchmark_timeout_seconds: int = 600,
 ) -> dict[str, Any]:
     """Evolve one tool description inside a manifest.
 
@@ -345,427 +351,491 @@ def evolve(
     root_logger = logging.getLogger()
     root_logger.addHandler(file_handler)
     try:
-        register_litellm_failure_callback()
-        register_litellm_cost_callback()
-        COST_LEDGER.reset()
-        console.print(f"  Run log: {run_log_path}")
+        try:
+            register_litellm_failure_callback()
+            register_litellm_cost_callback()
+            COST_LEDGER.reset()
+            COST_LEDGER.set_ceiling(max_total_cost_usd)
+            console.print(f"  Run log: {run_log_path}")
+            if max_total_cost_usd is not None:
+                console.print(f"  Cost ceiling: ${max_total_cost_usd:.4f}")
 
-        sessiondb_drops: Optional[dict[str, int]] = None
-        if eval_source == "synthetic":
-            console.print(f"\n[bold]Building tool-selection eval dataset[/bold] (synthetic, three buckets)")
-            if dry_run:
-                # Synthetic dataset gen is itself an LM call; --dry-run skips it.
-                # The "would generate N" line mirrors the skill-path dry-run shape.
-                console.print(
-                    f"\n[bold green]DRY RUN — would generate {config.eval_dataset_size} "
-                    f"synthetic examples; skipping LM dataset gen + GEPA.[/bold green]"
-                )
-                return {"decision": "dry-run", "eval_source": "synthetic"}
-            builder = SyntheticDatasetBuilder(config)
-            raw_examples = builder.generate_tool_selection(
-                manifest=manifest,
-                target_tool=tool_name,
-                num_cases=config.eval_dataset_size,
-            )
-            dataset = split_examples(
-                raw_examples,
-                seed=config.seed,
-                train_ratio=config.train_ratio,
-                val_ratio=config.val_ratio,
-                holdout_ratio=config.holdout_ratio,
-            )
-        elif eval_source == "sessiondb":
-            console.print(
-                f"\n[bold]Building tool-selection eval dataset[/bold] (sessiondb, Hermes only)"
-            )
-            console.print(
-                "  [dim]Claude Code and Copilot logs don't carry tool-call data — only Hermes "
-                "session JSON is mined.[/dim]"
-            )
-            if dry_run:
-                # Importer is free (no LM calls); judge is the LM-spending stage.
-                # Run only the importer so the operator sees real candidate counts
-                # and the per-invoked-tool distribution before paying for the judge.
-                candidates, importer_drops = HermesToolImporter.extract_candidates(
+            sessiondb_drops: Optional[dict[str, int]] = None
+            if eval_source == "synthetic":
+                console.print(f"\n[bold]Building tool-selection eval dataset[/bold] (synthetic, three buckets)")
+                if dry_run:
+                    # Synthetic dataset gen is itself an LM call; --dry-run skips it.
+                    # The "would generate N" line mirrors the skill-path dry-run shape.
+                    console.print(
+                        f"\n[bold green]DRY RUN — would generate {config.eval_dataset_size} "
+                        f"synthetic examples; skipping LM dataset gen + GEPA.[/bold green]"
+                    )
+                    return {"decision": "dry-run", "eval_source": "synthetic"}
+                builder = SyntheticDatasetBuilder(config)
+                raw_examples = builder.generate_tool_selection(
                     manifest=manifest,
-                    limit=config.eval_dataset_size * 2,
+                    target_tool=tool_name,
+                    num_cases=config.eval_dataset_size,
                 )
-                tool_counts: dict[str, int] = {}
-                for cand in candidates:
-                    name = cand["invoked_tool"]
-                    tool_counts[name] = tool_counts.get(name, 0) + 1
+                dataset = split_examples(
+                    raw_examples,
+                    seed=config.seed,
+                    train_ratio=config.train_ratio,
+                    val_ratio=config.val_ratio,
+                    holdout_ratio=config.holdout_ratio,
+                )
+            elif eval_source == "sessiondb":
                 console.print(
-                    f"\n[bold green]DRY RUN — importer surfaced {len(candidates)} candidates; "
-                    f"skipping judge + GEPA.[/bold green]"
+                    f"\n[bold]Building tool-selection eval dataset[/bold] (sessiondb, Hermes only)"
                 )
-                console.print(f"  Importer drops: {importer_drops}")
-                if tool_counts:
-                    console.print(f"  Invoked-tool distribution: {tool_counts}")
-                return {
-                    "decision": "dry-run",
-                    "eval_source": "sessiondb",
-                    "candidate_count": len(candidates),
-                    "importer_drops": importer_drops,
-                    "invoked_tool_distribution": tool_counts,
-                }
-            dataset, sessiondb_drops = build_tool_dataset_from_sessions(
-                manifest=manifest,
-                target_tool=tool_name,
-                output_path=Path("datasets") / "tools" / tool_name,
-                model=eval_model,
-                max_examples=config.eval_dataset_size,
-                seed=config.seed,
+                console.print(
+                    "  [dim]Claude Code and Copilot logs don't carry tool-call data — only Hermes "
+                    "session JSON is mined.[/dim]"
+                )
+                if dry_run:
+                    # Importer is free (no LM calls); judge is the LM-spending stage.
+                    # Run only the importer so the operator sees real candidate counts
+                    # and the per-invoked-tool distribution before paying for the judge.
+                    candidates, importer_drops = HermesToolImporter.extract_candidates(
+                        manifest=manifest,
+                        limit=config.eval_dataset_size * 2,
+                    )
+                    tool_counts: dict[str, int] = {}
+                    for cand in candidates:
+                        name = cand["invoked_tool"]
+                        tool_counts[name] = tool_counts.get(name, 0) + 1
+                    console.print(
+                        f"\n[bold green]DRY RUN — importer surfaced {len(candidates)} candidates; "
+                        f"skipping judge + GEPA.[/bold green]"
+                    )
+                    console.print(f"  Importer drops: {importer_drops}")
+                    if tool_counts:
+                        console.print(f"  Invoked-tool distribution: {tool_counts}")
+                    return {
+                        "decision": "dry-run",
+                        "eval_source": "sessiondb",
+                        "candidate_count": len(candidates),
+                        "importer_drops": importer_drops,
+                        "invoked_tool_distribution": tool_counts,
+                    }
+                dataset, sessiondb_drops = build_tool_dataset_from_sessions(
+                    manifest=manifest,
+                    target_tool=tool_name,
+                    output_path=Path("datasets") / "tools" / tool_name,
+                    model=eval_model,
+                    max_examples=config.eval_dataset_size,
+                    seed=config.seed,
+                )
+                non_manifest = sessiondb_drops.get("non_manifest", 0)
+                if non_manifest:
+                    console.print(
+                        f"  [yellow]Dropped {non_manifest} session invocations of tools "
+                        f"not in this manifest.[/yellow]"
+                    )
+                if not dataset.all_examples:
+                    console.print(
+                        "[red]✗ Session mining produced 0 usable examples. "
+                        "Drop breakdown: " + ", ".join(f"{k}={v}" for k, v in sessiondb_drops.items() if v) +
+                        ". Try --eval-source synthetic.[/red]"
+                    )
+                    sys.exit(1)
+            else:
+                raise ValueError(f"unknown eval_source: {eval_source!r}")
+
+            console.print(
+                f"  Generated {len(dataset.all_examples)} examples — "
+                f"{len(dataset.train)} train / {len(dataset.val)} val / {len(dataset.holdout)} holdout"
             )
-            non_manifest = sessiondb_drops.get("non_manifest", 0)
-            if non_manifest:
+
+            if len(dataset.holdout) < config.min_holdout_size:
                 console.print(
-                    f"  [yellow]Dropped {non_manifest} session invocations of tools "
-                    f"not in this manifest.[/yellow]"
-                )
-            if not dataset.all_examples:
-                console.print(
-                    "[red]✗ Session mining produced 0 usable examples. "
-                    "Drop breakdown: " + ", ".join(f"{k}={v}" for k, v in sessiondb_drops.items() if v) +
-                    ". Try --eval-source synthetic.[/red]"
+                    f"[red]✗ Holdout has only {len(dataset.holdout)} examples; need ≥{config.min_holdout_size} "
+                    f"to gate on improvement signal. Increase eval_dataset_size or holdout_ratio.[/red]"
                 )
                 sys.exit(1)
-        else:
-            raise ValueError(f"unknown eval_source: {eval_source!r}")
 
-        console.print(
-            f"  Generated {len(dataset.all_examples)} examples — "
-            f"{len(dataset.train)} train / {len(dataset.val)} val / {len(dataset.holdout)} holdout"
-        )
+            console.print(f"\n[bold]Validating baseline description[/bold]")
+            validator = ConstraintValidator(config)
+            baseline_constraints = validator.validate_static(baseline_description, "tool_description")
+            for c in baseline_constraints:
+                icon = "✓" if c.passed else "✗"
+                color = "green" if c.passed else "red"
+                console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
+            if not all(c.passed for c in baseline_constraints):
+                console.print("[yellow]⚠ Baseline description has constraint violations — proceeding anyway[/yellow]")
 
-        if len(dataset.holdout) < config.min_holdout_size:
-            console.print(
-                f"[red]✗ Holdout has only {len(dataset.holdout)} examples; need ≥{config.min_holdout_size} "
-                f"to gate on improvement signal. Increase eval_dataset_size or holdout_ratio.[/red]"
+            lm = dspy.LM(eval_model, request_timeout=60, num_retries=5)
+            dspy.configure(
+                lm=lm,
+                warn_on_type_mismatch=False,
+                callbacks=[LMTimingCallback()],
             )
-            sys.exit(1)
 
-        console.print(f"\n[bold]Validating baseline description[/bold]")
-        validator = ConstraintValidator(config)
-        baseline_constraints = validator.validate_static(baseline_description, "tool_description")
-        for c in baseline_constraints:
-            icon = "✓" if c.passed else "✗"
-            color = "green" if c.passed else "red"
-            console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-        if not all(c.passed for c in baseline_constraints):
-            console.print("[yellow]⚠ Baseline description has constraint violations — proceeding anyway[/yellow]")
-
-        lm = dspy.LM(eval_model, request_timeout=60, num_retries=5)
-        dspy.configure(
-            lm=lm,
-            warn_on_type_mismatch=False,
-            callbacks=[LMTimingCallback()],
-        )
-
-        judge = ToolJudge(config)
-        metric = make_tool_fitness_metric(
-            judge=judge,
-            baseline_description=baseline_description,
-            manifest=manifest,
-            target_tool_name=tool_name,
-            max_growth=config.growth_free_threshold,
-            text_extractor=lambda predictor: _description_from_predictor(predictor, tool_name),
-        )
-
-        baseline_module = ToolModule(
-            target_tool_name=tool_name,
-            manifest=manifest,
-            target_description=baseline_description,
-        )
-
-        proposer_mode = resolve_proposer_mode(config.fitness_profile)
-        proposer = BudgetAwareToolProposer(
-            target_tool_name=tool_name,
-            manifest=manifest,
-            target_description=baseline_description,
-            baseline_chars=len(baseline_description),
-            max_growth=config.bap_max_growth,
-        )
-
-        trainset = _build_examples(dataset.train, for_module=True)
-        valset = _build_examples(dataset.val, for_module=True)
-
-        console.print(f"\n[bold cyan]Running GEPA optimization (max_full_evals={iterations})[/bold cyan]\n")
-        start_time = time.time()
-
-        reflection_lm = dspy.LM(
-            reflection_model or optimizer_model,
-            temperature=1.0,
-            max_tokens=32000,
-            cache=False,
-            request_timeout=300,
-            num_retries=2,
-        )
-        optimizer = dspy.GEPA(
-            metric=metric,
-            max_full_evals=iterations,
-            reflection_lm=reflection_lm,
-            seed=config.seed,
-            track_stats=True,
-            instruction_proposer=proposer,
-        )
-        optimized_module = optimizer.compile(
-            baseline_module, trainset=trainset, valset=valset,
-        )
-
-        elapsed = time.time() - start_time
-        console.print(f"\n  GEPA optimization completed in {elapsed:.1f}s")
-
-        knee_pick: Optional[CandidatePick] = None
-        if hasattr(optimized_module, "detailed_results"):
-            details = optimized_module.detailed_results
-            knee_pick = select_knee_point(
-                candidates=details.candidates,
-                val_aggregate_scores=details.val_aggregate_scores,
-                n_val=len(valset),
-                static_validator=lambda txt: validator.validate_static(txt, "tool_description"),
-                gepa_default_idx=details.best_idx,
-                text_extractor=lambda c: _candidate_description(c, tool_name),
+            judge = ToolJudge(config)
+            metric = make_tool_fitness_metric(
+                judge=judge,
+                baseline_description=baseline_description,
+                manifest=manifest,
+                target_tool_name=tool_name,
+                max_growth=config.growth_free_threshold,
+                text_extractor=lambda predictor: _description_from_predictor(predictor, tool_name),
             )
-            evolved_description = _candidate_description(knee_pick.module, tool_name)
-            optimized_module = ToolModule(
+
+            baseline_module = ToolModule(
                 target_tool_name=tool_name,
                 manifest=manifest,
-                target_description=evolved_description,
+                target_description=baseline_description,
             )
+
+            proposer_mode = resolve_proposer_mode(config.fitness_profile)
+            proposer = BudgetAwareToolProposer(
+                target_tool_name=tool_name,
+                manifest=manifest,
+                target_description=baseline_description,
+                baseline_chars=len(baseline_description),
+                max_growth=config.bap_max_growth,
+            )
+
+            trainset = _build_examples(dataset.train, for_module=True)
+            valset = _build_examples(dataset.val, for_module=True)
+
+            console.print(f"\n[bold cyan]Running GEPA optimization (max_full_evals={iterations})[/bold cyan]\n")
+            start_time = time.time()
+
+            reflection_lm = dspy.LM(
+                reflection_model or optimizer_model,
+                temperature=1.0,
+                max_tokens=32000,
+                cache=False,
+                request_timeout=300,
+                num_retries=2,
+            )
+            optimizer = dspy.GEPA(
+                metric=metric,
+                max_full_evals=iterations,
+                reflection_lm=reflection_lm,
+                seed=config.seed,
+                track_stats=True,
+                instruction_proposer=proposer,
+            )
+            optimized_module = optimizer.compile(
+                baseline_module, trainset=trainset, valset=valset,
+            )
+
+            elapsed = time.time() - start_time
+            console.print(f"\n  GEPA optimization completed in {elapsed:.1f}s")
+
+            knee_pick: Optional[CandidatePick] = None
+            if hasattr(optimized_module, "detailed_results"):
+                details = optimized_module.detailed_results
+                knee_pick = select_knee_point(
+                    candidates=details.candidates,
+                    val_aggregate_scores=details.val_aggregate_scores,
+                    n_val=len(valset),
+                    static_validator=lambda txt: validator.validate_static(txt, "tool_description"),
+                    gepa_default_idx=details.best_idx,
+                    text_extractor=lambda c: _candidate_description(c, tool_name),
+                )
+                evolved_description = _candidate_description(knee_pick.module, tool_name)
+                optimized_module = ToolModule(
+                    target_tool_name=tool_name,
+                    manifest=manifest,
+                    target_description=evolved_description,
+                )
+                console.print(
+                    f"\n[bold]Knee-point selection[/bold]: picked candidate "
+                    f"{knee_pick.picked_idx} (val={knee_pick.val_score:.3f}, "
+                    f"rank {knee_pick.val_rank_in_band} of {knee_pick.band_size} in band, "
+                    f"{knee_pick.body_chars} chars vs GEPA default "
+                    f"{knee_pick.gepa_default_body_chars}; ε={knee_pick.epsilon:.3f}; "
+                    f"fallback={knee_pick.fallback})"
+                )
+            else:
+                evolved_description = optimized_module.description_text
+
+            console.print(f"\n[bold]Validating evolved description (static checks)[/bold]")
+            static_constraints = validator.validate_static(evolved_description, "tool_description")
+            static_pass = True
+            for c in static_constraints:
+                icon = "✓" if c.passed else "✗"
+                color = "green" if c.passed else "red"
+                console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
+                if not c.passed:
+                    static_pass = False
+
+            run_inputs = {
+                "seed": config.seed,
+                "iterations": iterations,
+                "optimizer_model": optimizer_model,
+                "reflection_model": config.reflection_model,
+                "eval_model": config.eval_model,
+                "eval_dataset_size": config.eval_dataset_size,
+                "holdout_ratio": config.holdout_ratio,
+                "quality_gate_preset": quality_gate,
+                "fitness_profile": fitness_profile,
+                "enable_confusable_bucket": config.enable_confusable_bucket,
+            }
+            tool_payload_fields = {
+                "artifact_type": "tool_description",
+                "target_tool": tool_name,
+                "manifest_neighbor_count": len(manifest.tools) - 1,
+                "sentinel_failures": proposer.sentinel_failures,
+            }
+
+            if not static_pass:
+                console.print("[red]✗ Evolved description FAILED static constraints — not deploying[/red]")
+                failed_path = output_dir / "evolved_FAILED.json"
+                evolved_manifest = manifest.replace_description(tool_name, evolved_description)
+                failed_path.write_text(json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n")
+                write_gate_decision(output_dir, {
+                    "schema_version": "4",
+                    "decision": "reject",
+                    "reason": "static_constraint_failure",
+                    "failed_constraints": [c.constraint_name for c in static_constraints if not c.passed],
+                    "messages": [c.message for c in static_constraints if not c.passed],
+                    "knee_point": _knee_point_payload(knee_pick),
+                    "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools, sessiondb_drops=sessiondb_drops),
+                    "run_inputs": run_inputs,
+                    **tool_payload_fields,
+                })
+                console.print(f"  Saved failed variant to {failed_path}")
+                return {"decision": "reject", "reason": "static_constraint_failure"}
+
             console.print(
-                f"\n[bold]Knee-point selection[/bold]: picked candidate "
-                f"{knee_pick.picked_idx} (val={knee_pick.val_score:.3f}, "
-                f"rank {knee_pick.val_rank_in_band} of {knee_pick.band_size} in band, "
-                f"{knee_pick.body_chars} chars vs GEPA default "
-                f"{knee_pick.gepa_default_body_chars}; ε={knee_pick.epsilon:.3f}; "
-                f"fallback={knee_pick.fallback})"
+                f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]"
             )
-        else:
-            evolved_description = optimized_module.description_text
+            holdout_examples = _build_examples(dataset.holdout, for_module=True)
+            avg_baseline, baseline_per_example = _holdout_evaluate_with_metric(
+                baseline_module, holdout_examples, metric, lm,
+            )
+            avg_evolved, evolved_per_example = _holdout_evaluate_with_metric(
+                optimized_module, holdout_examples, metric, lm,
+            )
+            improvement = avg_evolved - avg_baseline
 
-        console.print(f"\n[bold]Validating evolved description (static checks)[/bold]")
-        static_constraints = validator.validate_static(evolved_description, "tool_description")
-        static_pass = True
-        for c in static_constraints:
-            icon = "✓" if c.passed else "✗"
-            color = "green" if c.passed else "red"
-            console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-            if not c.passed:
-                static_pass = False
+            console.print(f"\n[bold]Validating growth against holdout improvement[/bold]")
+            bootstrap = paired_bootstrap(
+                baseline_per_example,
+                evolved_per_example,
+                confidence=config.bootstrap_confidence,
+                n_resamples=config.bootstrap_n_resamples,
+                seed=config.seed,
+            )
+            # Growth + ceiling check on the description, not the rendered manifest —
+            # the gate's curve has to apply to the artifact the user actually evolves.
+            growth_constraints = validator.validate_growth_with_quality(
+                evolved_description, baseline_description, bootstrap,
+            )
+            growth_pass = True
+            for c in growth_constraints:
+                icon = "✓" if c.passed else "✗"
+                color = "green" if c.passed else "red"
+                console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
+                if not c.passed:
+                    growth_pass = False
 
-        run_inputs = {
-            "seed": config.seed,
-            "iterations": iterations,
-            "optimizer_model": optimizer_model,
-            "reflection_model": config.reflection_model,
-            "eval_model": config.eval_model,
-            "eval_dataset_size": config.eval_dataset_size,
-            "holdout_ratio": config.holdout_ratio,
-            "quality_gate_preset": quality_gate,
-            "fitness_profile": fitness_profile,
-            "enable_confusable_bucket": config.enable_confusable_bucket,
-        }
-        tool_payload_fields = {
-            "artifact_type": "tool_description",
-            "target_tool": tool_name,
-            "manifest_neighbor_count": len(manifest.tools) - 1,
-            "sentinel_failures": proposer.sentinel_failures,
-        }
+            # Write manifests before the hook so it can reference them via
+            # $EVOLVED_PATH / $BASELINE_PATH.
+            benchmark_block: Optional[dict[str, Any]] = None
+            if growth_pass and benchmark_cmd is not None:
+                evolved_manifest_for_hook = manifest.replace_description(tool_name, evolved_description)
+                evolved_manifest_path = output_dir / "evolved_manifest.json"
+                baseline_manifest_path = output_dir / "baseline_manifest.json"
+                evolved_manifest_path.write_text(
+                    json.dumps(_manifest_to_dict(evolved_manifest_for_hook), indent=2) + "\n"
+                )
+                baseline_manifest_path.write_text(
+                    json.dumps(_manifest_to_dict(manifest), indent=2) + "\n"
+                )
+                benchmark_block = run_benchmark_hook(
+                    benchmark_cmd,
+                    timeout_seconds=benchmark_timeout_seconds,
+                    evolved_path=evolved_manifest_path,
+                    baseline_path=baseline_manifest_path,
+                    output_dir=output_dir,
+                    target_name=tool_name,
+                    artifact_type="tool_description",
+                )
+                if not benchmark_block["passed"]:
+                    growth_pass = False
+                    evolved_manifest_path.unlink(missing_ok=True)
+                    baseline_manifest_path.unlink(missing_ok=True)
 
-        if not static_pass:
-            console.print("[red]✗ Evolved description FAILED static constraints — not deploying[/red]")
-            failed_path = output_dir / "evolved_FAILED.json"
-            evolved_manifest = manifest.replace_description(tool_name, evolved_description)
-            failed_path.write_text(json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n")
-            write_gate_decision(output_dir, {
+            baseline_chars = len(baseline_description)
+            evolved_chars = len(evolved_description)
+            growth_pct = (evolved_chars - baseline_chars) / max(1, baseline_chars)
+            required_improvement = max(
+                0.0,
+                config.growth_quality_slope * (growth_pct - config.growth_free_threshold),
+            )
+            decision_rule_used = resolve_decision_rule(config, growth_pct)
+            if growth_pass:
+                decision_reason = "passed"
+            elif benchmark_block is not None and not benchmark_block["passed"]:
+                decision_reason = "benchmark_failed"
+            else:
+                decision_reason = "growth_quality_gate"
+            decision_payload = {
                 "schema_version": "4",
-                "decision": "reject",
-                "reason": "static_constraint_failure",
-                "failed_constraints": [c.constraint_name for c in static_constraints if not c.passed],
-                "messages": [c.message for c in static_constraints if not c.passed],
+                "decision": "deploy" if growth_pass else "reject",
+                "reason": decision_reason,
+                "decision_rule_used": decision_rule_used,
+                "gate_mode": config.gate_mode,
+                "inferiority_tolerance": config.inferiority_tolerance,
+                "growth_pct": growth_pct,
+                "required_improvement": required_improvement,
+                "baseline_chars": baseline_chars,
+                "evolved_chars": evolved_chars,
+                "absolute_char_ceiling": config.max_absolute_chars,
+                "effective_absolute_char_ceiling": effective_absolute_char_ceiling(
+                    config.max_absolute_chars, baseline_chars,
+                ),
+                "growth_free_threshold": config.growth_free_threshold,
+                "fitness_profile": config.fitness_profile,
+                "proposer_mode": proposer_mode,
+                "growth_quality_slope": config.growth_quality_slope,
+                "baseline_per_example": baseline_per_example,
+                "evolved_per_example": evolved_per_example,
+                "avg_baseline": avg_baseline,
+                "avg_evolved": avg_evolved,
+                "bootstrap": bootstrap,
+                "win_loss": _compute_win_loss(baseline_per_example, evolved_per_example),
+                "failed_constraints": [c.constraint_name for c in growth_constraints if not c.passed],
+                "messages": [c.message for c in growth_constraints if not c.passed],
                 "knee_point": _knee_point_payload(knee_pick),
                 "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools, sessiondb_drops=sessiondb_drops),
                 "run_inputs": run_inputs,
                 **tool_payload_fields,
-            })
-            console.print(f"  Saved failed variant to {failed_path}")
-            return {"decision": "reject", "reason": "static_constraint_failure"}
+            }
+            if benchmark_block is not None:
+                decision_payload["benchmark"] = benchmark_block
+            gate_path = write_gate_decision(output_dir, decision_payload)
+            console.print(f"  [dim]Gate decision logged to {gate_path}[/dim]")
 
-        console.print(
-            f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]"
-        )
-        holdout_examples = _build_examples(dataset.holdout, for_module=True)
-        avg_baseline, baseline_per_example = _holdout_evaluate_with_metric(
-            baseline_module, holdout_examples, metric, lm,
-        )
-        avg_evolved, evolved_per_example = _holdout_evaluate_with_metric(
-            optimized_module, holdout_examples, metric, lm,
-        )
-        improvement = avg_evolved - avg_baseline
+            if not growth_pass:
+                console.print("[red]✗ Evolved description REJECTED by quality gate — not deploying[/red]")
+                evolved_manifest = manifest.replace_description(tool_name, evolved_description)
+                failed_path = output_dir / "evolved_FAILED.json"
+                failed_path.write_text(json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n")
+                console.print(f"  Saved failed variant to {failed_path}")
+                reject_reason = decision_payload.get("reason", "growth_quality_gate")
+                if apply:
+                    print(
+                        f"--apply skipped: gate rejected (decision: reject, reason: {reject_reason})",
+                        file=sys.stderr,
+                    )
+                if patch:
+                    print(
+                        f"--patch skipped: gate rejected (decision: reject, reason: {reject_reason})",
+                        file=sys.stderr,
+                    )
+                return {"decision": "reject", "reason": reject_reason}
 
-        console.print(f"\n[bold]Validating growth against holdout improvement[/bold]")
-        bootstrap = paired_bootstrap(
-            baseline_per_example,
-            evolved_per_example,
-            confidence=config.bootstrap_confidence,
-            n_resamples=config.bootstrap_n_resamples,
-            seed=config.seed,
-        )
-        # Growth + ceiling check on the description, not the rendered manifest —
-        # the gate's curve has to apply to the artifact the user actually evolves.
-        growth_constraints = validator.validate_growth_with_quality(
-            evolved_description, baseline_description, bootstrap,
-        )
-        growth_pass = True
-        for c in growth_constraints:
-            icon = "✓" if c.passed else "✗"
-            color = "green" if c.passed else "red"
-            console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-            if not c.passed:
-                growth_pass = False
+            table = Table(title="Tool Description Evolution Results")
+            table.add_column("Metric", style="bold")
+            table.add_column("Baseline", justify="right")
+            table.add_column("Evolved", justify="right")
+            table.add_column("Change", justify="right")
+            change_color = "green" if improvement > 0 else "red"
+            table.add_row(
+                "Holdout Score",
+                f"{avg_baseline:.3f}",
+                f"{avg_evolved:.3f}",
+                f"[{change_color}]{improvement:+.3f}[/{change_color}]",
+            )
+            table.add_row(
+                "Description Size",
+                f"{baseline_chars:,} chars",
+                f"{evolved_chars:,} chars",
+                f"{evolved_chars - baseline_chars:+,} chars",
+            )
+            table.add_row("Time", "", f"{elapsed:.1f}s", "")
+            console.print()
+            console.print(table)
 
-        baseline_chars = len(baseline_description)
-        evolved_chars = len(evolved_description)
-        growth_pct = (evolved_chars - baseline_chars) / max(1, baseline_chars)
-        required_improvement = max(
-            0.0,
-            config.growth_quality_slope * (growth_pct - config.growth_free_threshold),
-        )
-        decision_rule_used = resolve_decision_rule(config, growth_pct)
-        decision_payload = {
-            "schema_version": "4",
-            "decision": "deploy" if growth_pass else "reject",
-            "reason": "passed" if growth_pass else "growth_quality_gate",
-            "decision_rule_used": decision_rule_used,
-            "gate_mode": config.gate_mode,
-            "inferiority_tolerance": config.inferiority_tolerance,
-            "growth_pct": growth_pct,
-            "required_improvement": required_improvement,
-            "baseline_chars": baseline_chars,
-            "evolved_chars": evolved_chars,
-            "absolute_char_ceiling": config.max_absolute_chars,
-            "effective_absolute_char_ceiling": effective_absolute_char_ceiling(
-                config.max_absolute_chars, baseline_chars,
-            ),
-            "growth_free_threshold": config.growth_free_threshold,
-            "fitness_profile": config.fitness_profile,
-            "proposer_mode": proposer_mode,
-            "growth_quality_slope": config.growth_quality_slope,
-            "baseline_per_example": baseline_per_example,
-            "evolved_per_example": evolved_per_example,
-            "avg_baseline": avg_baseline,
-            "avg_evolved": avg_evolved,
-            "bootstrap": bootstrap,
-            "win_loss": _compute_win_loss(baseline_per_example, evolved_per_example),
-            "failed_constraints": [c.constraint_name for c in growth_constraints if not c.passed],
-            "messages": [c.message for c in growth_constraints if not c.passed],
-            "knee_point": _knee_point_payload(knee_pick),
-            "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools, sessiondb_drops=sessiondb_drops),
-            "run_inputs": run_inputs,
-            **tool_payload_fields,
-        }
-        gate_path = write_gate_decision(output_dir, decision_payload)
-        console.print(f"  [dim]Gate decision logged to {gate_path}[/dim]")
-
-        if not growth_pass:
-            console.print("[red]✗ Evolved description REJECTED by quality gate — not deploying[/red]")
             evolved_manifest = manifest.replace_description(tool_name, evolved_description)
-            failed_path = output_dir / "evolved_FAILED.json"
-            failed_path.write_text(json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n")
-            console.print(f"  Saved failed variant to {failed_path}")
-            reject_reason = decision_payload.get("reason", "growth_quality_gate")
-            if apply:
-                print(
-                    f"--apply skipped: gate rejected (decision: reject, reason: {reject_reason})",
-                    file=sys.stderr,
-                )
+            (output_dir / "baseline_manifest.json").write_text(
+                json.dumps(_manifest_to_dict(manifest), indent=2) + "\n"
+            )
+            (output_dir / "evolved_manifest.json").write_text(
+                json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n"
+            )
+            metrics = {
+                "tool_name": tool_name,
+                "manifest_path": str(manifest_path),
+                "timestamp": timestamp,
+                "iterations": iterations,
+                "optimizer_model": optimizer_model,
+                "eval_model": eval_model,
+                "baseline_score": avg_baseline,
+                "evolved_score": avg_evolved,
+                "improvement": improvement,
+                "baseline_chars": baseline_chars,
+                "evolved_chars": evolved_chars,
+                "train_examples": len(dataset.train),
+                "val_examples": len(dataset.val),
+                "holdout_examples": len(dataset.holdout),
+                "elapsed_seconds": elapsed,
+                "sentinel_failures": proposer.sentinel_failures,
+                "cost": COST_LEDGER.summary(),
+            }
+            (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+            console.print(f"\n  Output saved to {output_dir}/")
+
             if patch:
-                print(
-                    f"--patch skipped: gate rejected (decision: reject, reason: {reject_reason})",
-                    file=sys.stderr,
+                baseline_text = json.dumps(_manifest_to_dict(manifest), indent=2) + "\n"
+                evolved_text = json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n"
+                patch_text = _emit_patch(baseline_text, evolved_text, manifest_path)
+                sys.stdout.write(patch_text)
+                if patch_text and not patch_text.endswith("\n"):
+                    sys.stdout.write("\n")
+
+            if apply:
+                source.apply_evolved(
+                    source_path=manifest_path,
+                    evolved_manifest=evolved_manifest,
+                    target_tool=tool_name,
+                    new_description=evolved_description,
                 )
-            return {"decision": "reject", "reason": reject_reason}
+                console.print(f"  --apply: wrote evolved description to {manifest_path}")
 
-        table = Table(title="Tool Description Evolution Results")
-        table.add_column("Metric", style="bold")
-        table.add_column("Baseline", justify="right")
-        table.add_column("Evolved", justify="right")
-        table.add_column("Change", justify="right")
-        change_color = "green" if improvement > 0 else "red"
-        table.add_row(
-            "Holdout Score",
-            f"{avg_baseline:.3f}",
-            f"{avg_evolved:.3f}",
-            f"[{change_color}]{improvement:+.3f}[/{change_color}]",
-        )
-        table.add_row(
-            "Description Size",
-            f"{baseline_chars:,} chars",
-            f"{evolved_chars:,} chars",
-            f"{evolved_chars - baseline_chars:+,} chars",
-        )
-        table.add_row("Time", "", f"{elapsed:.1f}s", "")
-        console.print()
-        console.print(table)
+            if improvement > 0:
+                console.print(
+                    f"\n[bold green]✓ Evolution improved tool description by "
+                    f"{improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]"
+                )
+            else:
+                console.print(
+                    f"\n[yellow]⚠ Evolution did not improve tool description (change: {improvement:+.3f})[/yellow]"
+                )
 
-        evolved_manifest = manifest.replace_description(tool_name, evolved_description)
-        (output_dir / "baseline_manifest.json").write_text(
-            json.dumps(_manifest_to_dict(manifest), indent=2) + "\n"
-        )
-        (output_dir / "evolved_manifest.json").write_text(
-            json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n"
-        )
-        metrics = {
-            "tool_name": tool_name,
-            "manifest_path": str(manifest_path),
-            "timestamp": timestamp,
-            "iterations": iterations,
-            "optimizer_model": optimizer_model,
-            "eval_model": eval_model,
-            "baseline_score": avg_baseline,
-            "evolved_score": avg_evolved,
-            "improvement": improvement,
-            "baseline_chars": baseline_chars,
-            "evolved_chars": evolved_chars,
-            "train_examples": len(dataset.train),
-            "val_examples": len(dataset.val),
-            "holdout_examples": len(dataset.holdout),
-            "elapsed_seconds": elapsed,
-            "sentinel_failures": proposer.sentinel_failures,
-            "cost": COST_LEDGER.summary(),
-        }
-        (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
-
-        console.print(f"\n  Output saved to {output_dir}/")
-
-        if patch:
-            baseline_text = json.dumps(_manifest_to_dict(manifest), indent=2) + "\n"
-            evolved_text = json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n"
-            patch_text = _emit_patch(baseline_text, evolved_text, manifest_path)
-            sys.stdout.write(patch_text)
-            if patch_text and not patch_text.endswith("\n"):
-                sys.stdout.write("\n")
-
-        if apply:
-            source.apply_evolved(
-                source_path=manifest_path,
-                evolved_manifest=evolved_manifest,
-                target_tool=tool_name,
-                new_description=evolved_description,
+            return metrics
+        except CostCeilingExceeded as exc:
+            # Abort may fire before `run_inputs` is built in the deploy path;
+            # fall back to a minimal equivalent so gate_decision.json is still useful.
+            run_inputs_for_abort = locals().get("run_inputs") or {
+                "seed": config.seed,
+                "iterations": iterations,
+                "optimizer_model": optimizer_model,
+                "reflection_model": config.reflection_model,
+                "eval_model": config.eval_model,
+                "eval_dataset_size": config.eval_dataset_size,
+                "holdout_ratio": config.holdout_ratio,
+                "quality_gate_preset": quality_gate,
+                "fitness_profile": fitness_profile,
+                "eval_source": eval_source,
+            }
+            write_cost_ceiling_abort(
+                exc,
+                output_dir=output_dir,
+                run_inputs=run_inputs_for_abort,
+                extra_fields={
+                    "artifact_type": "tool_description",
+                    "target_tool": tool_name,
+                },
             )
-            console.print(f"  --apply: wrote evolved description to {manifest_path}")
-
-        if improvement > 0:
-            console.print(
-                f"\n[bold green]✓ Evolution improved tool description by "
-                f"{improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]"
-            )
-        else:
-            console.print(
-                f"\n[yellow]⚠ Evolution did not improve tool description (change: {improvement:+.3f})[/yellow]"
-            )
-
-        return metrics
+            return {"decision": "aborted", "reason": "cost_ceiling_exceeded"}
     finally:
         root_logger.removeHandler(file_handler)
         file_handler.close()
@@ -851,6 +921,34 @@ def evolve(
         "discovery before spending judge + GEPA budget on a full run."
     ),
 )
+@click.option(
+    "--max-total-cost-usd",
+    default=None,
+    type=click.FloatRange(min=0.0),
+    help="Safety net: abort the run cleanly when cumulative LM cost (across "
+         "dataset gen, GEPA, holdout eval, and any sessiondb judge calls) "
+         "exceeds this dollar amount. Worst-case overshoot is one LM call "
+         "past the ceiling. 0 is accepted (aborts on first call, useful for "
+         "testing). Negative values rejected. Off by default.",
+)
+@click.option(
+    "--benchmark-cmd",
+    default=None,
+    type=str,
+    help="Deploy-gate hook: shell command run AFTER the framework's own "
+         "deploy gate passes; nonzero exit flips the decision to reject "
+         "with reason='benchmark_failed'. Receives EVOLVED_PATH, "
+         "BASELINE_PATH, RUN_DIR, TARGET_NAME, ARTIFACT_TYPE via env. Runs "
+         "under /bin/sh -c with shell=True (your shell, your command — "
+         "interactive aliases are not available). Trust boundary: the "
+         "command string is yours; do not pass strings you didn't write.",
+)
+@click.option(
+    "--benchmark-timeout-seconds",
+    default=600,
+    type=click.IntRange(min=1),
+    help="Wall-clock cap for the --benchmark-cmd hook (default 600s).",
+)
 def main(
     tool_name: str,
     manifest_path: Path,
@@ -864,6 +962,9 @@ def main(
     enable_confusable_bucket: bool,
     eval_source: str,
     dry_run: bool,
+    max_total_cost_usd: Optional[float],
+    benchmark_cmd: Optional[str],
+    benchmark_timeout_seconds: int,
 ) -> None:
     """Evolve one tool description in an MCP manifest using DSPy + GEPA."""
     if apply_flag and patch_flag:
@@ -881,6 +982,9 @@ def main(
         enable_confusable_bucket=enable_confusable_bucket,
         eval_source=eval_source,
         dry_run=dry_run,
+        max_total_cost_usd=max_total_cost_usd,
+        benchmark_cmd=benchmark_cmd,
+        benchmark_timeout_seconds=benchmark_timeout_seconds,
     )
 
 

@@ -18,7 +18,10 @@ from unittest.mock import patch
 import pytest
 
 from evolution.core.lm_timing_callback import (
+    COST_LEDGER,
+    CostCeilingExceeded,
     CostLedger,
+    LMTimingCallback,
     _log_litellm_cost,
 )
 
@@ -237,3 +240,143 @@ class TestCostLedgerReset:
         summary = ledger.summary()
         assert summary["total_usd"] == 0.0
         assert summary["by_model"] == {}
+
+    def test_reset_clears_pending_abort_flag(self):
+        """The cost callback persists process-globally, so a stale flag
+        would abort the next run's first LM call."""
+        ledger = CostLedger()
+        ledger.set_ceiling(0.0)
+        with patch(
+            "evolution.core.lm_timing_callback.litellm.completion_cost",
+            return_value=0.5,
+        ):
+            _log_litellm_cost(
+                {}, _make_response(prompt_tokens=100, completion_tokens=10),
+                None, None, ledger=ledger,
+            )
+        assert ledger.get_abort_state() is not None  # abort is queued
+        ledger.reset()
+        assert ledger.get_abort_state() is None  # cleared
+
+
+class TestCostCeiling:
+    """The cost-ceiling kill switch."""
+
+    def test_set_ceiling_persists_until_reset(self):
+        ledger = CostLedger()
+        ledger.set_ceiling(2.50)
+        # Setting None disables (no exception, no aborts queued).
+        ledger.set_ceiling(None)
+        assert ledger.get_abort_state() is None
+
+    def test_record_below_ceiling_does_not_set_flag(self):
+        ledger = CostLedger()
+        ledger.set_ceiling(1.00)
+        with patch(
+            "evolution.core.lm_timing_callback.litellm.completion_cost",
+            return_value=0.50,  # under the ceiling
+        ):
+            _log_litellm_cost(
+                {}, _make_response(prompt_tokens=10, completion_tokens=5),
+                None, None, ledger=ledger,
+            )
+        assert ledger.get_abort_state() is None
+
+    def test_record_over_ceiling_sets_flag(self):
+        ledger = CostLedger()
+        ledger.set_ceiling(0.10)
+        with patch(
+            "evolution.core.lm_timing_callback.litellm.completion_cost",
+            return_value=0.25,  # one call past the ceiling
+        ):
+            _log_litellm_cost(
+                {}, _make_response(prompt_tokens=10, completion_tokens=5),
+                None, None, ledger=ledger,
+            )
+        state = ledger.get_abort_state()
+        assert state is not None
+        total, ceiling = state
+        assert ceiling == 0.10
+        assert total == pytest.approx(0.25)
+
+    def test_record_does_not_raise_when_over_ceiling(self):
+        """The cost callback only sets the flag — it never raises (litellm
+        would swallow callback exceptions anyway).
+        """
+        ledger = CostLedger()
+        ledger.set_ceiling(0.0)
+        with patch(
+            "evolution.core.lm_timing_callback.litellm.completion_cost",
+            return_value=1.00,
+        ):
+            # Must complete without exception even though total >> ceiling.
+            _log_litellm_cost(
+                {}, _make_response(prompt_tokens=10, completion_tokens=5),
+                None, None, ledger=ledger,
+            )
+
+    def test_baselm_call_raises_when_abort_pending(self):
+        """The monkey-patched BaseLM.__call__ is the load-bearing seam —
+        callbacks get their exceptions swallowed, the call path doesn't.
+        """
+        from dspy.clients.base_lm import BaseLM
+
+        COST_LEDGER.reset()
+        try:
+            COST_LEDGER.set_ceiling(0.0)
+            with patch(
+                "evolution.core.lm_timing_callback.litellm.completion_cost",
+                return_value=1.00,
+            ):
+                _log_litellm_cost(
+                    {}, _make_response(prompt_tokens=10, completion_tokens=5),
+                    None, None,
+                )
+            # Build a minimal BaseLM-like subclass; we don't want to spawn a
+            # real LM. Calling __call__ directly through the class exercises
+            # the patched method.
+            class _StubLM(BaseLM):
+                model = "stub"
+
+                def forward(self, *args, **kwargs):  # pragma: no cover — should not reach this
+                    raise AssertionError("forward should not be called when abort is pending")
+
+            stub = _StubLM(model="stub")
+            with pytest.raises(CostCeilingExceeded) as exc_info:
+                stub(prompt="hello")
+            assert exc_info.value.ceiling_usd == 0.0
+            assert exc_info.value.total_usd == pytest.approx(1.00)
+        finally:
+            COST_LEDGER.reset()
+
+    def test_baselm_call_does_not_raise_when_no_abort(self):
+        """Sanity: with no ceiling set, the patched __call__ delegates
+        to the original BaseLM behavior with no extra exception.
+        """
+        from dspy.clients.base_lm import BaseLM
+        COST_LEDGER.reset()
+
+        called = {"forward": False}
+
+        class _StubLM(BaseLM):
+            model = "stub"
+
+            def forward(self, *args, **kwargs):
+                called["forward"] = True
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))],
+                    usage=SimpleNamespace(prompt_tokens=0, completion_tokens=0),
+                    model="stub",
+                )
+
+        stub = _StubLM(model="stub")
+        # Doesn't raise from the patch (forward may or may not succeed,
+        # but the patch itself should not interfere).
+        try:
+            stub(prompt="hello")
+        except CostCeilingExceeded:
+            pytest.fail("patched __call__ raised CostCeilingExceeded when no abort was pending")
+        except Exception:
+            # Other downstream errors are acceptable for this test — we
+            # only care that the cost-ceiling guard didn't fire.
+            pass

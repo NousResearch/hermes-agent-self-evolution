@@ -177,6 +177,25 @@ uv run python -m evolution.skills.evolve_skill --skill X --patch | git apply
 
 Both flags are no-ops on a reject decision (with a stderr notice). `--apply` also skips with a warning when the source path is under Claude Code's plugin cache (read-only by design).
 
+### Safety knobs
+
+`--max-total-cost-usd FLOAT` aborts the run cleanly when cumulative LM cost exceeds the ceiling. Useful when an accidentally-cranked `--iterations` could push a run past your expected budget. Worst-case overshoot is one LM call past the ceiling — the cost callback fires after each call returns, and the next call aborts at start.
+
+```bash
+uv run python -m evolution.skills.evolve_skill --skill X --max-total-cost-usd 5.00
+```
+
+On abort, `output/<artifact>/<ts>/gate_decision.json` carries `decision="aborted"`, `reason="cost_ceiling_exceeded"`, and the full `cost_summary` block so you see what was actually spent.
+
+`--benchmark-cmd "<shell command>"` runs your command as a deploy gate after the framework's own gate passes. Nonzero exit flips the decision to `reject` with `reason="benchmark_failed"`. The command receives the evolved + baseline artifact paths via env vars so it can run a pytest line, a custom benchmark, or any shell pipeline:
+
+```bash
+uv run python -m evolution.tools.evolve_tool --tool X --manifest Y \
+    --benchmark-cmd 'pytest -k smoke && custom_check.sh "$EVOLVED_PATH"'
+```
+
+Env vars: `EVOLVED_PATH`, `BASELINE_PATH`, `RUN_DIR`, `TARGET_NAME`, `ARTIFACT_TYPE`. The hook runs under `/bin/sh -c` — interactive aliases are not available; invoke binaries by full name. Trust boundary: the command string is yours, do not pass strings you didn't write yourself.
+
 ## What It Optimizes
 
 | Phase | Target | Engine | Status |

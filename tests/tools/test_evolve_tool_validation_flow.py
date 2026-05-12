@@ -717,3 +717,199 @@ class TestEvalSourceSessiondb:
 
         assert result == {"decision": "dry-run", "eval_source": "synthetic"}
         assert not (run_dir / "gate_decision.json").exists()
+
+
+def _benchmark_test_kwargs(temp_manifest: Path, run_dir: Path) -> dict:
+    """Common evolve() kwargs for the benchmark-hook tests — the rest of the
+    pipeline is mocked so we can exercise the post-decision hook insertion."""
+    return dict(
+        tool_name="search_files",
+        manifest_path=temp_manifest,
+        iterations=1,
+        eval_dataset_size=30,
+        holdout_ratio=0.5,
+        quality_gate="non-inferiority",
+        enable_confusable_bucket=True,
+        output_dir=run_dir,
+        benchmark_timeout_seconds=10,
+    )
+
+
+def _benchmark_test_mocks(manifest):
+    """The four standard mocks that take evolve() through to the deploy
+    decision — same shape as TestGateDecisionSchemaOnDeploy."""
+    return [
+        patch.object(
+            SyntheticDatasetBuilder,
+            "_call_lm_for_bucket",
+            side_effect=_bucket_side_effect(15, 9, 6),
+        ),
+        patch(
+            "evolution.tools.evolve_tool.dspy.GEPA",
+            new=_make_fake_gepa(_build_evolved_module(manifest, EVOLVED_DESCRIPTION)),
+        ),
+        patch.object(
+            ToolJudge,
+            "score",
+            new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
+        ),
+        patch.object(
+            ToolModule,
+            "forward",
+            new=_scripted_module_forward(expected_tool_for_evolved="search_files"),
+        ),
+    ]
+
+
+class TestBenchmarkCmdHook:
+    """The --benchmark-cmd hook: runs after the framework's own deploy gate
+    passes; nonzero exit / timeout / spawn error flips to reject."""
+
+    def test_benchmark_pass_keeps_deploy_decision(self, temp_manifest: Path, tmp_path: Path):
+        import subprocess as _subprocess
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        run_dir = tmp_path / "run"
+        fake_run = SimpleNamespace(returncode=0, stdout="ok\n", stderr="")
+        with patch("evolution.core.quality_gate.subprocess.run", return_value=fake_run):
+            with _benchmark_test_mocks(manifest)[0], _benchmark_test_mocks(manifest)[1], \
+                 _benchmark_test_mocks(manifest)[2], _benchmark_test_mocks(manifest)[3]:
+                evolve(
+                    **_benchmark_test_kwargs(temp_manifest, run_dir),
+                    benchmark_cmd="echo ok",
+                )
+
+        payload = json.loads((run_dir / "gate_decision.json").read_text())
+        assert payload["decision"] == "deploy"
+        assert payload["reason"] == "passed"
+        assert payload["benchmark"]["passed"] is True
+        assert payload["benchmark"]["exit_code"] == 0
+        assert payload["benchmark"]["reason"] == "ok"
+        assert payload["benchmark"]["command"] == "echo ok"
+        assert "ok" in payload["benchmark"]["stdout_tail"]
+        # Deploy artifacts present.
+        assert (run_dir / "evolved_manifest.json").exists()
+        assert (run_dir / "baseline_manifest.json").exists()
+
+    def test_benchmark_fail_flips_to_reject(self, temp_manifest: Path, tmp_path: Path):
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        run_dir = tmp_path / "run"
+        fake_run = SimpleNamespace(returncode=1, stdout="boom\n", stderr="")
+        with patch("evolution.core.quality_gate.subprocess.run", return_value=fake_run):
+            with _benchmark_test_mocks(manifest)[0], _benchmark_test_mocks(manifest)[1], \
+                 _benchmark_test_mocks(manifest)[2], _benchmark_test_mocks(manifest)[3]:
+                evolve(
+                    **_benchmark_test_kwargs(temp_manifest, run_dir),
+                    benchmark_cmd="exit 1",
+                )
+
+        payload = json.loads((run_dir / "gate_decision.json").read_text())
+        assert payload["decision"] == "reject"
+        assert payload["reason"] == "benchmark_failed"
+        assert payload["benchmark"]["passed"] is False
+        assert payload["benchmark"]["exit_code"] == 1
+        assert payload["benchmark"]["reason"] == "exit_nonzero"
+        assert "boom" in payload["benchmark"]["stdout_tail"]
+        # Reject path: failed artifact present, deploy artifact removed.
+        assert (run_dir / "evolved_FAILED.json").exists()
+        assert not (run_dir / "evolved_manifest.json").exists()
+        assert not (run_dir / "baseline_manifest.json").exists()
+
+    def test_benchmark_timeout_rejects(self, temp_manifest: Path, tmp_path: Path):
+        import subprocess as _subprocess
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        run_dir = tmp_path / "run"
+        with patch(
+            "evolution.core.quality_gate.subprocess.run",
+            side_effect=_subprocess.TimeoutExpired(cmd="sleep 100", timeout=10),
+        ):
+            with _benchmark_test_mocks(manifest)[0], _benchmark_test_mocks(manifest)[1], \
+                 _benchmark_test_mocks(manifest)[2], _benchmark_test_mocks(manifest)[3]:
+                evolve(
+                    **_benchmark_test_kwargs(temp_manifest, run_dir),
+                    benchmark_cmd="sleep 100",
+                )
+
+        payload = json.loads((run_dir / "gate_decision.json").read_text())
+        assert payload["decision"] == "reject"
+        assert payload["benchmark"]["passed"] is False
+        assert payload["benchmark"]["reason"] == "timeout"
+        assert payload["benchmark"]["exit_code"] is None
+
+    def test_benchmark_command_error_rejects(self, temp_manifest: Path, tmp_path: Path):
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        run_dir = tmp_path / "run"
+        with patch(
+            "evolution.core.quality_gate.subprocess.run",
+            side_effect=PermissionError("execve failed"),
+        ):
+            with _benchmark_test_mocks(manifest)[0], _benchmark_test_mocks(manifest)[1], \
+                 _benchmark_test_mocks(manifest)[2], _benchmark_test_mocks(manifest)[3]:
+                evolve(
+                    **_benchmark_test_kwargs(temp_manifest, run_dir),
+                    benchmark_cmd="/some/uninvokable/script",
+                )
+
+        payload = json.loads((run_dir / "gate_decision.json").read_text())
+        assert payload["decision"] == "reject"
+        assert payload["benchmark"]["passed"] is False
+        assert payload["benchmark"]["reason"] == "command_error"
+        assert "execve failed" in payload["benchmark"]["stderr_tail"]
+
+    def test_benchmark_env_vars_reach_subprocess(self, temp_manifest: Path, tmp_path: Path):
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        run_dir = tmp_path / "run"
+        captured_env = {}
+
+        def _capture(*args, **kwargs):
+            captured_env.update(kwargs.get("env") or {})
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with patch("evolution.core.quality_gate.subprocess.run", side_effect=_capture):
+            with _benchmark_test_mocks(manifest)[0], _benchmark_test_mocks(manifest)[1], \
+                 _benchmark_test_mocks(manifest)[2], _benchmark_test_mocks(manifest)[3]:
+                evolve(
+                    **_benchmark_test_kwargs(temp_manifest, run_dir),
+                    benchmark_cmd="true",
+                )
+
+        assert captured_env["EVOLVED_PATH"].endswith("/evolved_manifest.json")
+        assert captured_env["BASELINE_PATH"].endswith("/baseline_manifest.json")
+        assert captured_env["RUN_DIR"] == str(run_dir)
+        assert captured_env["TARGET_NAME"] == "search_files"
+        assert captured_env["ARTIFACT_TYPE"] == "tool_description"
+
+    def test_benchmark_not_called_when_growth_gate_rejects(self, temp_manifest: Path, tmp_path: Path):
+        """If the framework's own gate would reject, the benchmark hook never
+        runs — no point spending the user's CI budget on a variant we already
+        decided not to ship."""
+        from evolution.core.constraints import ConstraintResult, ConstraintValidator
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        run_dir = tmp_path / "run"
+        ran = {"called": False}
+
+        def _tripwire(*args, **kwargs):
+            ran["called"] = True
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        def _force_reject(self, artifact_text, baseline_text, bootstrap_result):
+            return [ConstraintResult(
+                passed=False,
+                constraint_name="growth_quality_gate",
+                message="forced reject for test",
+            )]
+
+        with patch("evolution.core.quality_gate.subprocess.run", side_effect=_tripwire), \
+             patch.object(ConstraintValidator, "validate_growth_with_quality", new=_force_reject):
+            with _benchmark_test_mocks(manifest)[0], _benchmark_test_mocks(manifest)[1], \
+                 _benchmark_test_mocks(manifest)[2], _benchmark_test_mocks(manifest)[3]:
+                evolve(
+                    **_benchmark_test_kwargs(temp_manifest, run_dir),
+                    benchmark_cmd="echo would-not-run",
+                )
+
+        # Growth gate failed → benchmark never invoked → no benchmark block.
+        payload = json.loads((run_dir / "gate_decision.json").read_text())
+        assert payload["decision"] == "reject"
+        assert payload["reason"] == "growth_quality_gate"
+        assert "benchmark" not in payload
+        assert ran["called"] is False

@@ -233,6 +233,58 @@ Written when any `validate_static` check fails on the evolved artifact (short-ci
 }
 ```
 
+### Benchmark-hook block (opt-in, present when `--benchmark-cmd` was set)
+
+When the run uses `--benchmark-cmd`, the gate decision carries an extra `benchmark` block regardless of pass/fail:
+
+```json
+"benchmark": {
+  "command": "pytest -k smoke",
+  "exit_code": 0,                 // null on timeout / spawn error
+  "duration_seconds": 12.4,
+  "stdout_tail": "...4096 chars max...",
+  "stderr_tail": "...4096 chars max...",
+  "passed": true,
+  "reason": "ok"                  // "ok" | "exit_nonzero" | "timeout" | "command_error"
+}
+```
+
+When `passed=false`, the top-level `decision` is `"reject"` and `reason` is `"benchmark_failed"`. The benchmark hook only runs when the framework's own deploy gate would deploy — if `growth_quality_gate` already rejected, the hook is skipped and the `benchmark` block is absent (no point spending the user's CI budget on a variant we already decided not to ship).
+
+### Cost-ceiling-abort variant
+
+Written when `--max-total-cost-usd` is set and cumulative LM cost exceeds the ceiling. The next LM call after the ceiling trips raises `CostCeilingExceeded` from `LMTimingCallback.on_lm_start`, which the orchestrator catches at top level. Worst-case overshoot is one LM call past the ceiling — `cost_at_abort_usd` shows what was actually spent.
+
+```json
+{
+  "schema_version": "4",
+  "decision": "aborted",
+  "reason": "cost_ceiling_exceeded",
+  "cost_ceiling_usd": 0.50,
+  "cost_at_abort_usd": 0.524,
+  "cost_summary": {                              // mirrors metrics.json.cost
+    "total_usd": 0.524,
+    "by_model": {
+      "openai/gpt-4.1-mini": {
+        "tokens_in_uncached": 12000,
+        "tokens_in_cached": 0,
+        "tokens_out": 800,
+        "reasoning_tokens": 0,
+        "cost_usd": 0.524,
+        "calls": 28,
+        "cache_hit_rate": 0.0
+      }
+    }
+  },
+  "run_inputs": { /* same shape as the deploy/reject variant */ },
+  // Tool-path runs additionally include:
+  "artifact_type": "tool_description",
+  "target_tool": "search_files"
+}
+```
+
+`decision="aborted"` is a third value alongside `"deploy"` and `"reject"` — calibration scripts that group by decision should add it to the dimension. The schema test (`TestGrowthGateDecisionSchema`) doesn't enforce this variant since it only fires on opt-in `--max-total-cost-usd` and an additive third decision value doesn't break the existing required-field set.
+
 ### Growth-quality-gate variant (deploy or reject)
 
 ```json

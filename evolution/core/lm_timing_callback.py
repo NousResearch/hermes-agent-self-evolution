@@ -30,6 +30,7 @@ Three surfaces:
 
 from __future__ import annotations
 
+import functools
 import logging
 import threading
 import time
@@ -50,6 +51,22 @@ _HEARTBEAT_TIERS: tuple[tuple[int, int], ...] = (
     (300, logging.WARNING),
     (600, logging.WARNING),
 )
+
+
+class CostCeilingExceeded(BaseException):
+    """Cumulative LM cost exceeded ``--max-total-cost-usd``.
+
+    Inherits from ``BaseException`` so routine ``except Exception:`` in
+    litellm callbacks, DSPy callbacks, and ``dspy.Evaluate``'s per-call
+    error swallower can't absorb the abort.
+    """
+
+    def __init__(self, total_usd: float, ceiling_usd: float):
+        self.total_usd = total_usd
+        self.ceiling_usd = ceiling_usd
+        super().__init__(
+            f"cost ${total_usd:.4f} exceeded ceiling ${ceiling_usd:.4f} — aborting"
+        )
 
 
 class LMTimingCallback(BaseCallback):
@@ -206,10 +223,25 @@ class CostLedger:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._by_model: dict[str, _ModelCostRow] = {}
+        self._ceiling_usd: Optional[float] = None
+        self._abort_requested: bool = False
 
     def reset(self) -> None:
+        # Must also clear the abort flag — the cost callback is registered
+        # process-globally, so a stale flag from a prior run would abort
+        # the next run's first LM call.
         with self._lock:
             self._by_model.clear()
+            self._ceiling_usd = None
+            self._abort_requested = False
+
+    def set_ceiling(self, usd: Optional[float]) -> None:
+        """Set the total-cost ceiling in USD. ``None`` disables. After the
+        ceiling is exceeded, the next LM call will raise
+        ``CostCeilingExceeded`` from ``LMTimingCallback.on_lm_start``.
+        """
+        with self._lock:
+            self._ceiling_usd = usd
 
     def record(
         self,
@@ -221,9 +253,9 @@ class CostLedger:
         reasoning_tokens: int,
         cost_usd: float,
     ) -> None:
-        # Single critical section over dict-insert + counter-increment so
-        # concurrent dspy.Evaluate threads can't observe a half-updated
-        # row or race the model-key creation.
+        # Single critical section over the dict insert + the ceiling check
+        # so concurrent dspy.Evaluate threads can't observe a half-updated
+        # row or read a stale total when setting the abort flag.
         with self._lock:
             row = self._by_model.setdefault(model, _ModelCostRow())
             row.tokens_in_uncached += max(0, prompt_tokens - cached_tokens)
@@ -232,6 +264,24 @@ class CostLedger:
             row.reasoning_tokens += reasoning_tokens
             row.cost_usd += cost_usd
             row.calls += 1
+            if self._ceiling_usd is not None and not self._abort_requested:
+                total = sum(r.cost_usd for r in self._by_model.values())
+                if total > self._ceiling_usd:
+                    self._abort_requested = True
+
+    def get_abort_state(self) -> Optional[tuple[float, float]]:
+        """If a cost-ceiling abort is pending, return ``(total_usd,
+        ceiling_usd)`` for the exception payload. Returns ``None``
+        otherwise. The flag is not cleared by reading — every LM call
+        after the ceiling trip will keep aborting until ``reset()``.
+        """
+        with self._lock:
+            if not self._abort_requested:
+                return None
+            total = sum(r.cost_usd for r in self._by_model.values())
+            # _ceiling_usd is non-None when _abort_requested is True (set
+            # together inside the lock in record()), so the cast is safe.
+            return total, float(self._ceiling_usd)  # type: ignore[arg-type]
 
     def summary(self) -> dict[str, Any]:
         with self._lock:
@@ -318,3 +368,30 @@ def register_litellm_cost_callback() -> None:
         callbacks = litellm.success_callback or []
         if _log_litellm_cost not in callbacks:
             litellm.success_callback = callbacks + [_log_litellm_cost]
+
+def _install_cost_ceiling_lm_guard() -> None:
+    """Patch ``BaseLM.__call__`` to raise ``CostCeilingExceeded`` when the
+    ledger has flagged an abort. Callbacks can't raise — DSPy and litellm
+    both swallow callback exceptions — so the check has to live in the
+    call path itself. Idempotent.
+    """
+    from dspy.clients.base_lm import BaseLM
+
+    if getattr(BaseLM.__call__, "_cost_ceiling_guarded", False):
+        return
+
+    original_call = BaseLM.__call__
+
+    @functools.wraps(original_call)
+    def call_with_cost_ceiling_check(self, *args, **kwargs):
+        state = COST_LEDGER.get_abort_state()
+        if state is not None:
+            raise CostCeilingExceeded(*state)
+        return original_call(self, *args, **kwargs)
+
+    call_with_cost_ceiling_check._cost_ceiling_guarded = True  # type: ignore[attr-defined]
+    BaseLM.__call__ = call_with_cost_ceiling_check
+
+
+_install_cost_ceiling_lm_guard()
+

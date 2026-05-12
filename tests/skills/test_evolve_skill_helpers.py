@@ -56,6 +56,11 @@ def _mipro_runner_missing_optuna(**kwargs):
     raise ImportError("optuna is required for MIPROv2")
 
 
+def _gepa_runner_cost_ceiling(**kwargs):
+    from evolution.core.lm_timing_callback import CostCeilingExceeded
+    raise CostCeilingExceeded(total_usd=10.0, ceiling_usd=5.0)
+
+
 class TestBuildOptimizerAndCompile:
     def _common_kwargs(self, **overrides):
         kwargs = dict(
@@ -97,6 +102,25 @@ class TestBuildOptimizerAndCompile:
                 _gepa_runner=_gepa_runner_raises,
                 _mipro_runner=_mipro_runner_succeeds,
             )
+
+    def test_cost_ceiling_reraises_without_fallback(self):
+        """A CostCeilingExceeded raised by GEPA must NOT trigger MIPROv2
+        fallback — that would re-incur cost and defeat the kill switch.
+        Use a tripwire MIPRO runner to verify it's never called.
+        """
+        from evolution.core.lm_timing_callback import CostCeilingExceeded
+
+        def _mipro_tripwire(**kwargs):
+            raise AssertionError("MIPROv2 fallback must not run on cost-ceiling abort")
+
+        with pytest.raises(CostCeilingExceeded) as exc_info:
+            _build_optimizer_and_compile(
+                **self._common_kwargs(),  # no_fallback=False (the default)
+                _gepa_runner=_gepa_runner_cost_ceiling,
+                _mipro_runner=_mipro_tripwire,
+            )
+        assert exc_info.value.ceiling_usd == 5.0
+        assert exc_info.value.total_usd == 10.0
 
     def test_miprov2_importerror_chains_through_gepa_cause(self):
         # When MIPROv2 raises ImportError (missing optuna), the user must

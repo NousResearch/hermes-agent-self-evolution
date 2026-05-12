@@ -68,6 +68,9 @@ Both delivery flags are no-ops on a reject decision and emit a one-line stderr n
 |---|---|---|
 | `--dry-run` | off | Validate setup; don't run optimization. |
 | `--evaluate-band-on-holdout / --no-evaluate-band-on-holdout` | off | Calibration telemetry: after the picked candidate is selected, re-evaluate every candidate in the knee-point band on the holdout and write `band_holdout.json` alongside `gate_decision.json`. Adds judge calls proportional to band size × holdout examples (subsampled to ≤100). Off by default to keep production runs cheap. |
+| `--max-total-cost-usd FLOAT` | off | Safety net: abort cleanly when cumulative LM cost exceeds this dollar amount. Worst-case overshoot is one LM call past the ceiling (the cost callback fires AFTER the call returns; the next call aborts at start). 0 is accepted (aborts on first call). Negatives rejected. Writes a `decision="aborted"` `gate_decision.json` with `cost_at_abort_usd`, `cost_ceiling_usd`, and the full `cost_summary` block. |
+| `--benchmark-cmd "<shell command>"` | off | Deploy-gate hook: shell command run AFTER the framework's own deploy gate passes; nonzero exit flips the decision to `reject` with `reason="benchmark_failed"`. Receives `EVOLVED_PATH`, `BASELINE_PATH`, `RUN_DIR`, `TARGET_NAME`, `ARTIFACT_TYPE` via env. Runs under `/bin/sh -c`; aliases and shell functions from your interactive shell are not available. Trust boundary: the command string is yours; do not pass strings you didn't write. Adds a `benchmark` block to `gate_decision.json`. |
+| `--benchmark-timeout-seconds INT` | `600` | Wall-clock cap for the `--benchmark-cmd` hook. Timeout treated as a benchmark fail with `reason="timeout"`. |
 
 ### Exit conditions
 - `sys.exit(1)` if skill not found across all `SkillSource`s — prints available skills per source.
@@ -98,6 +101,9 @@ Evolves one tool's top-level `description` field inside an MCP-shape manifest. T
 | `--seed <int>` | `42` | RNG seed for dataset splitting. |
 | `--eval-source {synthetic,sessiondb}` | `synthetic` | Where the eval dataset comes from. `synthetic` runs the three-bucket generator (50%/30%/20% target-correct / confusable-neighbor / regression-detection). `sessiondb` mines Hermes session JSON for `(task, invoked_tool)` pairs and re-judges them against the current manifest; misselections at judge confidence ≥0.85 become flipped-label training examples. Claude Code and Copilot logs aren't mined (no tool-call data). |
 | `--dry-run` | off | Build the eval dataset and stop. Useful for confirming sessiondb discovery before spending judge + GEPA budget. Returns `{"decision": "dry-run", "dataset_size": N}`. |
+| `--max-total-cost-usd FLOAT` | off | Same as the skill-path flag: abort cleanly when cumulative LM cost (dataset gen + judge + GEPA + holdout eval) exceeds this dollar amount. Worst-case overshoot is one LM call. Writes a `decision="aborted"` `gate_decision.json` with `cost_at_abort_usd`, `cost_ceiling_usd`, `cost_summary`, plus the tool-path `artifact_type` and `target_tool` fields for grouping by surface. |
+| `--benchmark-cmd "<shell command>"` | off | Same as the skill-path hook: shell command run AFTER deploy gate passes; nonzero exit flips to `reject`. Env vars `EVOLVED_PATH` and `BASELINE_PATH` point at the rendered manifest JSONs in the run dir. `ARTIFACT_TYPE` is `"tool_description"`. |
+| `--benchmark-timeout-seconds INT` | `600` | Wall-clock cap for the hook. |
 
 Both `--apply` and `--patch` are no-ops on a reject decision and emit a one-line stderr notice in that case.
 
