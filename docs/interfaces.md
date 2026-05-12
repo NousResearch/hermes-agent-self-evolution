@@ -127,6 +127,42 @@ Standalone session-history importer. Useful for previewing what `--eval-source s
 
 **Note:** the standalone CLI uses `_load_skill_text(skill_name)` which expects skills under `~/.hermes/skills/`. The `evolve_skill.py` `--eval-source sessiondb` path uses the same `build_dataset_from_external` orchestration but resolves the skill via `SkillSource` instead.
 
+## CLI: `python -m evolution.validation.closed_loop`
+
+Closed-loop validation: drive a real Hermes Agent through a task suite with the baseline and evolved artifacts, score real tool-selection behavior, compare. Exit 0 on pass, 1 on regression — drop-in compatible with `--benchmark-cmd`.
+
+### Required flags
+
+| Flag | Notes |
+|---|---|
+| `--tool <name>` | Hermes tool whose description is being validated (e.g. `patch`). Identifies which tool file's description gets spliced. |
+| `--hermes-repo <path>` | Path to your hermes-agent checkout. The tool file inside its `tools/` directory is mutated and restored. |
+| `--tasks <path>` | JSONL task-suite file. Each task has `task_id`, `user_message` (with optional `{fixture_dir}` placeholder), `expected_tools`, `forbidden_tools`, `fixture_setup`. |
+| `--baseline <path>` | Path to the baseline tool-module file (typically `hermes-agent/tools/<file>.py` unmutated). |
+| `--evolved <path>` | Path to the evolved tool-module file (an `evolve_tool --apply` output, or a hand-crafted candidate). |
+
+### Optional flags
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--output-dir <path>` | `output/validation/<tool>/<timestamp>/` | Where the `validation_report.json` lands. |
+| `--task-timeout-seconds <int>` | `600` | Per-task wall-clock cap for `hermes -z`. Timeouts count as **abstentions** in the report, not failures — they don't tip the decision either way. |
+
+### Exit conditions
+
+- `0` if the two-condition decision rule passes (`evolved_pass_rate >= baseline_pass_rate` AND (`n_losses == 0` OR `n_wins >= 2 * n_losses`)).
+- `1` if either condition fails (regression).
+- `StaleBackupError` (non-zero exit, clear message) if a `.cl_backup` file exists from a prior crashed run — the user must `mv` it back before re-running.
+- `ConcurrentRunError` if another harness or interactive `hermes` session holds the `fcntl.flock` on the target tool file's parent directory.
+
+### Crash safety
+
+The harness mutates the user's hermes-agent install in place. Defenses:
+
+- `.cl_backup` written atomically before any splice, validated with `ast.parse` before being trusted for restore.
+- `fcntl.flock` sentinel in the parent dir prevents concurrent harness runs from corrupting each other's restore.
+- `sha256` verification after every task — a YOLO-mode agent that rewrites the spliced file mid-suite (`terminal(echo > file_tools.py)`) is caught before later tasks silently run a corrupt baseline.
+
 ## Python API: `evolve()`
 
 ```python

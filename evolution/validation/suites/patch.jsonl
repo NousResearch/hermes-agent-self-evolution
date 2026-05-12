@@ -1,0 +1,11 @@
+# Closed-loop validation suite for the Hermes `patch` tool.
+# Tasks #1, #2, #3, #5 should resolve via patch (small / targeted / non-contiguous edits).
+# Task #4 should resolve via write_file (creating a new file — patch can't).
+# The hand-overclaimed "use patch for any file modification" description is
+# expected to fail task #4; if the harness doesn't flag this, the harness is
+# broken before the framework is.
+{"task_id": "patch_add_import", "user_message": "Add the line `from pathlib import Path` at the very top of {fixture_dir}/foo.py and save the file. Don't change anything else.", "expected_tools": ["patch"], "forbidden_tools": ["write_file"], "fixture_setup": {"foo.py": "def hello():\n    return 'world'\n"}}
+{"task_id": "patch_fix_typo", "user_message": "In {fixture_dir}/config.yaml, change the word `databse` to `database`. Don't change anything else.", "expected_tools": ["patch"], "forbidden_tools": ["write_file"], "fixture_setup": {"config.yaml": "service:\n  name: my-app\n  databse: postgres://localhost:5432/mydb\n  port: 8080\n"}}
+{"task_id": "patch_update_version_pin", "user_message": "In {fixture_dir}/requirements.txt, change the line `django==3.2` to `django==4.0`. Don't change anything else.", "expected_tools": ["patch"], "forbidden_tools": ["write_file"], "fixture_setup": {"requirements.txt": "requests==2.31.0\ndjango==3.2\npytest==7.4.0\n"}}
+{"task_id": "write_new_file", "user_message": "Create a new file at {fixture_dir}/utils.py containing a single function `def add(a, b): return a + b`. The file does not exist yet.", "expected_tools": ["write_file"], "forbidden_tools": ["patch"], "fixture_setup": {}}
+{"task_id": "patch_multi_location_settings", "user_message": "In {fixture_dir}/settings.py, change `DEBUG = True` to `DEBUG = False`, and change `ALLOWED_HOSTS = []` to `ALLOWED_HOSTS = ['example.com']`. Don't change anything else.", "expected_tools": ["patch"], "forbidden_tools": ["write_file"], "fixture_setup": {"settings.py": "import os\n\nDEBUG = True\nSECRET_KEY = 'change-me'\nALLOWED_HOSTS = []\nDATABASES = {}\n"}}

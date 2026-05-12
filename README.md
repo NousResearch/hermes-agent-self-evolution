@@ -196,6 +196,32 @@ uv run python -m evolution.tools.evolve_tool --tool X --manifest Y \
 
 Env vars: `EVOLVED_PATH`, `BASELINE_PATH`, `RUN_DIR`, `TARGET_NAME`, `ARTIFACT_TYPE`. The hook runs under `/bin/sh -c` — interactive aliases are not available; invoke binaries by full name. Trust boundary: the command string is yours, do not pass strings you didn't write yourself.
 
+### Closed-loop validation (real agent on real tasks)
+
+The framework's deploy gate scores evolved artifacts against an LM-judge on a synthetic eval set. That's a closed loop: an LM scoring another LM's output on tasks a third LM made up. To break the loop, point a real agent at a small task suite with the baseline and evolved artifacts and see whether real agent behavior actually shifted:
+
+```bash
+uv run python -m evolution.validation.closed_loop \
+    --tool patch \
+    --hermes-repo ~/.hermes/hermes-agent \
+    --tasks evolution/validation/suites/patch.jsonl \
+    --baseline ~/.hermes/hermes-agent/tools/file_tools.py \
+    --evolved /tmp/evolved/file_tools.py
+```
+
+For each task in the suite, the harness installs baseline then evolved into the user's hermes-agent (atomically, with a `.cl_backup` for crash recovery and `fcntl.flock` to block concurrent runs), invokes `hermes -z` non-interactively, parses the resulting session JSON, and scores each run against the task's `expected_tools` and `forbidden_tools`. The report shows per-task wins/losses + aggregate pass-rate change. Decision rule: pass iff `evolved_pass_rate >= baseline_pass_rate` AND (no per-task loss OR wins offset losses 2:1). Exit code 0 on pass, 1 on regression — drop-in for `--benchmark-cmd`:
+
+```bash
+--benchmark-cmd 'python -m evolution.validation.closed_loop \
+    --tool $TARGET_NAME \
+    --hermes-repo ~/.hermes/hermes-agent \
+    --tasks evolution/validation/suites/$TARGET_NAME.jsonl \
+    --baseline "$BASELINE_PATH" \
+    --evolved "$EVOLVED_PATH"'
+```
+
+Cost: each task is one `hermes -z` run (~$0.05–$0.50). The bundled `patch.jsonl` is 5 tasks × 2 phases = ~$0.50–$5 per validation.
+
 ## What It Optimizes
 
 | Phase | Target | Engine | Status |

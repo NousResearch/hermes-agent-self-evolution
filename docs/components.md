@@ -294,6 +294,24 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 
 **`gate_decision.json` additions:** every tool-path decision carries `artifact_type: "tool_description"`, `target_tool: <name>`, `manifest_neighbor_count: len(manifest.tools) - 1`, and `sentinel_failures: <count>` (number of reflection-LM outputs the proposer rejected for failing sentinel preservation).
 
+## evolution/validation/ — closed-loop validation against a real agent
+
+Drives an actual agent (`HermesAgentRunner` via `hermes -z`) through a small task suite with baseline and evolved artifacts, scores real tool-selection behavior, compares. Orthogonal to skills/tools/prompts/code — measures agent behavior, not artifact production.
+
+- `agent_runner.py` — `AgentRunner` Protocol + `AgentRunResult` dataclass + `TaskRunContext`. The Protocol shape leaves room for Claude Code / other backends in v2 without changing the validator.
+- `hermes_runner.py` — `HermesAgentRunner.run(ctx) -> AgentRunResult`. Subprocess `hermes -z "task"` with `HERMES_HOME` + `HOME` redirected to a per-task tmp dir and `cwd` set to the task's fixture dir. Scores from the session JSON only — `hermes -z` exit code is unreliable (returns 0 on agent-loop crashes). Tolerates both tool-call shapes Hermes emits (`{"function": {"name": ...}}` nested and flat `{"name": ...}`). Errors (timeout, no session JSON written, malformed JSON) become abstentions in the report.
+- `task.py` — `Task` + `TaskSuite.from_jsonl`. JSONL with comment + blank-line tolerance; sha256 of the file bytes lands in the report so regression-by-curation (silently dropping a hard task) is auditable.
+- `artifact_installer.py` — `ArtifactInstaller` Protocol + `HermesToolDescriptionInstaller`. Reads the artifact source as a Hermes tool-module file, parses it via `HermesToolSource`, splices the target tool's description into the live install via `apply_evolved`. Returns `sha256(target_path)` post-install for the validator's drift check. Helpers: `atomic_write_bytes`, `verify_python_parses`.
+- `validator.py` — `ClosedLoopValidator.validate(inputs) -> ValidationReport`. The dangerous path: mutates the user's hermes-agent install in place. Three defenses:
+  - `fcntl.flock` sentinel in the parent dir of the target tool file — concurrent harness runs (or a user running `hermes` interactively) fail fast with `ConcurrentRunError`.
+  - `.cl_backup` written atomically and `ast.parse`-validated before being trusted for restore. The harness refuses to start if a stale, valid backup exists, naming the file so the user can `mv` it manually.
+  - `sha256` verification after every task — a YOLO-mode agent that overwrites the spliced file mid-suite is caught with `ChecksumDriftError` before later tasks silently run a corrupt baseline.
+- `report.py` — `ValidationReport` (JSON + Rich console rendering) plus the scoring (`score_task`), phase summary (`summarize_phase`), win/loss decomposition (`compute_win_loss`), and the two-condition decision rule (`decide`):
+  - `evolved.pass_rate >= baseline.pass_rate`
+  - `n_losses == 0` OR `n_wins >= 2 * n_losses`
+- `closed_loop.py` — Click CLI. Exit 0 on `pass`, 1 on `regression`. Drop-in compatible with `--benchmark-cmd`.
+- `suites/patch.jsonl` — v1 task suite (5 tasks targeting the `patch` vs `write_file` boundary). Task #4 ("create new file") is the load-bearing regression check.
+
 ## evolution/{prompts, code, monitor}/ — planned, empty
 
 These packages exist as empty stubs anchoring the planned tier-3/4/5 work. See `PLAN.md` for the design.
