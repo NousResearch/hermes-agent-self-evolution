@@ -73,8 +73,12 @@ VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
 
 
-def _contains_secret(text: str) -> bool:
-    """Check if text contains potential API keys or tokens."""
+def contains_secret(text: str) -> bool:
+    """Check if text contains potential API keys or tokens.
+
+    Public helper — `evolution.tools.session_mining` imports it for the
+    tool-mining path's secret scrub.
+    """
     return bool(SECRET_PATTERNS.search(text))
 
 
@@ -177,7 +181,7 @@ class ClaudeCodeImporter:
                 text = entry.get("display", "")
                 if not text or len(text) < 10:
                     continue
-                if _contains_secret(text):
+                if contains_secret(text):
                     continue
 
                 messages.append({
@@ -280,7 +284,7 @@ def _parse_copilot_events(
 
                 if event_type == "user.message":
                     if current_user_msg and current_assistant_msg:
-                        if not _contains_secret(current_user_msg) and not _contains_secret(current_assistant_msg):
+                        if not contains_secret(current_user_msg) and not contains_secret(current_assistant_msg):
                             pairs.append({
                                 "source": "copilot",
                                 "task_input": current_user_msg,
@@ -301,7 +305,7 @@ def _parse_copilot_events(
                             current_assistant_msg = content
 
         if current_user_msg and current_assistant_msg:
-            if not _contains_secret(current_user_msg) and not _contains_secret(current_assistant_msg):
+            if not contains_secret(current_user_msg) and not contains_secret(current_assistant_msg):
                 pairs.append({
                     "source": "copilot",
                     "task_input": current_user_msg,
@@ -341,35 +345,15 @@ class HermesSessionImporter:
             List of dicts with keys: source, task_input, assistant_response,
             session_id.
         """
-        if not HermesSessionImporter.SESSION_DIR.exists():
-            return []
-
         messages = []
-        session_files = sorted(
-            HermesSessionImporter.SESSION_DIR.glob("*.json"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,  # newest first
-        )
-
-        for session_file in session_files:
-            try:
-                data = json.loads(session_file.read_text())
-            except (json.JSONDecodeError, OSError):
-                continue
-
-            msg_list = data.get("messages", [])
-            if not msg_list:
-                continue
-
-            session_id = data.get("session_id", session_file.stem)
-
+        for session_id, msg_list in iter_hermes_sessions():
             for i, msg in enumerate(msg_list):
                 if msg.get("role") != "user":
                     continue
                 user_text = msg.get("content", "")
                 if not user_text or len(user_text) < 10:
                     continue
-                if _contains_secret(user_text):
+                if contains_secret(user_text):
                     continue
 
                 assistant_text = ""
@@ -382,7 +366,7 @@ class HermesSessionImporter:
                     elif msg_list[j].get("role") == "user":
                         break
 
-                if assistant_text and _contains_secret(assistant_text):
+                if assistant_text and contains_secret(assistant_text):
                     continue
 
                 messages.append({
@@ -396,6 +380,40 @@ class HermesSessionImporter:
                     return messages
 
         return messages
+
+
+def iter_hermes_sessions():
+    """Yield ``(session_id, messages)`` for each Hermes session file.
+
+    Walks ``~/.hermes/sessions/*.json`` newest-first by mtime. Skips files
+    that fail to parse and sessions with no ``messages`` list. The yielded
+    ``messages`` is the raw list — callers are responsible for whatever
+    pair / tool-call extraction they need.
+
+    Shared by ``HermesSessionImporter`` (skill-path) and
+    ``evolution.tools.session_mining`` (tool-path).
+    """
+    if not HermesSessionImporter.SESSION_DIR.exists():
+        return
+
+    session_files = sorted(
+        HermesSessionImporter.SESSION_DIR.glob("*.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,  # newest first
+    )
+
+    for session_file in session_files:
+        try:
+            data = json.loads(session_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        msg_list = data.get("messages", [])
+        if not msg_list:
+            continue
+
+        session_id = data.get("session_id", session_file.stem)
+        yield session_id, msg_list
 
 
 class RelevanceFilter:
@@ -486,7 +504,7 @@ class RelevanceFilter:
                             assistant_response=msg.get("assistant_response", "")[:1000],
                         )
 
-                    scoring = _parse_scoring_json(result.scoring)
+                    scoring = parse_scoring_json(result.scoring)
                     if scoring is None:
                         errors += 1
                         progress.update(task, advance=1)
@@ -523,13 +541,16 @@ class RelevanceFilter:
         return examples
 
 
-def _parse_scoring_json(text: str) -> Optional[dict]:
+def parse_scoring_json(text: str) -> Optional[dict]:
     """Extract a JSON object from LLM scoring output.
 
     First tries ``json.loads`` for clean output, then falls back to a
     balanced-brace walk. Regex extraction was rejected — ``r'\\{[^}]+\\}'``
     breaks on nested braces (e.g. "handle {edge} cases" inside a string).
     Returns None when no valid JSON object is found.
+
+    Public helper — `evolution.tools.session_mining` imports it for the
+    tool-mining path's judge-response parse.
     """
     if not text:
         return None

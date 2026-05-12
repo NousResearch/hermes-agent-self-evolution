@@ -362,9 +362,16 @@ Runs of `evolution.tools.evolve_tool` write the same schema with four extra top-
 | `manifest_neighbor_count` | `int \| None` | Set only on tool runs. Equals `len(manifest.tools) - 1` — the number of confusable peers the selector had to disambiguate against. |
 | `sentinel_failures` | `int \| None` | Set only on tool runs. Count of reflection-LM outputs the proposer rejected for failing sentinel preservation. A high count signals the reflection LM is struggling with the constraint and the run may be wasting iterations. |
 
-`dataset.categories` (`{"target_correct": N, "confusable_neighbor": N, "regression_detection": N}`) is populated on tool runs; on skill runs it's `{"general": N}`.
+`dataset.categories` namespace is **disjoint per eval source** on the tool path. Synthetic runs produce `{"target_correct": N, "confusable_neighbor": N, "regression_detection": N}` from the three-bucket generator. SessionDB runs produce `{"agreed": N, "misselection": N}` from the confidence-banded judge: `"agreed"` means the judge concurred with the agent's actual tool choice, `"misselection"` means it disagreed at confidence ≥0.85 and `expected_behavior` was flipped to the judge's pick. Skill runs use `{"general": N}`. Calibration scripts should branch on `run_inputs.eval_source` before interpreting the category mix.
 
 `dataset.dropped_tools` is a list of `[name_hint, reason]` 2-lists naming schemas the source adapter saw but couldn't parse statically (e.g., dicts built from function calls, descriptions that aren't literal strings / name refs / f-strings). Empty `[]` on the MCP-JSON path where nothing is dropped; populated on the Hermes Python-source path so users see what was excluded from evaluation.
+
+#### SessionDB-only fields (`run_inputs.eval_source == "sessiondb"`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `dataset.sessiondb_drops` | `dict[str, int]` | Per-reason drop counts across the two pipeline stages. Importer keys: `short_task`, `slash_command`, `secret`, `no_tool_calls`, `non_manifest`. Judge keys: `judge_irrelevant`, `judge_error`, `noisy_middle`, `low_confidence`, `unknown_correct_tool`. Judge keys are absent when zero candidates reached the judge stage. |
+| `dataset.dropped_non_manifest_count` | `int` | Pulled out of `sessiondb_drops["non_manifest"]` as a top-level int so calibration scripts don't have to know the inner key set. Counts session invocations of tools that exist in the historical session but not in the current manifest under evolution. |
 
 ## metrics.json (deploy-only summary)
 

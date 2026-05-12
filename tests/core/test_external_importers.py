@@ -23,14 +23,15 @@ import pytest
 from click.testing import CliRunner
 
 from evolution.core.external_importers import (
-    _contains_secret,
+    contains_secret,
     _is_relevant_to_skill,
-    _parse_scoring_json,
+    parse_scoring_json,
     _parse_copilot_events,
     _read_copilot_workspace,
     _load_skill_text,
     _validate_eval_example,
     build_dataset_from_external,
+    iter_hermes_sessions,
     main,
     ClaudeCodeImporter,
     CopilotImporter,
@@ -48,106 +49,106 @@ class TestSecretDetection:
     """Verify that known secret formats are caught and normal text is not."""
 
     def test_detects_anthropic_key(self):
-        assert _contains_secret("here is sk-ant-api03-abc123def456 my key")
+        assert contains_secret("here is sk-ant-api03-abc123def456 my key")
 
     def test_detects_openrouter_key(self):
-        assert _contains_secret("sk-or-v1-abcdef1234567890abcdef")
+        assert contains_secret("sk-or-v1-abcdef1234567890abcdef")
 
     def test_detects_github_pat(self):
-        assert _contains_secret("use ghp_abcdefghijklmnopqrstuvwxyz12")
+        assert contains_secret("use ghp_abcdefghijklmnopqrstuvwxyz12")
 
     def test_detects_github_user_token(self):
-        assert _contains_secret("ghu_abcdef123456")
+        assert contains_secret("ghu_abcdef123456")
 
     def test_detects_slack_bot_token(self):
-        assert _contains_secret("SLACK_TOKEN is xoxb-123-456-abcdef")
+        assert contains_secret("SLACK_TOKEN is xoxb-123-456-abcdef")
 
     def test_detects_slack_app_token(self):
-        assert _contains_secret("xapp-1-ABC-123456-xyz")
+        assert contains_secret("xapp-1-ABC-123456-xyz")
 
     def test_detects_notion_token(self):
-        assert _contains_secret("ntn_37257299567bdiGRuYDIjhNH8uFribb461")
+        assert contains_secret("ntn_37257299567bdiGRuYDIjhNH8uFribb461")
 
     def test_detects_bearer_token(self):
-        assert _contains_secret("Authorization: Bearer dsm_bYxe4QUvPsDjRThUu2Qb3z")
+        assert contains_secret("Authorization: Bearer dsm_bYxe4QUvPsDjRThUu2Qb3z")
 
     def test_detects_env_var_anthropic(self):
-        assert _contains_secret("export ANTHROPIC_API_KEY=something")
+        assert contains_secret("export ANTHROPIC_API_KEY=something")
 
     def test_detects_env_var_openai(self):
-        assert _contains_secret("OPENAI_API_KEY=sk-blah")
+        assert contains_secret("OPENAI_API_KEY=sk-blah")
 
     def test_detects_long_sk_prefix(self):
-        assert _contains_secret("sk-proj-1234567890abcdefghij")
+        assert contains_secret("sk-proj-1234567890abcdefghij")
 
     def test_ignores_normal_text(self):
-        assert not _contains_secret("sort these messages by topic")
+        assert not contains_secret("sort these messages by topic")
 
     def test_ignores_short_sk_prefix(self):
         # "sk" alone or "sk-foo" (short) should not trigger
-        assert not _contains_secret("I asked about sk")
+        assert not contains_secret("I asked about sk")
 
     def test_ignores_prose_with_key_word(self):
-        assert not _contains_secret("the key insight is that we need to refactor")
+        assert not contains_secret("the key insight is that we need to refactor")
 
     def test_ignores_word_bearer_in_prose(self):
         # "Bearer" followed by short token shouldn't match (< 20 chars)
-        assert not _contains_secret("the bearer of bad news")
+        assert not contains_secret("the bearer of bad news")
 
     def test_ignores_code_token_discussion(self):
         # Discussing tokens in general shouldn't trigger
-        assert not _contains_secret("parse the JWT token from the header")
+        assert not contains_secret("parse the JWT token from the header")
 
     def test_ignores_ask_substring(self):
         # "ask" contains "sk" — should not trigger
-        assert not _contains_secret("ask the user for their preferences")
+        assert not contains_secret("ask the user for their preferences")
 
     def test_detects_password_assignment(self):
-        assert _contains_secret("password=my_super_secret_123")
-        assert _contains_secret("password: hunter2abc")
+        assert contains_secret("password=my_super_secret_123")
+        assert contains_secret("password: hunter2abc")
 
     def test_detects_secret_assignment(self):
-        assert _contains_secret("secret=abc123def456")
-        assert _contains_secret("secret: my_api_secret_key")
+        assert contains_secret("secret=abc123def456")
+        assert contains_secret("secret: my_api_secret_key")
 
     def test_detects_token_assignment_long_value(self):
-        assert _contains_secret("token=abcdef1234567890")
-        assert _contains_secret("token: eyJhbGciOiJIUzI1NiJ9")
+        assert contains_secret("token=abcdef1234567890")
+        assert contains_secret("token: eyJhbGciOiJIUzI1NiJ9")
 
     def test_ignores_token_assignment_short_value(self):
         # "token=abc" has < 10 chars after = so should NOT trigger
-        assert not _contains_secret("token=abc")
+        assert not contains_secret("token=abc")
 
     def test_ignores_password_in_prose(self):
         # "password" without assignment operator shouldn't trigger
-        assert not _contains_secret("the password field should be validated")
-        assert not _contains_secret("reset your password using the link")
+        assert not contains_secret("the password field should be validated")
+        assert not contains_secret("reset your password using the link")
 
     def test_ignores_secret_in_prose(self):
-        assert not _contains_secret("the secret to success is consistency")
-        assert not _contains_secret("it's no secret that we need to refactor")
+        assert not contains_secret("the secret to success is consistency")
+        assert not contains_secret("it's no secret that we need to refactor")
 
     def test_detects_openrouter_env_var(self):
-        assert _contains_secret("export OPENROUTER_API_KEY=sk-or-xyz")
+        assert contains_secret("export OPENROUTER_API_KEY=sk-or-xyz")
 
     def test_detects_slack_bot_token_env_var(self):
-        assert _contains_secret("SLACK_BOT_TOKEN=xoxb-abc")
+        assert contains_secret("SLACK_BOT_TOKEN=xoxb-abc")
 
     def test_detects_github_token_env_var(self):
-        assert _contains_secret("GITHUB_TOKEN=ghp_abc123")
+        assert contains_secret("GITHUB_TOKEN=ghp_abc123")
 
     def test_detects_aws_access_key(self):
-        assert _contains_secret("AKIAIOSFODNN7EXAMPLE")
+        assert contains_secret("AKIAIOSFODNN7EXAMPLE")
 
     def test_detects_pem_private_key(self):
-        assert _contains_secret("-----BEGIN RSA PRIVATE KEY-----\nMIIEow...")
-        assert _contains_secret("-----BEGIN PRIVATE KEY-----\nMIIEvQ...")
+        assert contains_secret("-----BEGIN RSA PRIVATE KEY-----\nMIIEow...")
+        assert contains_secret("-----BEGIN PRIVATE KEY-----\nMIIEvQ...")
 
     def test_detects_aws_secret_env_var(self):
-        assert _contains_secret("export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG")
+        assert contains_secret("export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG")
 
     def test_detects_database_url_env_var(self):
-        assert _contains_secret("DATABASE_URL=postgres://user:pass@host/db")
+        assert contains_secret("DATABASE_URL=postgres://user:pass@host/db")
 
 
 
@@ -201,29 +202,29 @@ class TestScoringJsonParser:
     """Verify _parse_scoring_json handles various LLM output formats."""
 
     def test_clean_json(self):
-        result = _parse_scoring_json('{"relevant": true, "difficulty": "easy"}')
+        result = parse_scoring_json('{"relevant": true, "difficulty": "easy"}')
         assert result["relevant"] is True
 
     def test_json_in_markdown(self):
         text = 'Here is my assessment:\n```json\n{"relevant": false}\n```'
-        result = _parse_scoring_json(text)
+        result = parse_scoring_json(text)
         assert result is not None
         assert result["relevant"] is False
 
     def test_json_with_surrounding_text(self):
         text = 'I think this is relevant. {"relevant": true, "category": "sorting"} That is my answer.'
-        result = _parse_scoring_json(text)
+        result = parse_scoring_json(text)
         assert result["category"] == "sorting"
 
     def test_no_json_returns_none(self):
-        assert _parse_scoring_json("This is just plain text with no JSON") is None
+        assert parse_scoring_json("This is just plain text with no JSON") is None
 
     def test_malformed_json_returns_none(self):
-        assert _parse_scoring_json("{broken json: ???}") is None
+        assert parse_scoring_json("{broken json: ???}") is None
 
     def test_direct_parse_fast_path(self):
         """Clean JSON should be parsed directly without regex fallback."""
-        result = _parse_scoring_json('{"relevant": true, "nested": {"key": "val"}}')
+        result = parse_scoring_json('{"relevant": true, "nested": {"key": "val"}}')
         assert result is not None
         assert result["relevant"] is True
         # Nested objects work via direct parse but would fail regex
@@ -231,19 +232,19 @@ class TestScoringJsonParser:
 
     def test_non_dict_json_returns_none(self):
         """A JSON array or string should return None (we need a dict)."""
-        assert _parse_scoring_json('[1, 2, 3]') is None
-        assert _parse_scoring_json('"just a string"') is None
+        assert parse_scoring_json('[1, 2, 3]') is None
+        assert parse_scoring_json('"just a string"') is None
 
     def test_nested_braces_in_values(self):
         """JSON with braces inside string values must parse correctly."""
         text = 'Here: {"relevant": true, "expected_behavior": "handle {edge} cases"}'
-        result = _parse_scoring_json(text)
+        result = parse_scoring_json(text)
         assert result is not None
         assert result["relevant"] is True
         assert "{edge}" in result["expected_behavior"]
 
     def test_empty_string_returns_none(self):
-        assert _parse_scoring_json("") is None
+        assert parse_scoring_json("") is None
 
 
 
@@ -547,6 +548,66 @@ class TestHermesSessionImporter:
         assert len(msgs) == 3
 
 
+class TestIterHermesSessions:
+    """The shared session iterator that both skill-path and tool-path miners use."""
+
+    def test_yields_session_id_and_messages(self, tmp_path):
+        session = {
+            "session_id": "abc-123",
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ],
+        }
+        (tmp_path / "s.json").write_text(json.dumps(session))
+
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+            results = list(iter_hermes_sessions())
+
+        assert results == [("abc-123", session["messages"])]
+
+    def test_skips_malformed_json(self, tmp_path):
+        (tmp_path / "bad.json").write_text("{not valid")
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+            assert list(iter_hermes_sessions()) == []
+
+    def test_skips_sessions_without_messages(self, tmp_path):
+        (tmp_path / "empty.json").write_text(json.dumps({"session_id": "x"}))
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+            assert list(iter_hermes_sessions()) == []
+
+    def test_falls_back_to_filename_stem_when_session_id_missing(self, tmp_path):
+        (tmp_path / "session_42.json").write_text(json.dumps({
+            "messages": [{"role": "user", "content": "Anything"}],
+        }))
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+            results = list(iter_hermes_sessions())
+        assert results[0][0] == "session_42"
+
+    def test_returns_empty_when_dir_missing(self, tmp_path):
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path / "nope"):
+            assert list(iter_hermes_sessions()) == []
+
+    def test_orders_newest_first_by_mtime(self, tmp_path):
+        import os
+        older = tmp_path / "old.json"
+        newer = tmp_path / "new.json"
+        older.write_text(json.dumps({
+            "session_id": "old",
+            "messages": [{"role": "user", "content": "older message"}],
+        }))
+        newer.write_text(json.dumps({
+            "session_id": "new",
+            "messages": [{"role": "user", "content": "newer message"}],
+        }))
+        # Backdate `older` so mtime ordering is unambiguous regardless of write order.
+        os.utime(older, (1000, 1000))
+        os.utime(newer, (2000, 2000))
+
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+            results = list(iter_hermes_sessions())
+
+        assert [sid for sid, _ in results] == ["new", "old"]
 
 
 class TestSkillNameMatching:

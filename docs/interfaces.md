@@ -97,10 +97,13 @@ Evolves one tool's top-level `description` field inside an MCP-shape manifest. T
 | `--apply` | off | Rewrite the source manifest file in place with the evolved description on a deploy decision. Preserves every non-target tool's description, `inputSchema`, and any `_evolution_metadata` block. No-op (with stderr notice) when the manifest is under `~/.claude/plugins/cache`. Mutually exclusive with `--patch`. |
 | `--patch` | off | Emit a unified diff of (baseline → evolved) manifest JSON to stdout. Mutually exclusive with `--apply`. |
 | `--seed <int>` | `42` | RNG seed for dataset splitting. |
+| `--eval-source {synthetic,sessiondb}` | `synthetic` | Where the eval dataset comes from. `synthetic` runs the three-bucket generator (50%/30%/20% target-correct / confusable-neighbor / regression-detection). `sessiondb` mines Hermes session JSON for `(task, invoked_tool)` pairs and re-judges them against the current manifest; misselections at judge confidence ≥0.85 become flipped-label training examples. Claude Code and Copilot logs aren't mined (no tool-call data). |
+| `--dry-run` | off | Build the eval dataset and stop. Useful for confirming sessiondb discovery before spending judge + GEPA budget. Returns `{"decision": "dry-run", "dataset_size": N}`. |
 
 Both `--apply` and `--patch` are no-ops on a reject decision and emit a one-line stderr notice in that case.
 
 ### Exit conditions
+- `sys.exit(1)` if `--eval-source sessiondb` produces zero usable examples — the run.log includes a per-reason drop breakdown (importer + judge stages); the suggestion is to switch to `--eval-source synthetic`.
 - `sys.exit(1)` if the holdout split has fewer than `min_holdout_size` (default 10) examples.
 - Returns normally (rejection path) if static or growth-quality gate fails — `evolved_FAILED.json` + `gate_decision.json` are written.
 

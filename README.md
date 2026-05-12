@@ -120,6 +120,8 @@ With `--apply`, the evolved description is spliced into the source file's bytes 
 
 ### Mine real session history for evals
 
+For skill evolution:
+
 ```bash
 uv run python -m evolution.skills.evolve_skill \
     --skill github-code-review \
@@ -128,6 +130,19 @@ uv run python -m evolution.skills.evolve_skill \
 ```
 
 Pulls real usage from Claude Code (`~/.claude/history.jsonl`), Copilot, and Hermes session logs.
+
+For tool description evolution:
+
+```bash
+uv run python -m evolution.tools.evolve_tool \
+    --tool search_files \
+    --manifest /path/to/mcp-tools.json \
+    --eval-source sessiondb
+```
+
+Mines Hermes session JSON (`~/.hermes/sessions/`) for `(user_task, invoked_tool)` pairs, then re-judges each pair against the current manifest. Misselections — where the judge picks a different tool than the agent did with high confidence — become flipped-label training examples that exercise exactly the failure mode the evolution is trying to fix. Add `--dry-run` to confirm session discovery before spending judge + GEPA budget.
+
+Only Hermes is mined for tool data — Claude Code and Copilot session logs don't carry `tool_use` blocks. The eval is biased toward whatever task distribution lives in your session history, so it may underrepresent the confusable-neighbor cases the synthetic eval targets directly. Run synthetic first if you need that coverage and don't have substantial Hermes history.
 
 ### Tune the fitness weighting
 
