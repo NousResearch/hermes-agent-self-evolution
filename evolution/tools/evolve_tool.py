@@ -248,6 +248,7 @@ def _maybe_build_closed_loop_cache(
     saturation_threshold: float,
     min_iters: int,
     window_size: int,
+    gate_mode: str = "sampled",
 ):
     """Build a ClosedLoopFeedbackCache when the user opted in, else None.
 
@@ -285,7 +286,17 @@ def _maybe_build_closed_loop_cache(
         saturation_threshold=saturation_threshold,
         min_iters=min_iters,
         window_size=window_size,
+        gate_mode=gate_mode,
     )
+
+
+def _load_behavioral_examples_from_suite(suite_path: Path) -> list:
+    """Build behavioral dspy.Examples from a suite file. Local-import path
+    so the validation stack isn't pulled in unless the user opted in."""
+    from evolution.core.behavioral_example import build_behavioral_examples
+    from evolution.validation.task import TaskSuite
+
+    return build_behavioral_examples(TaskSuite.from_jsonl(suite_path))
 
 
 def _manifest_to_dict(manifest: ToolManifest) -> dict[str, Any]:
@@ -335,6 +346,8 @@ def evolve(
     closed_loop_saturation_threshold: float = 0.95,
     closed_loop_min_iters: int = 3,
     closed_loop_window_size: int = 8,
+    closed_loop_mode: str = "feedback",
+    closed_loop_in_valset: bool = False,
 ) -> dict[str, Any]:
     """Evolve one tool description inside a manifest.
 
@@ -526,6 +539,12 @@ def evolve(
             )
 
             judge = ToolJudge(config)
+            # In modes that route behavioral examples through the metric for
+            # selection-affecting scoring, the saturation gate would defeat
+            # the purpose — every novel candidate must score every time.
+            cache_gate_mode = (
+                "always" if closed_loop_mode in ("trainset", "both") else "sampled"
+            )
             closed_loop_cache = _maybe_build_closed_loop_cache(
                 tool_name=tool_name,
                 baseline_description=baseline_description,
@@ -534,6 +553,7 @@ def evolve(
                 saturation_threshold=closed_loop_saturation_threshold,
                 min_iters=closed_loop_min_iters,
                 window_size=closed_loop_window_size,
+                gate_mode=cache_gate_mode,
             )
             metric = make_tool_fitness_metric(
                 judge=judge,
@@ -562,6 +582,23 @@ def evolve(
 
             trainset = _build_examples(dataset.train, for_module=True)
             valset = _build_examples(dataset.val, for_module=True)
+
+            # Behavioral-example injection: each closed-loop task becomes an
+            # additional dspy.Example whose score contributes to GEPA's
+            # sum(minibatch_scores) acceptance — behavioral wins can break
+            # judge ties on saturated baselines.
+            if closed_loop_mode in ("trainset", "both"):
+                if closed_loop_suite_path is None:
+                    raise ValueError(
+                        f"--closed-loop-mode={closed_loop_mode} requires "
+                        "--closed-loop-during-evolution to be set"
+                    )
+                behavioral_examples = _load_behavioral_examples_from_suite(
+                    closed_loop_suite_path
+                )
+                trainset = trainset + behavioral_examples
+                if closed_loop_in_valset:
+                    valset = valset + behavioral_examples
 
             console.print(f"\n[bold cyan]Running GEPA optimization (max_full_evals={iterations})[/bold cyan]\n")
             start_time = time.time()
@@ -1051,6 +1088,28 @@ def evolve(
     type=click.IntRange(min=1),
     help="Number of recent judge scores the saturation gate inspects (default 8).",
 )
+@click.option(
+    "--closed-loop-mode",
+    default="feedback",
+    type=click.Choice(["feedback", "trainset", "both"]),
+    help="How closed-loop signal participates in GEPA. 'feedback' (default) "
+         "appends a [CLOSED_LOOP] block to the reflection LM's input — "
+         "proposal-prompt signal only, no acceptance change. 'trainset' adds "
+         "behavioral dspy.Examples to the training set whose score (binary "
+         "pass/fail from the closed-loop validator) contributes to GEPA's "
+         "sum(minibatch_scores) acceptance — lets behavioral wins break judge "
+         "ties on saturated baselines. 'both' does trainset + the [CLOSED_LOOP] "
+         "feedback block on non-behavioral examples (most expensive).",
+)
+@click.option(
+    "--closed-loop-in-valset/--no-closed-loop-in-valset",
+    "closed_loop_in_valset",
+    default=False,
+    help="When --closed-loop-mode is trainset or both, also include behavioral "
+         "examples in the valset (adds them to the Pareto frontier + holdout "
+         "scoring). Costs more — each accepted candidate triggers another full "
+         "eval pass over the behavioral examples. Default off.",
+)
 def main(
     tool_name: str,
     manifest_path: Path,
@@ -1072,6 +1131,8 @@ def main(
     closed_loop_saturation_threshold: float,
     closed_loop_min_iters: int,
     closed_loop_window_size: int,
+    closed_loop_mode: str,
+    closed_loop_in_valset: bool,
 ) -> None:
     """Evolve one tool description in an MCP manifest using DSPy + GEPA."""
     if apply_flag and patch_flag:
@@ -1079,6 +1140,11 @@ def main(
     if closed_loop_suite_path is not None and closed_loop_hermes_repo is None:
         raise click.UsageError(
             "--closed-loop-during-evolution requires --closed-loop-hermes-repo"
+        )
+    if closed_loop_mode != "feedback" and closed_loop_suite_path is None:
+        raise click.UsageError(
+            f"--closed-loop-mode={closed_loop_mode} requires "
+            "--closed-loop-during-evolution to be set"
         )
     evolve(
         tool_name=tool_name,
@@ -1101,6 +1167,8 @@ def main(
         closed_loop_saturation_threshold=closed_loop_saturation_threshold,
         closed_loop_min_iters=closed_loop_min_iters,
         closed_loop_window_size=closed_loop_window_size,
+        closed_loop_mode=closed_loop_mode,
+        closed_loop_in_valset=closed_loop_in_valset,
     )
 
 

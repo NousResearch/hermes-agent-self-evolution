@@ -21,6 +21,7 @@ from evolution.core.fitness import (
     _augment_feedback_with_closed_loop,
     _augment_feedback_with_pred_trace,
     _clamp_to_unit,
+    _score_behavioral_example,
 )
 from evolution.tools.tool_source import ToolManifest
 
@@ -176,6 +177,9 @@ def make_tool_fitness_metric(
     target_len = int(baseline_len * (1 + max_growth)) if baseline_len else 0
 
     def metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+        if hasattr(pred, "_closed_loop_task_id"):
+            return _score_behavioral_example(pred, closed_loop_cache)
+
         raw_chosen = getattr(pred, "chosen_tool", "") or ""
         reasoning = getattr(pred, "reasoning", "") or ""
 

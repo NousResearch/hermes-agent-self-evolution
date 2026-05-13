@@ -131,7 +131,24 @@ class ToolModule(dspy.Module):
             self.selector.predict.signature.with_instructions(rendered)
         )
 
-    def forward(self, task: str) -> dspy.Prediction:
+    def forward(
+        self,
+        task: str,
+        closed_loop_task_id: Optional[str] = None,
+    ) -> dspy.Prediction:
+        if closed_loop_task_id is not None:
+            # Behavioral example: skip the selector LM call, stuff the
+            # current candidate text into the Prediction so the metric's
+            # behavioral branch can score via the closed-loop cache.
+            # The metric reads these via getattr regardless of pred_trace,
+            # so score is consistent across GEPA's Pareto-eval and
+            # reflective-feedback paths.
+            return dspy.Prediction(
+                chosen_tool="",
+                reasoning="",
+                _closed_loop_task_id=closed_loop_task_id,
+                _candidate_text=self.description_text,
+            )
         result = self.selector(task=task)
         return dspy.Prediction(
             chosen_tool=result.chosen_tool,

@@ -363,3 +363,100 @@ class TestConstructorValidation:
                 baseline_description="baseline",
                 min_iters=0,
             )
+
+    def test_invalid_gate_mode_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="gate_mode"):
+            ClosedLoopFeedbackCache(
+                validator=MagicMock(),
+                suite=_build_suite(tmp_path),
+                tool_name="write_file",
+                baseline_description="baseline",
+                gate_mode="bogus",
+            )
+
+
+class TestGateModeAlways:
+    def test_always_mode_opens_gate_without_history(self, tmp_path):
+        cache = ClosedLoopFeedbackCache(
+            validator=MagicMock(),
+            suite=_build_suite(tmp_path),
+            tool_name="write_file",
+            baseline_description="baseline",
+            gate_mode="always",
+        )
+        # No record_judge_score calls — sampled mode would return False here.
+        assert cache.should_run() is True
+
+    def test_always_mode_fires_validator_on_cache_miss(self, tmp_path):
+        validator = MagicMock()
+        validator.validate.return_value = _build_report()
+        cache = ClosedLoopFeedbackCache(
+            validator=validator,
+            suite=_build_suite(tmp_path),
+            tool_name="write_file",
+            baseline_description="baseline",
+            gate_mode="always",
+        )
+        # No judge scores recorded — sampled mode would return None.
+        result = cache.get_or_run("evolved desc")
+        assert result is not None
+        validator.validate.assert_called_once()
+
+
+class TestGetTaskVerdict:
+    def test_returns_per_task_result_on_cache_hit(self, tmp_path):
+        report = _build_report(
+            decision="regression",
+            pass_rate_change=-0.50,
+            evolved_tasks=[
+                TaskResult("t1", False, False, ["patch"], 1.0, "stub", None),
+                TaskResult("t2", True, False, ["write_file"], 1.0, "stub", None),
+            ],
+        )
+        validator = MagicMock()
+        validator.validate.return_value = report
+        cache = ClosedLoopFeedbackCache(
+            validator=validator,
+            suite=_build_suite(tmp_path),
+            tool_name="write_file",
+            baseline_description="baseline",
+            gate_mode="always",
+        )
+        t1 = cache.get_task_verdict("cand", "t1")
+        t2 = cache.get_task_verdict("cand", "t2")
+        assert t1 is not None and t1.passed is False
+        assert t2 is not None and t2.passed is True
+        # Both calls hit the same cached report (validator invoked once).
+        assert validator.validate.call_count == 1
+
+    def test_returns_none_on_cache_miss_with_closed_gate(self, tmp_path):
+        cache = ClosedLoopFeedbackCache(
+            validator=MagicMock(),
+            suite=_build_suite(tmp_path),
+            tool_name="write_file",
+            baseline_description="baseline",
+            saturation_threshold=0.95,
+            min_iters=999,
+            gate_mode="sampled",  # default; explicit for clarity
+        )
+        cache._iters_since_last_run = 0
+        # No saturating judge scores; gate stays closed.
+        cache.record_judge_score(0.5)
+        assert cache.get_task_verdict("never_seen", "t1") is None
+
+    def test_returns_none_when_task_id_not_in_report(self, tmp_path):
+        report = _build_report(
+            evolved_tasks=[
+                TaskResult("t1", True, False, ["write_file"], 1.0, "stub", None),
+            ],
+        )
+        validator = MagicMock()
+        validator.validate.return_value = report
+        cache = ClosedLoopFeedbackCache(
+            validator=validator,
+            suite=_build_suite(tmp_path),
+            tool_name="write_file",
+            baseline_description="baseline",
+            gate_mode="always",
+        )
+        assert cache.get_task_verdict("cand", "nonexistent_task") is None

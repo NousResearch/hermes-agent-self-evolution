@@ -161,6 +161,9 @@ def make_skill_fitness_metric(
         pred_name=None,
         pred_trace=None,
     ):
+        if hasattr(prediction, "_closed_loop_task_id"):
+            return _score_behavioral_example(prediction, closed_loop_cache)
+
         agent_output = getattr(prediction, "output", "") or ""
         task = getattr(example, "task_input", "") or ""
 
@@ -258,6 +261,61 @@ def _augment_feedback_with_pred_trace(
     if not extras:
         return base_feedback
     return base_feedback + "\n\n" + "\n\n".join(extras)
+
+
+def _score_behavioral_example(
+    prediction: dspy.Prediction,
+    closed_loop_cache: Optional[Any],
+) -> dspy.Prediction:
+    """Score a behavioral example via the closed-loop cache.
+
+    Reads ``_closed_loop_task_id`` and ``_candidate_text`` from the
+    prediction (stuffed there by ``ToolModule.forward`` on the behavioral
+    branch — see ``evolution/tools/tool_module.py``). Returns a
+    ``Prediction(score, feedback)`` with binary score:
+
+      - 1.0 if the cached ``TaskResult.passed`` is True and not abstained
+      - 0.0 on fail, abstain, cache miss, or missing cache
+
+    Score is deterministic over candidate text (cache is keyed by it), so
+    repeated calls with the same prediction return byte-identical scores —
+    GEPA's predictor-vs-module byte-identity contract holds automatically.
+    """
+    task_id = prediction._closed_loop_task_id
+    candidate_text = getattr(prediction, "_candidate_text", "") or ""
+
+    if closed_loop_cache is None or not candidate_text:
+        return dspy.Prediction(
+            score=0.0,
+            feedback=f"[BEHAVIORAL] task {task_id}: cache unavailable",
+        )
+
+    verdict = closed_loop_cache.get_task_verdict(candidate_text, task_id)
+
+    if verdict is None:
+        return dspy.Prediction(
+            score=0.0,
+            feedback=f"[BEHAVIORAL] task {task_id}: no verdict (cache miss or validator error)",
+        )
+
+    if verdict.abstained:
+        return dspy.Prediction(
+            score=0.0,
+            feedback=(
+                f"[BEHAVIORAL] task {task_id}: abstained "
+                f"(runner error: {verdict.error or 'unknown'})"
+            ),
+        )
+
+    outcome = "pass" if verdict.passed else "fail"
+    score = 1.0 if verdict.passed else 0.0
+    return dspy.Prediction(
+        score=score,
+        feedback=(
+            f"[BEHAVIORAL] task {task_id}: {outcome}\n"
+            f"  tools_invoked: {list(verdict.tool_calls_seq)!r}"
+        ),
+    )
 
 
 def _augment_feedback_with_closed_loop(

@@ -154,3 +154,101 @@ class TestEvolveSkillFlagRaises:
         ])
         assert result.exit_code != 0
         assert "SkillFileInstaller" in result.output
+
+
+class TestClosedLoopModeFlag:
+    def test_mode_defaults_to_feedback(
+        self, tmp_path, fake_hermes_repo, task_suite_file
+    ):
+        from evolution.tools.evolve_tool import main
+        runner = CliRunner()
+        with patch("evolution.tools.evolve_tool.evolve") as fake_evolve:
+            fake_evolve.return_value = {"ok": True}
+            result = runner.invoke(main, [
+                "--tool", "patch",
+                "--manifest", str(fake_hermes_repo / "tools"),
+                "--closed-loop-during-evolution", str(task_suite_file),
+                "--closed-loop-hermes-repo", str(fake_hermes_repo),
+            ])
+        assert result.exit_code == 0, result.output
+        assert fake_evolve.call_args.kwargs["closed_loop_mode"] == "feedback"
+        assert fake_evolve.call_args.kwargs["closed_loop_in_valset"] is False
+
+    def test_trainset_mode_threads_through(
+        self, tmp_path, fake_hermes_repo, task_suite_file
+    ):
+        from evolution.tools.evolve_tool import main
+        runner = CliRunner()
+        with patch("evolution.tools.evolve_tool.evolve") as fake_evolve:
+            fake_evolve.return_value = {"ok": True}
+            result = runner.invoke(main, [
+                "--tool", "patch",
+                "--manifest", str(fake_hermes_repo / "tools"),
+                "--closed-loop-during-evolution", str(task_suite_file),
+                "--closed-loop-hermes-repo", str(fake_hermes_repo),
+                "--closed-loop-mode", "trainset",
+                "--closed-loop-in-valset",
+            ])
+        assert result.exit_code == 0, result.output
+        kwargs = fake_evolve.call_args.kwargs
+        assert kwargs["closed_loop_mode"] == "trainset"
+        assert kwargs["closed_loop_in_valset"] is True
+
+    def test_trainset_mode_without_suite_raises(
+        self, tmp_path, fake_hermes_repo
+    ):
+        from evolution.tools.evolve_tool import main
+        runner = CliRunner()
+        result = runner.invoke(main, [
+            "--tool", "patch",
+            "--manifest", str(fake_hermes_repo / "tools"),
+            "--closed-loop-mode", "trainset",
+        ])
+        assert result.exit_code != 0
+        assert "requires --closed-loop-during-evolution" in result.output
+
+    def test_invalid_mode_rejected_by_click(
+        self, tmp_path, fake_hermes_repo
+    ):
+        from evolution.tools.evolve_tool import main
+        runner = CliRunner()
+        result = runner.invoke(main, [
+            "--tool", "patch",
+            "--manifest", str(fake_hermes_repo / "tools"),
+            "--closed-loop-mode", "garbage",
+        ])
+        assert result.exit_code != 0
+
+
+class TestCacheGateModeWiring:
+    def test_feedback_mode_uses_sampled_gate(
+        self, fake_hermes_repo, task_suite_file
+    ):
+        from evolution.tools.evolve_tool import _maybe_build_closed_loop_cache
+        cache = _maybe_build_closed_loop_cache(
+            tool_name="patch",
+            baseline_description="desc",
+            suite_path=task_suite_file,
+            hermes_repo=fake_hermes_repo,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+            gate_mode="sampled",
+        )
+        assert cache.gate_mode == "sampled"
+
+    def test_trainset_mode_uses_always_gate(
+        self, fake_hermes_repo, task_suite_file
+    ):
+        from evolution.tools.evolve_tool import _maybe_build_closed_loop_cache
+        cache = _maybe_build_closed_loop_cache(
+            tool_name="patch",
+            baseline_description="desc",
+            suite_path=task_suite_file,
+            hermes_repo=fake_hermes_repo,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+            gate_mode="always",
+        )
+        assert cache.gate_mode == "always"

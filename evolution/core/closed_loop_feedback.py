@@ -27,9 +27,9 @@ import logging
 import tempfile
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
-from evolution.validation.report import ValidationReport
+from evolution.validation.report import TaskResult, ValidationReport
 from evolution.validation.task import TaskSuite
 from evolution.validation.validator import (
     ChecksumDriftError,
@@ -38,6 +38,9 @@ from evolution.validation.validator import (
     StaleBackupError,
     ValidationInputs,
 )
+
+
+GateMode = Literal["sampled", "always"]
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +72,7 @@ class ClosedLoopFeedbackCache:
         saturation_threshold: float = 0.95,
         min_iters: int = 3,
         window_size: int = 8,
+        gate_mode: GateMode = "sampled",
     ) -> None:
         if not (0.0 <= saturation_threshold <= 1.0):
             raise ValueError(
@@ -78,12 +82,17 @@ class ClosedLoopFeedbackCache:
             raise ValueError(f"min_iters must be >= 1, got {min_iters}")
         if window_size < 1:
             raise ValueError(f"window_size must be >= 1, got {window_size}")
+        if gate_mode not in ("sampled", "always"):
+            raise ValueError(
+                f"gate_mode must be 'sampled' or 'always', got {gate_mode!r}"
+            )
         self._validator = validator
         self._suite = suite
         self._tool_name = tool_name
         self.saturation_threshold = saturation_threshold
         self.min_iters = min_iters
         self.window_size = window_size
+        self.gate_mode = gate_mode
 
         self._tmp_dir = Path(tempfile.mkdtemp(prefix="cl_feedback_"))
         self._baseline_path = self._tmp_dir / "baseline.json"
@@ -105,9 +114,16 @@ class ClosedLoopFeedbackCache:
     def should_run(self) -> bool:
         """Saturation gate: fire when the recent window saturates OR a periodic floor is hit.
 
+        In ``gate_mode="always"`` the gate is unconditionally open — used when
+        closed-loop is a selection-affecting score channel (behavioral-example
+        trainset mode), where every novel candidate text must score every
+        time it's sampled.
+
         Caller is responsible for cache-hit short-circuiting before this —
         a cache hit always returns the cached report regardless of the gate.
         """
+        if self.gate_mode == "always":
+            return True
         recent = self._judge_history[-self.window_size :]
         if not recent:
             return False
@@ -149,6 +165,27 @@ class ClosedLoopFeedbackCache:
             self._cache[key] = report
             self._iters_since_last_run = 0
             return report
+
+    def get_task_verdict(
+        self, candidate_text: str, task_id: str
+    ) -> Optional[TaskResult]:
+        """Return the per-task ``TaskResult`` for ``candidate_text`` and ``task_id``.
+
+        Used by the behavioral-example branch of the fitness metric:
+        ``score = float(verdict.passed)`` if a verdict is available, else
+        ``0.0`` so a candidate isn't credited for a non-result.
+
+        Returns ``None`` if ``get_or_run`` returns ``None`` (gate closed in
+        ``sampled`` mode, or validator raised a swallowed error) or if the
+        requested ``task_id`` isn't present in the report's evolved phase.
+        """
+        report = self.get_or_run(candidate_text)
+        if report is None:
+            return None
+        for task_result in report.evolved.tasks:
+            if task_result.task_id == task_id:
+                return task_result
+        return None
 
     def _key(self, candidate_text: str) -> str:
         hasher = hashlib.sha256()
