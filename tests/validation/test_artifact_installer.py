@@ -90,6 +90,26 @@ class TestExtractDescription:
         desc = installer._extract_description(evolved_json)
         assert desc == "Apply targeted edits from JSON."
 
+    def test_extracts_from_mcp_manifest_json_relative_path(
+        self, fake_hermes_repo, tmp_path, monkeypatch
+    ):
+        # Reproduces the --benchmark-cmd flow: EVOLVED_PATH arrives as a
+        # path relative to the orchestrator's CWD (e.g.
+        # "output/tools/<ts>/evolved_manifest.json"). The prior impl piped
+        # this through MCPManifestSource.find_manifest, which prepended the
+        # input's own parent and doubled the path.
+        out_dir = tmp_path / "output" / "tools" / "run1"
+        out_dir.mkdir(parents=True)
+        (out_dir / "evolved_manifest.json").write_text(json.dumps(_JSON_FIXTURE))
+        monkeypatch.chdir(tmp_path)
+        installer = HermesToolDescriptionInstaller(
+            hermes_repo=fake_hermes_repo,
+            tool_name="patch",
+        )
+        rel_path = Path("output/tools/run1/evolved_manifest.json")
+        desc = installer._extract_description(rel_path)
+        assert desc == "Apply targeted edits from JSON."
+
     def test_json_target_tool_missing_raises(self, fake_hermes_repo, tmp_path):
         evolved_json = tmp_path / "evolved_manifest.json"
         evolved_json.write_text(json.dumps({

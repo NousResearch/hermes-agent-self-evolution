@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Protocol
 
 from evolution.tools.hermes_source import HermesToolSource
-from evolution.tools.tool_source import MCPManifestSource, ToolManifest
+from evolution.tools.tool_source import ToolManifest
 
 
 class ArtifactInstaller(Protocol):
@@ -98,9 +98,9 @@ class HermesToolDescriptionInstaller:
         threads through as ``EVOLVED_PATH`` / ``BASELINE_PATH``).
         """
         if artifact_source.suffix == ".json":
-            manifest = MCPManifestSource(artifact_source.parent).find_manifest(artifact_source)
-            if manifest is None:
-                raise ValueError(f"Could not parse {artifact_source} as MCP manifest JSON")
+            # MCPManifestSource.find_manifest double-resolves relative paths
+            # against its root; from_json_file takes the path as given.
+            manifest = ToolManifest.from_json_file(artifact_source)
             return manifest.find_tool(self.tool_name).description
 
         # Default: Hermes tool-module .py file. The parse uses
