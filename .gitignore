@@ -17,6 +17,7 @@ datasets/**/*.json
 
 # Evolution snapshots
 snapshots/
+output/
 *.pkl
 
 # IDE

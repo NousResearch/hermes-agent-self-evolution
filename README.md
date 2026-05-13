@@ -49,6 +49,43 @@ python -m evolution.skills.evolve_skill \
     --eval-source sessiondb
 ```
 
+## Phase 1 Smoke Tests
+
+Two smoke paths are available for skill evolution:
+
+1. **API-free regression tests** — safe for CI and local verification:
+
+```bash
+python -m pytest -q
+```
+
+These tests monkeypatch the provider/optimizer boundary and verify that the real
+orchestration path writes `baseline_skill.md`, `evolved_skill.md`, and
+`metrics.json` artifacts.
+
+2. **Optional live provider smoke test** — manual only, may incur model cost:
+
+```bash
+python scripts/run_live_skill_evolution_smoke.py --print-command-only
+
+# After reviewing the command and setting provider credentials, run it live:
+export OPENAI_API_KEY=...
+python scripts/run_live_skill_evolution_smoke.py
+```
+
+By default, the live smoke uses the fixture skill in
+`examples/hermes-agent-fixture/` and the small golden dataset in
+`examples/golden-datasets/demo-skill/`, runs one iteration, and writes artifacts
+under `output/live-smoke/`. Override `--optimizer-model`, `--eval-model`,
+`--dataset-path`, `--hermes-repo`, or `--output-dir` to test another provider or
+skill.
+
+Expected live-smoke artifacts:
+- `baseline_skill.md` — original full `SKILL.md`
+- `evolved_skill.md` — candidate full `SKILL.md`
+- `metrics.json` — scores, dataset sizes, elapsed time, and constraint status
+- `evolved_FAILED.md` — saved instead when constraints reject the candidate
+
 ## What It Optimizes
 
 | Phase | Target | Engine | Status |

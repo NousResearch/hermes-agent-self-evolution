@@ -1,0 +1,1 @@
+{"task_input":"Review this change: the evolved skill body grew by 18% and still includes the original frontmatter.","expected_behavior":"Confirm growth remains within the configured limit, note that full SKILL.md validation should include frontmatter, and provide one next step.","difficulty":"medium","category":"constraint-validation","source":"golden"}

@@ -33,6 +33,37 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def build_gepa_optimizer(iterations: int, optimizer_model: str):
+    """Construct a DSPy 3.2+ GEPA optimizer for skill evolution.
+
+    Older code used ``max_steps``; current DSPy GEPA uses budget arguments
+    such as ``max_full_evals`` and requires an explicit reflection LM.
+    """
+    reflection_lm = dspy.LM(optimizer_model)
+    return dspy.GEPA(
+        metric=skill_fitness_metric,
+        max_full_evals=iterations,
+        reflection_lm=reflection_lm,
+    )
+
+
+def validate_skill_candidate(
+    validator: ConstraintValidator,
+    frontmatter: str,
+    body: str,
+    baseline_body: Optional[str] = None,
+):
+    """Validate a skill candidate using full SKILL.md text for structure.
+
+    The body is what GEPA evolves, but skill-structure validation needs the
+    YAML frontmatter too. Reassemble both candidate and baseline so structure
+    and growth checks evaluate the artifact that would actually be saved.
+    """
+    full_skill = reassemble_skill(frontmatter, body)
+    baseline_full = reassemble_skill(frontmatter, baseline_body) if baseline_body is not None else None
+    return validator.validate_all(full_skill, "skill", baseline_text=baseline_full)
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -43,6 +74,7 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    output_dir: Optional[str] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -55,6 +87,8 @@ def evolve(
     )
     if hermes_repo:
         config.hermes_agent_path = Path(hermes_repo)
+    if output_dir:
+        config.output_dir = Path(output_dir)
 
     # ── 1. Find and load the skill ──────────────────────────────────────
     console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]\n")
@@ -119,7 +153,11 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validate_skill_candidate(
+        validator=validator,
+        frontmatter=skill["frontmatter"],
+        body=skill["body"],
+    )
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -154,9 +192,9 @@ def evolve(
     start_time = time.time()
 
     try:
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+        optimizer = build_gepa_optimizer(
+            iterations=iterations,
+            optimizer_model=optimizer_model,
         )
 
         optimized_module = optimizer.compile(
@@ -186,7 +224,12 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validate_skill_candidate(
+        validator=validator,
+        frontmatter=skill["frontmatter"],
+        body=evolved_body,
+        baseline_body=skill["body"],
+    )
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -198,7 +241,7 @@ def evolve(
     if not all_pass:
         console.print("[red]✗ Evolved skill FAILED constraints — not deploying[/red]")
         # Still save for inspection
-        output_path = Path("output") / skill_name / "evolved_FAILED.md"
+        output_path = config.output_dir / skill_name / "evolved_FAILED.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(evolved_full)
         console.print(f"  Saved failed variant to {output_path}")
@@ -254,7 +297,7 @@ def evolve(
 
     # ── 10. Save output ─────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = Path("output") / skill_name / timestamp
+    output_dir = config.output_dir / skill_name / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Save evolved skill
@@ -304,7 +347,8 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--output-dir", default=None, help="Directory for evolved artifacts and metrics")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, output_dir):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -316,6 +360,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        output_dir=output_dir,
     )
 
 
