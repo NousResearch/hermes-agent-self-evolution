@@ -2,9 +2,9 @@
 
 ## One-line model
 
-A SKILL.md file is wrapped as a `dspy.Module`; GEPA mutates the module's instruction text using execution-trace feedback; candidates are scored by an LLM-as-judge; the winning candidate has to clear a paired-bootstrap quality gate on a held-out split before it's accepted.
+A SKILL.md body or a tool description is wrapped as a `dspy.Module`; GEPA mutates the module's instruction text using execution-trace feedback; candidates are scored by an LLM-as-judge; the winning candidate has to clear a paired-bootstrap quality gate on a held-out split before it's accepted. An orthogonal closed-loop validation surface runs a real agent against a JSONL task suite to compare baseline vs evolved behavior — either as a post-gate veto, as a reflection-LM feedback enricher during evolution, or as a score channel that contributes to GEPA's minibatch acceptance.
 
-The framework is **agent-agnostic** at the optimizer layer — `(skill_text, eval_examples) → optimized_skill_text`. Agent-specific layout is isolated to `evolution/core/skill_sources.py`.
+The framework is **agent-agnostic** at the optimizer layer — `(artifact_text, eval_examples) → optimized_artifact_text`. Agent-specific layout is isolated to `evolution/core/skill_sources.py` (skills) and `evolution/tools/{tool_source,hermes_source}.py` (tools).
 
 ## Top-level flow
 
@@ -40,20 +40,42 @@ graph TB
         knee[skills.knee_point<br/>select_knee_point]
     end
 
+    subgraph tools_tier[Tool Tier]
+        evolve_tool[tools.evolve_tool<br/>main + evolve]
+        tool_module[tools.tool_module<br/>ToolModule + sentinels]
+        tool_proposer[tools.tool_proposer<br/>BudgetAwareToolProposer]
+        tool_judge[tools.tool_judge<br/>ToolJudge + tool metric]
+        tool_source[tools.tool_source<br/>MCPManifestSource + ToolManifest]
+        hermes_source[tools.hermes_source<br/>Hermes *_SCHEMA AST adapter]
+    end
+
+    subgraph validation_subsystem[Closed-loop validation]
+        validator[validation.validator<br/>ClosedLoopValidator]
+        hermes_runner[validation.hermes_runner<br/>hermes -z subprocess]
+        installer[validation.artifact_installer<br/>HermesToolDescriptionInstaller]
+        report[validation.report<br/>ValidationReport + decision]
+        task[validation.task<br/>Task + TaskSuite]
+        cl_cli[validation.closed_loop<br/>CLI]
+    end
+
     subgraph core[Core Infrastructure]
         config[core.config<br/>EvolutionConfig]
         constraints[core.constraints<br/>ConstraintValidator]
-        dataset[core.dataset_builder<br/>Synthetic + Golden]
+        quality[core.quality_gate<br/>presets + write_gate_decision]
+        dataset[core.dataset_builder<br/>Synthetic + Golden + tool 3-bucket]
         importers[core.external_importers<br/>ClaudeCode/Copilot/Hermes]
-        fitness[core.fitness<br/>LLMJudge + metric closure]
+        fitness[core.fitness<br/>LLMJudge + skill metric + behavioral helper]
+        cl_feedback[core.closed_loop_feedback<br/>ClosedLoopFeedbackCache + renderer]
+        behavioral[core.behavioral_example<br/>build_behavioral_examples]
         sources[core.skill_sources<br/>SkillSource protocol + 3 impls]
         stats[core.stats<br/>paired_bootstrap]
-        timing[core.lm_timing_callback<br/>LMTimingCallback + litellm hook]
+        timing[core.lm_timing_callback<br/>LMTimingCallback + cost ledger + litellm hook]
     end
 
     subgraph external[External]
         dspy[dspy.GEPA / dspy.MIPROv2 / dspy.LM / dspy.Evaluate]
         litellm[litellm.failure_callback]
+        hermes[hermes -z subprocess]
     end
 
     evolve_skill --> skill_module
@@ -61,14 +83,43 @@ graph TB
     evolve_skill --> knee
     evolve_skill --> config
     evolve_skill --> constraints
+    evolve_skill --> quality
     evolve_skill --> dataset
     evolve_skill --> importers
     evolve_skill --> fitness
     evolve_skill --> sources
     evolve_skill --> stats
     evolve_skill --> timing
+
+    evolve_tool --> tool_module
+    evolve_tool --> tool_proposer
+    evolve_tool --> tool_judge
+    evolve_tool --> tool_source
+    evolve_tool --> hermes_source
+    evolve_tool --> knee
+    evolve_tool --> config
+    evolve_tool --> constraints
+    evolve_tool --> quality
+    evolve_tool --> dataset
+    evolve_tool --> stats
+    evolve_tool --> timing
+    evolve_tool -.closed-loop opt-in.-> cl_feedback
+    evolve_tool -.trainset mode.-> behavioral
+    cl_feedback --> validator
+    behavioral --> task
+    tool_judge --> fitness
+    tool_proposer --> budget
+
+    validator --> hermes_runner
+    validator --> installer
+    validator --> report
+    validator --> task
+    cl_cli --> validator
+    hermes_runner --> hermes
+
     skill_module --> dspy
     budget --> dspy
+    tool_module --> dspy
     fitness --> dspy
     dataset --> dspy
     timing --> dspy
@@ -80,7 +131,7 @@ graph TB
     importers --> dataset
 ```
 
-`evolution/core/` has no dependency on `evolution/skills/`. The reverse holds: skill-tier code uses core helpers but core never imports from a tier package. This keeps the tier-2/3/4 expansion path open.
+`evolution/core/` has no dependency on `evolution/skills/`, `evolution/tools/`, or `evolution/validation/`. The reverse holds: tier packages use core helpers but core never imports from a tier package. `closed_loop_feedback.py` imports `evolution.validation.*` types because it's the integration seam, but the validation subpackage doesn't import from skills/tools. This keeps the tier-3/4/5 expansion path open.
 
 ## Design patterns in active use
 
@@ -111,6 +162,15 @@ When growth is below the free threshold, the gate degrades to "no-regression onl
 
 ### 8. Per-attempt LM observability
 `LMTimingCallback` (DSPy `BaseCallback`) logs every LM call's start/end with model + duration; heartbeat warnings fire at 60s/180s/300s/600s tiers (60s = DEBUG, rest = WARNING). `register_litellm_failure_callback()` installs a module-level hook on `litellm.failure_callback` so each retry attempt is logged separately. Without this, a 5×60s retry loop on a flaky API looks like a single 5-minute LM call.
+
+### 9. Cost-ceiling kill switch
+`LMTimingCallback` also drives a per-run `CostLedger` that accumulates per-call cost from litellm's `_hidden_params`. `--max-total-cost-usd <N>` arms the ledger; once the accumulated cost crosses `N`, the next LM call raises `CostCeilingExceeded` from `LMTimingCallback.on_lm_start`. The orchestrator catches this at the top level and writes a `decision="aborted"` `gate_decision.json` with `cost_at_abort_usd` + `cost_ceiling_usd` + `cost_summary`. Worst-case overshoot is one LM call past the ceiling.
+
+### 10. Closed-loop validation as a separate surface
+`evolution/validation/` runs a real agent (`hermes -z`) through a JSONL task suite with baseline vs evolved artifacts spliced into the live install. Available three ways:
+- **Post-gate veto** (`--benchmark-cmd "python -m evolution.validation.closed_loop ..."`) — runs after the deploy gate passes; nonzero exit flips the decision to reject with `reason="benchmark_failed"`.
+- **Reflection feedback** (`--closed-loop-during-evolution <suite.jsonl> --closed-loop-mode feedback`) — `ClosedLoopFeedbackCache` runs the validator during the GEPA loop, saturation-gated, and the verdict is rendered into the reflection LM's input via the metric's `dspy.Prediction.feedback` string. Score channel untouched.
+- **Trainset score channel** (`--closed-loop-mode trainset`) — `build_behavioral_examples(suite)` injects per-task `dspy.Example`s into the trainset. The metric's behavioral branch returns binary pass/fail as score. Behavioral wins contribute to `sum(minibatch_scores)` acceptance, breaking judge ties on saturated baselines. `ToolModule.forward` accepts a `closed_loop_task_id` kwarg and short-circuits past the selector LM, stuffing `_candidate_text` + `_closed_loop_task_id` into the returned `Prediction` so the metric can read them on any pred_trace path without a custom DspyAdapter.
 
 ## Data flow on a single run
 

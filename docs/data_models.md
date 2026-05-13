@@ -195,6 +195,96 @@ Helpers:
 
 Rejects at load: an empty `tools` tuple, and normalization collisions (`read-file` vs `read_file`, which both lowercase + underscore-normalize to `read_file`). Sentinel matching uses original casing but lookup robustness relies on normalization being injective.
 
+## Closed-loop validation types
+
+These live under `evolution/validation/` and are produced by `ClosedLoopValidator.validate()` (the standalone CLI's primary output) and consumed by `ClosedLoopFeedbackCache` (the during-evolution integration).
+
+### Task (`evolution/validation/task.py`)
+
+```python
+@dataclass(frozen=True)
+class Task:
+    task_id: str
+    user_message: str           # may contain {fixture_dir} placeholder
+    expected_tools: tuple[str, ...] = ()
+    forbidden_tools: tuple[str, ...] = ()
+    fixture_setup: dict[str, str] = field(default_factory=dict)
+```
+
+`fixture_setup` is a `relative_path → file_content` map materialized into the task's per-task tmp dir before the agent runs. `user_message.format(fixture_dir=...)` substitutes the placeholder.
+
+Scoring rule (`score_task` in `report.py`):
+- Returns `(passed: bool, abstained: bool)`.
+- Abstention if the runner errored (timeout, no session JSON, parse failure) — neither evidence for nor against the artifact.
+- Else: passes iff `expected_tools` were invoked AND no `forbidden_tools` were invoked. Empty `expected_tools` short-circuits to true; empty `forbidden_tools` is no-op.
+
+### TaskSuite (`evolution/validation/task.py`)
+
+```python
+@dataclass(frozen=True)
+class TaskSuite:
+    path: Path
+    sha256: str           # of the file bytes — lands in ValidationReport for audit
+    tasks: tuple[Task, ...]
+```
+
+`TaskSuite.from_jsonl(path)` reads the file, skipping blank lines and `#`-prefixed comment lines, raising `ValueError` with `path:lineno` on parse errors. The sha256 is included in every `ValidationReport.task_suite_sha256` so a silent "drop a hard task" is auditable at code review time.
+
+### TaskResult (`evolution/validation/report.py`)
+
+```python
+@dataclass(frozen=True)
+class TaskResult:
+    task_id: str
+    passed: bool
+    abstained: bool
+    tool_calls_seq: list[str]
+    duration_seconds: float
+    model_name: Optional[str] = None
+    error: Optional[str] = None
+```
+
+`tool_calls_seq` is the ordered list of tool names invoked during the agent's response. The behavioral-example metric in `_score_behavioral_example` reads `passed` directly to produce a binary score; `tool_calls_seq` lands in `render_feedback_block` for the reflection LM.
+
+### PhaseResult / WinLoss / ValidationReport (`evolution/validation/report.py`)
+
+```python
+@dataclass(frozen=True)
+class PhaseResult:
+    pass_rate: float
+    n_passed: int
+    n_failed: int
+    n_abstained: int
+    tasks: list[TaskResult]
+
+@dataclass(frozen=True)
+class WinLoss:
+    n_wins: int                # per-task: evolved passed, baseline failed
+    n_losses: int              # per-task: evolved failed, baseline passed
+    n_ties: int
+    pass_rate_change: float    # evolved.pass_rate - baseline.pass_rate
+
+@dataclass(frozen=True)
+class ValidationReport:
+    schema_version: str        # currently "1"
+    tool: str
+    task_suite_path: str
+    task_suite_sha256: str
+    baseline: PhaseResult
+    evolved: PhaseResult
+    delta: WinLoss
+    decision: str              # "pass" | "regression"
+    decision_reasons: list[str]
+```
+
+Two-condition decision rule (`decide()`):
+1. `evolved.pass_rate >= baseline.pass_rate` (aggregate no-regression).
+2. `n_losses == 0` OR `n_wins >= 2 * n_losses` (per-task: wins need to overwhelm losses 2:1).
+
+Both must hold to return `"pass"`; else `"regression"`. The 2:1 win-loss ratio is the threshold for "robustly better" given LM non-determinism — observed at ~15-20% per-task flip rate on borderline tasks, so a single flip should not dominate.
+
+`ValidationReport.to_dict()` round-trips to `validation_report.json` written under `output/validation/<tool>/<timestamp>/`.
+
 ## Evolved manifest output JSON
 
 `output/tools/<tool>/<timestamp>/evolved_manifest.json` (deploy) and `evolved_FAILED.json` (reject) have the same shape as the input MCP-shape manifest:

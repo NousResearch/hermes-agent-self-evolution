@@ -296,10 +296,188 @@ pytest tests/ -q
 ```
 
 Tests are organized:
-- `tests/core/` — `test_constraints.py`, `test_dataset_builder.py`, `test_external_importers.py`, `test_fitness.py`, `test_lm_timing_callback.py`, `test_skill_sources.py`, `test_stats.py`
-- `tests/skills/` — `test_budget_aware_proposer.py`, `test_evolve_skill_helpers.py`, `test_evolve_skill_validation_flow.py`, `test_knee_point.py`, `test_skill_module.py`
+- `tests/core/` — constraints, dataset_builder, external_importers, fitness (skill + behavioral metric branch), lm_timing_callback, lm_timing_cost (cost ledger + ceiling kill switch), skill_sources, stats, quality_gate, behavioral_example, closed_loop_feedback, fitness_closed_loop
+- `tests/skills/` — budget_aware_proposer, evolve_skill_helpers, evolve_skill_validation_flow, knee_point, skill_module
+- `tests/tools/` — cross_tool_regression, evolve_tool_closed_loop, evolve_tool_v2_acceptance (integration test: `DspyAdapter.evaluate` arithmetic on a hand-built minibatch with mixed judge + behavioral examples), evolve_tool_validation_flow, hermes_source, session_mining, tool_judge, tool_module, tool_module_behavioral
+- `tests/validation/` — artifact_installer, closed_loop_cli, hermes_runner, report, safety, task, validator
 
-All tests use mocks for LM calls — no real API keys required. The `_skill_source_env` autouse fixture (in tests that touch `EvolutionConfig`) sets `SKILL_SOURCES_HERMES_REPO` to a `tmp_path` fake repo so discovery doesn't pick up the developer's real `~/.hermes` install.
+All tests use mocks for LM calls — no real API keys required. The `_skill_source_env` autouse fixture (in tests that touch `EvolutionConfig`) sets `SKILL_SOURCES_HERMES_REPO` to a `tmp_path` fake repo so discovery doesn't pick up the developer's real `~/.hermes` install. Closed-loop tests use a `FakeCache` that maps `(candidate_text, task_id) → bool` directly, bypassing the validator — and `dspy.utils.DummyLM` for any LM the adapter would otherwise invoke.
+
+## Workflow 9: Evolve a tool description (deploy path)
+
+The tool-pipeline analog of Workflow 1. Same shape — load artifact → build dataset → wrap as `dspy.Module` → GEPA → knee → static → holdout → paired bootstrap → gate — with three substitutions: the artifact is a manifest tool description (not a SKILL.md), the dataset is the three-bucket tool-selection generator (target_correct / confusable_neighbor / regression_detection), and the module is `ToolModule` rendering a sentinel-wrapped manifest.
+
+```bash
+python -m evolution.tools.evolve_tool \
+    --tool search_files \
+    --manifest /path/to/manifest.json \
+    --iterations 5
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_tool
+    participant Src as ToolSource
+    participant DS as SyntheticDatasetBuilder
+    participant TM as ToolModule
+    participant GEPA as dspy.GEPA
+    participant Prop as BudgetAwareToolProposer
+    participant Knee as select_knee_point
+    participant Val as ConstraintValidator
+    participant Eval as dspy.Evaluate
+    participant Boot as paired_bootstrap
+    participant FS as filesystem
+
+    CLI->>Src: find_manifest(path) — dispatches MCPManifestSource or HermesToolSource by supports()
+    Src-->>CLI: ToolManifest
+    CLI->>CLI: target = manifest.find_tool(tool_name)
+    CLI->>DS: generate_tool_selection(manifest, target_tool, n)
+    DS-->>CLI: EvalDataset with categories (target_correct / confusable_neighbor / regression_detection)
+    CLI->>TM: ToolModule(target_tool, manifest, baseline_description) — installs rendered manifest with sentinels around the target description
+    CLI->>GEPA: compile(baseline, trainset, valset, instruction_proposer=BudgetAwareToolProposer)
+    GEPA->>Prop: mutate sentinel-delimited region only
+    GEPA-->>CLI: optimized_module with detailed_results
+    CLI->>Knee: select_knee_point(candidates, val_scores, n_val, validator, text_extractor=description_from_predictor)
+    Knee-->>CLI: CandidatePick (parsimony measured on description, not full manifest)
+    CLI->>Val: validate_static(evolved_description, "tool_description")
+    Val-->>CLI: pass
+    CLI->>Eval: evaluate baseline + evolved on holdout
+    Eval-->>CLI: per-example judge scores
+    CLI->>Boot: paired_bootstrap(baseline, evolved)
+    Boot-->>CLI: mean, lower_bound, upper_bound
+    CLI->>Val: validate_growth_with_quality on description chars (not full manifest)
+    Val-->>CLI: pass
+    CLI->>FS: write evolved_manifest.json + baseline_manifest.json + metrics.json + gate_decision.json
+    Note over CLI,FS: --apply rewrites the source manifest in place via ToolSource.apply_evolved (preserves every non-target tool's description + inputSchema + _evolution_metadata)
+```
+
+`gate_decision.json` adds `artifact_type: "tool_description"`, `target_tool`, `manifest_neighbor_count`, and `sentinel_failures` (the count of reflection-LM outputs the proposer rejected for failing sentinel preservation).
+
+## Workflow 10: Closed-loop validation (standalone harness)
+
+Drives a real Hermes Agent through a JSONL task suite with baseline + evolved artifacts spliced into the live install. Used as a post-gate veto via `--benchmark-cmd`, or directly for confidence on a single artifact pair.
+
+```bash
+python -m evolution.validation.closed_loop \
+    --tool patch \
+    --hermes-repo /path/to/hermes-agent \
+    --tasks evolution/validation/suites/patch.jsonl \
+    --baseline /path/to/hermes-agent/tools/file_tools.py \
+    --evolved /path/to/evolve_tool/output/.../evolved_manifest.json
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as closed_loop
+    participant Suite as TaskSuite
+    participant V as ClosedLoopValidator
+    participant Inst as HermesToolDescriptionInstaller
+    participant FS as live hermes-agent tools dir
+    participant R as HermesAgentRunner
+    participant H as hermes -z subprocess
+    participant Rep as ValidationReport
+
+    CLI->>Suite: TaskSuite.from_jsonl(tasks) → sha256 of bytes
+    CLI->>V: validate(ValidationInputs(tool, suite, baseline_artifact, evolved_artifact))
+    V->>V: refuse_if_stale_backup_exists(.cl_backup)
+    V->>FS: acquire fcntl.flock on parent dir (else ConcurrentRunError)
+    V->>FS: atomic_write_bytes(.cl_backup, target.read_bytes())
+    V->>V: verify_python_parses(.cl_backup) — trusted for restore
+    loop baseline phase, then evolved phase
+        V->>Inst: install(artifact_source) — splice description into target
+        Inst-->>V: sha256 of target post-install
+        loop each task in suite
+            V->>V: verify target sha256 unchanged (else ChecksumDriftError)
+            V->>R: run(TaskRunContext(user_message, fixture_dir, extra_env))
+            R->>FS: mkdtemp HERMES_HOME + materialize fixture_setup files
+            R->>H: hermes -z "<user_message>" with sandboxed HOME
+            H-->>R: session JSON (exit code ignored; agent-loop crashes return 0)
+            R-->>V: AgentRunResult(tool_calls_seq, final_text_tail, error?)
+            V->>V: score_task(expected, forbidden, run) → (passed, abstained)
+        end
+    end
+    V->>FS: atomic_write_bytes(target, .cl_backup.read_bytes())  # always restore
+    V->>FS: .cl_backup.unlink()
+    V->>Rep: ValidationReport(baseline, evolved, delta, decision, ...)
+    Rep-->>CLI: written to output/validation/<tool>/<ts>/validation_report.json
+    CLI-->>CLI: exit 0 on pass, 1 on regression
+```
+
+Three crash-safety mechanisms: the `.cl_backup` sentinel + AST validation prevents trusting a corrupt restore; the `fcntl.flock` on a sentinel file in the parent dir prevents concurrent runs from racing each other's restores; the sha256 check between tasks catches a YOLO-mode agent that overwrites the spliced file mid-suite. All three are mandatory — the harness refuses to start if any defense is in an inconsistent state.
+
+## Workflow 11: Closed-loop signal during evolution
+
+When `--closed-loop-during-evolution <suite.jsonl>` is set on `evolve_tool`, the same `ClosedLoopValidator` is wired into the GEPA loop via `ClosedLoopFeedbackCache`. Two modes (mutually compatible with the post-gate `--benchmark-cmd` hook):
+
+### `--closed-loop-mode feedback` — reflection-LM feedback channel only
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Metric as fitness metric closure
+    participant Cache as ClosedLoopFeedbackCache
+    participant V as ClosedLoopValidator
+    participant Refl as reflection LM
+    participant GEPA as dspy.GEPA
+
+    GEPA->>Metric: call(example, prediction, pred_trace=...)
+    Metric->>Cache: record_judge_score(judge.composite)
+    Metric->>Metric: judge.score(...)  # standard
+    alt pred_trace is set (reflective-feedback path)
+        Metric->>Cache: get_or_run(candidate_text)
+        alt gate open AND cache miss
+            Cache->>V: validate(ValidationInputs(...))
+            V-->>Cache: ValidationReport
+            Cache->>Cache: store by sha256(candidate + suite.sha256)
+        else gate closed OR cache hit
+            Cache-->>Metric: cached report OR None
+        end
+        Metric->>Metric: render_feedback_block(report) → "[CLOSED_LOOP] decision=... | task X: ..."
+        Metric->>Metric: feedback += rendered_block
+    end
+    Metric-->>GEPA: Prediction(score=judge.composite, feedback=enriched)
+    GEPA->>Refl: propose new candidate with enriched feedback
+```
+
+Score channel untouched — feedback goes to the reflection LM's input prompt for the next mutation. Saturation gate fires when `min(recent_judge_scores) >= saturation_threshold` (default 0.95) OR `iters_since_last_run >= min_iters` (default 3). On saturated baselines the gate is open most of the time.
+
+### `--closed-loop-mode trainset` — score channel
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_tool
+    participant Build as build_behavioral_examples
+    participant Suite as TaskSuite
+    participant GEPA as dspy.GEPA
+    participant TM as ToolModule
+    participant Metric as fitness metric closure
+    participant Cache as ClosedLoopFeedbackCache
+    participant V as ClosedLoopValidator
+
+    CLI->>Suite: TaskSuite.from_jsonl(suite_path)
+    CLI->>Build: build_behavioral_examples(suite)
+    Build-->>CLI: [dspy.Example(task=..., closed_loop_task_id="t_1").with_inputs("task", "closed_loop_task_id"), ...]
+    CLI->>CLI: trainset += behavioral_examples
+    CLI->>GEPA: compile(baseline, trainset, valset)
+    GEPA->>TM: forward(task=..., closed_loop_task_id="t_1")
+    Note over TM: behavioral example detected — skip selector LM, stuff candidate text into pred
+    TM-->>GEPA: Prediction(chosen_tool="", _closed_loop_task_id="t_1", _candidate_text=description_text)
+    GEPA->>Metric: call(example, prediction)
+    Metric->>Metric: hasattr(pred, "_closed_loop_task_id") → True
+    Metric->>Cache: get_task_verdict(pred._candidate_text, "t_1") — gate_mode="always"
+    Cache->>V: validate(...)  # cache miss
+    V-->>Cache: ValidationReport
+    Cache-->>Metric: TaskResult(passed=True/False, ...)
+    Metric-->>GEPA: Prediction(score=float(verdict.passed), feedback="[BEHAVIORAL] task t_1: pass")
+    Note over GEPA: behavioral score contributes to sum(minibatch_scores) acceptance
+```
+
+Per-task scores are deterministic over candidate text (cache is keyed by `sha256(candidate + suite.sha256)`), so GEPA's predictor-vs-module byte-identity contract holds automatically. With `--closed-loop-in-valset`, the same examples are also added to the valset — Pareto frontier + holdout scoring incorporate behavioral signal too, at the cost of an extra full-eval pass per accepted candidate.
+
+`--closed-loop-mode both` does both: trainset behavioral examples for acceptance, plus the `[CLOSED_LOOP]` feedback block on non-behavioral examples for reflection.
 
 ## Failure-mode summary
 
@@ -315,3 +493,9 @@ All tests use mocks for LM calls — no real API keys required. The `_skill_sour
 | Judge LM stall | `TimeoutError` after `60s × 5` retries → propagates up to GEPA → fallback | `run.log` |
 | Dataset gen JSON truncation | already fixed (`max_tokens=16000`); legacy: `JSONDecodeError` | `run.log` |
 | MIPROv2 missing optuna | `ImportError` re-raised with GEPA failure as `__cause__` | console |
+| `--max-total-cost-usd` ceiling crossed | `decision="aborted"` `gate_decision.json` written; next LM call raises `CostCeilingExceeded` from `LMTimingCallback.on_lm_start`; orchestrator catches at top level | `gate_decision.json` (`cost_at_abort_usd`, `cost_ceiling_usd`, `cost_summary`) |
+| `--benchmark-cmd` exits nonzero | deploy gate flipped to reject with `reason="benchmark_failed"`; benchmark block in gate_decision | `gate_decision.json` (`benchmark` block) |
+| Closed-loop validator stale `.cl_backup` | `StaleBackupError` on startup, refuses to run; clear message names the file for manual `mv` | console only |
+| Closed-loop validator concurrent run | `ConcurrentRunError` (`fcntl.flock` non-blocking acquire fails) | console only |
+| Closed-loop validator drift between tasks | `ChecksumDriftError` after the offending task; phase aborts, restore still runs | run.log + raised error |
+| Closed-loop cache validator failure during evolution | `WARNING` logged, cache returns `None`, GEPA continues without the verdict — never aborts the run | run.log |

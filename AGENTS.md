@@ -23,13 +23,15 @@ Project-specific context for AI coding assistants. Read this first when picking 
 
 `[meta:project-overview]` Cross-ref: [docs/codebase_info.md](docs/codebase_info.md), [docs/architecture.md](docs/architecture.md), [README.md](README.md)
 
-`agent-self-evolution` evolves agent SKILL.md files via DSPy + GEPA (a reflective prompt optimizer). The whole pipeline is API calls — no GPU training, no model weights touched. A SKILL.md body is wrapped as a `dspy.Module`, GEPA mutates the instruction text using execution-trace feedback, candidates are scored by an LLM-as-judge, and the winner has to clear a paired-bootstrap quality gate on a held-out split before being accepted.
+`agent-self-evolution` evolves two kinds of agent artifacts via DSPy + GEPA (a reflective prompt optimizer): **skill files** (`SKILL.md` bodies wrapped as `dspy.Module`) and **tool descriptions** (the `description` field on tools in an MCP-shape manifest, or in Hermes-style `*_SCHEMA` Python files). The pipeline is API calls only — no GPU training. GEPA mutates the instruction text using execution-trace feedback, candidates are scored by an LLM-as-judge, and the winner clears a paired-bootstrap quality gate on a held-out split before being accepted.
 
-Framework-agnostic at the optimizer layer: any agent that emits SKILL.md files (Hermes Agent, Claude Code skills, custom local layouts) is supported via the `SkillSource` Protocol in `evolution/core/skill_sources.py`.
+A separate **closed-loop validation** surface (`evolution/validation/`) runs a real agent (`hermes -z`) through a JSONL task suite with baseline vs evolved artifacts spliced into the live install, scores actual tool-selection behavior, and compares with a two-condition decision rule. The harness ships as a standalone CLI, a reflection-LM feedback enricher during the GEPA loop, and a score channel that contributes to GEPA's minibatch acceptance (so behavioral wins can break judge ties on saturated baselines).
+
+Framework-agnostic at the optimizer layer: any agent that emits `SKILL.md` files (Hermes Agent, Claude Code skills, custom local layouts) is supported via the `SkillSource` Protocol in `evolution/core/skill_sources.py`. Tool sources are similarly pluggable via the `ToolSource` Protocol (`MCPManifestSource` for MCP-shape JSON, `HermesToolSource` for Python `*_SCHEMA` declarations resolved via AST).
 
 For *why this differs from raw DSPy + GEPA* (the small-N selection layer, the paired-bootstrap deploy gate, the composite judge fitness) see [docs/framework_advantages.md](docs/framework_advantages.md).
 
-Tiers 1 and 2 are implemented: skill files in `evolution/skills/`, tool descriptions in `evolution/tools/` (with `MCPManifestSource` for MCP `list_tools()`-shape JSON and `HermesToolSource` for Python `*_SCHEMA` declarations resolved via AST). Tiers 3-5 (prompt sections, code, continuous loop) exist as empty package stubs. See `PLAN.md` for each phase's "Deviations from plan" subsection.
+Tiers 1 and 2 are implemented: skill files in `evolution/skills/`, tool descriptions in `evolution/tools/`. Tiers 3-5 (prompt sections, code, continuous loop) exist as empty package stubs. See `PLAN.md` for each phase's "Deviations from plan" subsection.
 
 ## Repo layout at a glance
 
@@ -41,18 +43,21 @@ agent-self-evolution/
 │   ├── core/            # framework-agnostic infrastructure
 │   ├── skills/          # Tier 1 — skill-file evolution
 │   ├── tools/           # Tier 2 — tool-description evolution
+│   ├── validation/      # closed-loop validation against a real agent
 │   ├── prompts/         # Tier 3 stub
 │   ├── code/            # Tier 4 stub
 │   └── monitor/         # Tier 5 stub
 ├── tests/
 │   ├── core/            # mirrors evolution/core/
 │   ├── skills/          # mirrors evolution/skills/
-│   └── tools/           # mirrors evolution/tools/
+│   ├── tools/           # mirrors evolution/tools/
+│   └── validation/      # mirrors evolution/validation/
 ├── datasets/
 │   ├── skills/<name>/   # train.jsonl, val.jsonl, holdout.jsonl
 │   └── tools/           # tool eval data is generated per-run, not cached here
-├── output/<skill>/<ts>/ # per-run artifacts (git-ignored)
+├── output/<artifact>/<ts>/  # per-run artifacts (git-ignored)
 ├── reports/             # validation PDFs + reports/<phase>_prose.yaml
+├── examples/            # copy-paste config artifacts (e.g. hermes_tools_evolution_metadata.json sidecar)
 ├── assets/              # logo PNGs used by the report (e.g. dna.png)
 ├── docs/                # the knowledge base — start at docs/index.md
 ├── generate_report.py   # renderer: --run output/<skill>/<ts>/ --prose reports/<phase>_prose.yaml --out reports/<phase>_validation_report.pdf
@@ -79,18 +84,33 @@ The `evolution/<tier>/` directories form **a clean layering**: `evolution/core/`
 
 | Concern | File |
 |---|---|
-| CLI + orchestration | `evolution/skills/evolve_skill.py` |
+| Skill CLI + orchestration | `evolution/skills/evolve_skill.py` |
+| Tool CLI + orchestration | `evolution/tools/evolve_tool.py` |
 | `EvolutionConfig` dataclass | `evolution/core/config.py` |
 | `SkillSource` Protocol + 3 impls | `evolution/core/skill_sources.py` |
+| `ToolSource` Protocol + MCP-JSON adapter | `evolution/tools/tool_source.py` |
+| Hermes Python `*_SCHEMA` AST adapter | `evolution/tools/hermes_source.py` |
 | SKILL.md ↔ DSPy bridge (`SkillModule`) | `evolution/skills/skill_module.py` |
-| Char-budget reflection prompt | `evolution/skills/budget_aware_proposer.py` |
+| Tool manifest ↔ DSPy bridge (`ToolModule`) | `evolution/tools/tool_module.py` |
+| Char-budget reflection prompt (skill) | `evolution/skills/budget_aware_proposer.py` |
+| Sentinel-preserving reflection prompt (tool) | `evolution/tools/tool_proposer.py` |
 | Knee-point Pareto picker | `evolution/skills/knee_point.py` |
-| Synthetic dataset gen + golden loader | `evolution/core/dataset_builder.py` |
+| Synthetic dataset gen + golden loader + tool three-bucket gen | `evolution/core/dataset_builder.py` |
 | Sessiondb mining (Claude Code, Copilot, Hermes) | `evolution/core/external_importers.py` |
-| LLM-as-judge + GEPA-shaped metric | `evolution/core/fitness.py` |
+| LLM-as-judge + skill metric + behavioral-example branch | `evolution/core/fitness.py` |
+| Tool-flavored judge + tool metric | `evolution/tools/tool_judge.py` |
+| Behavioral `dspy.Example` builder for closed-loop trainset | `evolution/core/behavioral_example.py` |
+| Closed-loop verdict cache + deterministic feedback rendering | `evolution/core/closed_loop_feedback.py` |
 | Deploy gate (static + growth-quality) | `evolution/core/constraints.py` |
+| Preset table + gate-decision persistence (shared by skill/tool) | `evolution/core/quality_gate.py` |
 | Paired-bootstrap CI | `evolution/core/stats.py` |
-| LM observability (timing, heartbeats, retries) | `evolution/core/lm_timing_callback.py` |
+| LM observability (timing, heartbeats, retries) + cost ledger + cost-ceiling kill switch | `evolution/core/lm_timing_callback.py` |
+| Closed-loop CLI (real-agent validation) | `evolution/validation/closed_loop.py` |
+| Validator: mutate + restore live agent file, run task suite | `evolution/validation/validator.py` |
+| `hermes -z` subprocess runner with sandboxed HOME | `evolution/validation/hermes_runner.py` |
+| Description splice into live tool file | `evolution/validation/artifact_installer.py` |
+| Task / TaskSuite (JSONL with sha256 audit) | `evolution/validation/task.py` |
+| ValidationReport + two-condition decision rule | `evolution/validation/report.py` |
 
 ## Coding conventions
 
@@ -138,7 +158,7 @@ Inferred from the existing source — follow these unless you have a specific re
 
 `[meta:test-workflow]` Cross-ref: [docs/interfaces.md](docs/interfaces.md), [docs/workflows.md Workflow 8](docs/workflows.md)
 
-- Run all tests: `pytest tests/ -q` from the repo root, **inside the venv** (`source .venv/bin/activate`). Currently 282 tests.
+- Run all tests: `pytest tests/ -q` from the repo root, **inside the venv** (`source .venv/bin/activate`). Currently ~680 tests.
 - All tests use mocks for LM calls — no API keys required.
 - The `_skill_source_env` autouse fixture (defined per-module, e.g., `tests/core/test_constraints.py:9`) sets `SKILL_SOURCES_HERMES_REPO` to a `tmp_path` fake repo so discovery doesn't pick up real `~/.hermes` / `~/.claude` installs. Add this fixture to any new test that touches `EvolutionConfig`.
 

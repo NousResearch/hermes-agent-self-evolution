@@ -138,7 +138,37 @@ Reference of the major modules in `evolution/`. Each entry: what it owns, the pu
 
 Score is **never** modified by `pred_trace` enrichment — GEPA enforces score equality across both call sites (warns and overrides if they diverge).
 
+**`_augment_feedback_with_closed_loop`** appends a `[CLOSED_LOOP]` (or `[CLOSED_LOOP-NOISY]` when `|Δpass_rate| < 0.15`) block to the feedback string when a `ClosedLoopFeedbackCache` is wired in and the saturation gate fires (pred_trace-gated, same as the budget hint). The block carries the closed-loop decision, win/loss/tie counts, and per-task diffs for tasks whose verdict changed between baseline and evolved. Score is still untouched on this path — only feedback. Used when the metric is configured with `closed_loop_cache=` (see `closed_loop_feedback.py` and `--closed-loop-during-evolution` on `evolve_tool`).
+
+**`_score_behavioral_example`** is the behavioral-example branch. The metric's top-of-closure check `if hasattr(prediction, "_closed_loop_task_id"):` routes a behavioral `dspy.Example` (one per closed-loop task, added to the trainset when `--closed-loop-mode trainset|both`) to this helper. It reads `_candidate_text` + `_closed_loop_task_id` off the Prediction (stuffed there by `ToolModule.forward` on the behavioral branch), asks the cache for the per-task verdict, and returns `Prediction(score=float(verdict.passed), feedback="[BEHAVIORAL] task <id>: pass|fail|abstain …")`. Judge is never called on behavioral examples. Score is deterministic over candidate text (cache key) so GEPA's predictor-vs-module byte-identity contract holds automatically.
+
 **LM hardening:** `request_timeout=60, num_retries=5` on the judge LM. 60s = 6× P99 of slowest observed `gpt-4.1-mini` call (9.8s). 5×60s = 5min worst case before raising.
+
+## evolution/core/behavioral_example.py — closed-loop task → dspy.Example builder
+
+**Owns:** the function that turns a closed-loop `TaskSuite` into a list of `dspy.Example`s suitable for injection into GEPA's trainset (or valset).
+
+**Public surface:**
+- `build_behavioral_examples(suite: TaskSuite) -> list[dspy.Example]` — one example per task in the suite, stable-ordered by `task_id`. Each example carries a `closed_loop_task_id` marker the fitness metric routes on, plus the suite's original `user_message` as a placeholder `task` field (not consumed by the behavioral branch; kept for debuggability). Both fields are marked as input keys via `.with_inputs("task", "closed_loop_task_id")` so DSPy passes them to `ToolModule.forward()` via `program(**example.inputs())`.
+
+**Why this exists:** behavioral examples are how closed-loop signal enters GEPA's `sum(minibatch_scores)` acceptance arithmetic. The metric's behavioral branch scores `float(verdict.passed)` and the result lands in the same minibatch sum the judge contributes to — so a candidate that wins a behavioral task its predecessor failed adds +1.0 to the sum and breaks judge ties on saturated baselines.
+
+## evolution/core/closed_loop_feedback.py — closed-loop verdict cache + deterministic feedback rendering
+
+**Owns:** the integration seam between `ClosedLoopValidator` and the GEPA loop — runs validator, caches results by candidate text, and renders verdicts as deterministic text blocks for the reflection LM's feedback channel.
+
+**Public surface:**
+- `ClosedLoopFeedbackCache(validator, suite, tool_name, baseline_description, saturation_threshold=0.95, min_iters=3, window_size=8, gate_mode="sampled")` — single instance per `evolve_tool`/`evolve_skill` run. Threading-locked so DSPy's parallel `Evaluate` workers don't race into `ConcurrentRunError` from the validator's cross-process flock. Tmp dir for baseline/evolved manifest JSON lives for the cache's lifetime; OS reclaims at process exit.
+- `.record_judge_score(score)` — call from the metric on every invocation; feeds the saturation gate's recent-window history.
+- `.should_run() -> bool` — the gate. `gate_mode="sampled"` (default, opportunistic feedback-only use): fire when `min(recent_window) >= saturation_threshold` OR `iters_since_last_run >= min_iters`. `gate_mode="always"` (selection-affecting trainset use): always open — every novel candidate must score every time.
+- `.get_or_run(candidate_text) -> Optional[ValidationReport]` — cache key is `sha256(candidate + suite.sha256)`. Cache hit returns cached report; miss writes the candidate's description into a tmp JSON manifest and calls `validator.validate()`. Validator failures (`ConcurrentRunError`, `StaleBackupError`, `ChecksumDriftError`) log `WARNING` and return `None` — closed-loop failure must never take the GEPA run down.
+- `.get_task_verdict(candidate_text, task_id) -> Optional[TaskResult]` — calls `get_or_run` and indexes `report.evolved.tasks` by `task_id`. Returns `None` if the gate is closed or the validator raised a swallowed error or the task isn't present.
+- `render_feedback_block(report: ValidationReport) -> str` — module-level function. Renders the cached report as a deterministic `[CLOSED_LOOP]` block (or `[CLOSED_LOOP-NOISY]` when `|Δpass_rate| < 0.15`) with decision, decision_reasons, win/loss/tie counts, and per-task diffs for tasks whose verdict changed. Determinism is required because GEPA hashes reflective-dataset entries for caching.
+
+**Two use modes**, both wired through `evolve_tool` CLI flags:
+
+1. **Feedback enricher** (`--closed-loop-mode feedback`, default): the metric's `_augment_feedback_with_closed_loop` helper calls `get_or_run` on the candidate currently under reflection, then appends the rendered block to the metric's `dspy.Prediction.feedback`. Saturation-gated so it only fires when the judge has converged. Score is unchanged.
+2. **Trainset score channel** (`--closed-loop-mode trainset`): `build_behavioral_examples(suite)` injects per-task `dspy.Example`s into the trainset. The metric's behavioral branch calls `get_task_verdict` on each behavioral example and returns the binary verdict as score. Behavioral wins contribute to `sum(minibatch_scores)`, breaking judge ties at acceptance.
 
 ## evolution/core/constraints.py — deploy gate
 
@@ -248,6 +278,8 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 
 **Implementation note (load-bearing):** like `SkillModule`, `ToolModule.__init__` overwrites `self.selector.predict.signature` via `with_instructions(rendered_manifest)` so GEPA's `named_predictors()` walk finds the manifest in `Predict.signature.instructions`. The signature's class docstring is intentionally a placeholder.
 
+**Behavioral-example branch:** `forward()` accepts an optional `closed_loop_task_id: str` kwarg. When set, the module skips `self.selector(task=task)` entirely (no LM call) and returns a `Prediction` carrying `_closed_loop_task_id` and `_candidate_text=self.description_text`. The fitness metric's behavioral branch reads these fields from `pred` regardless of `pred_trace`, so behavioral-example scores are consistent across GEPA's Pareto-eval and reflective-feedback paths. This is the mechanism by which closed-loop verdicts enter the score channel without a custom DspyAdapter — the data is threaded through the `Prediction` object itself.
+
 ## evolution/tools/tool_proposer.py — sentinel-constrained reflection prompt
 
 **Owns:** the GEPA `instruction_proposer` that mutates only the sentinel-delimited region of the rendered manifest.
@@ -270,6 +302,8 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 **Implementation note (load-bearing):** the metric parses `pred.chosen_tool` with generous normalization before reaching the judge — lowercased, stripped of quotes/backticks/whitespace, hyphens replaced with underscores. Short-circuits to `dspy.Prediction(score=0.0, feedback=...)` for unparseable outputs (blank or contains internal whitespace) and for outputs that parse to a name not in the manifest. The judge is only called on a parseable, in-manifest choice.
 
 `text_extractor` is forwarded into `_augment_feedback_with_pred_trace` so the `[BUDGET]` reflection line measures the description region between sentinels rather than the full rendered manifest — without it, the budget framing is wrong by an order of magnitude on multi-tool manifests.
+
+**Behavioral-example branch:** the metric's top-of-closure check is `if hasattr(pred, "_closed_loop_task_id"):` — a behavioral example produced by `build_behavioral_examples(suite)` gets routed to `_score_behavioral_example(pred, closed_loop_cache)`, which returns `Prediction(score=float(verdict.passed), feedback="[BEHAVIORAL] task <id>: pass|fail|abstain …")`. The judge is never called on behavioral examples. The `closed_loop_cache` is an optional `make_tool_fitness_metric` kwarg; when set, every metric invocation also calls `cache.record_judge_score(score.composite)` on the non-behavioral path so the saturation gate sees fresh history.
 
 ## evolution/tools/evolve_tool.py — CLI + orchestrator
 
@@ -294,11 +328,25 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 
 **`gate_decision.json` additions:** every tool-path decision carries `artifact_type: "tool_description"`, `target_tool: <name>`, `manifest_neighbor_count: len(manifest.tools) - 1`, and `sentinel_failures: <count>` (number of reflection-LM outputs the proposer rejected for failing sentinel preservation).
 
+**Closed-loop integration during evolution:** five flags wire `ClosedLoopFeedbackCache` into the GEPA loop without changing the metric signature or the proposer.
+
+- `--closed-loop-during-evolution <suite.jsonl>` (+ required `--closed-loop-hermes-repo`): construct a `ClosedLoopFeedbackCache` against the validator stack and pass it into `make_tool_fitness_metric(closed_loop_cache=...)`.
+- `--closed-loop-mode {feedback,trainset,both}` (default `feedback`):
+  - `feedback`: the cache lives only on the metric's feedback path — `_augment_feedback_with_closed_loop` appends a `[CLOSED_LOOP]` block when the saturation gate fires. Score channel unchanged.
+  - `trainset`: `_load_behavioral_examples_from_suite(suite_path)` injects per-task `dspy.Example`s into GEPA's trainset; cache is built with `gate_mode="always"` because behavioral scoring needs to run every time the example is sampled. Behavioral scores contribute to `sum(minibatch_scores)` acceptance.
+  - `both`: trainset behavioral examples AND the `[CLOSED_LOOP]` feedback block on non-behavioral examples (most expensive).
+- `--closed-loop-in-valset / --no-closed-loop-in-valset` (default off): when `mode != feedback`, also include behavioral examples in the valset — adds them to the Pareto frontier + holdout scoring at the cost of an extra full-eval pass over the suite per accepted candidate.
+- `--closed-loop-saturation-threshold / --closed-loop-min-iters / --closed-loop-window-size` — only consumed in `feedback` mode; tune the saturation gate.
+
+`main()` rejects `--closed-loop-during-evolution` without `--closed-loop-hermes-repo` as a `UsageError`, and `--closed-loop-mode != feedback` without `--closed-loop-during-evolution`. Local imports in `_maybe_build_closed_loop_cache` keep the validation stack out of cold-path runs.
+
+**Cost ceiling + benchmark hook (shared with `evolve_skill`):** `--max-total-cost-usd` participates in the same `CostLedger` kill switch (see `lm_timing_callback.py`); `--benchmark-cmd` is a post-gate shell hook whose env vars include `EVOLVED_PATH` / `BASELINE_PATH` pointing at the rendered manifest JSONs and `ARTIFACT_TYPE="tool_description"`. Both write structured blocks into `gate_decision.json` — see `data_models.md`.
+
 ## evolution/validation/ — closed-loop validation against a real agent
 
 Drives an actual agent (`HermesAgentRunner` via `hermes -z`) through a small task suite with baseline and evolved artifacts, scores real tool-selection behavior, compares. Orthogonal to skills/tools/prompts/code — measures agent behavior, not artifact production.
 
-- `agent_runner.py` — `AgentRunner` Protocol + `AgentRunResult` dataclass + `TaskRunContext`. The Protocol shape leaves room for Claude Code / other backends in v2 without changing the validator.
+- `agent_runner.py` — `AgentRunner` Protocol + `AgentRunResult` dataclass + `TaskRunContext`. The Protocol shape leaves room for Claude Code or other backends without changing the validator.
 - `hermes_runner.py` — `HermesAgentRunner.run(ctx) -> AgentRunResult`. Subprocess `hermes -z "task"` with `HERMES_HOME` + `HOME` redirected to a per-task tmp dir and `cwd` set to the task's fixture dir. Scores from the session JSON only — `hermes -z` exit code is unreliable (returns 0 on agent-loop crashes). Tolerates both tool-call shapes Hermes emits (`{"function": {"name": ...}}` nested and flat `{"name": ...}`). Errors (timeout, no session JSON written, malformed JSON) become abstentions in the report.
 - `task.py` — `Task` + `TaskSuite.from_jsonl`. JSONL with comment + blank-line tolerance; sha256 of the file bytes lands in the report so regression-by-curation (silently dropping a hard task) is auditable.
 - `artifact_installer.py` — `ArtifactInstaller` Protocol + `HermesToolDescriptionInstaller`. Reads the artifact source as a Hermes tool-module file, parses it via `HermesToolSource`, splices the target tool's description into the live install via `apply_evolved`. Returns `sha256(target_path)` post-install for the validator's drift check. Helpers: `atomic_write_bytes`, `verify_python_parses`.
@@ -310,7 +358,9 @@ Drives an actual agent (`HermesAgentRunner` via `hermes -z`) through a small tas
   - `evolved.pass_rate >= baseline.pass_rate`
   - `n_losses == 0` OR `n_wins >= 2 * n_losses`
 - `closed_loop.py` — Click CLI. Exit 0 on `pass`, 1 on `regression`. Drop-in compatible with `--benchmark-cmd`.
-- `suites/patch.jsonl` — v1 task suite (5 tasks targeting the `patch` vs `write_file` boundary). Task #4 ("create new file") is the load-bearing regression check.
+- `suites/*.jsonl` — JSONL task suites. `patch.jsonl` targets the `patch` vs `write_file` boundary; `write_file.jsonl` and `search_files.jsonl` cover the symmetric direction. Each task carries `task_id`, `user_message` (with optional `{fixture_dir}` placeholder), `expected_tools`, `forbidden_tools`, `fixture_setup` (relative-path → file-content dict materialized into a per-task tmp dir).
+
+**During-evolution integration.** Beyond the standalone CLI, the same `ClosedLoopValidator` powers `evolution/core/closed_loop_feedback.py`'s `ClosedLoopFeedbackCache`. The cache writes the candidate description into a tmp manifest JSON, calls `validator.validate(ValidationInputs(...))` with it as `evolved_artifact`, and caches the returned `ValidationReport` by candidate text. The cache surfaces verdicts to the metric two ways: as a deterministic feedback block on the reflection path (`feedback` mode), or as per-task `TaskResult.passed` reads via `get_task_verdict(candidate, task_id)` for the behavioral-example branch (`trainset` mode). The validator itself doesn't know about the cache; it always sees a `ValidationInputs` with two artifacts and produces a `ValidationReport`.
 
 ## evolution/{prompts, code, monitor}/ — planned, empty
 

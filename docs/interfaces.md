@@ -71,6 +71,7 @@ Both delivery flags are no-ops on a reject decision and emit a one-line stderr n
 | `--max-total-cost-usd FLOAT` | off | Safety net: abort cleanly when cumulative LM cost exceeds this dollar amount. Worst-case overshoot is one LM call past the ceiling (the cost callback fires AFTER the call returns; the next call aborts at start). 0 is accepted (aborts on first call). Negatives rejected. Writes a `decision="aborted"` `gate_decision.json` with `cost_at_abort_usd`, `cost_ceiling_usd`, and the full `cost_summary` block. |
 | `--benchmark-cmd "<shell command>"` | off | Deploy-gate hook: shell command run AFTER the framework's own deploy gate passes; nonzero exit flips the decision to `reject` with `reason="benchmark_failed"`. Receives `EVOLVED_PATH`, `BASELINE_PATH`, `RUN_DIR`, `TARGET_NAME`, `ARTIFACT_TYPE` via env. Runs under `/bin/sh -c`; aliases and shell functions from your interactive shell are not available. Trust boundary: the command string is yours; do not pass strings you didn't write. Adds a `benchmark` block to `gate_decision.json`. |
 | `--benchmark-timeout-seconds INT` | `600` | Wall-clock cap for the `--benchmark-cmd` hook. Timeout treated as a benchmark fail with `reason="timeout"`. |
+| `--closed-loop-during-evolution <suite.jsonl>` | off | Wired symmetrically with `evolve_tool` for CLI consistency. Skill-side closed-loop validation requires a `SkillFileInstaller` that doesn't exist yet, so setting this flag raises with a clear error. |
 
 ### Exit conditions
 - `sys.exit(1)` if skill not found across all `SkillSource`s — prints available skills per source.
@@ -104,6 +105,15 @@ Evolves one tool's top-level `description` field inside an MCP-shape manifest. T
 | `--max-total-cost-usd FLOAT` | off | Same as the skill-path flag: abort cleanly when cumulative LM cost (dataset gen + judge + GEPA + holdout eval) exceeds this dollar amount. Worst-case overshoot is one LM call. Writes a `decision="aborted"` `gate_decision.json` with `cost_at_abort_usd`, `cost_ceiling_usd`, `cost_summary`, plus the tool-path `artifact_type` and `target_tool` fields for grouping by surface. |
 | `--benchmark-cmd "<shell command>"` | off | Same as the skill-path hook: shell command run AFTER deploy gate passes; nonzero exit flips to `reject`. Env vars `EVOLVED_PATH` and `BASELINE_PATH` point at the rendered manifest JSONs in the run dir. `ARTIFACT_TYPE` is `"tool_description"`. |
 | `--benchmark-timeout-seconds INT` | `600` | Wall-clock cap for the hook. |
+| `--closed-loop-during-evolution <suite.jsonl>` | off | Path to a closed-loop JSONL task suite (same shape consumed by the standalone `closed_loop` CLI). Constructs a `ClosedLoopFeedbackCache` and threads it into the metric. Requires `--closed-loop-hermes-repo`. |
+| `--closed-loop-hermes-repo <path>` | required when the suite path is set | Path to the hermes-agent checkout the validator should mutate in place during evolution. |
+| `--closed-loop-mode {feedback,trainset,both}` | `feedback` | How the cached verdict participates in GEPA. `feedback`: append a `[CLOSED_LOOP]` block to the reflection LM's input — proposal-prompt signal only, no acceptance change. `trainset`: add behavioral `dspy.Example`s to the trainset whose score (binary pass/fail) contributes to GEPA's `sum(minibatch_scores)` acceptance — lets behavioral wins break judge ties on saturated baselines. `both`: trainset + the `[CLOSED_LOOP]` feedback block on non-behavioral examples (most expensive). |
+| `--closed-loop-in-valset / --no-closed-loop-in-valset` | off | When `--closed-loop-mode` is `trainset` or `both`, also include behavioral examples in the valset (adds them to the Pareto frontier + holdout scoring). Each accepted candidate triggers another full-eval pass over the behavioral examples. |
+| `--closed-loop-saturation-threshold FLOAT` | `0.95` | Min judge score over the recent window for the saturation gate to open. Only consumed in `feedback` mode (`trainset` / `both` use `gate_mode="always"`). |
+| `--closed-loop-min-iters INT` | `3` | Periodic-fire floor: fire closed-loop at least every N reflective iterations even when the judge isn't saturating. `feedback` mode only. |
+| `--closed-loop-window-size INT` | `8` | Number of recent judge scores the saturation gate inspects. `feedback` mode only. |
+
+`main()` rejects `--closed-loop-during-evolution` without `--closed-loop-hermes-repo`, and rejects `--closed-loop-mode != feedback` without `--closed-loop-during-evolution`. Local imports keep the validation stack out of cold-path runs.
 
 Both `--apply` and `--patch` are no-ops on a reject decision and emit a one-line stderr notice in that case.
 
