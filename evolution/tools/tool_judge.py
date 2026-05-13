@@ -18,6 +18,7 @@ from evolution.core.config import EvolutionConfig
 from evolution.core.fitness import (
     FitnessScore,
     _PROFILE_WEIGHTS,
+    _augment_feedback_with_closed_loop,
     _augment_feedback_with_pred_trace,
     _clamp_to_unit,
 )
@@ -150,6 +151,7 @@ def make_tool_fitness_metric(
     target_tool_name: str,
     max_growth: float,
     text_extractor: Optional[Callable[[Any], str]] = None,
+    closed_loop_cache: Optional[Any] = None,
 ) -> Callable:
     """Construct a GEPA-shaped 5-arg fitness metric.
 
@@ -163,6 +165,11 @@ def make_tool_fitness_metric(
     measures the description region between sentinels rather than the
     full rendered manifest. Without it the budget framing is wrong by an
     order of magnitude on multi-tool manifests.
+
+    ``closed_loop_cache`` is an optional ``ClosedLoopFeedbackCache``
+    (typed as ``Any`` to keep imports light). When set, judge scores are
+    recorded on every call and a ``[CLOSED_LOOP]`` block is appended to
+    the feedback string in the reflective-feedback path.
     """
     available_names = sorted(t.name for t in manifest.tools)
     baseline_len = len(baseline_description or "")
@@ -198,11 +205,19 @@ def make_tool_fitness_metric(
             chosen_tool=chosen,
             agent_reasoning=reasoning,
         )
+        if closed_loop_cache is not None:
+            closed_loop_cache.record_judge_score(score.composite)
         feedback = _augment_feedback_with_pred_trace(
             score.feedback,
             pred_trace,
             baseline_len=baseline_len,
             target_len=target_len,
+            text_extractor=text_extractor,
+        )
+        feedback = _augment_feedback_with_closed_loop(
+            feedback,
+            closed_loop_cache,
+            pred_trace,
             text_extractor=text_extractor,
         )
         return dspy.Prediction(score=score.composite, feedback=feedback)

@@ -239,6 +239,55 @@ def _resolve_source(manifest_path: Path) -> ToolSource:
     )
 
 
+def _maybe_build_closed_loop_cache(
+    *,
+    tool_name: str,
+    baseline_description: str,
+    suite_path: Optional[Path],
+    hermes_repo: Optional[Path],
+    saturation_threshold: float,
+    min_iters: int,
+    window_size: int,
+):
+    """Build a ClosedLoopFeedbackCache when the user opted in, else None.
+
+    Local imports keep the validation stack out of the cold path — this
+    module's tests + CLI smoke don't need the hermes_runner / validator
+    imports unless the flag was set.
+    """
+    if suite_path is None:
+        return None
+    if hermes_repo is None:
+        # main() guards this; assert in case evolve() is called from code
+        # bypassing the CLI.
+        raise ValueError(
+            "closed_loop_suite_path set without closed_loop_hermes_repo"
+        )
+    from evolution.core.closed_loop_feedback import ClosedLoopFeedbackCache
+    from evolution.validation.artifact_installer import (
+        HermesToolDescriptionInstaller,
+    )
+    from evolution.validation.hermes_runner import HermesAgentRunner
+    from evolution.validation.task import TaskSuite
+    from evolution.validation.validator import ClosedLoopValidator
+
+    installer = HermesToolDescriptionInstaller(
+        hermes_repo=hermes_repo, tool_name=tool_name
+    )
+    runner = HermesAgentRunner()
+    validator = ClosedLoopValidator(installer=installer, runner=runner)
+    suite = TaskSuite.from_jsonl(suite_path)
+    return ClosedLoopFeedbackCache(
+        validator=validator,
+        suite=suite,
+        tool_name=tool_name,
+        baseline_description=baseline_description,
+        saturation_threshold=saturation_threshold,
+        min_iters=min_iters,
+        window_size=window_size,
+    )
+
+
 def _manifest_to_dict(manifest: ToolManifest) -> dict[str, Any]:
     """Serialize a ToolManifest back to MCP-list_tools shape (plus metadata)."""
     out: dict[str, Any] = {
@@ -281,6 +330,11 @@ def evolve(
     max_total_cost_usd: Optional[float] = None,
     benchmark_cmd: Optional[str] = None,
     benchmark_timeout_seconds: int = 600,
+    closed_loop_suite_path: Optional[Path] = None,
+    closed_loop_hermes_repo: Optional[Path] = None,
+    closed_loop_saturation_threshold: float = 0.95,
+    closed_loop_min_iters: int = 3,
+    closed_loop_window_size: int = 8,
 ) -> dict[str, Any]:
     """Evolve one tool description inside a manifest.
 
@@ -472,6 +526,15 @@ def evolve(
             )
 
             judge = ToolJudge(config)
+            closed_loop_cache = _maybe_build_closed_loop_cache(
+                tool_name=tool_name,
+                baseline_description=baseline_description,
+                suite_path=closed_loop_suite_path,
+                hermes_repo=closed_loop_hermes_repo,
+                saturation_threshold=closed_loop_saturation_threshold,
+                min_iters=closed_loop_min_iters,
+                window_size=closed_loop_window_size,
+            )
             metric = make_tool_fitness_metric(
                 judge=judge,
                 baseline_description=baseline_description,
@@ -479,6 +542,7 @@ def evolve(
                 target_tool_name=tool_name,
                 max_growth=config.growth_free_threshold,
                 text_extractor=lambda predictor: _description_from_predictor(predictor, tool_name),
+                closed_loop_cache=closed_loop_cache,
             )
 
             baseline_module = ToolModule(
@@ -949,6 +1013,44 @@ def evolve(
     type=click.IntRange(min=1),
     help="Wall-clock cap for the --benchmark-cmd hook (default 600s).",
 )
+@click.option(
+    "--closed-loop-during-evolution",
+    "closed_loop_suite_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to a JSONL task suite (same shape as evolution/validation/suites/*.jsonl). "
+         "When set, the framework runs the closed-loop validator on saturating GEPA "
+         "iterations and appends a [CLOSED_LOOP] block to the reflection LM's feedback "
+         "input. Held-out from training tasks (no overlap-detection enforcement). "
+         "Requires --closed-loop-hermes-repo.",
+)
+@click.option(
+    "--closed-loop-hermes-repo",
+    default=None,
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Path to the hermes-agent checkout the closed-loop validator should mutate "
+         "in place. Required iff --closed-loop-during-evolution is set.",
+)
+@click.option(
+    "--closed-loop-saturation-threshold",
+    default=0.95,
+    type=click.FloatRange(min=0.0, max=1.0),
+    help="Min judge score over the recent window for the saturation gate to open "
+         "(default 0.95).",
+)
+@click.option(
+    "--closed-loop-min-iters",
+    default=3,
+    type=click.IntRange(min=1),
+    help="Periodic-fire floor: fire closed-loop at least every N reflective "
+         "iterations even when the judge isn't saturating (default 3).",
+)
+@click.option(
+    "--closed-loop-window-size",
+    default=8,
+    type=click.IntRange(min=1),
+    help="Number of recent judge scores the saturation gate inspects (default 8).",
+)
 def main(
     tool_name: str,
     manifest_path: Path,
@@ -965,10 +1067,19 @@ def main(
     max_total_cost_usd: Optional[float],
     benchmark_cmd: Optional[str],
     benchmark_timeout_seconds: int,
+    closed_loop_suite_path: Optional[Path],
+    closed_loop_hermes_repo: Optional[Path],
+    closed_loop_saturation_threshold: float,
+    closed_loop_min_iters: int,
+    closed_loop_window_size: int,
 ) -> None:
     """Evolve one tool description in an MCP manifest using DSPy + GEPA."""
     if apply_flag and patch_flag:
         raise click.UsageError("--apply and --patch are mutually exclusive")
+    if closed_loop_suite_path is not None and closed_loop_hermes_repo is None:
+        raise click.UsageError(
+            "--closed-loop-during-evolution requires --closed-loop-hermes-repo"
+        )
     evolve(
         tool_name=tool_name,
         manifest_path=manifest_path,
@@ -985,6 +1096,11 @@ def main(
         max_total_cost_usd=max_total_cost_usd,
         benchmark_cmd=benchmark_cmd,
         benchmark_timeout_seconds=benchmark_timeout_seconds,
+        closed_loop_suite_path=closed_loop_suite_path,
+        closed_loop_hermes_repo=closed_loop_hermes_repo,
+        closed_loop_saturation_threshold=closed_loop_saturation_threshold,
+        closed_loop_min_iters=closed_loop_min_iters,
+        closed_loop_window_size=closed_loop_window_size,
     )
 
 

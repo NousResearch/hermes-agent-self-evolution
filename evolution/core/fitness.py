@@ -127,6 +127,7 @@ def make_skill_fitness_metric(
     judge: "LLMJudge",
     baseline_skill_text: str = "",
     max_growth: float = 0.2,
+    closed_loop_cache: Optional[Any] = None,
 ):
     """Build a GEPA-compatible metric closed over an LLMJudge instance.
 
@@ -142,6 +143,13 @@ def make_skill_fitness_metric(
     Score must be byte-identical between predictor-level and module-level
     call sites — GEPA warns and overrides on divergence — so the
     pred_trace-driven feedback enrichment never touches the score.
+
+    ``closed_loop_cache`` is an optional ``ClosedLoopFeedbackCache`` (typed
+    as ``Any`` here to keep this module free of the validation-stack
+    import). When set, the metric records each judge score on the cache
+    (for the saturation gate) and appends the cache's rendered
+    ``[CLOSED_LOOP]`` block to the feedback string in the reflective-feedback
+    path (``pred_trace`` is set). Never modifies the score.
     """
     baseline_len = len(baseline_skill_text or "")
     target_len = int(baseline_len * (1 + max_growth)) if baseline_len else 0
@@ -174,11 +182,19 @@ def make_skill_fitness_metric(
             expected_behavior=getattr(example, "expected_behavior", "") or "",
             agent_output=agent_output,
         )
+        if closed_loop_cache is not None:
+            closed_loop_cache.record_judge_score(score.composite)
         feedback = _augment_feedback_with_pred_trace(
             score.feedback,
             pred_trace,
             baseline_len=baseline_len,
             target_len=target_len,
+        )
+        feedback = _augment_feedback_with_closed_loop(
+            feedback,
+            closed_loop_cache,
+            pred_trace,
+            text_extractor=None,
         )
         return dspy.Prediction(score=score.composite, feedback=feedback)
 
@@ -242,6 +258,54 @@ def _augment_feedback_with_pred_trace(
     if not extras:
         return base_feedback
     return base_feedback + "\n\n" + "\n\n".join(extras)
+
+
+def _augment_feedback_with_closed_loop(
+    base_feedback: str,
+    closed_loop_cache: Optional[Any],
+    pred_trace,
+    text_extractor: Optional[Callable[[Any], str]] = None,
+) -> str:
+    """Append a [CLOSED_LOOP] block when the cache returns a verdict.
+
+    Gated identically to ``_augment_feedback_with_pred_trace``: only fires
+    when ``pred_trace`` is set (GEPA's reflective-feedback path), so the
+    Pareto-evaluation path stays cheap.
+
+    Closed-loop verdict retrieval is best-effort: cache miss with the gate
+    closed returns ``None``, validator errors are swallowed inside the
+    cache and return ``None``. In either case base_feedback passes through
+    unchanged.
+    """
+    if closed_loop_cache is None or not pred_trace:
+        return base_feedback
+
+    try:
+        predictor, _inputs, _output = pred_trace[0]
+    except (IndexError, TypeError, ValueError):
+        return base_feedback
+
+    try:
+        if text_extractor is not None:
+            candidate_text = text_extractor(predictor) or ""
+        else:
+            candidate_text = predictor.signature.instructions or ""
+    except AttributeError:
+        return base_feedback
+
+    if not candidate_text:
+        return base_feedback
+
+    report = closed_loop_cache.get_or_run(candidate_text)
+    if report is None:
+        return base_feedback
+
+    # Local import to avoid pulling the validation stack into every metric
+    # build site; the cache parameter is what gates this import.
+    from evolution.core.closed_loop_feedback import render_feedback_block
+
+    block = render_feedback_block(report)
+    return base_feedback + "\n\n" + block
 
 
 def _clamp_to_unit(value: str) -> float:

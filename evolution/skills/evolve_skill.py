@@ -1269,6 +1269,16 @@ def evolve(
     type=click.IntRange(min=1),
     help="Wall-clock cap for the --benchmark-cmd hook (default 600s).",
 )
+@click.option(
+    "--closed-loop-during-evolution",
+    "closed_loop_suite_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to a JSONL task suite for in-loop closed-loop validation feedback. "
+         "Wired symmetrically with evolve_tool, but skill-side closed-loop "
+         "validation requires a SkillFileInstaller that doesn't exist yet — "
+         "setting this flag raises until that lands.",
+)
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflection_model,
          eval_model, skill_source_dir, dry_run, seed, budget, no_fallback,
          quality_gate, growth_free_threshold,
@@ -1277,8 +1287,15 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          knee_point_strategy, bap_safety_margin, bap_max_growth,
          eval_dataset_size, holdout_ratio, evaluate_band_on_holdout,
          fitness_profile, apply, patch, max_total_cost_usd,
-         benchmark_cmd, benchmark_timeout_seconds):
+         benchmark_cmd, benchmark_timeout_seconds,
+         closed_loop_suite_path):
     """Evolve an agent skill using DSPy + GEPA optimization."""
+    if closed_loop_suite_path is not None:
+        raise click.UsageError(
+            "--closed-loop-during-evolution is wired on evolve_skill for CLI "
+            "consistency, but skill-side closed-loop validation requires a "
+            "SkillFileInstaller that doesn't exist yet."
+        )
     evolve(
         skill_name=skill,
         iterations=iterations,
