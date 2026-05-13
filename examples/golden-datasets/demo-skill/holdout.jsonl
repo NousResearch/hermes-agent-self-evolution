@@ -1,0 +1,1 @@
+{"task_input":"Review this change: a live smoke script refuses to run unless provider credentials are detected, unless explicitly overridden.","expected_behavior":"Recognize the cost-control guardrail, mention the override should be explicit, and recommend documenting provider setup and expected artifacts.","difficulty":"medium","category":"cost-control","source":"golden"}
