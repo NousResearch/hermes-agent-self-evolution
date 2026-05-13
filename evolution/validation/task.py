@@ -32,8 +32,12 @@ class Task:
     fixture_setup: dict[str, str] = field(default_factory=dict)
 
     def render_message(self, fixture_dir: Path) -> str:
-        """Substitute ``{fixture_dir}`` in the message with the resolved path."""
-        return self.user_message.format(fixture_dir=str(fixture_dir))
+        """Substitute ``{fixture_dir}`` in the message with the resolved path.
+
+        Uses a plain ``str.replace`` so literal ``{`` / ``}`` in task
+        content (Python dict literals, JSON snippets) survive verbatim.
+        """
+        return self.user_message.replace("{fixture_dir}", str(fixture_dir))
 
 
 @dataclass(frozen=True)

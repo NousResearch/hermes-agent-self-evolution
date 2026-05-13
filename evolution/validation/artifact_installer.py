@@ -40,6 +40,13 @@ class HermesToolDescriptionInstaller:
     layout as the baseline). We reuse ``HermesToolSource`` to do the
     AST parse + byte-precise splice; this class only manages the
     target_path bookkeeping and the post-install checksum.
+
+    Constraint: the target tool's schema must be declared as a static
+    dict literal (``NAME_SCHEMA = {...}``). Schemas built by a
+    function call (e.g. ``EXECUTE_CODE_SCHEMA = build_schema()``) end
+    up in ``HermesToolSource.dropped_tools`` and aren't installable —
+    closed-loop validation for those tools needs the upstream module
+    refactored to a static literal first.
     """
 
     def __init__(self, hermes_repo: Path, tool_name: str) -> None:

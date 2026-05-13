@@ -25,6 +25,18 @@ class TestTaskRendering:
         task = Task(task_id="t1", user_message="run the agent")
         assert task.render_message(tmp_path) == "run the agent"
 
+    def test_render_preserves_literal_braces_in_message(self, tmp_path):
+        # Task content often contains code with `{` and `}` (Python dict
+        # literals, JSON snippets, format specifiers). These must survive
+        # the placeholder substitution without being interpreted.
+        task = Task(
+            task_id="t1",
+            user_message="write {fixture_dir}/x.py: data = {'id': 1, 'value': [2, 3]}",
+        )
+        rendered = task.render_message(tmp_path)
+        assert "{'id': 1, 'value': [2, 3]}" in rendered
+        assert str(tmp_path) in rendered
+
 
 class TestTaskSuiteLoader:
     def _write_jsonl(self, path: Path, rows: list[dict]) -> None:

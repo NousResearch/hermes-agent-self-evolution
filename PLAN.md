@@ -457,6 +457,7 @@ These descriptions are sent with every API call as part of the tool schema — e
 4. **Benchmark gating again not built in.** Same as Phase 1 deviation #1 — the built-in deploy gate is paired-bootstrap CI on the holdout. For benchmark-style gating users wire `--benchmark-cmd "<shell command>"`; the hook also runs on the tool path against the rendered manifest (`EVOLVED_PATH` points at the JSON).
 5. **Eval triples are `(task, correct_tool)`, not `(task, correct_tool, correct_params)`.** Schema structure is frozen by design; parameter correctness is a separate concern from description quality.
 6. **Input surface is broader than planned.** The plan framed Phase 2 around Hermes' `tools/registry.py`. The build supports any agent that can emit an MCP `list_tools()`-shape JSON manifest *and* Hermes-style Python `*_SCHEMA` declarations (via `HermesToolSource`'s AST walker, with one-hop `Name`-reference resolution for cases like `TERMINAL_TOOL_DESCRIPTION`). This is a scope expansion, not a contraction.
+7. **N=2 saturated baselines.** Weak-target hunt ran `evolve_tool` against `write_file` (98.8–99.2% holdout, 3 seeds, 1×/3× iter) and `search_files` (98.6% holdout). Both runs produced evolved descriptions byte-identical to the baseline — the knee-point picker correctly reverts to the unchanged baseline when GEPA's variants tie. The framework's tool-description pipeline is regression-catching, not improvement-finding, on these hand-tuned descriptions.
 
 ### Phase 3: System Prompt Evolution
 

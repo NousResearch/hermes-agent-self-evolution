@@ -1,0 +1,8 @@
+{
+  "confusable_neighbors": {
+    "write_file": "patch",
+    "patch": "write_file",
+    "search_files": "read_file",
+    "read_file": "search_files"
+  }
+}

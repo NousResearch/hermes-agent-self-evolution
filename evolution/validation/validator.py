@@ -71,7 +71,15 @@ class ValidationInputs:
 
 
 class ClosedLoopValidator:
-    """Run baseline + evolved phases against a task suite, produce a report."""
+    """Run baseline + evolved phases against a task suite, produce a report.
+
+    Single-run verdicts on small suites are noisy: tasks where the agent
+    could plausibly pick more than one tool flip across identical-input
+    runs at a rate that's been observed in the ~15-20% range. The
+    decision rule (``n_wins >= 2 * n_losses``) assumes multi-run usage;
+    for confident verdicts on small suites, invoke the harness 3+
+    times and aggregate.
+    """
 
     def __init__(self, installer: ArtifactInstaller, runner: AgentRunner) -> None:
         self.installer = installer
