@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -54,8 +55,18 @@ class ResolvedLM:
     source: str
 
 
-class HermesProviderError(RuntimeError):
-    """Raised when no model can be resolved from any source."""
+class HermesProviderError(BaseException):
+    """Raised when no model can be resolved from any source, or when an
+    auth failure aborts a run.
+
+    Inherits from BaseException (not RuntimeError) so the dspy.Evaluate
+    worker pool's ``except Exception`` cannot swallow it. This mirrors
+    the trick CostCeilingExceeded uses in evolution/core/lm_timing_callback.py
+    to bypass the same swallowing.
+
+    Callers that previously caught with ``except HermesProviderError`` keep
+    working unchanged; only the bare ``except Exception`` no longer catches it.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -423,21 +434,45 @@ def _coerce_priority(value: Any) -> int:
     return 999
 
 
+def _is_pool_entry_usable(entry: Dict[str, Any], *, now_epoch: float) -> bool:
+    """Skip credentials Hermes has marked exhausted. Mirrors Hermes's
+    own pool-rotation behavior — an entry with ``last_status ==
+    "exhausted"`` is unavailable until ``last_error_reset_at`` has passed.
+    Entries without ``last_status`` are treated as usable for back-compat
+    with hand-edited auth.json.
+    """
+    status = entry.get("last_status")
+    if status != "exhausted":
+        return True
+    reset_at = entry.get("last_error_reset_at")
+    if not isinstance(reset_at, (int, float)):
+        # Exhausted but no cooldown → treat as permanently bad until Hermes
+        # rewrites the entry. Better than silently using a credential the
+        # last successful Hermes run knew was dead.
+        return False
+    return now_epoch >= float(reset_at)
+
+
 def _pick_pool_entry(auth_store: Dict[str, Any], provider: str) -> Optional[Dict[str, Any]]:
-    """Return the highest-priority credential entry for ``provider``.
+    """Return the highest-priority *usable* credential entry for ``provider``.
 
     Lowest ``priority`` integer wins (Hermes convention: 0 = highest).
     Also checks ``custom:<provider>`` namespaced keys when the bare
-    provider key has no entries.
+    provider key has no entries. Entries Hermes marked exhausted with a
+    future cooldown are skipped — see _is_pool_entry_usable.
     """
     pool = auth_store.get("credential_pool")
     if not isinstance(pool, dict):
         return None
+    now = time.time()
     candidates: List[Dict[str, Any]] = []
     for key in (provider, f"custom:{provider}"):
         entries = pool.get(key)
         if isinstance(entries, list):
-            candidates.extend(e for e in entries if isinstance(e, dict))
+            candidates.extend(
+                e for e in entries
+                if isinstance(e, dict) and _is_pool_entry_usable(e, now_epoch=now)
+            )
     if not candidates:
         return None
     candidates.sort(key=lambda e: _coerce_priority(e.get("priority")))

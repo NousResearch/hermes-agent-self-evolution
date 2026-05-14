@@ -158,6 +158,11 @@ def _log_litellm_failure(kwargs, exception, start_time, end_time) -> None:
     logical call), exposing intermediate retries that BaseCallback hides
     behind a single `on_lm_end`. Without this, a 5×60s retry loop on a
     flaky API looks like a single 5-minute LM call.
+
+    Also sets the mid-run auth-abort sentinel on the cost ledger when the
+    exception is auth-shaped, so the next BaseLM.__call__ raises
+    HermesProviderError. Defense-in-depth for credentials that go bad
+    after preflight passed.
     """
     model = kwargs.get("model", "<unknown>")
     duration = (end_time - start_time).total_seconds() if end_time else -1.0
@@ -165,6 +170,19 @@ def _log_litellm_failure(kwargs, exception, start_time, end_time) -> None:
         "[litellm RETRY/FAIL] model=%s duration=%.1fs exception=%s: %s",
         model, duration, type(exception).__name__, str(exception)[:200],
     )
+
+    # Local import — auth_check pulls in litellm + hermes_provider which
+    # are heavy; only worth the cost when we actually hit a failure.
+    from evolution.core.auth_check import is_auth_error
+
+    if is_auth_error(exception):
+        COST_LEDGER._set_auth_abort(
+            f"Authentication failed mid-run for model '{model}': "
+            f"{type(exception).__name__}: {str(exception)[:200]}\n"
+            "The credential may have expired during the run. Run "
+            "`hermes auth` (or set the appropriate provider env var) and "
+            "re-run."
+        )
 
 
 _register_lock = threading.Lock()
@@ -225,15 +243,39 @@ class CostLedger:
         self._by_model: dict[str, _ModelCostRow] = {}
         self._ceiling_usd: Optional[float] = None
         self._abort_requested: bool = False
+        # Mid-run auth-abort sentinel: when a litellm.failure_callback
+        # observes an auth-shaped exception, it sets this. The patched
+        # BaseLM.__call__ checks it and raises HermesProviderError so the
+        # next worker abort propagates past dspy.Evaluate's `except
+        # Exception` swallower (HermesProviderError is BaseException-derived).
+        self._auth_abort_message: Optional[str] = None
 
     def reset(self) -> None:
-        # Must also clear the abort flag — the cost callback is registered
-        # process-globally, so a stale flag from a prior run would abort
-        # the next run's first LM call.
+        # Must also clear the abort flags — the cost + failure callbacks
+        # are registered process-globally, so a stale flag from a prior
+        # run would abort the next run's first LM call.
         with self._lock:
             self._by_model.clear()
             self._ceiling_usd = None
             self._abort_requested = False
+            self._auth_abort_message = None
+
+    def _set_auth_abort(self, message: str) -> None:
+        """Set the auth-abort sentinel. First message wins — the original
+        failure is the actionable one; subsequent failures are usually
+        downstream effects of the same bad credential.
+        """
+        with self._lock:
+            if self._auth_abort_message is None:
+                self._auth_abort_message = message
+
+    def get_auth_abort_message(self) -> Optional[str]:
+        """If a mid-run auth abort is pending, return its message;
+        otherwise None. The flag is not cleared by reading — every LM
+        call after the abort will keep raising until ``reset()``.
+        """
+        with self._lock:
+            return self._auth_abort_message
 
     def set_ceiling(self, usd: Optional[float]) -> None:
         """Set the total-cost ceiling in USD. ``None`` disables. After the
@@ -387,6 +429,14 @@ def _install_cost_ceiling_lm_guard() -> None:
         state = COST_LEDGER.get_abort_state()
         if state is not None:
             raise CostCeilingExceeded(*state)
+        # Mid-run auth-abort: HermesProviderError is BaseException-derived
+        # so dspy.Evaluate's `except Exception` cannot swallow it — the
+        # abort propagates out of the worker pool to the top-level CLI
+        # catch.
+        auth_msg = COST_LEDGER.get_auth_abort_message()
+        if auth_msg is not None:
+            from evolution.core.hermes_provider import HermesProviderError
+            raise HermesProviderError(auth_msg)
         return original_call(self, *args, **kwargs)
 
     call_with_cost_ceiling_check._cost_ceiling_guarded = True  # type: ignore[attr-defined]

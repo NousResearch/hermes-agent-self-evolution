@@ -49,7 +49,7 @@ uv sync
 
 ### Run with Hermes Agent
 
-If you have [Hermes Agent](https://github.com/NousResearch/hermes-agent) configured (`~/.hermes/config.yaml` exists with a `model:` section), the framework picks up your provider, model, base URL, and API key automatically — no environment variables to set when your config has an inline `api_key` or a populated credential pool. (OAuth-based setups, e.g. Nous Portal, still need a fresh `hermes login`.)
+If you have [Hermes Agent](https://github.com/NousResearch/hermes-agent) configured (`~/.hermes/config.yaml` exists with a `model:` section), the framework picks up your provider, model, base URL, and API key automatically — no environment variables to set when your config has an inline `api_key` or a populated credential pool. (OAuth-based setups, e.g. Nous Portal, still need a fresh `hermes model` to refresh.)
 
 ```bash
 uv run python -m evolution.skills.evolve_skill \

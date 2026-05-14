@@ -24,6 +24,7 @@ from evolution.core.hermes_provider import (
     HermesProviderError,
     ResolvedLM,
     _coerce_priority,
+    _is_pool_entry_usable,
     _pick_pool_entry,
     _redact_lm,
     resolve_default_lm,
@@ -767,6 +768,120 @@ class TestCredentialPoolEdgeCases:
         assert _coerce_priority(None) == 999
         assert _coerce_priority("not-a-number") == 999
         assert _coerce_priority(1.5) == 999  # float intentionally rejected
+
+
+class TestPoolEntryExhaustion:
+    """Mirror Hermes's own behavior: skip credentials Hermes already
+    marked exhausted unless their reset_at has passed. Hermes writes
+    these fields when it gets a 401 (auth) or 429 (rate limit) — picking
+    them up here avoids both pointless preflight calls and burning the
+    same dead credential on every run.
+    """
+
+    def test_unset_last_status_is_usable(self):
+        # Back-compat: hand-edited auth.json entries without last_status
+        # behave as before (treated as usable).
+        assert _is_pool_entry_usable({"access_token": "x"}, now_epoch=1000.0)
+
+    def test_status_ok_is_usable(self):
+        assert _is_pool_entry_usable(
+            {"access_token": "x", "last_status": "ok"}, now_epoch=1000.0
+        )
+
+    def test_exhausted_with_future_reset_is_skipped(self):
+        assert not _is_pool_entry_usable(
+            {
+                "access_token": "x",
+                "last_status": "exhausted",
+                "last_error_reset_at": 2000.0,
+            },
+            now_epoch=1000.0,
+        )
+
+    def test_exhausted_with_past_reset_is_usable(self):
+        # Cooldown expired — credential becomes available again. Hermes
+        # rotates back to the entry on its next run; we should too.
+        assert _is_pool_entry_usable(
+            {
+                "access_token": "x",
+                "last_status": "exhausted",
+                "last_error_reset_at": 500.0,
+            },
+            now_epoch=1000.0,
+        )
+
+    def test_exhausted_without_reset_is_skipped(self):
+        # Defensive: exhausted entries without a reset_at are treated as
+        # permanently bad rather than silently usable.
+        assert not _is_pool_entry_usable(
+            {"access_token": "x", "last_status": "exhausted"},
+            now_epoch=1000.0,
+        )
+
+    def test_pick_pool_entry_prefers_usable_over_exhausted_lower_priority(self, hermes_home):
+        # Even if exhausted entry has lower (better) priority, the usable
+        # one wins.
+        write_config(
+            hermes_home,
+            """
+            model:
+              default: m
+              provider: anthropic
+            """,
+        )
+        write_auth(
+            hermes_home,
+            {
+                "credential_pool": {
+                    "anthropic": [
+                        {
+                            "priority": 0,
+                            "auth_type": "api_key",
+                            "access_token": "exhausted-but-best-priority",
+                            "last_status": "exhausted",
+                            "last_error_reset_at": 9999999999.0,
+                        },
+                        {
+                            "priority": 5,
+                            "auth_type": "api_key",
+                            "access_token": "usable-fallback",
+                        },
+                    ]
+                },
+            },
+        )
+        lm = resolve_default_lm(role="optimizer", hermes_home=hermes_home)
+        assert lm.lm_kwargs["api_key"] == "usable-fallback"
+
+    def test_pick_pool_entry_returns_none_when_only_exhausted(self, hermes_home, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "from-env-fallback")
+        write_config(
+            hermes_home,
+            """
+            model:
+              default: m
+              provider: anthropic
+            """,
+        )
+        write_auth(
+            hermes_home,
+            {
+                "credential_pool": {
+                    "anthropic": [
+                        {
+                            "priority": 0,
+                            "auth_type": "api_key",
+                            "access_token": "dead",
+                            "last_status": "exhausted",
+                            "last_error_reset_at": 9999999999.0,
+                        },
+                    ]
+                },
+            },
+        )
+        # Only entry is exhausted → fall through to env var.
+        lm = resolve_default_lm(role="optimizer", hermes_home=hermes_home)
+        assert lm.lm_kwargs["api_key"] == "from-env-fallback"
 
 
 # ---------------------------------------------------------------------------

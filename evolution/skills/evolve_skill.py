@@ -23,7 +23,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
-from evolution.core.hermes_provider import resolve_default_lm, resolved_lms_dump
+from evolution.core.auth_check import preflight as _preflight_lm_credentials
+from evolution.core.hermes_provider import HermesProviderError, resolve_default_lm, resolved_lms_dump
 from evolution.core.quality_gate import (
     QUALITY_GATE_PRESETS,
     resolve_proposer_mode,
@@ -366,6 +367,13 @@ def _build_optimizer_and_compile(
     except CostCeilingExceeded:
         # Don't fall back to MIPROv2 — that would re-incur cost and defeat the kill switch.
         raise
+    except HermesProviderError:
+        # Defensive: HermesProviderError is BaseException-derived so the
+        # broad `except Exception` below already wouldn't catch it; this
+        # explicit re-raise documents intent and guards against someone
+        # changing the inheritance back to RuntimeError. Auth failures
+        # don't get fixed by switching to MIPROv2 — same creds, same fail.
+        raise
     except Exception as gepa_exc:
         if no_fallback:
             raise
@@ -498,6 +506,7 @@ def evolve(
     max_total_cost_usd: Optional[float] = None,
     benchmark_cmd: Optional[str] = None,
     benchmark_timeout_seconds: int = 600,
+    skip_preflight: bool = False,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -598,6 +607,16 @@ def evolve(
             COST_LEDGER.reset()
             COST_LEDGER.set_ceiling(max_total_cost_usd)
             console.print(f"  Run log: {run_log_path}")
+
+            # Validate credentials before doing ANY LM work — dataset
+            # generation alone can spend $0.50+ before we'd otherwise
+            # discover the eval LM has a stale token. Preflight is one
+            # tiny call per unique LM, raises HermesProviderError with
+            # provider-specific recovery guidance.
+            if not skip_preflight:
+                _preflight_optimizer = resolve_default_lm(role="optimizer", explicit_model=optimizer_model)
+                _preflight_eval = resolve_default_lm(role="eval", explicit_model=eval_model)
+                _preflight_lm_credentials([_preflight_optimizer, _preflight_eval])
             if max_total_cost_usd is not None:
                 console.print(f"  Cost ceiling: ${max_total_cost_usd:.4f}")
 
@@ -1305,6 +1324,17 @@ def evolve(
     help="Wall-clock cap for the --benchmark-cmd hook (default 600s).",
 )
 @click.option(
+    "--no-preflight",
+    "skip_preflight",
+    is_flag=True,
+    default=False,
+    help="Skip the LM credential preflight probe. By default, the framework "
+         "makes one tiny ~$0.0001 litellm.completion call per unique LM "
+         "before GEPA setup to validate credentials work — this catches "
+         "expired tokens up front rather than 5 minutes into a run. Pass "
+         "this flag to skip when you know your creds are good.",
+)
+@click.option(
     "--closed-loop-during-evolution",
     "closed_loop_suite_path",
     default=None,
@@ -1323,6 +1353,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          eval_dataset_size, holdout_ratio, evaluate_band_on_holdout,
          fitness_profile, apply, patch, max_total_cost_usd,
          benchmark_cmd, benchmark_timeout_seconds,
+         skip_preflight,
          closed_loop_suite_path):
     """Evolve an agent skill using DSPy + GEPA optimization."""
     if closed_loop_suite_path is not None:
@@ -1331,40 +1362,48 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             "consistency, but skill-side closed-loop validation requires a "
             "SkillFileInstaller that doesn't exist yet."
         )
-    evolve(
-        skill_name=skill,
-        iterations=iterations,
-        eval_source=eval_source,
-        dataset_path=dataset_path,
-        optimizer_model=optimizer_model,
-        reflection_model=reflection_model,
-        eval_model=eval_model,
-        skill_source_dirs=list(skill_source_dir) if skill_source_dir else None,
-        dry_run=dry_run,
-        seed=seed,
-        budget=budget,
-        no_fallback=no_fallback,
-        quality_gate=quality_gate,
-        growth_free_threshold=growth_free_threshold,
-        growth_quality_slope=growth_quality_slope,
-        max_absolute_chars=max_absolute_chars,
-        inferiority_tolerance=inferiority_tolerance,
-        bootstrap_confidence=bootstrap_confidence,
-        bootstrap_n_resamples=bootstrap_resamples,
-        knee_point_epsilon=knee_point_epsilon,
-        knee_point_strategy=knee_point_strategy,
-        bap_safety_margin=bap_safety_margin,
-        bap_max_growth=bap_max_growth,
-        eval_dataset_size=eval_dataset_size,
-        holdout_ratio=holdout_ratio,
-        evaluate_band_on_holdout=evaluate_band_on_holdout,
-        fitness_profile=fitness_profile,
-        apply_in_place=apply,
-        emit_patch=patch,
-        max_total_cost_usd=max_total_cost_usd,
-        benchmark_cmd=benchmark_cmd,
-        benchmark_timeout_seconds=benchmark_timeout_seconds,
-    )
+    try:
+        evolve(
+            skill_name=skill,
+            iterations=iterations,
+            eval_source=eval_source,
+            dataset_path=dataset_path,
+            optimizer_model=optimizer_model,
+            reflection_model=reflection_model,
+            eval_model=eval_model,
+            skill_source_dirs=list(skill_source_dir) if skill_source_dir else None,
+            dry_run=dry_run,
+            seed=seed,
+            budget=budget,
+            no_fallback=no_fallback,
+            quality_gate=quality_gate,
+            growth_free_threshold=growth_free_threshold,
+            growth_quality_slope=growth_quality_slope,
+            max_absolute_chars=max_absolute_chars,
+            inferiority_tolerance=inferiority_tolerance,
+            bootstrap_confidence=bootstrap_confidence,
+            bootstrap_n_resamples=bootstrap_resamples,
+            knee_point_epsilon=knee_point_epsilon,
+            knee_point_strategy=knee_point_strategy,
+            bap_safety_margin=bap_safety_margin,
+            bap_max_growth=bap_max_growth,
+            eval_dataset_size=eval_dataset_size,
+            holdout_ratio=holdout_ratio,
+            evaluate_band_on_holdout=evaluate_band_on_holdout,
+            fitness_profile=fitness_profile,
+            apply_in_place=apply,
+            emit_patch=patch,
+            max_total_cost_usd=max_total_cost_usd,
+            benchmark_cmd=benchmark_cmd,
+            benchmark_timeout_seconds=benchmark_timeout_seconds,
+            skip_preflight=skip_preflight,
+        )
+    except HermesProviderError as exc:
+        # Render a clean error panel instead of dumping a Python traceback
+        # — this is the failure mode for stale Hermes credentials and the
+        # message contains actionable per-provider recovery commands.
+        console.print(Panel(str(exc), title="[bold]Authentication[/bold]", border_style="red"))
+        sys.exit(2)
 
 
 if __name__ == "__main__":

@@ -140,11 +140,32 @@ The framework checks env vars in this priority order when `~/.hermes/config.yaml
 
 For finer control, pass `--optimizer-model` etc. explicitly and skip Hermes resolution entirely.
 
-## Stale OAuth tokens
+## Stale credentials and the auth-error path
 
-`~/.hermes/auth.json` can hold OAuth-issued credentials (Nous Portal, OpenAI Codex). If the underlying token expires, LiteLLM will return 401 and the run fails with a `litellm.AuthenticationError` traceback — currently surfaced as-is, with no translation to a friendlier message. Run `hermes login` to refresh the token, or pass `--optimizer-model` with a different provider to bypass.
+The framework validates LM credentials before doing any optimization work. On every `evolve` run (unless you pass `--no-preflight`), it makes one tiny ~$0.0001 `litellm.completion` call per unique LM combo. If a credential is bad, the run fails fast with a Rich-formatted error panel that names the model and includes the right recovery command for your provider — no Python traceback, no 5-minute doomed run, no dataset-gen budget burned before the failure surfaces.
 
-The framework does not refresh OAuth tokens — that's Hermes's job. Translating LiteLLM auth errors into a `HermesProviderError` with an actionable "run hermes login" hint is tracked under "Future work" below.
+Per-provider recovery commands the framework suggests:
+
+| Provider | Recovery |
+|---|---|
+| `anthropic` | `hermes auth add anthropic` |
+| `nous` | `hermes model` (then select Nous Portal) |
+| `gemini` | `hermes login --provider google-gemini-cli` |
+| `openrouter`, `openai`, `kimi-coding`, etc. | `export <PROVIDER>_API_KEY=...` |
+| `copilot` | `gh auth login` |
+
+(`hermes login` was deprecated upstream — current Hermes commands are `hermes auth add <provider>` or `hermes model`. Gemini still uses the old `hermes login --provider` form.)
+
+If a credential goes bad mid-run (rare — long sessions on short-TTL OAuth, key revocation in flight), the same `HermesProviderError` surfaces from the next LM call rather than producing silent `score=0.0` evaluations. The mid-run path is defense-in-depth on top of preflight; under normal use the preflight catches everything.
+
+The framework does not refresh OAuth tokens — that's Hermes's job. Honor the `last_status: exhausted` + `last_error_reset_at` fields Hermes writes to `auth.json` when it detects a bad credential; we skip those entries until Hermes's cooldown passes, mirroring Hermes's own pool rotation logic.
+
+### Skipping preflight
+
+Pass `--no-preflight` to skip the credential probe. Useful when:
+- You just ran `evolve` successfully a minute ago and know the creds are good
+- You're iterating in a tight loop and want to shave the ~1s preflight latency
+- Your provider's `litellm.completion` probe is flaky (some custom endpoints don't like `max_tokens=1`)
 
 ## Troubleshooting
 
@@ -168,8 +189,7 @@ The framework defaults all four roles to Hermes's single `model.default`. To use
 
 This module currently does not:
 
-- Refresh expired OAuth tokens (delegated to `hermes login`)
-- Translate `litellm.AuthenticationError` into an actionable `HermesProviderError` pointing at `hermes login`
+- Refresh expired OAuth tokens (delegated to `hermes auth add <provider>` / `hermes model`)
 - Honor `auxiliary.*` provider config from `config.yaml` (Hermes's vision/web-extract/session-search routing)
 - Support AWS Bedrock or OpenAI Codex Responses API end-to-end
 - Auto-suggest cheaper per-role models via `/v1/models` introspection

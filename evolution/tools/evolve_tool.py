@@ -23,7 +23,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
-from evolution.core.hermes_provider import resolve_default_lm, resolved_lms_dump
+from evolution.core.auth_check import preflight as _preflight_lm_credentials
+from evolution.core.hermes_provider import HermesProviderError, resolve_default_lm, resolved_lms_dump
 from evolution.core.constraints import (
     ConstraintValidator,
     effective_absolute_char_ceiling,
@@ -349,6 +350,7 @@ def evolve(
     closed_loop_window_size: int = 8,
     closed_loop_mode: str = "feedback",
     closed_loop_in_valset: bool = False,
+    skip_preflight: bool = False,
 ) -> dict[str, Any]:
     """Evolve one tool description inside a manifest.
 
@@ -427,6 +429,13 @@ def evolve(
             console.print(f"  Run log: {run_log_path}")
             if max_total_cost_usd is not None:
                 console.print(f"  Cost ceiling: ${max_total_cost_usd:.4f}")
+
+            # Validate credentials before any LM work — dataset gen alone
+            # can spend $0.50+ before we'd otherwise discover a stale token.
+            if not skip_preflight and not dry_run:
+                _preflight_optimizer = resolve_default_lm(role="optimizer", explicit_model=optimizer_model)
+                _preflight_eval = resolve_default_lm(role="eval", explicit_model=eval_model)
+                _preflight_lm_credentials([_preflight_optimizer, _preflight_eval])
 
             sessiondb_drops: Optional[dict[str, int]] = None
             if eval_source == "synthetic":
@@ -1122,6 +1131,17 @@ def evolve(
          "feedback block on non-behavioral examples (most expensive).",
 )
 @click.option(
+    "--no-preflight",
+    "skip_preflight",
+    is_flag=True,
+    default=False,
+    help="Skip the LM credential preflight probe. By default, the framework "
+         "makes one tiny ~$0.0001 litellm.completion call per unique LM "
+         "before GEPA setup to validate credentials work — this catches "
+         "expired tokens up front rather than 5 minutes into a run. Pass "
+         "this flag to skip when you know your creds are good.",
+)
+@click.option(
     "--closed-loop-in-valset/--no-closed-loop-in-valset",
     "closed_loop_in_valset",
     default=False,
@@ -1146,6 +1166,7 @@ def main(
     max_total_cost_usd: Optional[float],
     benchmark_cmd: Optional[str],
     benchmark_timeout_seconds: int,
+    skip_preflight: bool,
     closed_loop_suite_path: Optional[Path],
     closed_loop_hermes_repo: Optional[Path],
     closed_loop_saturation_threshold: float,
@@ -1166,30 +1187,37 @@ def main(
             f"--closed-loop-mode={closed_loop_mode} requires "
             "--closed-loop-during-evolution to be set"
         )
-    evolve(
-        tool_name=tool_name,
-        manifest_path=manifest_path,
-        iterations=iterations,
-        fitness_profile=fitness_profile,
-        quality_gate=quality_gate,
-        max_absolute_chars=max_absolute_chars,
-        apply=apply_flag,
-        patch=patch_flag,
-        seed=seed,
-        enable_confusable_bucket=enable_confusable_bucket,
-        eval_source=eval_source,
-        dry_run=dry_run,
-        max_total_cost_usd=max_total_cost_usd,
-        benchmark_cmd=benchmark_cmd,
-        benchmark_timeout_seconds=benchmark_timeout_seconds,
-        closed_loop_suite_path=closed_loop_suite_path,
-        closed_loop_hermes_repo=closed_loop_hermes_repo,
-        closed_loop_saturation_threshold=closed_loop_saturation_threshold,
-        closed_loop_min_iters=closed_loop_min_iters,
-        closed_loop_window_size=closed_loop_window_size,
-        closed_loop_mode=closed_loop_mode,
-        closed_loop_in_valset=closed_loop_in_valset,
-    )
+    try:
+        evolve(
+            tool_name=tool_name,
+            manifest_path=manifest_path,
+            iterations=iterations,
+            fitness_profile=fitness_profile,
+            quality_gate=quality_gate,
+            max_absolute_chars=max_absolute_chars,
+            apply=apply_flag,
+            patch=patch_flag,
+            seed=seed,
+            enable_confusable_bucket=enable_confusable_bucket,
+            eval_source=eval_source,
+            dry_run=dry_run,
+            max_total_cost_usd=max_total_cost_usd,
+            benchmark_cmd=benchmark_cmd,
+            benchmark_timeout_seconds=benchmark_timeout_seconds,
+            closed_loop_suite_path=closed_loop_suite_path,
+            closed_loop_hermes_repo=closed_loop_hermes_repo,
+            closed_loop_saturation_threshold=closed_loop_saturation_threshold,
+            closed_loop_min_iters=closed_loop_min_iters,
+            closed_loop_window_size=closed_loop_window_size,
+            closed_loop_mode=closed_loop_mode,
+            closed_loop_in_valset=closed_loop_in_valset,
+            skip_preflight=skip_preflight,
+        )
+    except HermesProviderError as exc:
+        # Render a clean error panel instead of dumping a Python traceback —
+        # auth failures contain actionable per-provider recovery commands.
+        console.print(Panel(str(exc), title="[bold]Authentication[/bold]", border_style="red"))
+        sys.exit(2)
 
 
 if __name__ == "__main__":
