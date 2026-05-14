@@ -23,6 +23,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.hermes_provider import resolve_default_lm, resolved_lms_dump
 from evolution.core.quality_gate import (
     QUALITY_GATE_PRESETS,
     resolve_proposer_mode,
@@ -257,13 +258,15 @@ def _default_gepa_runner(
     # max_tokens=32000 satisfies DSPy's reasoning-model floor of 16000
     # (DSPy raises ValueError below that).
     reflection_lm_model = reflection_model or optimizer_model
+    _reflection_lm = resolve_default_lm(role="reflection", explicit_model=reflection_lm_model)
     optimizer = dspy.GEPA(
         metric=metric,
         auto=gepa_budget,
         # cache=False because at temperature=1.0 the disk cache would
         # replay stale mutations across runs and shrink candidate diversity.
         reflection_lm=dspy.LM(
-            reflection_lm_model,
+            _reflection_lm.model,
+            **_reflection_lm.lm_kwargs,
             temperature=1.0,
             max_tokens=32000,
             cache=False,
@@ -467,8 +470,8 @@ def evolve(
     iterations: int = 10,
     eval_source: str = "synthetic",
     dataset_path: Optional[str] = None,
-    optimizer_model: str = "openai/gpt-4.1",
-    eval_model: str = "openai/gpt-4.1-mini",
+    optimizer_model: Optional[str] = None,
+    eval_model: Optional[str] = None,
     skill_source_dirs: Optional[list[str]] = None,
     dry_run: bool = False,
     seed: int = 42,
@@ -663,13 +666,18 @@ def evolve(
                 console.print("[yellow]⚠ Baseline skill has constraint violations — proceeding anyway[/yellow]")
 
             gepa_budget = _resolve_budget(iterations, budget)
+            # Resolve up-front so the banner reflects the model the run will
+            # actually call — printing the raw CLI flag value showed "None"
+            # whenever Hermes was doing the resolving.
+            _optimizer_lm = resolve_default_lm(role="optimizer", explicit_model=optimizer_model)
+            _eval_lm = resolve_default_lm(role="eval", explicit_model=eval_model)
             console.print(f"\n[bold]Configuring optimizer[/bold]")
             console.print(f"  Optimizer: GEPA (budget={gepa_budget})")
-            console.print(f"  Optimizer model: {optimizer_model}")
-            console.print(f"  Eval model: {eval_model}")
+            console.print(f"  Optimizer model: {_optimizer_lm.model} ({_optimizer_lm.source})")
+            console.print(f"  Eval model: {_eval_lm.model} ({_eval_lm.source})")
 
             # request_timeout=60 ≈ 6x P99 of slowest observed gpt-4.1-mini call.
-            lm = dspy.LM(eval_model, request_timeout=60, num_retries=5)
+            lm = dspy.LM(_eval_lm.model, **_eval_lm.lm_kwargs, request_timeout=60, num_retries=5)
             # warn_on_type_mismatch=False silences spam from signatures that pass
             # empty/None into `str` inputs (e.g. RelevanceFilter.assistant_response
             # before any assistant turn).
@@ -798,6 +806,11 @@ def evolve(
                         "optimizer_model": optimizer_model,
                         "reflection_model": config.reflection_model,
                         "eval_model": config.eval_model,
+                        "resolved_lms": resolved_lms_dump(
+                            optimizer=optimizer_model,
+                            reflection=config.reflection_model,
+                            eval_=config.eval_model,
+                        ),
                         "eval_dataset_size": config.eval_dataset_size,
                         "holdout_ratio": config.holdout_ratio,
                         "quality_gate_preset": quality_gate,
@@ -933,6 +946,11 @@ def evolve(
                     "optimizer_model": optimizer_model,
                     "reflection_model": config.reflection_model,
                     "eval_model": config.eval_model,
+                    "resolved_lms": resolved_lms_dump(
+                        optimizer=optimizer_model,
+                        reflection=config.reflection_model,
+                        eval_=config.eval_model,
+                    ),
                     "eval_dataset_size": config.eval_dataset_size,
                     "holdout_ratio": config.holdout_ratio,
                     "quality_gate_preset": quality_gate,
@@ -996,6 +1014,9 @@ def evolve(
                 "iterations": iterations,
                 "optimizer_model": optimizer_model,
                 "eval_model": eval_model,
+                "resolved_lms": resolved_lms_dump(
+                    optimizer=optimizer_model, eval_=eval_model
+                ),
                 "baseline_score": avg_baseline,
                 "evolved_score": avg_evolved,
                 "improvement": improvement,
@@ -1039,6 +1060,11 @@ def evolve(
                     "optimizer_model": optimizer_model,
                     "reflection_model": config.reflection_model,
                     "eval_model": config.eval_model,
+                    "resolved_lms": resolved_lms_dump(
+                        optimizer=optimizer_model,
+                        reflection=config.reflection_model,
+                        eval_=config.eval_model,
+                    ),
                     "eval_dataset_size": config.eval_dataset_size,
                     "holdout_ratio": config.holdout_ratio,
                     "quality_gate_preset": quality_gate,
@@ -1063,19 +1089,28 @@ def evolve(
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
 @click.option(
     "--optimizer-model",
-    default="openai/gpt-4.1",
-    help="Default LM bound to dspy.configure (eval LM). Reflection LM is "
-    "controlled separately by --reflection-model.",
+    default=None,
+    help="LiteLLM model string for the optimizer LM (e.g. anthropic/claude-opus-4-5, "
+    "openai/gpt-4.1, openrouter/anthropic/claude-opus-4-5). When unset, defaults "
+    "to the model resolved from ~/.hermes/config.yaml + auth.json + provider env "
+    "vars; if neither is configured, exits with an actionable error. "
+    "Reflection LM is controlled separately by --reflection-model.",
 )
 @click.option(
     "--reflection-model",
-    default="openai/gpt-5-mini",
+    default=None,
     help="Model for the GEPA reflection LM (the LM the instruction proposer "
-    "calls). DSPy's GEPA docstring recommends gpt-5-class reasoning models; "
-    "Decagon's production blog reports gpt-4o-mini failed completely here. "
-    "Reasoning models require max_tokens >= 16000 (we set 32000).",
+    "calls). DSPy's GEPA docstring recommends gpt-5-class reasoning models. "
+    "Reasoning models require max_tokens >= 16000 (we set 32000). "
+    "When unset, falls back to --optimizer-model.",
 )
-@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
+@click.option(
+    "--eval-model",
+    default=None,
+    help="Model for evaluation + judge LMs. When unset, defaults to the "
+    "model resolved from Hermes (same as --optimizer-model). On Hermes setups "
+    "with one model only, all roles collapse onto it.",
+)
 @click.option(
     "--skill-source-dir",
     "skill_source_dir",

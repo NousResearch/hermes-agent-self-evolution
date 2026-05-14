@@ -47,6 +47,53 @@ cd agent-self-evolution
 uv sync
 ```
 
+### Run with Hermes Agent
+
+If you have [Hermes Agent](https://github.com/NousResearch/hermes-agent) configured (`~/.hermes/config.yaml` exists with a `model:` section), the framework picks up your provider, model, base URL, and API key automatically — no environment variables to set when your config has an inline `api_key` or a populated credential pool. (OAuth-based setups, e.g. Nous Portal, still need a fresh `hermes login`.)
+
+```bash
+uv run python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --iterations 10
+```
+
+Whatever model + provider Hermes is using (Anthropic, OpenRouter, Nous Portal, a local vLLM/Ollama/LM Studio, etc.) becomes the default for the optimizer, reflection, eval, and judge LMs. On Hermes setups with a single model, all four roles collapse onto it — no extra config required.
+
+For multi-model providers, override per role:
+
+```bash
+uv run python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --optimizer-model anthropic/claude-opus-4-5 \
+    --reflection-model anthropic/claude-opus-4-5 \
+    --eval-model anthropic/claude-haiku-4-5
+```
+
+For closed-loop validation — run the actual Hermes binary against fixture tasks and feed its scores back into GEPA — point at your Hermes checkout:
+
+```bash
+export SKILL_SOURCES_HERMES_REPO=~/.hermes/hermes-agent
+uv run python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --closed-loop-during-evolution evolution/validation/suites/your_suite.jsonl \
+    --closed-loop-hermes-repo ~/.hermes/hermes-agent
+```
+
+The closed-loop validator invokes `hermes -z` directly, so it uses the same provider config Hermes itself uses. Optimization and validation see the same model.
+
+### Run without Hermes Agent
+
+Set any standard provider env var and run — the framework falls back to env-var auto-detection in priority order (`ANTHROPIC_API_KEY` → `OPENROUTER_API_KEY` → `OPENAI_API_KEY` → others). When neither Hermes nor an env var is configured, the framework exits with an actionable message listing what was tried.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+uv run python -m evolution.skills.evolve_skill \
+    --skill writing-skills \
+    --iterations 10
+```
+
+See [docs/model_resolution.md](docs/model_resolution.md) for the full provider mapping, local-server (vLLM/Ollama/LM Studio) examples, and per-role override patterns.
+
 ### Skill discovery
 
 Skills are resolved by walking a list of `SkillSource` adapters in priority order:
@@ -67,6 +114,8 @@ uv run python -m evolution.skills.evolve_skill \
     --iterations 10 \
     --eval-source synthetic
 ```
+
+The model defaults to whatever Hermes is configured for. See "Run with Hermes Agent" above.
 
 ### Evolve a Claude Code skill
 

@@ -231,6 +231,9 @@ class TestToolJudge:
         config = MagicMock()
         config.fitness_profile = "balanced"
         config.eval_model = "openai/gpt-4.1-mini"
+        config.get_lm.return_value = SimpleNamespace(
+            model="openai/gpt-4.1-mini", lm_kwargs={}, source="test"
+        )
         judge = ToolJudge(config)
 
         # Mock the inner ChainOfThought judge to return scripted scores.
@@ -264,6 +267,9 @@ class TestToolJudge:
         config = MagicMock()
         config.fitness_profile = "balanced"
         config.eval_model = "openai/gpt-4.1-mini"
+        config.get_lm.return_value = SimpleNamespace(
+            model="openai/gpt-4.1-mini", lm_kwargs={}, source="test"
+        )
         judge = ToolJudge(config)
         judge.judge = MagicMock(
             return_value=SimpleNamespace(

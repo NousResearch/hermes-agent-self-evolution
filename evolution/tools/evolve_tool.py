@@ -23,6 +23,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.hermes_provider import resolve_default_lm, resolved_lms_dump
 from evolution.core.constraints import (
     ConstraintValidator,
     effective_absolute_char_ceiling,
@@ -335,9 +336,9 @@ def evolve(
     enable_confusable_bucket: bool = False,
     dry_run: bool = False,
     output_dir: Optional[Path] = None,
-    optimizer_model: str = "openai/gpt-4.1",
-    reflection_model: Optional[str] = "openai/gpt-5-mini",
-    eval_model: str = "openai/gpt-4.1-mini",
+    optimizer_model: Optional[str] = None,
+    reflection_model: Optional[str] = None,
+    eval_model: Optional[str] = None,
     max_total_cost_usd: Optional[float] = None,
     benchmark_cmd: Optional[str] = None,
     benchmark_timeout_seconds: int = 600,
@@ -531,7 +532,8 @@ def evolve(
             if not all(c.passed for c in baseline_constraints):
                 console.print("[yellow]⚠ Baseline description has constraint violations — proceeding anyway[/yellow]")
 
-            lm = dspy.LM(eval_model, request_timeout=60, num_retries=5)
+            _eval_lm = resolve_default_lm(role="eval", explicit_model=eval_model)
+            lm = dspy.LM(_eval_lm.model, **_eval_lm.lm_kwargs, request_timeout=60, num_retries=5)
             dspy.configure(
                 lm=lm,
                 warn_on_type_mismatch=False,
@@ -603,8 +605,13 @@ def evolve(
             console.print(f"\n[bold cyan]Running GEPA optimization (max_full_evals={iterations})[/bold cyan]\n")
             start_time = time.time()
 
+            _reflection_lm = resolve_default_lm(
+                role="reflection",
+                explicit_model=reflection_model or optimizer_model,
+            )
             reflection_lm = dspy.LM(
-                reflection_model or optimizer_model,
+                _reflection_lm.model,
+                **_reflection_lm.lm_kwargs,
                 temperature=1.0,
                 max_tokens=32000,
                 cache=False,
@@ -670,6 +677,11 @@ def evolve(
                 "optimizer_model": optimizer_model,
                 "reflection_model": config.reflection_model,
                 "eval_model": config.eval_model,
+                "resolved_lms": resolved_lms_dump(
+                    optimizer=optimizer_model,
+                    reflection=config.reflection_model,
+                    eval_=config.eval_model,
+                ),
                 "eval_dataset_size": config.eval_dataset_size,
                 "holdout_ratio": config.holdout_ratio,
                 "quality_gate_preset": quality_gate,
@@ -868,6 +880,9 @@ def evolve(
                 "iterations": iterations,
                 "optimizer_model": optimizer_model,
                 "eval_model": eval_model,
+                "resolved_lms": resolved_lms_dump(
+                    optimizer=optimizer_model, eval_=eval_model
+                ),
                 "baseline_score": avg_baseline,
                 "evolved_score": avg_evolved,
                 "improvement": improvement,
@@ -921,6 +936,11 @@ def evolve(
                 "optimizer_model": optimizer_model,
                 "reflection_model": config.reflection_model,
                 "eval_model": config.eval_model,
+                "resolved_lms": resolved_lms_dump(
+                    optimizer=optimizer_model,
+                    reflection=config.reflection_model,
+                    eval_=config.eval_model,
+                ),
                 "eval_dataset_size": config.eval_dataset_size,
                 "holdout_ratio": config.holdout_ratio,
                 "quality_gate_preset": quality_gate,

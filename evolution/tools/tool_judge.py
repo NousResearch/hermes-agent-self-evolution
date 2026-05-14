@@ -86,8 +86,10 @@ class ToolJudge:
     ) -> FitnessScore:
         """Score a tool-selection decision using LLM-as-judge."""
 
+        _lm = self.config.get_lm("eval")
         lm = dspy.LM(
-            self.config.eval_model,
+            _lm.model,
+            **_lm.lm_kwargs,
             temperature=0.0,
             max_tokens=4000,
             request_timeout=60,

@@ -11,6 +11,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
+from evolution.core.hermes_provider import ResolvedLM, Role, resolve_default_lm
 from evolution.core.skill_sources import SkillSource, discover_skill_sources
 
 
@@ -25,13 +26,28 @@ class EvolutionConfig:
     iterations: int = 10
     population_size: int = 5
 
-    optimizer_model: str = "openai/gpt-4.1"
-    # Decagon's blog: gpt-4o-mini "failed completely" as reflection LM —
-    # reflection is where model strength meaningfully changes outcomes.
-    # CLI overrides this default to gpt-5-mini.
+    # Per-role model overrides. When set, treated as explicit LiteLLM model
+    # strings that bypass Hermes resolution. When None, get_lm() falls back
+    # to resolve_default_lm() against ~/.hermes/config.yaml + auth.json +
+    # provider env vars. Field type stays str-or-None for backward
+    # compatibility with callers that pass model strings directly.
+    optimizer_model: Optional[str] = None
     reflection_model: Optional[str] = None
-    eval_model: str = "openai/gpt-4.1-mini"
-    judge_model: str = "openai/gpt-4.1"
+    eval_model: Optional[str] = None
+    judge_model: Optional[str] = None
+
+    def get_lm(self, role: Role) -> ResolvedLM:
+        """Return the ResolvedLM for the given role.
+
+        Reads the ``<role>_model`` override field; if set, treats it as an
+        explicit LiteLLM model string. If unset, resolves from Hermes config
+        via ``resolve_default_lm``. The reflection role falls back to the
+        optimizer's resolved model when its own override is unset.
+        """
+        explicit = getattr(self, f"{role}_model", None)
+        if not explicit and role == "reflection":
+            explicit = self.optimizer_model
+        return resolve_default_lm(role=role, explicit_model=explicit)
 
     max_skill_size: int = 15_000
     max_tool_desc_size: int = 500
