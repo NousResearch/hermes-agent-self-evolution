@@ -301,3 +301,110 @@ class TestExceptionReparenting:
                 pytest.fail("HermesProviderError should not be caught by `except Exception`")
         except HermesProviderError:
             pass  # expected
+
+
+# ---------------------------------------------------------------------------
+# Probe dispatch by LM shape (Responses API + factory paths)
+# ---------------------------------------------------------------------------
+
+
+class TestPreflightDispatchesByModelType:
+    def test_responses_model_type_uses_responses_fn(self):
+        # When the resolver flagged the LM with model_type="responses",
+        # preflight must call litellm.responses (with input=...), NOT
+        # litellm.completion (with messages=...). The Responses endpoint
+        # rejects chat-shaped payloads with a 400.
+        completion_fn = MagicMock(return_value=MagicMock())
+        responses_fn = MagicMock(return_value=MagicMock())
+        lms = [
+            ResolvedLM(
+                model="openai/gpt-5",
+                lm_kwargs={"api_key": "k", "model_type": "responses"},
+                source="x",
+            )
+        ]
+        preflight(lms, completion_fn=completion_fn, responses_fn=responses_fn)
+        completion_fn.assert_not_called()
+        responses_fn.assert_called_once()
+        kwargs = responses_fn.call_args.kwargs
+        # input not messages
+        assert "input" in kwargs
+        assert "messages" not in kwargs
+        # max_output_tokens not max_tokens
+        assert kwargs["max_output_tokens"] == 16
+        # model_type is stripped from forwarded kwargs (it's a dspy-internal
+        # marker, not a litellm.responses parameter)
+        assert "model_type" not in kwargs
+
+    def test_chat_model_type_uses_completion_fn_unchanged(self):
+        # Regression guard: the default path (no model_type, or
+        # model_type="chat") must still go through litellm.completion.
+        completion_fn = MagicMock(return_value=MagicMock())
+        responses_fn = MagicMock(return_value=MagicMock())
+        lms = [
+            ResolvedLM(
+                model="anthropic/claude-haiku-4-5",
+                lm_kwargs={"api_key": "k"},
+                source="x",
+            )
+        ]
+        preflight(lms, completion_fn=completion_fn, responses_fn=responses_fn)
+        completion_fn.assert_called_once()
+        responses_fn.assert_not_called()
+
+
+class TestPreflightHonorsProviderHint:
+    def test_explicit_provider_hint_used_for_recovery_message(self):
+        # When ResolvedLM carries provider_hint, the recovery message uses
+        # that — not the LiteLLM model prefix. This is critical for Codex
+        # (model="openai/gpt-5-codex" → would map to OpenAI hint without
+        # the explicit "openai-codex" hint).
+        responses_fn = MagicMock(side_effect=_auth_err(model="openai/gpt-5-codex"))
+        lms = [
+            ResolvedLM(
+                model="openai/gpt-5-codex",
+                lm_kwargs={"api_key": "bad", "model_type": "responses"},
+                source="codex",
+                provider_hint="openai-codex",
+            )
+        ]
+        with pytest.raises(HermesProviderError) as exc:
+            preflight(lms, completion_fn=MagicMock(), responses_fn=responses_fn)
+        msg = str(exc.value)
+        # Codex-specific recovery, NOT the generic OpenAI export
+        assert "hermes auth add openai-codex" in msg
+        assert "OPENAI_API_KEY" not in msg
+
+
+class TestPreflightUsesLMFactoryWhenSet:
+    def test_factory_path_invokes_instance_call(self):
+        # When lm_factory is set (Codex), preflight must instantiate the LM
+        # via the factory and call it directly so the same OAuth + headers
+        # path executes that the user will hit at evolve time.
+        instance_call = MagicMock(return_value=[{"text": "ok"}])
+        fake_instance = MagicMock()
+        fake_instance.side_effect = instance_call
+        # Use callable __call__ since lm(messages=...) syntax expects it.
+        fake_instance.__call__ = instance_call
+
+        from evolution.core import hermes_provider as hp
+
+        with patch.object(hp, "instantiate_lm", return_value=fake_instance) as mock_inst:
+            lms = [
+                ResolvedLM(
+                    model="openai/gpt-5-codex",
+                    lm_kwargs={},
+                    source="codex",
+                    lm_factory=lambda: fake_instance,
+                    provider_hint="openai-codex",
+                )
+            ]
+            preflight(
+                lms,
+                completion_fn=MagicMock(),
+                responses_fn=MagicMock(),
+            )
+            # instantiate_lm was used (so role kwargs like cache=False reach
+            # the LM); the constructed instance was invoked with a probe.
+            mock_inst.assert_called_once()
+            instance_call.assert_called_once()

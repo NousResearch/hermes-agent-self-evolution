@@ -24,7 +24,12 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
 from evolution.core.auth_check import preflight as _preflight_lm_credentials
-from evolution.core.hermes_provider import HermesProviderError, resolve_default_lm, resolved_lms_dump
+from evolution.core.hermes_provider import (
+    HermesProviderError,
+    instantiate_lm,
+    resolve_default_lm,
+    resolved_lms_dump,
+)
 from evolution.core.constraints import (
     ConstraintValidator,
     effective_absolute_char_ceiling,
@@ -542,7 +547,7 @@ def evolve(
                 console.print("[yellow]⚠ Baseline description has constraint violations — proceeding anyway[/yellow]")
 
             _eval_lm = resolve_default_lm(role="eval", explicit_model=eval_model)
-            lm = dspy.LM(_eval_lm.model, **_eval_lm.lm_kwargs, request_timeout=60, num_retries=5)
+            lm = instantiate_lm(_eval_lm, request_timeout=60, num_retries=5)
             dspy.configure(
                 lm=lm,
                 warn_on_type_mismatch=False,
@@ -618,9 +623,8 @@ def evolve(
                 role="reflection",
                 explicit_model=reflection_model or optimizer_model,
             )
-            reflection_lm = dspy.LM(
-                _reflection_lm.model,
-                **_reflection_lm.lm_kwargs,
+            reflection_lm = instantiate_lm(
+                _reflection_lm,
                 temperature=1.0,
                 max_tokens=32000,
                 cache=False,

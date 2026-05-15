@@ -24,7 +24,12 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
 from evolution.core.auth_check import preflight as _preflight_lm_credentials
-from evolution.core.hermes_provider import HermesProviderError, resolve_default_lm, resolved_lms_dump
+from evolution.core.hermes_provider import (
+    HermesProviderError,
+    instantiate_lm,
+    resolve_default_lm,
+    resolved_lms_dump,
+)
 from evolution.core.quality_gate import (
     QUALITY_GATE_PRESETS,
     resolve_proposer_mode,
@@ -265,9 +270,8 @@ def _default_gepa_runner(
         auto=gepa_budget,
         # cache=False because at temperature=1.0 the disk cache would
         # replay stale mutations across runs and shrink candidate diversity.
-        reflection_lm=dspy.LM(
-            _reflection_lm.model,
-            **_reflection_lm.lm_kwargs,
+        reflection_lm=instantiate_lm(
+            _reflection_lm,
             temperature=1.0,
             max_tokens=32000,
             cache=False,
@@ -696,7 +700,7 @@ def evolve(
             console.print(f"  Eval model: {_eval_lm.model} ({_eval_lm.source})")
 
             # request_timeout=60 ≈ 6x P99 of slowest observed gpt-4.1-mini call.
-            lm = dspy.LM(_eval_lm.model, **_eval_lm.lm_kwargs, request_timeout=60, num_retries=5)
+            lm = instantiate_lm(_eval_lm, request_timeout=60, num_retries=5)
             # warn_on_type_mismatch=False silences spam from signatures that pass
             # empty/None into `str` inputs (e.g. RelevanceFilter.assistant_response
             # before any assistant turn).

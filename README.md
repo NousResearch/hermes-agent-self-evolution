@@ -57,7 +57,7 @@ uv run python -m evolution.skills.evolve_skill \
     --iterations 10
 ```
 
-Whatever model + provider Hermes is using (Anthropic, OpenRouter, Nous Portal, a local vLLM/Ollama/LM Studio, etc.) becomes the default for the optimizer, reflection, eval, and judge LMs. On Hermes setups with a single model, all four roles collapse onto it. OAuth-based setups (e.g. Nous Portal) refresh credentials via `hermes model`; API-key setups read from `~/.hermes/config.yaml`'s inline `api_key` or `~/.hermes/auth.json`'s credential pool.
+Whatever model + provider Hermes is using (Anthropic, OpenRouter, Nous Portal, OpenAI Codex Responses, AWS Bedrock, a local vLLM/Ollama/LM Studio, etc.) becomes the default for the optimizer, reflection, eval, and judge LMs. On Hermes setups with a single model, all four roles collapse onto it. OAuth-based setups (e.g. Nous Portal) refresh credentials via `hermes model`; API-key setups read from `~/.hermes/config.yaml`'s inline `api_key` or `~/.hermes/auth.json`'s credential pool.
 
 For multi-model providers, override per role:
 

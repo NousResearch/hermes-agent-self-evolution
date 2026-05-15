@@ -91,6 +91,7 @@ _HERMES_AUTH_COMMAND_BY_PROVIDER: Dict[str, str] = {
         "export AWS_PROFILE=<profile>  # or export AWS_BEARER_TOKEN_BEDROCK=..., "
         "or run from an instance/role with Bedrock permissions"
     ),
+    "openai-codex": "hermes auth add openai-codex",
 }
 
 
@@ -104,20 +105,29 @@ def preflight(
     *,
     timeout_seconds: float = 10.0,
     completion_fn: Callable[..., Any] = litellm.completion,
+    responses_fn: Callable[..., Any] = litellm.responses,
 ) -> None:
-    """Validate every unique (model, kwargs) tuple in ``lms``.
+    """Validate every unique LM in ``lms`` with a tiny probe call.
 
-    Makes one ``litellm.completion`` probe per unique LM (deduped across
-    roles). Raises ``HermesProviderError`` on the first auth failure with
-    a message that names the provider and includes a recovery command.
-    Raises ``HermesProviderRateLimitError`` on 429. Lets unrelated
-    exceptions propagate as-is (network errors, timeouts, etc. are not
-    our problem).
+    Dispatches by LM shape:
+
+      * ``lm.lm_factory`` set (Codex) — instantiate the LM via the factory,
+        then call it through DSPy so OAuth refresh + Cloudflare headers
+        exercise on the same path used at evolve time.
+      * ``model_type == "responses"`` in ``lm_kwargs`` — probe via
+        ``litellm.responses`` (the OpenAI Responses API endpoint).
+      * Otherwise — probe via ``litellm.completion`` (chat completions,
+        the default for everything else).
+
+    Raises ``HermesProviderError`` on the first auth failure with a message
+    naming the provider and a recovery command. Raises
+    ``HermesProviderRateLimitError`` on 429. Lets unrelated exceptions
+    propagate as-is (network errors, timeouts, etc. are not our problem).
 
     Cost: ~$0.0001 per probe. For a Hermes single-model setup, dedup
     typically collapses 4 roles to 1 probe. Calls flow through the
-    already-registered ``litellm.success_callback`` so they show up in
-    the cost ledger.
+    already-registered ``litellm.success_callback`` (or the Codex LM's
+    own cost-tracking path) so they show up in the cost ledger.
     """
     seen: set[str] = set()
     for lm in lms:
@@ -126,9 +136,9 @@ def preflight(
             continue
         seen.add(key)
         _probe_one(
-            model=lm.model,
-            lm_kwargs=lm.lm_kwargs,
+            lm=lm,
             completion_fn=completion_fn,
+            responses_fn=responses_fn,
             timeout=timeout_seconds,
         )
 
@@ -222,53 +232,119 @@ def _dedupe_key(lm: ResolvedLM) -> str:
 
 def _probe_one(
     *,
-    model: str,
-    lm_kwargs: Dict[str, Any],
+    lm: ResolvedLM,
+    completion_fn: Callable[..., Any],
+    responses_fn: Callable[..., Any],
+    timeout: float,
+) -> None:
+    """Single probe per LM, dispatched by LM shape (factory, responses, chat)."""
+    try:
+        if lm.lm_factory is not None:
+            _probe_via_factory(lm=lm, timeout=timeout)
+        elif lm.lm_kwargs.get("model_type") == "responses":
+            _probe_responses(lm=lm, responses_fn=responses_fn, timeout=timeout)
+        else:
+            _probe_chat(lm=lm, completion_fn=completion_fn, timeout=timeout)
+    except BaseException as exc:
+        provider_hint = lm.provider_hint or _provider_hint_from_model(lm.model)
+        _translate_or_reraise(exc, model=lm.model, provider_hint=provider_hint)
+
+
+def _probe_chat(
+    *,
+    lm: ResolvedLM,
     completion_fn: Callable[..., Any],
     timeout: float,
 ) -> None:
-    """Single ``litellm.completion`` probe. Translates auth/rate-limit
-    failures; lets unrelated errors propagate.
+    """Chat-completions probe via litellm.completion.
 
     ``max_tokens=16`` (not 1) because OpenAI's reasoning-class models
     reject sub-output-budget probes with HTTP 400 ("max_tokens or model
     output limit was reached"). 16 is plenty for an empty-ish response
     and still costs ~$0.0001.
     """
-    try:
-        completion_fn(
-            model=model,
-            messages=[{"role": "user", "content": "."}],
-            max_tokens=16,
-            num_retries=0,
-            timeout=timeout,
-            **lm_kwargs,
-        )
-    except BaseException as exc:
-        # Order matters: rate-limit check first so a 429 with the word
-        # "unauthorized" in some providers' error body doesn't get
-        # mis-classified as auth.
-        if is_rate_limit_error(exc):
-            raise HermesProviderRateLimitError(
-                f"Rate limit hit during preflight for model '{model}'. "
-                f"Underlying: {type(exc).__name__}: {exc}\n"
-                "Wait and retry, or pass --no-preflight to skip the probe."
-            ) from exc
-        if is_auth_error(exc):
-            raise HermesProviderError(
-                format_auth_error_message(
-                    model=model,
-                    provider_hint=_provider_hint_from_model(model),
-                    underlying=exc,
-                )
-            ) from exc
-        # 400 BadRequest on a tiny probe usually means the probe payload
-        # itself is wrong for this model (some endpoints reject empty
-        # messages, max_tokens floors, etc.) — not the user's credential.
-        # Letting it through as a non-auth failure would crash the run
-        # before GEPA gets to make its own (longer) call which might work
-        # fine. Suppress with a debug log; the actual GEPA call will
-        # surface real errors at the right time.
-        if isinstance(exc, getattr(litellm, "BadRequestError", ())):
-            return
-        raise
+    completion_fn(
+        model=lm.model,
+        messages=[{"role": "user", "content": "."}],
+        max_tokens=16,
+        num_retries=0,
+        timeout=timeout,
+        **lm.lm_kwargs,
+    )
+
+
+def _probe_responses(
+    *,
+    lm: ResolvedLM,
+    responses_fn: Callable[..., Any],
+    timeout: float,
+) -> None:
+    """Responses-API probe via litellm.responses.
+
+    Strips ``model_type`` from kwargs since it's a dspy-internal marker,
+    not a litellm.responses parameter.
+    """
+    kwargs = {k: v for k, v in lm.lm_kwargs.items() if k != "model_type"}
+    responses_fn(
+        model=lm.model,
+        input=[{"role": "user", "content": "."}],
+        max_output_tokens=16,
+        num_retries=0,
+        timeout=timeout,
+        **kwargs,
+    )
+
+
+def _probe_via_factory(*, lm: ResolvedLM, timeout: float) -> None:
+    """Probe via the LM's own factory (currently only Codex).
+
+    Calls the LM through its DSPy interface so OAuth refresh, Cloudflare
+    headers, and message-format conversion all exercise on the same code
+    path users hit at evolve time. ``cache=False`` so the probe always
+    reaches the wire.
+    """
+    # Lazy import to avoid pulling dspy into auth_check's module-load path.
+    from evolution.core.hermes_provider import instantiate_lm  # noqa: PLC0415
+
+    instance = instantiate_lm(
+        lm,
+        cache=False,
+        num_retries=0,
+        request_timeout=timeout,
+    )
+    instance(messages=[{"role": "user", "content": "."}])
+
+
+def _translate_or_reraise(
+    exc: BaseException, *, model: str, provider_hint: Optional[str] = None
+) -> None:
+    """Translate an exception from a probe into the framework's error types,
+    suppress probe-payload BadRequests, or re-raise the original.
+    """
+    # Order matters: rate-limit check first so a 429 with the word
+    # "unauthorized" in some providers' error body doesn't get
+    # mis-classified as auth.
+    if is_rate_limit_error(exc):
+        raise HermesProviderRateLimitError(
+            f"Rate limit hit during preflight for model '{model}'. "
+            f"Underlying: {type(exc).__name__}: {exc}\n"
+            "Wait and retry, or pass --no-preflight to skip the probe."
+        ) from exc
+    if is_auth_error(exc):
+        raise HermesProviderError(
+            format_auth_error_message(
+                model=model,
+                provider_hint=provider_hint or _provider_hint_from_model(model),
+                underlying=exc,
+            )
+        ) from exc
+    # 400 BadRequest on a tiny probe usually means the probe payload
+    # itself is wrong for this model (some endpoints reject empty
+    # messages, max_tokens floors, etc.) — not the user's credential.
+    # Letting it through as a non-auth failure would crash the run
+    # before GEPA gets to make its own (longer) call which might work
+    # fine. Suppress; the actual GEPA call will surface real errors at
+    # the right time.
+    if isinstance(exc, getattr(litellm, "BadRequestError", ())):
+        return
+    raise exc

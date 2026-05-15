@@ -49,10 +49,9 @@ The Hermes provider name maps to LiteLLM as follows. For each, the framework con
 | `lmstudio` | `openai/<model>` | `api_base=http://127.0.0.1:1234/v1` (default), `api_key=EMPTY` | LM Studio local server |
 | `zai`, `kimi-coding`, `minimax`, `huggingface`, `nvidia`, `arcee`, `ollama-cloud`, `kilocode`, `ai-gateway`, `xiaomi` | `openai/<model>` | Provider's canonical `api_base`, `api_key` from env or pool | OpenAI-wire-compatible HTTP |
 | `bedrock` (aliases: `aws`, `aws-bedrock`, `amazon`, `amazon-bedrock`) | `bedrock/<model-id>` | `aws_region_name` (+ optional `aws_profile_name`) | AWS Bedrock via boto3 default credential chain — see [AWS Bedrock setup](#aws-bedrock-setup) below |
+| `openai-codex` | `openai/<model>` | `api_base=https://chatgpt.com/backend-api/codex`, `api_key=<oauth-bearer>`, `extra_headers` for Cloudflare, `model_type=responses` | Custom DSPy LM with OAuth refresh — see [OpenAI Codex Responses API](#openai-codex-responses-api) below |
 
 **Wire-mode flip:** if the resolved `api_base` contains `/anthropic` (z.ai with `/anthropic` suffix, MiniMax with `/anthropic` suffix), the model string flips to `anthropic/<model>` — Hermes does the same auto-detection.
-
-**Codex Responses API is not yet in the provider table.** A `provider: openai-codex` in `config.yaml` is rejected with a "Unknown provider" error. Pass `--optimizer-model openai/<model>` with `OPENAI_API_KEY` set to bypass the resolver, or use a different provider for evolution.
 
 ## Local-server setups
 
@@ -120,6 +119,26 @@ Bedrock is **never auto-detected** when `provider: auto` (or unset) — AWS env 
 When boto3 can't find any credentials, the call surfaces as `litellm.AuthenticationError("Unable to locate credentials...")`. The preflight catches this and renders the recovery hint (`export AWS_PROFILE=...` / `export AWS_BEARER_TOKEN_BEDROCK=...` / "run from an instance with Bedrock permissions") in the standard Rich panel.
 
 **What's not supported:** Bedrock Guardrails (Hermes uses these via boto3 directly; LiteLLM doesn't expose them). If Guardrails are required for your evolution runs, wrap the framework with your own moderation layer — the cost ledger and cost-ceiling work unchanged.
+
+## OpenAI Codex Responses API
+
+For users with a ChatGPT subscription, Hermes can route through OpenAI's Codex Responses API. Run `hermes auth add openai-codex` (Hermes-side) to populate `~/.hermes/auth.json` with an OAuth access + refresh token, then point your `config.yaml` at it:
+
+```yaml
+# ~/.hermes/config.yaml
+model:
+  default: gpt-5-codex     # or gpt-5, depending on what your plan grants
+  provider: openai-codex
+```
+
+The framework reads OAuth credentials from `auth.json credential_pool["openai-codex"]` (highest-priority entry wins) and instantiates a `CodexLM` — a thin `dspy.LM` subclass that adds two things on top of stock DSPy:
+
+1. **Cloudflare-mitigation headers**: `originator: codex_cli_rs`, a `codex_cli_rs`-prefixed `User-Agent`, and `ChatGPT-Account-ID` extracted from the OAuth JWT. Without these, every call from a non-residential IP (CI runners, VPS, cloud-hosted agents) gets a 403 from Cloudflare regardless of OAuth correctness.
+2. **In-memory OAuth refresh**: the access token expires every ~30 minutes; before each call the LM checks `expires_at` against a 120s skew window and refreshes via the OAuth `refresh_token` grant if needed. Multiple LM roles (optimizer, reflection, eval, judge) share one process-wide refresh state so a four-thread evolution doesn't trigger four parallel refreshes (which would `refresh_token_reused` three of them).
+
+Refresh is **in-memory only** — the framework does not write back to `~/.hermes/auth.json`. Long evolutions (>30 minutes on a fresh token) need to re-run `hermes auth add openai-codex` if the on-disk store also needs to be refreshed, but each evolve invocation refreshes its own runtime state independently.
+
+**What's not supported:** streaming via the Responses endpoint (evolution doesn't stream), Codex-specific reasoning-effort overrides (DSPy's defaults work for gpt-5-class), and tool-call message conversion beyond what DSPy's `_convert_chat_request_to_responses_request` already handles. If a Codex 401 surfaces during a run, the standard auth-error panel renders with the `hermes auth add openai-codex` recovery hint.
 
 ## Per-role overrides
 
@@ -216,9 +235,8 @@ The framework defaults all four roles to Hermes's single `model.default`. To use
 
 This module currently does not:
 
-- Refresh expired OAuth tokens (delegated to `hermes auth add <provider>` / `hermes model`)
+- Refresh expired OAuth tokens for non-Codex providers (delegated to `hermes auth add <provider>` / `hermes model`; Codex tokens refresh in-memory — see [OpenAI Codex Responses API](#openai-codex-responses-api))
 - Honor `auxiliary.*` provider config from `config.yaml` (Hermes's vision/web-extract/session-search routing)
-- Support OpenAI Codex Responses API end-to-end (AWS Bedrock is supported — see [AWS Bedrock setup](#aws-bedrock-setup))
 - Auto-suggest cheaper per-role models via `/v1/models` introspection
 
 The slim resolver lives at `evolution/core/hermes_provider.py`. The mapping table is sourced from `hermes_cli/auth.py` constants — drift is possible; update by reference when Hermes adds providers.

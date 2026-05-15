@@ -28,7 +28,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 import yaml
 
@@ -48,11 +48,23 @@ class ResolvedLM:
     ``lm_kwargs`` is splatted into ``dspy.LM(model, **lm_kwargs, ...)`` —
     typical keys are ``api_base`` and ``api_key``. ``source`` describes
     where the resolution came from for diagnostic logging.
+
+    ``lm_factory`` is an escape hatch for providers that need a non-stock
+    ``dspy.LM`` (currently only OpenAI Codex, which carries OAuth state and
+    a refresh hook). When set, callers should invoke the factory instead of
+    constructing ``dspy.LM(model, **lm_kwargs)`` directly.
+
+    ``provider_hint`` is the canonical Hermes provider name (e.g.
+    ``"openai-codex"``) used to look up the right recovery command in the
+    auth-error path. When ``None``, the provider hint is derived from the
+    LiteLLM model prefix instead.
     """
 
     model: str
     lm_kwargs: Dict[str, Any]
     source: str
+    lm_factory: Optional[Callable[[], Any]] = None
+    provider_hint: Optional[str] = None
 
 
 class HermesProviderError(BaseException):
@@ -158,7 +170,7 @@ _PROVIDER_ALIASES = {
 _KNOWN_PROVIDERS = (
     set(_NATIVE_LITELLM_PREFIX)
     | set(_OPENAI_WIRE_DEFAULT_BASE_URL)
-    | {"bedrock"}
+    | {"bedrock", "openai-codex"}
 )
 
 # Auto-detect priority order when ``model.provider: auto`` (or unset).
@@ -292,6 +304,14 @@ def resolve_default_lm(
     if canonical == "bedrock":
         return _resolve_bedrock_lm(config=config, target_model=target_model)
 
+    # Codex has its own resolution path — OAuth credentials live in
+    # auth.json, there's no env var, and instantiation needs the OAuth state
+    # for in-memory token refresh. The CodexLM subclass handles all of that.
+    if canonical == "openai-codex":
+        return _resolve_codex_lm(
+            auth_store=auth_store, target_model=target_model, role=role
+        )
+
     if not target_model:
         raise HermesProviderError(
             f"~/.hermes/config.yaml sets provider='{requested_provider}' "
@@ -328,6 +348,32 @@ def _redact_lm(lm: ResolvedLM) -> Dict[str, Any]:
         "lm_kwargs": redacted_kwargs,
         "source": lm.source,
     }
+
+
+def instantiate_lm(resolved: ResolvedLM, **role_kwargs: Any) -> Any:
+    """Build an LM instance from a ResolvedLM, applying role-specific kwargs.
+
+    For providers with a custom factory (currently only Codex), the factory
+    captures OAuth state and pins reasoning-model defaults. ``role_kwargs``
+    (e.g. ``request_timeout``, ``num_retries``, per-role ``temperature``)
+    are applied via ``.copy()`` so the OAuth state survives onto the new
+    instance.
+
+    For all other providers, we splat ``lm_kwargs`` directly into a stock
+    ``dspy.LM`` — current behavior unchanged.
+
+    The ``dspy`` import is lazy to keep this module lean (it's imported
+    early during config load).
+    """
+    if resolved.lm_factory is not None:
+        lm = resolved.lm_factory()
+        if role_kwargs:
+            lm = lm.copy(**role_kwargs)
+        return lm
+
+    import dspy  # noqa: PLC0415 — lazy import to keep module load light
+
+    return dspy.LM(resolved.model, **resolved.lm_kwargs, **role_kwargs)
 
 
 def resolved_lms_dump(
@@ -565,6 +611,95 @@ def _resolve_bedrock_lm(
         model=f"bedrock/{model_name}",
         lm_kwargs=lm_kwargs,
         source=f"hermes-config:bedrock(region={region})",
+    )
+
+
+def _resolve_codex_lm(
+    *,
+    auth_store: Dict[str, Any],
+    target_model: str,
+    role: Role,
+) -> ResolvedLM:
+    """Build a ResolvedLM for OpenAI Codex Responses API.
+
+    Codex creds live in ``~/.hermes/auth.json`` under
+    ``credential_pool["openai-codex"]``: an access token, a refresh token,
+    an expiry timestamp, and an optional base URL override. We pick the
+    highest-priority pool entry (lowest ``priority`` integer wins, mirroring
+    Hermes), then return a ResolvedLM whose ``lm_factory`` instantiates a
+    ``CodexLM`` carrying the OAuth state. The factory captures the OAuth
+    state in a closure so the resolver doesn't need to plumb OAuth fields
+    through every consumer.
+
+    The ``CodexLM`` import is lazy to avoid a circular dependency: codex_lm
+    imports HermesProviderError from this module.
+    """
+    pool_entry = _pick_pool_entry(auth_store, "openai-codex")
+    if pool_entry is None:
+        raise HermesProviderError(
+            f"~/.hermes/config.yaml sets provider='openai-codex' but no usable "
+            f"entry was found in ~/.hermes/auth.json credential_pool[\"openai-codex\"]. "
+            f"Run `hermes auth add openai-codex` to authenticate, or pass "
+            f"--{role}-model to bypass Hermes resolution."
+        )
+
+    access_token = _str_or_none(pool_entry.get("access_token")) or ""
+    if not access_token:
+        raise HermesProviderError(
+            "~/.hermes/auth.json credential_pool[\"openai-codex\"] entry has "
+            "no access_token. Run `hermes auth add openai-codex` to "
+            "re-authenticate."
+        )
+
+    refresh_token = _str_or_none(pool_entry.get("refresh_token")) or ""
+    base_url = _str_or_none(pool_entry.get("base_url"))
+    expires_at_raw = pool_entry.get("expires_at")
+    expires_at = (
+        float(expires_at_raw)
+        if isinstance(expires_at_raw, (int, float))
+        else None
+    )
+
+    # Codex requires a model name from config.yaml — there's no sensible
+    # standalone default since the user's ChatGPT plan determines what they
+    # have access to (gpt-5, gpt-5-codex, etc.).
+    if not target_model:
+        raise HermesProviderError(
+            "~/.hermes/config.yaml sets provider='openai-codex' but "
+            f"model.default is empty. Set it (e.g., 'gpt-5-codex' or 'gpt-5'), "
+            f"or pass --{role}-model."
+        )
+
+    # Lazy import to break the circular dependency with codex_lm.
+    from evolution.core.codex_lm import CodexLM as _CodexLM
+    from evolution.core.codex_headers import DEFAULT_CODEX_BASE_URL
+
+    effective_base_url = base_url or DEFAULT_CODEX_BASE_URL
+
+    # Codex models speak the OpenAI Responses wire protocol, so LiteLLM
+    # routes them via its OpenAI provider. Prefix with ``openai/`` if the
+    # user's config didn't already do so — the prefix is what tells LiteLLM
+    # to honor api_base + Bearer auth instead of inferring routing from the
+    # bare model name.
+    litellm_model = (
+        target_model if "/" in target_model else f"openai/{target_model}"
+    )
+
+    def _factory() -> Any:
+        return _CodexLM(
+            model=litellm_model,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            base_url=effective_base_url,
+        )
+
+    return ResolvedLM(
+        model=litellm_model,
+        lm_kwargs={},
+        source=f"hermes-config:openai-codex(base_url={effective_base_url})",
+        lm_factory=_factory,
+        provider_hint="openai-codex",
     )
 
 
