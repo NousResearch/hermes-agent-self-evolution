@@ -312,6 +312,18 @@ def resolve_default_lm(
             auth_store=auth_store, target_model=target_model, role=role
         )
 
+    # Nous Portal: when the credential pool entry has a refresh_token (the
+    # OAuth-managed flow that hermes model writes), route through NousLM
+    # for in-memory OAuth refresh + agent_key minting. The plain env-var
+    # NOUS_API_KEY path falls through to the generic OpenAI-wire handler
+    # below — no behavior change for that simpler setup.
+    if canonical == "nous":
+        nous_resolved = _maybe_resolve_nous_lm(
+            auth_store=auth_store, target_model=target_model, role=role
+        )
+        if nous_resolved is not None:
+            return nous_resolved
+
     if not target_model:
         raise HermesProviderError(
             f"~/.hermes/config.yaml sets provider='{requested_provider}' "
@@ -700,6 +712,116 @@ def _resolve_codex_lm(
         source=f"hermes-config:openai-codex(base_url={effective_base_url})",
         lm_factory=_factory,
         provider_hint="openai-codex",
+    )
+
+
+def _maybe_resolve_nous_lm(
+    *,
+    auth_store: Dict[str, Any],
+    target_model: str,
+    role: Role,
+) -> Optional[ResolvedLM]:
+    """Build a NousLM-backed ResolvedLM when the auth.json pool entry
+    looks OAuth-managed; return None to let the caller fall through to
+    the generic OpenAI-wire handler when the entry is just an env-var-
+    style API key.
+
+    Nous uses a two-stage credential model: an OAuth access_token
+    (long-lived) is exchanged for a short-lived agent_key that's the
+    actual inference Bearer. NousLM handles both: refresh access_token
+    in-memory when expiring, mint a fresh agent_key from it, re-mint on
+    inference 401. See evolution/core/nous_lm.py.
+
+    The "looks OAuth-managed" signal: pool entry has a refresh_token. A
+    pool entry without refresh_token is either env-var-only (NOUS_API_KEY
+    set, no real OAuth state) or hand-edited; let the caller fall
+    through to direct pass-through so we don't break that setup.
+
+    The CodexLM-equivalent NousLM import is lazy to avoid a circular
+    dependency: nous_lm imports HermesProviderError from this module.
+    """
+    pool_entry = _pick_pool_entry(auth_store, "nous")
+    if pool_entry is None:
+        # No pool entry at all → hint operator at the right recovery
+        # rather than falling through silently to env-var resolution
+        # that probably also won't work.
+        raise HermesProviderError(
+            "~/.hermes/config.yaml sets provider='nous' but no usable "
+            "entry was found in ~/.hermes/auth.json credential_pool[\"nous\"]. "
+            "Run `hermes model` and select Nous Portal to authenticate, "
+            f"or pass --{role}-model to bypass Hermes resolution."
+        )
+
+    refresh_token = _str_or_none(pool_entry.get("refresh_token"))
+    agent_key = _str_or_none(pool_entry.get("agent_key"))
+    if not refresh_token:
+        # An entry with agent_key set is plausibly env-var-style or
+        # hand-edited inference-only — let it fall through to the
+        # generic OpenAI-wire handler with whatever Bearer it carries.
+        # An entry with NEITHER refresh_token NOR agent_key is almost
+        # certainly a partial OAuth setup (interrupted hermes model run,
+        # or the portal handed back access_token only). Inference would
+        # 401 with no breadcrumb pointing at the missing credentials, so
+        # raise here with a specific recovery hint.
+        if agent_key is None:
+            raise HermesProviderError(
+                "~/.hermes/auth.json credential_pool[\"nous\"] entry has "
+                "an access_token but no refresh_token or agent_key — "
+                "looks like a partial OAuth setup. Run `hermes model` "
+                "and select Nous Portal to complete authentication, or "
+                f"pass --{role}-model to bypass Hermes resolution."
+            )
+        return None
+
+    access_token = _str_or_none(pool_entry.get("access_token"))
+    if not access_token:
+        raise HermesProviderError(
+            "~/.hermes/auth.json credential_pool[\"nous\"] entry has no "
+            "access_token. Run `hermes model` and select Nous Portal to "
+            "re-authenticate."
+        )
+
+    if not target_model:
+        raise HermesProviderError(
+            "~/.hermes/config.yaml sets provider='nous' but model.default "
+            f"is empty. Set it (e.g., 'Hermes-4-405B'), or pass --{role}-model."
+        )
+
+    # Lazy import to break the circular dependency with nous_lm.
+    from evolution.core.nous_lm import (  # noqa: PLC0415
+        NousLM as _NousLM,
+        NOUS_INFERENCE_BASE_URL,
+        NOUS_PORTAL_BASE_URL,
+    )
+    from evolution.core.oauth_helpers import parse_iso_or_epoch  # noqa: PLC0415
+
+    inference_base_url = (
+        _str_or_none(pool_entry.get("inference_base_url"))
+        or _str_or_none(pool_entry.get("base_url"))
+        or NOUS_INFERENCE_BASE_URL
+    )
+    oauth_expires_at = parse_iso_or_epoch(pool_entry.get("expires_at"))
+    agent_key = _str_or_none(pool_entry.get("agent_key"))
+    agent_key_expires_at = parse_iso_or_epoch(pool_entry.get("agent_key_expires_at"))
+
+    def _factory() -> Any:
+        return _NousLM(
+            model=f"openai/{target_model}",
+            access_token=access_token,
+            refresh_token=refresh_token,
+            oauth_expires_at=oauth_expires_at,
+            agent_key=agent_key,
+            agent_key_expires_at=agent_key_expires_at,
+            portal_base_url=NOUS_PORTAL_BASE_URL,
+            inference_base_url=inference_base_url,
+        )
+
+    return ResolvedLM(
+        model=f"openai/{target_model}",
+        lm_kwargs={},
+        source=f"hermes-config:nous(inference_base_url={inference_base_url})",
+        lm_factory=_factory,
+        provider_hint="nous",
     )
 
 

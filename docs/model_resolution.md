@@ -140,6 +140,36 @@ Refresh is **in-memory only** — the framework does not write back to `~/.herme
 
 **What's not supported:** streaming via the Responses endpoint (evolution doesn't stream), Codex-specific reasoning-effort overrides (DSPy's defaults work for gpt-5-class), and tool-call message conversion beyond what DSPy's `_convert_chat_request_to_responses_request` already handles. If a Codex 401 surfaces during a run, the standard auth-error panel renders with the `hermes auth add openai-codex` recovery hint.
 
+## Nous Portal OAuth + agent_key
+
+Nous Portal uses a two-stage credential model that's different from every other provider:
+
+1. **OAuth access_token** (long-lived, days). Refreshable via the standard `refresh_token` grant.
+2. **agent_key** (short-lived, ~30 minutes). Minted from the access_token via a Nous-specific `POST /api/oauth/agent-key`. The inference endpoint requires the **agent_key** as Bearer — not the access_token.
+
+Run `hermes model` and select Nous Portal to populate `~/.hermes/auth.json` with both. Then point `config.yaml` at Nous:
+
+```yaml
+# ~/.hermes/config.yaml
+model:
+  default: Hermes-4-405B
+  provider: nous
+```
+
+When the resolver detects a Nous credential pool entry with a `refresh_token` (signals OAuth-managed flow), the framework instantiates a `NousLM` subclass that:
+
+1. **Mints a fresh agent_key at preflight time** by POSTing to `{portal}/api/oauth/agent-key` with the OAuth access_token as Bearer.
+2. **Refreshes the OAuth access_token in-memory** when it's within 120s of expiry — POSTed to `{portal}/api/oauth/token` with the standard refresh_token grant. Mirrors Hermes's own refresh-first-then-mint sequencing in `hermes_cli/auth.py`.
+3. **Re-mints on inference 401** (mid-run agent_key revocation or expiration). The four LM roles (optimizer, reflection, eval, judge) coordinate through a shared lock so a four-thread evolution doesn't race the portal's single-use refresh-token rotation.
+
+The portal URL is overridable via `HERMES_PORTAL_BASE_URL` (Hermes's own env var name; sharing keeps configs portable for stage / mock setups).
+
+Refresh + mint state is **in-memory only** — the framework never writes back to `~/.hermes/auth.json`. For evolution sessions running longer than the on-disk agent_key TTL (~30 minutes since the last `hermes model`), the in-process refresh handles it. For multi-day sessions, periodic `hermes model` keeps the on-disk store fresh.
+
+**What's not supported:** auxiliary endpoints (vision / web-extract / session-search models from `auxiliary.*` config), streaming, and `auth.json` writeback. Pool entries without `refresh_token` (env-var-style `NOUS_API_KEY` setups) fall through to the existing direct-pass-through path — note that path probably doesn't actually work for Nous inference (the access_token isn't a valid Bearer), but we don't try to "upgrade" those users silently.
+
+A runnable smoke harness at `tests/manual/nous_smoke.py` validates the Nous wire flow against a local mock portal (no real Nous Portal account required). Run via `uv run python tests/manual/nous_smoke.py`.
+
 ## Per-role overrides
 
 When your provider exposes multiple models, you can pick a different one per role to manage cost. Common pattern: a frontier model for the optimizer + reflection LMs (where reasoning matters), a cheaper model for eval + judge (where you'll make many calls):
@@ -236,7 +266,7 @@ The framework defaults all four roles to Hermes's single `model.default`. To use
 
 This module currently does not:
 
-- Refresh expired OAuth tokens for non-Codex providers (delegated to `hermes auth add <provider>` / `hermes model`; Codex tokens refresh in-memory — see [OpenAI Codex Responses API](#openai-codex-responses-api))
 - Honor `auxiliary.*` provider config from `config.yaml` (Hermes's vision/web-extract/session-search routing)
+- OAuth refresh for Qwen, Spotify, or Google Gemini providers (Codex and Nous Portal handled in-memory — see their dedicated sections above; the other OAuth providers in Hermes don't have demand from the evolution use case yet)
 
 The slim resolver lives at `evolution/core/hermes_provider.py`. The mapping table is sourced from `hermes_cli/auth.py` constants — drift is possible; update by reference when Hermes adds providers.

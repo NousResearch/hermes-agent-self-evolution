@@ -15,8 +15,8 @@ datasets/**/*.jsonl
 datasets/**/*.json
 !datasets/.gitkeep
 
-# Output files from run
-output/**/*.md
+# Output files from run (per-run logs, evolved artifacts, gate decisions)
+output/
 
 # Evolution snapshots
 snapshots/
