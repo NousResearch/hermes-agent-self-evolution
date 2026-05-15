@@ -10,6 +10,8 @@ Agent Self-Evolution evolves and optimizes agent skills, tool descriptions, syst
 
 Works on any agent framework that emits `SKILL.md` markdown files. [Hermes Agent](https://github.com/NousResearch/hermes-agent) skills are the original target; Claude Code skills (and any other agent's `<dir>/<skill>/SKILL.md` layout) are also supported via a pluggable skill-source abstraction.
 
+> **Already running Hermes Agent?** No env vars to set. If `~/.hermes/config.yaml` exists, `uv run python -m evolution.skills.evolve_skill --skill <name>` picks up your provider, model, and credentials automatically. On startup the framework runs a tiny ~$0.0001 credential probe; if anything's stale you get a Rich-formatted error panel with the exact recovery command (e.g. `hermes auth add anthropic`) instead of a Python traceback. Jump to [Run with Hermes Agent](#run-with-hermes-agent), or read [docs/model_resolution.md](docs/model_resolution.md) for the full provider mapping.
+
 ## How It Works
 
 ```mermaid
@@ -49,15 +51,13 @@ uv sync
 
 ### Run with Hermes Agent
 
-If you have [Hermes Agent](https://github.com/NousResearch/hermes-agent) configured (`~/.hermes/config.yaml` exists with a `model:` section), the framework picks up your provider, model, base URL, and API key automatically — no environment variables to set when your config has an inline `api_key` or a populated credential pool. (OAuth-based setups, e.g. Nous Portal, still need a fresh `hermes model` to refresh.)
-
 ```bash
 uv run python -m evolution.skills.evolve_skill \
     --skill github-code-review \
     --iterations 10
 ```
 
-Whatever model + provider Hermes is using (Anthropic, OpenRouter, Nous Portal, a local vLLM/Ollama/LM Studio, etc.) becomes the default for the optimizer, reflection, eval, and judge LMs. On Hermes setups with a single model, all four roles collapse onto it — no extra config required.
+Whatever model + provider Hermes is using (Anthropic, OpenRouter, Nous Portal, a local vLLM/Ollama/LM Studio, etc.) becomes the default for the optimizer, reflection, eval, and judge LMs. On Hermes setups with a single model, all four roles collapse onto it. OAuth-based setups (e.g. Nous Portal) refresh credentials via `hermes model`; API-key setups read from `~/.hermes/config.yaml`'s inline `api_key` or `~/.hermes/auth.json`'s credential pool.
 
 For multi-model providers, override per role:
 
