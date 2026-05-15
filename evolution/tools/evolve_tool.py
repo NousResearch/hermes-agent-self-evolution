@@ -24,6 +24,10 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
 from evolution.core.auth_check import preflight as _preflight_lm_credentials
+from evolution.core.cost_advisor import (
+    find_cheaper_alternative as _find_cheaper_alternative,
+    render_suggestion_panel as _render_cost_suggestion_panel,
+)
 from evolution.core.hermes_provider import (
     HermesProviderError,
     instantiate_lm,
@@ -356,6 +360,7 @@ def evolve(
     closed_loop_mode: str = "feedback",
     closed_loop_in_valset: bool = False,
     skip_preflight: bool = False,
+    skip_cost_suggest: bool = False,
 ) -> dict[str, Any]:
     """Evolve one tool description inside a manifest.
 
@@ -437,10 +442,27 @@ def evolve(
 
             # Validate credentials before any LM work — dataset gen alone
             # can spend $0.50+ before we'd otherwise discover a stale token.
-            if not skip_preflight and not dry_run:
+            # Resolve up front so the cost advisor below can reuse the same
+            # ResolvedLM without re-walking config + auth.json.
+            if not dry_run:
                 _preflight_optimizer = resolve_default_lm(role="optimizer", explicit_model=optimizer_model)
                 _preflight_eval = resolve_default_lm(role="eval", explicit_model=eval_model)
-                _preflight_lm_credentials([_preflight_optimizer, _preflight_eval])
+                if not skip_preflight:
+                    _preflight_lm_credentials([_preflight_optimizer, _preflight_eval])
+                # Cost advisor: only fire when the user inherited the eval
+                # model from Hermes (eval_model is None) AND the resolver
+                # returned a stock LM. Custom factory paths (Codex) route
+                # to a closed ChatGPT-subscription endpoint where suggesting
+                # "use openai/gpt-5-nano" implies a different auth setup
+                # the user didn't opt in to.
+                if (
+                    not skip_cost_suggest
+                    and eval_model is None
+                    and _preflight_eval.lm_factory is None
+                ):
+                    _alt = _find_cheaper_alternative(_preflight_eval.model)
+                    if _alt is not None:
+                        console.print(_render_cost_suggestion_panel("eval", _alt))
 
             sessiondb_drops: Optional[dict[str, int]] = None
             if eval_source == "synthetic":
@@ -1146,6 +1168,17 @@ def evolve(
          "this flag to skip when you know your creds are good.",
 )
 @click.option(
+    "--no-cost-suggest",
+    "skip_cost_suggest",
+    is_flag=True,
+    default=False,
+    help="Skip the post-preflight cost-suggestion panel. By default, when "
+         "--eval-model is unset, the framework checks litellm.model_cost "
+         "for a cheaper same-provider model with sufficient context window "
+         "and prints a Rich panel with a paste-ready --eval-model flag. "
+         "Pass this to suppress the panel.",
+)
+@click.option(
     "--closed-loop-in-valset/--no-closed-loop-in-valset",
     "closed_loop_in_valset",
     default=False,
@@ -1171,6 +1204,7 @@ def main(
     benchmark_cmd: Optional[str],
     benchmark_timeout_seconds: int,
     skip_preflight: bool,
+    skip_cost_suggest: bool,
     closed_loop_suite_path: Optional[Path],
     closed_loop_hermes_repo: Optional[Path],
     closed_loop_saturation_threshold: float,
@@ -1216,6 +1250,7 @@ def main(
             closed_loop_mode=closed_loop_mode,
             closed_loop_in_valset=closed_loop_in_valset,
             skip_preflight=skip_preflight,
+            skip_cost_suggest=skip_cost_suggest,
         )
     except HermesProviderError as exc:
         # Render a clean error panel instead of dumping a Python traceback —

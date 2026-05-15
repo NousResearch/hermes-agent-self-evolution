@@ -24,6 +24,10 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
 from evolution.core.auth_check import preflight as _preflight_lm_credentials
+from evolution.core.cost_advisor import (
+    find_cheaper_alternative as _find_cheaper_alternative,
+    render_suggestion_panel as _render_cost_suggestion_panel,
+)
 from evolution.core.hermes_provider import (
     HermesProviderError,
     instantiate_lm,
@@ -511,6 +515,7 @@ def evolve(
     benchmark_cmd: Optional[str] = None,
     benchmark_timeout_seconds: int = 600,
     skip_preflight: bool = False,
+    skip_cost_suggest: bool = False,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -617,10 +622,28 @@ def evolve(
             # discover the eval LM has a stale token. Preflight is one
             # tiny call per unique LM, raises HermesProviderError with
             # provider-specific recovery guidance.
+            # Resolve up front so both preflight (if enabled) and the cost
+            # advisor (if enabled and eval_model wasn't explicit) share the
+            # same ResolvedLM. The downstream LM-configure path (~line 700)
+            # re-resolves; small duplicate cost (no network — just file I/O).
+            _preflight_optimizer = resolve_default_lm(role="optimizer", explicit_model=optimizer_model)
+            _preflight_eval = resolve_default_lm(role="eval", explicit_model=eval_model)
             if not skip_preflight:
-                _preflight_optimizer = resolve_default_lm(role="optimizer", explicit_model=optimizer_model)
-                _preflight_eval = resolve_default_lm(role="eval", explicit_model=eval_model)
                 _preflight_lm_credentials([_preflight_optimizer, _preflight_eval])
+            # Cost advisor: only fire when the user inherited the eval model
+            # from Hermes (eval_model is None) AND the resolver returned a
+            # stock LM. Custom factory paths (Codex) route to a closed
+            # ChatGPT-subscription endpoint where suggesting "use openai/
+            # gpt-5-nano" implies a different auth setup the user didn't
+            # opt in to.
+            if (
+                not skip_cost_suggest
+                and eval_model is None
+                and _preflight_eval.lm_factory is None
+            ):
+                _alt = _find_cheaper_alternative(_preflight_eval.model)
+                if _alt is not None:
+                    console.print(_render_cost_suggestion_panel("eval", _alt))
             if max_total_cost_usd is not None:
                 console.print(f"  Cost ceiling: ${max_total_cost_usd:.4f}")
 
@@ -1339,6 +1362,17 @@ def evolve(
          "this flag to skip when you know your creds are good.",
 )
 @click.option(
+    "--no-cost-suggest",
+    "skip_cost_suggest",
+    is_flag=True,
+    default=False,
+    help="Skip the post-preflight cost-suggestion panel. By default, when "
+         "--eval-model is unset, the framework checks litellm.model_cost "
+         "for a cheaper same-provider model with sufficient context window "
+         "and prints a Rich panel with a paste-ready --eval-model flag. "
+         "Pass this to suppress the panel.",
+)
+@click.option(
     "--closed-loop-during-evolution",
     "closed_loop_suite_path",
     default=None,
@@ -1358,6 +1392,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          fitness_profile, apply, patch, max_total_cost_usd,
          benchmark_cmd, benchmark_timeout_seconds,
          skip_preflight,
+         skip_cost_suggest,
          closed_loop_suite_path):
     """Evolve an agent skill using DSPy + GEPA optimization."""
     if closed_loop_suite_path is not None:
@@ -1401,6 +1436,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             benchmark_cmd=benchmark_cmd,
             benchmark_timeout_seconds=benchmark_timeout_seconds,
             skip_preflight=skip_preflight,
+            skip_cost_suggest=skip_cost_suggest,
         )
     except HermesProviderError as exc:
         # Render a clean error panel instead of dumping a Python traceback

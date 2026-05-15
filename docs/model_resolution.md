@@ -168,10 +168,11 @@ When the `--<role>-model` flag is set, the resolver does not infer `api_base` or
 
 If your Hermes is configured for a single frontier model (e.g. Claude Opus), defaulting all four roles to it can be expensive. A typical evolution run hits the eval + judge LMs ~100x and the optimizer + reflection LMs ~10x. If your eval-LM-per-call cost is $0.10, eval alone is ~$10 per run; on Opus it would be ~$50.
 
-Two ways to manage this:
+Three ways to manage this:
 
 1. **Per-role overrides** (above) — pick a cheaper model from the same provider for eval + judge.
 2. **Use `--budget light`** — fewer GEPA iterations, fewer total LM calls.
+3. **Cost advisor** — when `--eval-model` is unset, the framework checks `litellm.model_cost` after preflight and surfaces a Rich panel suggesting a cheaper same-provider model with sufficient context window when one exists. The panel includes a paste-ready `--eval-model` flag. Pass `--no-cost-suggest` to suppress.
 
 The `output/<run>/run_config.json` includes a `resolved_lms` block showing exactly which model + endpoint was used per role, with `api_key` redacted. Inspect it after a run to confirm what you paid for.
 
@@ -237,6 +238,5 @@ This module currently does not:
 
 - Refresh expired OAuth tokens for non-Codex providers (delegated to `hermes auth add <provider>` / `hermes model`; Codex tokens refresh in-memory — see [OpenAI Codex Responses API](#openai-codex-responses-api))
 - Honor `auxiliary.*` provider config from `config.yaml` (Hermes's vision/web-extract/session-search routing)
-- Auto-suggest cheaper per-role models via `/v1/models` introspection
 
 The slim resolver lives at `evolution/core/hermes_provider.py`. The mapping table is sourced from `hermes_cli/auth.py` constants — drift is possible; update by reference when Hermes adds providers.
