@@ -80,6 +80,12 @@ _NATIVE_LITELLM_PREFIX = {
     "gemini": "gemini",
 }
 
+# AWS Bedrock defaults. Bedrock is handled out-of-band: no credential pool,
+# no api_key — boto3's default credential chain (env vars, AWS_PROFILE, IAM
+# role, IMDS) handles auth, and LiteLLM's bedrock provider does the rest.
+_BEDROCK_DEFAULT_REGION = "us-east-1"
+_BEDROCK_DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-6"
+
 # Hermes provider IDs that route via OpenAI-wire-compatible HTTP. LiteLLM
 # reaches them as ``openai/<model>`` with a custom ``api_base``. For each,
 # the canonical Hermes default endpoint when the user hasn't overridden it.
@@ -137,6 +143,12 @@ _PROVIDER_ALIASES = {
     "ollama": "custom",
     "vllm": "custom",
     "llamacpp": "custom",
+    # Hermes also accepts these spellings for AWS Bedrock; mirror so
+    # hand-edited configs don't get rejected as unknown providers.
+    "aws": "bedrock",
+    "aws-bedrock": "bedrock",
+    "amazon": "bedrock",
+    "amazon-bedrock": "bedrock",
 }
 
 # Every canonical provider name the resolver knows how to handle. Anything
@@ -144,7 +156,9 @@ _PROVIDER_ALIASES = {
 # to the OpenAI-wire default would route a typo'd provider to the wrong
 # endpoint with the wrong key.
 _KNOWN_PROVIDERS = (
-    set(_NATIVE_LITELLM_PREFIX) | set(_OPENAI_WIRE_DEFAULT_BASE_URL)
+    set(_NATIVE_LITELLM_PREFIX)
+    | set(_OPENAI_WIRE_DEFAULT_BASE_URL)
+    | {"bedrock"}
 )
 
 # Auto-detect priority order when ``model.provider: auto`` (or unset).
@@ -270,6 +284,14 @@ def resolve_default_lm(
             f"Known: {sorted(_KNOWN_PROVIDERS)}. Set model.provider to one of "
             f"these, or pass --{role}-model to bypass Hermes resolution."
         )
+
+    # Bedrock has its own resolution path — boto3's default credential chain
+    # handles auth, so there's no inline_api_key, env var, or pool entry to
+    # walk. Standalone fallback model lets users with a bare provider: bedrock
+    # config.yaml run without setting model.default.
+    if canonical == "bedrock":
+        return _resolve_bedrock_lm(config=config, target_model=target_model)
+
     if not target_model:
         raise HermesProviderError(
             f"~/.hermes/config.yaml sets provider='{requested_provider}' "
@@ -504,6 +526,46 @@ def _auto_detect(
         "has env-var or auth.json credentials"
     )
     return None, _Credential(api_key=None, api_base=None, source="none")
+
+
+def _resolve_bedrock_lm(
+    *,
+    config: Optional[Dict[str, Any]],
+    target_model: str,
+) -> ResolvedLM:
+    """Build a ResolvedLM for AWS Bedrock.
+
+    LiteLLM's ``bedrock/<model-id>`` provider auto-resolves AWS credentials
+    from boto3's default chain (``AWS_BEARER_TOKEN_BEDROCK``,
+    ``AWS_ACCESS_KEY_ID``/``AWS_SECRET_ACCESS_KEY``, ``AWS_PROFILE``, IAM
+    role, IMDS). The only kwargs we need to surface are ``aws_region_name``
+    and an optional ``aws_profile_name`` from the Hermes config.
+
+    Region resolution: ``bedrock.region`` in config.yaml takes precedence
+    over ``AWS_REGION``/``AWS_DEFAULT_REGION`` env vars, then falls back to
+    a hardcoded default. Cross-region inference profiles (e.g.
+    ``us.anthropic.claude-sonnet-4-6``) work unchanged — LiteLLM passes the
+    leading region prefix through to the underlying boto3 call.
+    """
+    bedrock_cfg = (config or {}).get("bedrock") or {}
+    region = (
+        (bedrock_cfg.get("region") or "").strip()
+        or os.getenv("AWS_REGION", "").strip()
+        or os.getenv("AWS_DEFAULT_REGION", "").strip()
+        or _BEDROCK_DEFAULT_REGION
+    )
+    profile = (bedrock_cfg.get("aws_profile_name") or "").strip()
+    model_name = target_model or _BEDROCK_DEFAULT_MODEL
+
+    lm_kwargs: Dict[str, Any] = {"aws_region_name": region}
+    if profile:
+        lm_kwargs["aws_profile_name"] = profile
+
+    return ResolvedLM(
+        model=f"bedrock/{model_name}",
+        lm_kwargs=lm_kwargs,
+        source=f"hermes-config:bedrock(region={region})",
+    )
 
 
 def _build_resolved_lm(

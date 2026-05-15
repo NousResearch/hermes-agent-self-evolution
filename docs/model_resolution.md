@@ -48,10 +48,11 @@ The Hermes provider name maps to LiteLLM as follows. For each, the framework con
 | `ollama`, `vllm`, `llamacpp` | `openai/<model>` | `api_base` from config (required), `api_key=EMPTY` placeholder | Local servers; aliases for `custom` |
 | `lmstudio` | `openai/<model>` | `api_base=http://127.0.0.1:1234/v1` (default), `api_key=EMPTY` | LM Studio local server |
 | `zai`, `kimi-coding`, `minimax`, `huggingface`, `nvidia`, `arcee`, `ollama-cloud`, `kilocode`, `ai-gateway`, `xiaomi` | `openai/<model>` | Provider's canonical `api_base`, `api_key` from env or pool | OpenAI-wire-compatible HTTP |
+| `bedrock` (aliases: `aws`, `aws-bedrock`, `amazon`, `amazon-bedrock`) | `bedrock/<model-id>` | `aws_region_name` (+ optional `aws_profile_name`) | AWS Bedrock via boto3 default credential chain — see [AWS Bedrock setup](#aws-bedrock-setup) below |
 
 **Wire-mode flip:** if the resolved `api_base` contains `/anthropic` (z.ai with `/anthropic` suffix, MiniMax with `/anthropic` suffix), the model string flips to `anthropic/<model>` — Hermes does the same auto-detection.
 
-**Bedrock and Codex Responses API are not in the provider table.** A `provider: bedrock` or `provider: openai-codex` in `config.yaml` is rejected with a "Unknown provider" error. Pass `--optimizer-model` with the correct LiteLLM-native string (e.g. `bedrock/anthropic.claude-...`) to bypass the resolver entirely; you'll need to set the corresponding env vars (AWS creds, Codex auth) yourself.
+**Codex Responses API is not yet in the provider table.** A `provider: openai-codex` in `config.yaml` is rejected with a "Unknown provider" error. Pass `--optimizer-model openai/<model>` with `OPENAI_API_KEY` set to bypass the resolver, or use a different provider for evolution.
 
 ## Local-server setups
 
@@ -93,6 +94,32 @@ model:
   provider: llamacpp
   base_url: http://localhost:8080/v1
 ```
+
+## AWS Bedrock setup
+
+Bedrock auth flows through boto3's default credential chain — `AWS_BEARER_TOKEN_BEDROCK`, `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, `AWS_PROFILE`, IAM role, or IMDS. The framework never reads AWS credentials itself; it only surfaces the region (and optional profile name) to LiteLLM, which calls boto3 under the hood.
+
+```yaml
+# ~/.hermes/config.yaml
+model:
+  default: us.anthropic.claude-sonnet-4-6
+  provider: bedrock
+bedrock:
+  region: us-east-2
+  aws_profile_name: my-bedrock-profile  # optional; omit to use default chain
+```
+
+Region resolution: `bedrock.region` in `config.yaml` → `AWS_REGION` env var → `AWS_DEFAULT_REGION` env var → `us-east-1` (hardcoded fallback).
+
+Cross-region inference profiles (`us.anthropic.claude-sonnet-4-6`, `apac.anthropic.claude-haiku-4-5`, etc.) work unchanged — the leading region prefix is part of the model ID and reaches Bedrock as-is.
+
+If `model.default` is unset, the framework falls back to `us.anthropic.claude-sonnet-4-6` so a bare `provider: bedrock` config runs without further configuration.
+
+Bedrock is **never auto-detected** when `provider: auto` (or unset) — AWS env vars are commonly set for non-Bedrock reasons (S3, DynamoDB), so silently routing the optimizer to Bedrock would surprise users. Set `provider: bedrock` explicitly to opt in.
+
+When boto3 can't find any credentials, the call surfaces as `litellm.AuthenticationError("Unable to locate credentials...")`. The preflight catches this and renders the recovery hint (`export AWS_PROFILE=...` / `export AWS_BEARER_TOKEN_BEDROCK=...` / "run from an instance with Bedrock permissions") in the standard Rich panel.
+
+**What's not supported:** Bedrock Guardrails (Hermes uses these via boto3 directly; LiteLLM doesn't expose them). If Guardrails are required for your evolution runs, wrap the framework with your own moderation layer — the cost ledger and cost-ceiling work unchanged.
 
 ## Per-role overrides
 
@@ -191,7 +218,7 @@ This module currently does not:
 
 - Refresh expired OAuth tokens (delegated to `hermes auth add <provider>` / `hermes model`)
 - Honor `auxiliary.*` provider config from `config.yaml` (Hermes's vision/web-extract/session-search routing)
-- Support AWS Bedrock or OpenAI Codex Responses API end-to-end
+- Support OpenAI Codex Responses API end-to-end (AWS Bedrock is supported — see [AWS Bedrock setup](#aws-bedrock-setup))
 - Auto-suggest cheaper per-role models via `/v1/models` introspection
 
 The slim resolver lives at `evolution/core/hermes_provider.py`. The mapping table is sourced from `hermes_cli/auth.py` constants — drift is possible; update by reference when Hermes adds providers.

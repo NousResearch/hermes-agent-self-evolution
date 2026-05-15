@@ -54,6 +54,9 @@ _AUTH_ERROR_PATTERNS: Tuple[str, ...] = (
     "forbidden",
     "401",
     "403",
+    # botocore.exceptions.NoCredentialsError surfaces this verbatim through
+    # LiteLLM's bedrock provider when the boto3 chain finds no credentials.
+    "unable to locate credentials",
 )
 
 # Substrings that indicate a rate limit (429).
@@ -84,6 +87,10 @@ _HERMES_AUTH_COMMAND_BY_PROVIDER: Dict[str, str] = {
     "kilocode": "export KILOCODE_API_KEY=...",
     "ai-gateway": "export AI_GATEWAY_API_KEY=...",
     "xiaomi": "export XIAOMI_API_KEY=...",
+    "bedrock": (
+        "export AWS_PROFILE=<profile>  # or export AWS_BEARER_TOKEN_BEDROCK=..., "
+        "or run from an instance/role with Bedrock permissions"
+    ),
 }
 
 
