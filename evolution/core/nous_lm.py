@@ -197,8 +197,8 @@ class NousLM(dspy.LM):
             agent_key_expires_at=agent_key_expires_at,
         )
 
-        # Initial mint if the constructor-supplied agent_key is missing or
-        # already expiring. Cheap on the happy path; one POST otherwise.
+        # Pay the mint cost at construction so the first forward() doesn't
+        # see a synchronous round-trip surprise.
         self._ensure_credentials()
 
     # ------------------------------------------------------------------
@@ -207,8 +207,13 @@ class NousLM(dspy.LM):
 
     def _oauth_needs_refresh(self) -> bool:
         if self._shared_state.oauth_expires_at is None:
-            # Unknown expiry → don't speculatively refresh; let the mint
-            # call surface a 401 if the access_token is actually dead.
+            # Unknown expiry → don't speculatively refresh; the mint
+            # call's own 401-triggers-refresh-retry path catches a
+            # genuinely-dead access_token. Note _agent_key_needs_mint
+            # makes the opposite choice (defaults True on unknown
+            # expiry) because there's no equivalent recovery for a
+            # missing agent_key — inference would just 401 with no
+            # built-in retry.
             return False
         return (
             time.time() + OAUTH_REFRESH_SKEW_SECONDS
@@ -219,8 +224,8 @@ class NousLM(dspy.LM):
         if not self._shared_state.agent_key:
             return True
         if self._shared_state.agent_key_expires_at is None:
-            # Have a key but no expiry — treat as needing re-mint to be
-            # safe. Cheaper than letting it 401 mid-run.
+            # Have a key but no expiry → re-mint defensively. See
+            # _oauth_needs_refresh for the asymmetric reasoning.
             return True
         return (
             time.time() + AGENT_KEY_REFRESH_SKEW_SECONDS
@@ -228,7 +233,6 @@ class NousLM(dspy.LM):
         )
 
     def _sync_from_shared_state(self) -> None:
-        """Pull the latest agent_key out of shared state into self.kwargs."""
         self.kwargs["api_key"] = self._shared_state.agent_key or ""
 
     def _ensure_credentials(self) -> None:
@@ -254,8 +258,16 @@ class NousLM(dspy.LM):
         """Skip skew check and re-mint immediately. Called when an inference
         call returned 401 — the cached agent_key is bad and we don't want
         to wait for the skew window.
+
+        Pre-checks the OAuth expiry too. Without this, a stale OAuth +
+        revoked agent_key combo takes three round-trips (mint→401→
+        refresh→mint); with the pre-check it's two (refresh→mint). The
+        mint's 401-triggers-refresh path still backstops the case where
+        OAuth looks fresh by skew but the portal has revoked it.
         """
         with self._shared_state.lock:
+            if self._oauth_needs_refresh():
+                self._refresh_oauth()
             self._mint_agent_key(allow_oauth_retry=True)
             self._sync_from_shared_state()
 
@@ -383,6 +395,15 @@ class NousLM(dspy.LM):
         raise HermesProviderError(_format_mint_error(response))
 
     def _absorb_mint_response(self, response: httpx.Response) -> None:
+        """Parse a 200 mint response into shared state.
+
+        Tolerates both the current ``api_key`` field and the older
+        ``agent_key`` shape, and prefers a server-supplied ``expires_at``
+        ISO 8601 timestamp over the relative ``expires_in``. When neither
+        expiry field is parseable, falls back to the requested floor TTL
+        with a warning so portal protocol drift doesn't silently cache a
+        key for longer than the server intended.
+        """
         try:
             payload = response.json()
         except ValueError as exc:
@@ -391,9 +412,6 @@ class NousLM(dspy.LM):
                 "Run `hermes model` to re-authenticate."
             ) from exc
 
-        # Hermes uses both ``api_key`` (current portal field) and falls back
-        # to ``agent_key`` (older shape). Mirror both so a portal protocol
-        # rev doesn't break us.
         agent_key = payload.get("api_key") or payload.get("agent_key")
         if not isinstance(agent_key, str) or not agent_key.strip():
             raise HermesProviderError(
@@ -489,7 +507,10 @@ def _format_oauth_error(response: httpx.Response) -> str:
     """
     code, detail = _parse_error_body(response)
 
-    if code == "refresh_token_reused" or "reuse" in detail.lower():
+    # Match the explicit code field, not the free-form detail string —
+    # a substring search on detail would false-positive on unrelated
+    # portal messages like "this is not a reusable connection".
+    if "reused" in code.lower():
         return (
             "Nous Portal refresh token was already consumed by another "
             "client (the portal enforces single-use refresh-token rotation). "
@@ -529,27 +550,36 @@ def _format_mint_error(response: httpx.Response) -> str:
 def _parse_error_body(response: httpx.Response) -> tuple[str, str]:
     """Best-effort parse of OAuth-style error JSON. Returns (code, detail)
     with sensible defaults when the body is missing or malformed.
+
+    On JSON parse failure (e.g., a CDN returning an HTML error page,
+    or a portal outage returning text), ``detail`` falls back to a
+    truncated snippet of the raw body so the operator can correlate
+    the failure with what the upstream actually sent.
     """
     code = "unknown"
     detail = f"status {response.status_code}"
     try:
         body = response.json()
-        if isinstance(body, dict):
-            err = body.get("error")
-            if isinstance(err, dict):
-                # OpenAI shape: {"error": {"code": ..., "message": ...}}
-                nested_code = err.get("code") or err.get("type")
-                if isinstance(nested_code, str) and nested_code.strip():
-                    code = nested_code.strip()
-                nested_msg = err.get("message")
-                if isinstance(nested_msg, str) and nested_msg.strip():
-                    detail = nested_msg.strip()
-            elif isinstance(err, str) and err.strip():
-                # OAuth-spec shape: {"error": "code", "error_description": "..."}
-                code = err.strip()
-                desc = body.get("error_description") or body.get("message")
-                if isinstance(desc, str) and desc.strip():
-                    detail = desc.strip()
     except ValueError:
-        pass
+        snippet = (response.text or "").strip()
+        if snippet:
+            detail = f"status {response.status_code}: {snippet[:512]}"
+        return code, detail
+
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict):
+            # OpenAI shape: {"error": {"code": ..., "message": ...}}
+            nested_code = err.get("code") or err.get("type")
+            if isinstance(nested_code, str) and nested_code.strip():
+                code = nested_code.strip()
+            nested_msg = err.get("message")
+            if isinstance(nested_msg, str) and nested_msg.strip():
+                detail = nested_msg.strip()
+        elif isinstance(err, str) and err.strip():
+            # OAuth-spec shape: {"error": "code", "error_description": "..."}
+            code = err.strip()
+            desc = body.get("error_description") or body.get("message")
+            if isinstance(desc, str) and desc.strip():
+                detail = desc.strip()
     return code, detail

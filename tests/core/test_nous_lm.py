@@ -753,6 +753,116 @@ class TestAsyncForce401Recovery:
                 )
 
 
+class TestForceRemintPreChecksOAuth:
+    """When inference 401s and we force a re-mint, an OAuth that's also
+    expiring should be refreshed FIRST, not re-discovered via mint→401→
+    refresh→mint (three round-trips). Saves one hop on the rare double-
+    stale path; the mint's own 401-retry still backstops the case where
+    OAuth looks fresh by skew but the portal has revoked it.
+    """
+
+    def test_force_remint_refreshes_oauth_when_also_expiring(self):
+        # Build LM with both creds expiring — initial mint already fires.
+        with patch("evolution.core.nous_lm.httpx.Client") as mock_cls:
+            mock_cls.return_value = _mock_httpx_post(
+                [
+                    # Initial _ensure_credentials path: OAuth is stale, refresh first.
+                    _mock_response(json_body={"access_token": "init-refresh", "expires_in": 86400}),
+                    # Then mint with the refreshed access_token.
+                    _mock_response(json_body={"api_key": "init-mint", "expires_in": 1800}),
+                ]
+            )
+            lm = NousLM(
+                model="openai/test-model",
+                access_token="stale",
+                refresh_token="r",
+                oauth_expires_at=time.time() + 30,  # forces refresh
+            )
+
+        # Now manually expire the OAuth again and call _force_remint.
+        # Expect: refresh POST + mint POST (2 calls), NOT mint→401→refresh→mint (3+).
+        lm._shared_state.oauth_expires_at = time.time() + 30  # stale again
+        with patch("evolution.core.nous_lm.httpx.Client") as mock_cls:
+            mock_cls.return_value = _mock_httpx_post(
+                [
+                    _mock_response(json_body={"access_token": "force-refresh", "expires_in": 86400}),
+                    _mock_response(json_body={"api_key": "force-mint", "expires_in": 1800}),
+                ]
+            )
+            lm._force_remint()
+            client = mock_cls.return_value
+            # Exactly 2 calls, in order: refresh THEN mint with the
+            # fresh access_token.
+            assert client.post.call_count == 2
+            paths = [c.args[0] for c in client.post.call_args_list]
+            assert paths[0].endswith("/api/oauth/token")
+            assert paths[1].endswith("/api/oauth/agent-key")
+            # Mint Bearer is the freshly-refreshed token, not the stale one.
+            assert (
+                client.post.call_args_list[1].kwargs["headers"]["Authorization"]
+                == "Bearer force-refresh"
+            )
+
+
+class TestParseErrorBodyTextFallback:
+    """When the OAuth/mint response body isn't JSON (CDN HTML page,
+    portal outage HTML, etc.), the error message should include a
+    snippet of what the upstream actually sent — not just a generic
+    'unknown: status N'.
+    """
+
+    def test_html_body_appears_in_error_detail(self):
+        from evolution.core.nous_lm import _parse_error_body
+
+        mock = MagicMock(spec=httpx.Response)
+        mock.status_code = 502
+        mock.json = MagicMock(side_effect=ValueError("not json"))
+        mock.text = "<html><body>Cloudflare 1020 Access Denied</body></html>"
+
+        code, detail = _parse_error_body(mock)
+        assert code == "unknown"
+        assert "Cloudflare 1020" in detail
+        assert "status 502" in detail
+
+    def test_empty_body_falls_back_to_status_only(self):
+        from evolution.core.nous_lm import _parse_error_body
+
+        mock = MagicMock(spec=httpx.Response)
+        mock.status_code = 503
+        mock.json = MagicMock(side_effect=ValueError("not json"))
+        mock.text = ""
+
+        code, detail = _parse_error_body(mock)
+        assert code == "unknown"
+        assert detail == "status 503"
+
+
+class TestReuseSubstringMatchesCodeNotDetail:
+    """Regression guard: the 'reused' check is on the code field, not on
+    the free-form detail string. A portal returning a server-error body
+    like 'this is not a reusable connection' must NOT trigger the
+    refresh_token_reused user-facing message.
+    """
+
+    def test_reusable_in_detail_does_not_trigger_reuse_message(self):
+        from evolution.core.nous_lm import _format_oauth_error
+
+        mock = MagicMock(spec=httpx.Response)
+        mock.status_code = 500
+        mock.json = MagicMock(
+            return_value={
+                "error": {
+                    "code": "internal_error",
+                    "message": "this is not a reusable connection",
+                }
+            }
+        )
+
+        msg = _format_oauth_error(mock)
+        assert "another client" not in msg
+        assert "single-use refresh-token rotation" not in msg
+
+
 class TestSharedStateInvariants:
     def test_post_init_rejects_partial_agent_key_state(self):
         # _SharedNousState __post_init__ catches the construction-time

@@ -721,24 +721,16 @@ def _maybe_resolve_nous_lm(
     target_model: str,
     role: Role,
 ) -> Optional[ResolvedLM]:
-    """Build a NousLM-backed ResolvedLM when the auth.json pool entry
-    looks OAuth-managed; return None to let the caller fall through to
-    the generic OpenAI-wire handler when the entry is just an env-var-
-    style API key.
+    """Build a NousLM-backed ResolvedLM when the pool entry has a
+    refresh_token (the OAuth-managed signal). Returns None for env-var
+    or hand-edited entries with an agent_key already present (caller
+    falls through to the generic OpenAI-wire handler), and raises for
+    partial OAuth setups (access_token without refresh_token or
+    agent_key) so the operator gets a `hermes model` recovery hint
+    instead of a silent inference 401.
 
-    Nous uses a two-stage credential model: an OAuth access_token
-    (long-lived) is exchanged for a short-lived agent_key that's the
-    actual inference Bearer. NousLM handles both: refresh access_token
-    in-memory when expiring, mint a fresh agent_key from it, re-mint on
-    inference 401. See evolution/core/nous_lm.py.
-
-    The "looks OAuth-managed" signal: pool entry has a refresh_token. A
-    pool entry without refresh_token is either env-var-only (NOUS_API_KEY
-    set, no real OAuth state) or hand-edited; let the caller fall
-    through to direct pass-through so we don't break that setup.
-
-    The CodexLM-equivalent NousLM import is lazy to avoid a circular
-    dependency: nous_lm imports HermesProviderError from this module.
+    See ``evolution/core/nous_lm.py`` for the two-stage credential
+    model and the in-memory refresh + mint flow.
     """
     pool_entry = _pick_pool_entry(auth_store, "nous")
     if pool_entry is None:
