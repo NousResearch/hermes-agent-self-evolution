@@ -90,3 +90,20 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+    def test_reassemble_strips_duplicate_frontmatter(self):
+        """If evolved body already contains a frontmatter block, it should
+        be stripped so the result has exactly one frontmatter."""
+        from evolution.skills.skill_module import reassemble_skill
+
+        frontmatter = 'name: foo\ndescription: bar'
+        evolved_with_fm = (
+            "---\nname: foo\ndescription: bar\n---\n\n# Evolved\n\ntext"
+        )
+        result = reassemble_skill(frontmatter, evolved_with_fm)
+
+        # Exactly one opening + one closing frontmatter delimiter
+        assert result.count("---") == 2
+        assert result.startswith("---\nname: foo")
+        assert "# Evolved" in result
