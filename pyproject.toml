@@ -16,6 +16,7 @@ keywords = ["llm", "optimization", "evolution", "dspy", "gepa", "hermes", "agent
 
 dependencies = [
     "dspy>=3.0.0",
+    "optuna>=3.0.0",  # required by dspy.teleprompt.MIPROv2
     "openai>=1.0.0",
     "pyyaml>=6.0",
     "click>=8.0",
