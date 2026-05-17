@@ -1,0 +1,179 @@
+"""Tests for the closed-loop integration on the skill-evolution path.
+
+Exercises the integration seams independently of GEPA: SkillModule's
+behavioral branch, the cache-construction helper, the behavioral-example
+loader's task_input shape, and the gate_mode policy. End-to-end behavior
+is exercised by the manual smoke harness at
+``tests/manual/skill_closed_loop_smoke.py`` (heavy, real LM spend).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from evolution.core.behavioral_example import build_behavioral_examples
+from evolution.skills.evolve_skill import (
+    _load_behavioral_examples_from_suite,
+    _maybe_build_closed_loop_cache_skill,
+)
+from evolution.skills.skill_module import SkillModule
+from evolution.validation.task import TaskSuite
+
+
+_SUITE_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "evolution"
+    / "validation"
+    / "suites"
+    / "systematic_debugging.jsonl"
+)
+
+
+@pytest.fixture
+def fake_skill_path(tmp_path):
+    src = tmp_path / "systematic_debugging"
+    src.mkdir()
+    md = src / "SKILL.md"
+    md.write_text(
+        "---\nname: systematic_debugging\n---\n\n# Weak baseline\n\nTry stuff.\n"
+    )
+    return md
+
+
+# ---------------------------------------------------------------------------
+# SkillModule.forward behavioral branch
+# ---------------------------------------------------------------------------
+
+
+class TestSkillModuleBehavioralBranch:
+    def test_normal_branch_calls_predictor(self):
+        # closed_loop_task_id absent → take the LM path. We mock the
+        # predictor to avoid a real LM call.
+        module = SkillModule("body")
+        with patch.object(module, "predictor") as mock_pred:
+            mock_pred.return_value = type("R", (), {"output": "hello"})()
+            result = module.forward(task_input="do X")
+        assert result.output == "hello"
+        mock_pred.assert_called_once_with(task_input="do X")
+
+    def test_behavioral_branch_skips_predictor(self):
+        # closed_loop_task_id present → no LM call; marker fields are
+        # stuffed onto the Prediction for the metric to route. Real
+        # SkillModule (no mock) because the behavioral branch must not
+        # touch the predictor at all — if it did, this test would hang
+        # waiting for a non-existent LM configuration.
+        module = SkillModule("evolved body text")
+        result = module.forward(
+            task_input="placeholder",
+            closed_loop_task_id="t1",
+        )
+        assert result._closed_loop_task_id == "t1"
+        assert result._candidate_text == "evolved body text"
+        assert result.output == ""
+
+
+# ---------------------------------------------------------------------------
+# Behavioral-example loader (skill-side task_input shape)
+# ---------------------------------------------------------------------------
+
+
+class TestBehavioralExampleLoader:
+    def test_skill_examples_use_task_input_field(self, tmp_path):
+        suite_path = tmp_path / "s.jsonl"
+        suite_path.write_text(
+            '{"task_id": "a", "user_message": "debug a", "test_command": "python t.py"}\n'
+            '{"task_id": "b", "user_message": "debug b", "test_command": "python t.py"}\n'
+        )
+        examples = _load_behavioral_examples_from_suite(suite_path)
+        assert len(examples) == 2
+        # Skill modules take `task_input`; the loader must use that field name.
+        assert "task_input" in examples[0].inputs()
+        assert "closed_loop_task_id" in examples[0].inputs()
+        assert examples[0].task_input == "debug a"
+
+    def test_tool_side_default_still_uses_task_field(self, tmp_path):
+        # build_behavioral_examples default preserves tool-path shape.
+        suite_path = tmp_path / "s.jsonl"
+        suite_path.write_text(
+            '{"task_id": "a", "user_message": "do a", "expected_tools": ["patch"]}\n'
+        )
+        examples = build_behavioral_examples(TaskSuite.from_jsonl(suite_path))
+        assert "task" in examples[0].inputs()
+        assert examples[0].task == "do a"
+
+
+# ---------------------------------------------------------------------------
+# Cache construction helper
+# ---------------------------------------------------------------------------
+
+
+class TestMaybeBuildClosedLoopCacheSkill:
+    def test_none_suite_returns_none(self, fake_skill_path):
+        cache = _maybe_build_closed_loop_cache_skill(
+            skill_name="systematic_debugging",
+            skill_path=fake_skill_path,
+            baseline_skill_body="body",
+            suite_path=None,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+        )
+        assert cache is None
+
+    def test_constructs_cache_with_skill_installer_and_md_suffix(
+        self, fake_skill_path
+    ):
+        cache = _maybe_build_closed_loop_cache_skill(
+            skill_name="systematic_debugging",
+            skill_path=fake_skill_path,
+            baseline_skill_body="baseline body text",
+            suite_path=_SUITE_FIXTURE,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+        )
+        assert cache is not None
+        # Baseline written as raw text via write_text_artifact (no JSON envelope).
+        baseline_text = cache._baseline_path.read_text()
+        assert baseline_text == "baseline body text"
+        # Suffix is .md for skill artifacts (not the default .json).
+        assert cache._baseline_path.suffix == ".md"
+        # Default gate_mode for skills is "sampled" — caller passes "always"
+        # only when wiring trainset mode.
+        assert cache.gate_mode == "sampled"
+
+    def test_gate_mode_always_propagates(self, fake_skill_path):
+        cache = _maybe_build_closed_loop_cache_skill(
+            skill_name="systematic_debugging",
+            skill_path=fake_skill_path,
+            baseline_skill_body="body",
+            suite_path=_SUITE_FIXTURE,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+            gate_mode="always",
+        )
+        assert cache.gate_mode == "always"
+
+    def test_installer_skills_src_is_under_workdir(self, fake_skill_path):
+        # The cache's validator holds an installer with skills_src — confirming
+        # the wiring is intact so the runner sees the candidate.
+        cache = _maybe_build_closed_loop_cache_skill(
+            skill_name="systematic_debugging",
+            skill_path=fake_skill_path,
+            baseline_skill_body="body",
+            suite_path=_SUITE_FIXTURE,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+        )
+        installer = cache._validator.installer
+        assert installer.skills_src.name == "skills"
+        # The baseline skill was copied into the installer's workdir.
+        target = installer.skills_src / "systematic_debugging" / "SKILL.md"
+        assert target.is_file()
+        # The user's original SKILL.md is untouched.
+        assert "Weak baseline" in fake_skill_path.read_text()

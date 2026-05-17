@@ -130,3 +130,28 @@ class TestTaskSuiteLoader:
         }])
         with pytest.raises(ValueError, match="fixture_setup must be a dict"):
             TaskSuite.from_jsonl(p)
+
+    def test_test_command_parsed_when_present(self, tmp_path):
+        p = tmp_path / "suite.jsonl"
+        self._write_jsonl(p, [{
+            "task_id": "t1",
+            "user_message": "debug it",
+            "test_command": "python test_solution.py",
+        }])
+        suite = TaskSuite.from_jsonl(p)
+        assert suite.tasks[0].test_command == "python test_solution.py"
+
+    def test_test_command_defaults_to_none(self, tmp_path):
+        p = tmp_path / "suite.jsonl"
+        self._write_jsonl(p, [{"task_id": "t1", "user_message": "do X"}])
+        suite = TaskSuite.from_jsonl(p)
+        assert suite.tasks[0].test_command is None
+
+    def test_test_command_non_string_raises(self, tmp_path):
+        p = tmp_path / "suite.jsonl"
+        self._write_jsonl(p, [{
+            "task_id": "t", "user_message": "m",
+            "test_command": ["python", "x.py"],
+        }])
+        with pytest.raises(ValueError, match="test_command must be a string"):
+            TaskSuite.from_jsonl(p)

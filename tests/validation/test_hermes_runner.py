@@ -254,3 +254,64 @@ class TestHermesAgentRunnerSubprocess:
 
         assert sandbox_seen["config_present"] is True
         assert "hunter2" in sandbox_seen["config_text"]
+
+    def test_skills_src_copied_into_sandbox_when_present(self, fixture_dir, tmp_path):
+        """When TaskRunContext.skills_src points at a directory, the runner
+        copies its contents into <sandbox>/skills/ so ``hermes -z``
+        discovers any candidate skills installed there.
+        """
+        skills_src = tmp_path / "candidate_skills"
+        (skills_src / "systematic_debugging").mkdir(parents=True)
+        (skills_src / "systematic_debugging" / "SKILL.md").write_text(
+            "---\nname: systematic_debugging\n---\n\nevolved body\n"
+        )
+        runner = HermesAgentRunner(user_config_path=tmp_path / "nonexistent")
+
+        sandbox_skills_state: dict = {}
+
+        def _fake_run(*args, **kwargs):
+            sandbox = Path(kwargs["env"]["HERMES_HOME"])
+            skill_path = sandbox / "skills" / "systematic_debugging" / "SKILL.md"
+            sandbox_skills_state["present"] = skill_path.is_file()
+            if sandbox_skills_state["present"]:
+                sandbox_skills_state["text"] = skill_path.read_text()
+            (sandbox / "sessions").mkdir(exist_ok=True)
+            _write_session(
+                sandbox / "sessions" / "session_test.json",
+                [{"role": "assistant", "content": "ok"}],
+            )
+            return type("CP", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with patch("evolution.validation.hermes_runner.subprocess.run", side_effect=_fake_run):
+            runner.run(TaskRunContext(
+                user_message="debug it",
+                fixture_dir=fixture_dir,
+                skills_src=skills_src,
+            ))
+
+        assert sandbox_skills_state["present"] is True
+        assert "evolved body" in sandbox_skills_state["text"]
+
+    def test_skills_src_none_means_no_skills_dir_created(self, fixture_dir, tmp_path):
+        """Tool-side runs (no skills_src) must not create an empty skills/
+        directory in the sandbox — keeps the legacy code path bit-for-bit."""
+        runner = HermesAgentRunner(user_config_path=tmp_path / "nonexistent")
+        sandbox_seen: dict = {}
+
+        def _fake_run(*args, **kwargs):
+            sandbox = Path(kwargs["env"]["HERMES_HOME"])
+            sandbox_seen["has_skills_dir"] = (sandbox / "skills").exists()
+            (sandbox / "sessions").mkdir(exist_ok=True)
+            _write_session(
+                sandbox / "sessions" / "session_test.json",
+                [{"role": "assistant", "content": "ok"}],
+            )
+            return type("CP", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with patch("evolution.validation.hermes_runner.subprocess.run", side_effect=_fake_run):
+            runner.run(TaskRunContext(
+                user_message="run",
+                fixture_dir=fixture_dir,
+            ))
+
+        assert sandbox_seen["has_skills_dir"] is False

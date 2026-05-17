@@ -21,6 +21,11 @@ class _StubInstaller:
         import hashlib
         return hashlib.sha256(self.target_path.read_bytes()).hexdigest()
 
+    def verify_backup(self, backup_path: Path) -> None:
+        # Stub: any non-empty backup is fine for tests.
+        if not backup_path.read_bytes():
+            raise ValueError(f"empty backup at {backup_path}")
+
 
 class _ScriptedRunner:
     """Runner that returns different tool_calls_seq depending on which

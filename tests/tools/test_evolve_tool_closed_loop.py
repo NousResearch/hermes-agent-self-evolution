@@ -142,18 +142,29 @@ class TestMainCliValidation:
         assert kwargs["closed_loop_hermes_repo"] == fake_hermes_repo
 
 
-class TestEvolveSkillFlagRaises:
-    def test_skill_side_flag_raises_with_clear_error(
+class TestEvolveSkillFlagThreadsThrough:
+    def test_skill_side_closed_loop_flag_passes_to_evolve(
         self, tmp_path, task_suite_file
     ):
+        # The skill-side --closed-loop-during-evolution flag is now fully
+        # wired (no longer a placeholder UsageError). Confirms the flag
+        # reaches evolve() — full end-to-end behavior is exercised by
+        # tests/skills/test_evolve_skill_closed_loop.py and the manual
+        # smoke harness.
         from evolution.skills.evolve_skill import main
         runner = CliRunner()
-        result = runner.invoke(main, [
-            "--skill", "some-skill",
-            "--closed-loop-during-evolution", str(task_suite_file),
-        ])
-        assert result.exit_code != 0
-        assert "SkillFileInstaller" in result.output
+        with patch("evolution.skills.evolve_skill.evolve") as fake_evolve:
+            fake_evolve.return_value = None
+            result = runner.invoke(main, [
+                "--skill", "some-skill",
+                "--closed-loop-during-evolution", str(task_suite_file),
+            ])
+        assert result.exit_code == 0, result.output
+        kwargs = fake_evolve.call_args.kwargs
+        assert kwargs["closed_loop_suite_path"] == task_suite_file
+        # Default mode is feedback for skills (skill bodies mutate heavily
+        # so opting into trainset is explicit).
+        assert kwargs["closed_loop_mode"] == "feedback"
 
 
 class TestClosedLoopModeFlag:

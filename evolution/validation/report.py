@@ -7,6 +7,8 @@ downstream calibration scripts can use the same parsers.
 from __future__ import annotations
 
 import json
+import shlex
+import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -50,20 +52,58 @@ def score_task(
     expected_tools: tuple[str, ...],
     forbidden_tools: tuple[str, ...],
     run: AgentRunResult,
+    test_command: Optional[str] = None,
+    fixture_dir: Optional[Path] = None,
+    test_command_timeout_seconds: float = 60.0,
 ) -> tuple[bool, bool]:
     """Return (passed, abstained).
 
     Abstention takes precedence over pass/fail: a task that errored out
     in the runner is not evidence of the artifact's quality either way.
+
+    When ``test_command`` is set (skill-side suites), the verdict is
+    "did the planted test pass after the agent's edits": the command
+    runs in ``fixture_dir`` with the given timeout, and passes iff exit
+    code is zero. ``expected_tools`` / ``forbidden_tools`` are ignored
+    in this mode. Command failure modes (nonzero exit, timeout,
+    FileNotFoundError) all map to ``(False, False)`` — "the test did
+    not pass," which is the meaningful verdict regardless of cause.
     """
     if run.error is not None:
         return False, True
+    if test_command is not None:
+        if fixture_dir is None:
+            raise ValueError(
+                "score_task: fixture_dir is required when test_command is set"
+            )
+        return _run_test_command(test_command, fixture_dir, test_command_timeout_seconds), False
     invoked = set(run.tool_calls_seq)
     if forbidden_tools and (invoked & set(forbidden_tools)):
         return False, False
     if expected_tools and not (invoked & set(expected_tools)):
         return False, False
     return True, False
+
+
+def _run_test_command(command: str, cwd: Path, timeout_seconds: float) -> bool:
+    """Run ``command`` in ``cwd``. Return True iff exit code is zero.
+
+    Uses ``shlex.split`` (no shell) so suite-controlled commands don't
+    accidentally pick up shell metacharacters. All failure modes
+    (nonzero exit, timeout, FileNotFoundError, OSError) return False —
+    the test did not pass is the verdict the caller needs.
+    """
+    try:
+        result = subprocess.run(
+            shlex.split(command),
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
 
 
 def summarize_phase(task_results: list[TaskResult]) -> PhaseResult:

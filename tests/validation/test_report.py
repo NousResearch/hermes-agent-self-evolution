@@ -68,6 +68,125 @@ class TestScoreTask:
         assert abstained
 
 
+class TestScoreTaskTestCommandMode:
+    """When ``test_command`` is set on a task, the verdict is exit-code-driven,
+    not tool-call-driven. Used by skill-side suites (e.g., planted-bug:
+    "did the agent's edits make the test pass").
+    """
+
+    @staticmethod
+    def _ok_run() -> AgentRunResult:
+        return AgentRunResult(
+            tool_calls_seq=[], final_text_tail="", duration_seconds=1.0,
+        )
+
+    def test_passes_on_exit_zero(self, tmp_path):
+        (tmp_path / "ok.py").write_text("import sys; sys.exit(0)\n")
+        passed, abstained = score_task(
+            expected_tools=(), forbidden_tools=(), run=self._ok_run(),
+            test_command="python ok.py",
+            fixture_dir=tmp_path,
+        )
+        assert passed
+        assert not abstained
+
+    def test_fails_on_nonzero_exit(self, tmp_path):
+        (tmp_path / "bad.py").write_text("import sys; sys.exit(1)\n")
+        passed, abstained = score_task(
+            expected_tools=(), forbidden_tools=(), run=self._ok_run(),
+            test_command="python bad.py",
+            fixture_dir=tmp_path,
+        )
+        assert not passed
+        assert not abstained
+
+    def test_timeout_marks_failed_not_abstained(self, tmp_path):
+        # Treat hangs as failure rather than abstention — a debugging
+        # task that goes infinite is the agent's failure to debug.
+        (tmp_path / "slow.py").write_text("import time; time.sleep(60)\n")
+        passed, abstained = score_task(
+            expected_tools=(), forbidden_tools=(), run=self._ok_run(),
+            test_command="python slow.py",
+            fixture_dir=tmp_path,
+            test_command_timeout_seconds=0.3,
+        )
+        assert not passed
+        assert not abstained
+
+    def test_cwd_is_fixture_dir(self, tmp_path):
+        # The test script verifies its own cwd matches the fixture dir.
+        (tmp_path / "cwd_check.py").write_text(
+            "import os, sys\n"
+            "sys.exit(0 if os.path.realpath(os.getcwd()) == sys.argv[1] else 1)\n"
+        )
+        passed, _ = score_task(
+            expected_tools=(), forbidden_tools=(), run=self._ok_run(),
+            test_command=f"python cwd_check.py {tmp_path.resolve()}",
+            fixture_dir=tmp_path,
+        )
+        assert passed
+
+    def test_precedence_over_tool_call_rule(self, tmp_path):
+        # When test_command is set, the tool-call rule is ignored
+        # entirely — even if the agent invoked a forbidden tool.
+        (tmp_path / "ok.py").write_text("")  # empty file → python ok.py exits 0
+        run = AgentRunResult(
+            tool_calls_seq=["forbidden_tool"], final_text_tail="", duration_seconds=1.0,
+        )
+        passed, _ = score_task(
+            expected_tools=("expected_tool",),
+            forbidden_tools=("forbidden_tool",),
+            run=run,
+            test_command="python ok.py",
+            fixture_dir=tmp_path,
+        )
+        assert passed
+
+    def test_command_not_found_fails(self, tmp_path):
+        passed, abstained = score_task(
+            expected_tools=(), forbidden_tools=(), run=self._ok_run(),
+            test_command="this-binary-does-not-exist-12345",
+            fixture_dir=tmp_path,
+        )
+        assert not passed
+        assert not abstained
+
+    def test_missing_fixture_dir_raises(self):
+        with pytest.raises(ValueError, match="fixture_dir is required"):
+            score_task(
+                expected_tools=(), forbidden_tools=(), run=self._ok_run(),
+                test_command="python ok.py",
+            )
+
+    def test_runner_error_still_abstains_with_test_command(self, tmp_path):
+        # Runner error takes precedence over test_command — same as it
+        # does over the tool-call rule. A subprocess crash that prevented
+        # the agent from running isn't evidence either way.
+        (tmp_path / "ok.py").write_text("")
+        run = AgentRunResult(
+            tool_calls_seq=[], final_text_tail="", duration_seconds=1.0,
+            error="hermes crashed",
+        )
+        passed, abstained = score_task(
+            expected_tools=(), forbidden_tools=(), run=run,
+            test_command="python ok.py",
+            fixture_dir=tmp_path,
+        )
+        assert not passed
+        assert abstained
+
+    def test_tool_only_path_unchanged_when_test_command_absent(self):
+        # Regression guard for the existing patch/search_files/write_file suites.
+        run = AgentRunResult(
+            tool_calls_seq=["patch"], final_text_tail="", duration_seconds=1.0,
+        )
+        passed, abstained = score_task(
+            expected_tools=("patch",), forbidden_tools=("write_file",), run=run,
+        )
+        assert passed
+        assert not abstained
+
+
 class TestSummarizePhase:
     def test_counts_and_pass_rate(self):
         results = [

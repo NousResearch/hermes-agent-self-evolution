@@ -90,8 +90,8 @@ class TestSaturationGate:
         cache = ClosedLoopFeedbackCache(
             validator=MagicMock(),
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline desc",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline desc",
         )
         cache._iters_since_last_run = 0  # reset to test purely-history-based gate
         assert cache.should_run() is False
@@ -100,8 +100,8 @@ class TestSaturationGate:
         cache = ClosedLoopFeedbackCache(
             validator=MagicMock(),
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             saturation_threshold=0.95,
             window_size=4,
             min_iters=999,  # disable periodic fallback
@@ -115,8 +115,8 @@ class TestSaturationGate:
         cache = ClosedLoopFeedbackCache(
             validator=MagicMock(),
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             saturation_threshold=0.95,
             window_size=4,
             min_iters=999,
@@ -130,8 +130,8 @@ class TestSaturationGate:
         cache = ClosedLoopFeedbackCache(
             validator=MagicMock(),
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             saturation_threshold=0.95,
             min_iters=3,
             window_size=4,
@@ -150,8 +150,8 @@ class TestGetOrRun:
         cache = ClosedLoopFeedbackCache(
             validator=validator,
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             min_iters=1,
         )
         cache.record_judge_score(0.99)  # open the gate
@@ -167,8 +167,8 @@ class TestGetOrRun:
         cache = ClosedLoopFeedbackCache(
             validator=validator,
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             saturation_threshold=0.95,
             min_iters=999,
         )
@@ -183,8 +183,8 @@ class TestGetOrRun:
         cache = ClosedLoopFeedbackCache(
             validator=validator,
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             min_iters=1,
         )
         cache.record_judge_score(0.99)
@@ -197,8 +197,8 @@ class TestGetOrRun:
         cache = ClosedLoopFeedbackCache(
             validator=MagicMock(),
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
         )
         k1 = cache._key("desc A")
         k2 = cache._key("desc B")
@@ -319,8 +319,8 @@ class TestConcurrency:
         cache = ClosedLoopFeedbackCache(
             validator=validator,
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             min_iters=1,
         )
         cache.record_judge_score(0.99)
@@ -349,8 +349,8 @@ class TestConstructorValidation:
             ClosedLoopFeedbackCache(
                 validator=MagicMock(),
                 suite=_build_suite(tmp_path),
-                tool_name="write_file",
-                baseline_description="baseline",
+                artifact_name="write_file",
+                baseline_artifact_text="baseline",
                 saturation_threshold=1.5,
             )
 
@@ -359,8 +359,8 @@ class TestConstructorValidation:
             ClosedLoopFeedbackCache(
                 validator=MagicMock(),
                 suite=_build_suite(tmp_path),
-                tool_name="write_file",
-                baseline_description="baseline",
+                artifact_name="write_file",
+                baseline_artifact_text="baseline",
                 min_iters=0,
             )
 
@@ -369,8 +369,8 @@ class TestConstructorValidation:
             ClosedLoopFeedbackCache(
                 validator=MagicMock(),
                 suite=_build_suite(tmp_path),
-                tool_name="write_file",
-                baseline_description="baseline",
+                artifact_name="write_file",
+                baseline_artifact_text="baseline",
                 gate_mode="bogus",
             )
 
@@ -380,8 +380,8 @@ class TestGateModeAlways:
         cache = ClosedLoopFeedbackCache(
             validator=MagicMock(),
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             gate_mode="always",
         )
         # No record_judge_score calls — sampled mode would return False here.
@@ -393,8 +393,8 @@ class TestGateModeAlways:
         cache = ClosedLoopFeedbackCache(
             validator=validator,
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             gate_mode="always",
         )
         # No judge scores recorded — sampled mode would return None.
@@ -418,8 +418,8 @@ class TestGetTaskVerdict:
         cache = ClosedLoopFeedbackCache(
             validator=validator,
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             gate_mode="always",
         )
         t1 = cache.get_task_verdict("cand", "t1")
@@ -433,8 +433,8 @@ class TestGetTaskVerdict:
         cache = ClosedLoopFeedbackCache(
             validator=MagicMock(),
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             saturation_threshold=0.95,
             min_iters=999,
             gate_mode="sampled",  # default; explicit for clarity
@@ -455,8 +455,81 @@ class TestGetTaskVerdict:
         cache = ClosedLoopFeedbackCache(
             validator=validator,
             suite=_build_suite(tmp_path),
-            tool_name="write_file",
-            baseline_description="baseline",
+            artifact_name="write_file",
+            baseline_artifact_text="baseline",
             gate_mode="always",
         )
         assert cache.get_task_verdict("cand", "nonexistent_task") is None
+
+
+class TestArtifactWriterInjection:
+    """The cache's default ``artifact_writer`` produces the single-tool MCP
+    manifest JSON the tool installer consumes. Skill-side callers inject
+    a writer that drops raw text directly. Tool-path behavior must be
+    bit-for-bit preserved when no writer is passed.
+    """
+
+    def test_default_writer_produces_mcp_manifest_json(self, tmp_path):
+        cache = ClosedLoopFeedbackCache(
+            validator=MagicMock(),
+            suite=_build_suite(tmp_path),
+            artifact_name="write_file",
+            baseline_artifact_text="baseline desc",
+        )
+        # Default suffix is .json; default writer is the MCP manifest.
+        baseline_text = cache._baseline_path.read_text()
+        assert cache._baseline_path.suffix == ".json"
+        parsed = json.loads(baseline_text)
+        assert parsed["tools"][0]["name"] == "write_file"
+        assert parsed["tools"][0]["description"] == "baseline desc"
+
+    def test_custom_writer_called_with_candidate_and_path(self, tmp_path):
+        calls: list[tuple[str, Path]] = []
+
+        def fake_writer(text: str, path: Path) -> None:
+            calls.append((text, path))
+            path.write_text(f"WRAPPED::{text}")
+
+        cache = ClosedLoopFeedbackCache(
+            validator=MagicMock(),
+            suite=_build_suite(tmp_path),
+            artifact_name="systematic_debugging",
+            baseline_artifact_text="baseline body",
+            artifact_writer=fake_writer,
+            artifact_suffix=".md",
+        )
+        # Baseline was written once during construction.
+        assert len(calls) == 1
+        assert calls[0][0] == "baseline body"
+        assert calls[0][1].suffix == ".md"
+        assert cache._baseline_path.read_text() == "WRAPPED::baseline body"
+
+    def test_custom_writer_invoked_on_each_validate(self, tmp_path):
+        calls: list[str] = []
+
+        def fake_writer(text: str, path: Path) -> None:
+            calls.append(text)
+            path.write_text(text)
+
+        validator = MagicMock()
+        validator.validate.return_value = _build_report()
+        cache = ClosedLoopFeedbackCache(
+            validator=validator,
+            suite=_build_suite(tmp_path),
+            artifact_name="systematic_debugging",
+            baseline_artifact_text="baseline",
+            artifact_writer=fake_writer,
+            artifact_suffix=".md",
+            gate_mode="always",
+        )
+        cache.get_or_run("candidate-1")
+        cache.get_or_run("candidate-2")
+        # 1 baseline write + 2 evolved writes.
+        assert calls == ["baseline", "candidate-1", "candidate-2"]
+
+    def test_write_text_artifact_helper_writes_plain_text(self, tmp_path):
+        from evolution.core.closed_loop_feedback import write_text_artifact
+
+        path = tmp_path / "out.md"
+        write_text_artifact("hello world\n", path)
+        assert path.read_text() == "hello world\n"

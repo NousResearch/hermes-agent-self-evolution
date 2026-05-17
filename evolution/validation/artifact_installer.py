@@ -1,9 +1,15 @@
 """ArtifactInstaller Protocol — how the validator gets an artifact onto disk.
 
-v1 only ships ``HermesToolDescriptionInstaller`` (splice into an
-existing tool's description via ``HermesToolSource``). v2 will add
-skill installers (drop a SKILL.md into the sandboxed HERMES_HOME's
-skills dir) without changing ``ClosedLoopValidator``.
+Two concrete installers ship: ``HermesToolDescriptionInstaller`` (splice
+an evolved description into a Hermes tool-module ``*_SCHEMA`` file in
+place) and ``SkillFileInstaller`` (write an evolved SKILL.md into a
+caller-provided writable workdir, decoupled from the user's actual
+HERMES_HOME / read-only plugin cache).
+
+Installers that need the runner to stage extra state into its per-task
+sandbox (only ``SkillFileInstaller`` today, which needs the candidate
+SKILL.md visible to ``hermes -z``) expose an optional ``skills_src``
+attribute the validator threads through ``TaskRunContext``.
 """
 
 from __future__ import annotations
@@ -11,9 +17,10 @@ from __future__ import annotations
 import ast
 import hashlib
 import os
+import shutil
 import tempfile
 from pathlib import Path
-from typing import Protocol
+from typing import Optional, Protocol
 
 from evolution.tools.hermes_source import HermesToolSource
 from evolution.tools.tool_source import ToolManifest
@@ -30,6 +37,15 @@ class ArtifactInstaller(Protocol):
         """Apply ``artifact_source`` to ``target_path``. Returns the sha256
         of ``target_path``'s on-disk bytes after installation so the
         validator can verify the file wasn't mutated between tasks."""
+        ...
+
+    def verify_backup(self, backup_path: Path) -> None:
+        """Validate the backup before trusting it for restore.
+
+        Default behavior for Python-source artifacts: raise SyntaxError if
+        the backup doesn't parse. For non-Python artifacts (skills), the
+        installer overrides with a format-appropriate check (e.g., UTF-8
+        decodability + non-empty)."""
         ...
 
 
@@ -89,6 +105,9 @@ class HermesToolDescriptionInstaller:
         )
         return sha256_of(self.target_path)
 
+    def verify_backup(self, backup_path: Path) -> None:
+        verify_python_parses(backup_path)
+
     def _extract_description(self, artifact_source: Path) -> str:
         """Return the description string for ``self.tool_name`` from
         ``artifact_source``. Dispatches on suffix so the installer can
@@ -118,6 +137,73 @@ class HermesToolDescriptionInstaller:
                     f"Could not parse {artifact_source} as a Hermes tool module"
                 )
             return manifest.find_tool(self.tool_name).description
+
+
+class SkillFileInstaller:
+    """Write an evolved SKILL.md into a writable workdir for closed-loop validation.
+
+    The user's actual skill may live in a read-only location (the Claude
+    Code plugin cache, a system-installed skill bundle, or a user
+    HERMES_HOME we don't want to mutate). The installer copies the
+    entire baseline skill directory once at construction into a
+    caller-owned ``workdir``, then ``install()`` writes candidate text
+    over the resulting target SKILL.md. The original location is never
+    touched.
+
+    ``skills_src`` is the directory the runner copies into its per-task
+    sandbox so ``hermes -z`` discovers the candidate skill. Exposed
+    here so the validator can thread it through ``TaskRunContext``
+    without a Hermes-specific code path.
+    """
+
+    def __init__(
+        self,
+        *,
+        skill_source_path: Path,
+        skill_name: str,
+        workdir: Path,
+    ) -> None:
+        if not skill_source_path.is_file():
+            raise FileNotFoundError(
+                f"skill_source_path not found: {skill_source_path}"
+            )
+        if not workdir.is_dir():
+            raise NotADirectoryError(
+                f"workdir not found or not a directory: {workdir}"
+            )
+        self.skill_name = skill_name
+        self.workdir = workdir
+        self.skills_src: Path = workdir / "skills"
+        skill_dest_dir = self.skills_src / skill_name
+        skill_dest_dir.parent.mkdir(parents=True, exist_ok=True)
+        source_dir = skill_source_path.parent
+        # Copy the entire skill directory (SKILL.md + any sibling files
+        # the skill references) so the candidate has the same surrounding
+        # context as the baseline.
+        shutil.copytree(source_dir, skill_dest_dir, dirs_exist_ok=False)
+        self.target_path: Path = skill_dest_dir / skill_source_path.name
+
+    def install(self, artifact_source: Path) -> str:
+        """Atomically overwrite ``target_path`` with ``artifact_source`` contents.
+
+        The artifact source is the candidate SKILL.md as written by the
+        cache's ``artifact_writer``. We just copy bytes — no parse, no
+        splice — since for skills the whole file is the artifact.
+        """
+        atomic_write_bytes(self.target_path, artifact_source.read_bytes())
+        return sha256_of(self.target_path)
+
+    def verify_backup(self, backup_path: Path) -> None:
+        """Skills are UTF-8 text; reject empty or non-UTF-8 backups."""
+        data = backup_path.read_bytes()
+        if not data:
+            raise ValueError(f"skill backup at {backup_path} is empty")
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"skill backup at {backup_path} is not valid UTF-8: {exc}"
+            ) from exc
 
 
 def sha256_of(path: Path) -> str:

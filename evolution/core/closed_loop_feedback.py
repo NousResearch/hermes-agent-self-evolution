@@ -27,7 +27,7 @@ import logging
 import tempfile
 import threading
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
 from evolution.validation.report import TaskResult, ValidationReport
 from evolution.validation.task import TaskSuite
@@ -41,6 +41,15 @@ from evolution.validation.validator import (
 
 
 GateMode = Literal["sampled", "always"]
+
+ArtifactWriter = Callable[[str, Path], None]
+"""Write candidate text to a path in the format the installer consumes.
+
+The cache calls this with ``(baseline_or_candidate_text, target_path)``
+before each validator run. The default writes a single-tool MCP manifest
+JSON (the tool-side shape); skill-side passes a writer that drops raw
+text directly into the path.
+"""
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +76,14 @@ class ClosedLoopFeedbackCache:
         *,
         validator: ClosedLoopValidator,
         suite: TaskSuite,
-        tool_name: str,
-        baseline_description: str,
+        artifact_name: str,
+        baseline_artifact_text: str,
         saturation_threshold: float = 0.95,
         min_iters: int = 3,
         window_size: int = 8,
         gate_mode: GateMode = "sampled",
+        artifact_writer: Optional[ArtifactWriter] = None,
+        artifact_suffix: str = ".json",
     ) -> None:
         if not (0.0 <= saturation_threshold <= 1.0):
             raise ValueError(
@@ -88,18 +99,22 @@ class ClosedLoopFeedbackCache:
             )
         self._validator = validator
         self._suite = suite
-        self._tool_name = tool_name
+        self._artifact_name = artifact_name
         self.saturation_threshold = saturation_threshold
         self.min_iters = min_iters
         self.window_size = window_size
         self.gate_mode = gate_mode
 
-        self._tmp_dir = Path(tempfile.mkdtemp(prefix="cl_feedback_"))
-        self._baseline_path = self._tmp_dir / "baseline.json"
-        self._evolved_path = self._tmp_dir / "evolved.json"
-        self._baseline_path.write_text(
-            _manifest_json(tool_name, baseline_description)
+        self._artifact_writer: ArtifactWriter = (
+            artifact_writer
+            if artifact_writer is not None
+            else _make_default_tool_writer(artifact_name)
         )
+
+        self._tmp_dir = Path(tempfile.mkdtemp(prefix="cl_feedback_"))
+        self._baseline_path = self._tmp_dir / f"baseline{artifact_suffix}"
+        self._evolved_path = self._tmp_dir / f"evolved{artifact_suffix}"
+        self._artifact_writer(baseline_artifact_text, self._baseline_path)
 
         self._cache: dict[str, ValidationReport] = {}
         self._judge_history: list[float] = []
@@ -147,11 +162,9 @@ class ClosedLoopFeedbackCache:
             if not self.should_run():
                 return None
             try:
-                self._evolved_path.write_text(
-                    _manifest_json(self._tool_name, candidate_text)
-                )
+                self._artifact_writer(candidate_text, self._evolved_path)
                 inputs = ValidationInputs(
-                    tool_name=self._tool_name,
+                    tool_name=self._artifact_name,
                     suite=self._suite,
                     baseline_artifact=self._baseline_path,
                     evolved_artifact=self._evolved_path,
@@ -293,3 +306,26 @@ def _manifest_json(tool_name: str, description: str) -> str:
         },
         indent=2,
     )
+
+
+def _make_default_tool_writer(tool_name: str) -> ArtifactWriter:
+    """Default ``artifact_writer`` for tool-side closed-loop.
+
+    Writes a single-tool MCP manifest JSON — the shape
+    ``HermesToolDescriptionInstaller._extract_description`` consumes when
+    ``artifact_source.suffix == ".json"``.
+    """
+
+    def write(candidate_text: str, path: Path) -> None:
+        path.write_text(_manifest_json(tool_name, candidate_text))
+
+    return write
+
+
+def write_text_artifact(candidate_text: str, path: Path) -> None:
+    """``artifact_writer`` for skill-side closed-loop: drop raw text into the path.
+
+    The skill installer reads the whole file as the candidate SKILL.md
+    body, so no envelope is needed.
+    """
+    path.write_text(candidate_text)

@@ -93,7 +93,21 @@ class SkillModule(dspy.Module):
         # install the skill body there so forward() reads exactly what GEPA writes.
         self.predictor.predict.signature = self.predictor.predict.signature.with_instructions(skill_text)
 
-    def forward(self, task_input: str) -> dspy.Prediction:
+    def forward(
+        self,
+        task_input: str,
+        closed_loop_task_id: Optional[str] = None,
+    ) -> dspy.Prediction:
+        if closed_loop_task_id is not None:
+            # Behavioral example: skip the predictor LM call. The metric's
+            # behavioral branch reads _closed_loop_task_id off the Prediction
+            # and routes to the closed-loop cache for scoring, so the LM call
+            # would be wasted spend.
+            return dspy.Prediction(
+                output="",
+                _closed_loop_task_id=closed_loop_task_id,
+                _candidate_text=self.skill_text,
+            )
         result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
 

@@ -461,6 +461,83 @@ def _emit_patch(baseline_text: str, evolved_text: str, path: Path) -> str:
     return "".join(diff_lines)
 
 
+def _maybe_build_closed_loop_cache_skill(
+    *,
+    skill_name: str,
+    skill_path: Path,
+    baseline_skill_body: str,
+    suite_path: Optional[Path],
+    saturation_threshold: float,
+    min_iters: int,
+    window_size: int,
+    gate_mode: str = "sampled",
+):
+    """Build a ClosedLoopFeedbackCache for the skill path; return None when disabled.
+
+    Mirrors evolve_tool's _maybe_build_closed_loop_cache. Local imports keep
+    the validation stack out of the cold path — most evolve_skill runs don't
+    set the flag and shouldn't pay the import cost.
+
+    Constructs:
+      - a per-process workdir under /tmp where the installer maintains a
+        writable copy of the baseline skill (decoupled from the user's
+        real HERMES_HOME / plugin cache)
+      - SkillFileInstaller pointing at that workdir
+      - ClosedLoopValidator + HermesAgentRunner
+      - ClosedLoopFeedbackCache wired with write_text_artifact (skill bodies
+        are raw text, not MCP manifests) and .md suffix
+    """
+    if suite_path is None:
+        return None
+    import tempfile
+
+    from evolution.core.closed_loop_feedback import (
+        ClosedLoopFeedbackCache,
+        write_text_artifact,
+    )
+    from evolution.validation.artifact_installer import SkillFileInstaller
+    from evolution.validation.hermes_runner import HermesAgentRunner
+    from evolution.validation.task import TaskSuite
+    from evolution.validation.validator import ClosedLoopValidator
+
+    workdir = Path(tempfile.mkdtemp(prefix="cl_skill_workdir_"))
+    installer = SkillFileInstaller(
+        skill_source_path=skill_path,
+        skill_name=skill_name,
+        workdir=workdir,
+    )
+    runner = HermesAgentRunner()
+    validator = ClosedLoopValidator(installer=installer, runner=runner)
+    suite = TaskSuite.from_jsonl(suite_path)
+    return ClosedLoopFeedbackCache(
+        validator=validator,
+        suite=suite,
+        artifact_name=skill_name,
+        baseline_artifact_text=baseline_skill_body,
+        saturation_threshold=saturation_threshold,
+        min_iters=min_iters,
+        window_size=window_size,
+        gate_mode=gate_mode,
+        artifact_writer=write_text_artifact,
+        artifact_suffix=".md",
+    )
+
+
+def _load_behavioral_examples_from_suite(suite_path: Path) -> list:
+    """Build behavioral dspy.Examples from a suite file.
+
+    Uses ``task_field="task_input"`` so the examples are shape-compatible
+    with ``SkillModule.forward(task_input=...)`` — tool-side uses ``"task"``.
+    Local-import path keeps the validation stack out of the cold path.
+    """
+    from evolution.core.behavioral_example import build_behavioral_examples
+    from evolution.validation.task import TaskSuite
+
+    return build_behavioral_examples(
+        TaskSuite.from_jsonl(suite_path), task_field="task_input"
+    )
+
+
 def _apply_in_place(skill_path: Path, evolved_full: str) -> bool:
     """Overwrite ``skill_path`` with ``evolved_full``.
 
@@ -516,6 +593,12 @@ def evolve(
     benchmark_timeout_seconds: int = 600,
     skip_preflight: bool = False,
     skip_cost_suggest: bool = False,
+    closed_loop_suite_path: Optional[Path] = None,
+    closed_loop_saturation_threshold: float = 0.95,
+    closed_loop_min_iters: int = 3,
+    closed_loop_window_size: int = 8,
+    closed_loop_mode: str = "feedback",
+    closed_loop_in_valset: bool = False,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -735,6 +818,25 @@ def evolve(
 
             baseline_module = SkillModule(skill["body"])
 
+            # In behavioral-trainset modes the saturation gate would defeat
+            # the purpose — every novel candidate must score every time it's
+            # sampled. Otherwise default to "sampled" to keep cost bounded;
+            # skill bodies mutate heavily, so cache hit rate on the validator
+            # is lower than tool-path.
+            _cache_gate_mode = (
+                "always" if closed_loop_mode in ("trainset", "both") else "sampled"
+            )
+            closed_loop_cache = _maybe_build_closed_loop_cache_skill(
+                skill_name=skill_name,
+                skill_path=skill_path,
+                baseline_skill_body=skill["body"],
+                suite_path=closed_loop_suite_path,
+                saturation_threshold=closed_loop_saturation_threshold,
+                min_iters=closed_loop_min_iters,
+                window_size=closed_loop_window_size,
+                gate_mode=_cache_gate_mode,
+            )
+
             # Build the metric once: DSPy's LM cache lines up across GEPA's
             # per-iteration scoring and the holdout eval below. The [BUDGET]
             # feedback line targets growth_free_threshold (the zone where the
@@ -745,10 +847,28 @@ def evolve(
                 judge,
                 baseline_skill_text=skill["body"],
                 max_growth=config.growth_free_threshold,
+                closed_loop_cache=closed_loop_cache,
             )
 
             trainset = dataset.to_dspy_examples("train")
             valset = dataset.to_dspy_examples("val")
+
+            # Behavioral-example injection: each closed-loop task becomes an
+            # additional dspy.Example whose score contributes to GEPA's
+            # sum(minibatch_scores) acceptance — behavioral wins can break
+            # judge ties on saturated baselines.
+            if closed_loop_mode in ("trainset", "both"):
+                if closed_loop_suite_path is None:
+                    raise ValueError(
+                        f"--closed-loop-mode={closed_loop_mode} requires "
+                        "--closed-loop-during-evolution to be set"
+                    )
+                behavioral_examples = _load_behavioral_examples_from_suite(
+                    closed_loop_suite_path
+                )
+                trainset = trainset + behavioral_examples
+                if closed_loop_in_valset:
+                    valset = valset + behavioral_examples
 
             console.print(f"\n[bold cyan]Running GEPA optimization (budget={gepa_budget})...[/bold cyan]\n")
 
@@ -1377,10 +1497,55 @@ def evolve(
     "closed_loop_suite_path",
     default=None,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Path to a JSONL task suite for in-loop closed-loop validation feedback. "
-         "Wired symmetrically with evolve_tool, but skill-side closed-loop "
-         "validation requires a SkillFileInstaller that doesn't exist yet — "
-         "setting this flag raises until that lands.",
+    help="Path to a JSONL task suite (e.g. evolution/validation/suites/"
+         "systematic_debugging.jsonl). When set, the framework runs the "
+         "closed-loop validator on saturating GEPA iterations and surfaces "
+         "verdicts into the reflection LM's feedback. Held-out from training "
+         "tasks (no overlap-detection enforcement).",
+)
+@click.option(
+    "--closed-loop-saturation-threshold",
+    default=0.95,
+    type=click.FloatRange(min=0.0, max=1.0),
+    help="Min judge score over the recent window for the saturation gate to "
+         "open (default 0.95).",
+)
+@click.option(
+    "--closed-loop-min-iters",
+    default=3,
+    type=click.IntRange(min=1),
+    help="Periodic-fire floor: fire closed-loop at least every N reflective "
+         "iterations even when the judge isn't saturating (default 3).",
+)
+@click.option(
+    "--closed-loop-window-size",
+    default=8,
+    type=click.IntRange(min=1),
+    help="Number of recent judge scores the saturation gate inspects (default 8).",
+)
+@click.option(
+    "--closed-loop-mode",
+    default="feedback",
+    type=click.Choice(["feedback", "trainset", "both"]),
+    help="How closed-loop signal participates in GEPA. 'feedback' (default) "
+         "appends a [CLOSED_LOOP] block to the reflection LM's input — "
+         "proposal-prompt signal only, no acceptance change. 'trainset' adds "
+         "behavioral dspy.Examples to the training set whose score (binary "
+         "pass/fail from the validator) contributes to GEPA's "
+         "sum(minibatch_scores) acceptance — lets behavioral wins break judge "
+         "ties on saturated baselines. 'both' does trainset + the [CLOSED_LOOP] "
+         "feedback block (most expensive). Skill bodies mutate heavily so "
+         "trainset/both fires the validator on every novel candidate; default "
+         "stays 'feedback' to keep cost bounded.",
+)
+@click.option(
+    "--closed-loop-in-valset/--no-closed-loop-in-valset",
+    "closed_loop_in_valset",
+    default=False,
+    help="When --closed-loop-mode is trainset or both, also include behavioral "
+         "examples in the valset (adds them to the Pareto frontier + holdout "
+         "scoring). Costs more — each accepted candidate triggers another full "
+         "eval pass over the behavioral examples. Default off.",
 )
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflection_model,
          eval_model, skill_source_dir, dry_run, seed, budget, no_fallback,
@@ -1393,14 +1558,13 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          benchmark_cmd, benchmark_timeout_seconds,
          skip_preflight,
          skip_cost_suggest,
-         closed_loop_suite_path):
+         closed_loop_suite_path,
+         closed_loop_saturation_threshold,
+         closed_loop_min_iters,
+         closed_loop_window_size,
+         closed_loop_mode,
+         closed_loop_in_valset):
     """Evolve an agent skill using DSPy + GEPA optimization."""
-    if closed_loop_suite_path is not None:
-        raise click.UsageError(
-            "--closed-loop-during-evolution is wired on evolve_skill for CLI "
-            "consistency, but skill-side closed-loop validation requires a "
-            "SkillFileInstaller that doesn't exist yet."
-        )
     try:
         evolve(
             skill_name=skill,
@@ -1437,6 +1601,12 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             benchmark_timeout_seconds=benchmark_timeout_seconds,
             skip_preflight=skip_preflight,
             skip_cost_suggest=skip_cost_suggest,
+            closed_loop_suite_path=closed_loop_suite_path,
+            closed_loop_saturation_threshold=closed_loop_saturation_threshold,
+            closed_loop_min_iters=closed_loop_min_iters,
+            closed_loop_window_size=closed_loop_window_size,
+            closed_loop_mode=closed_loop_mode,
+            closed_loop_in_valset=closed_loop_in_valset,
         )
     except HermesProviderError as exc:
         # Render a clean error panel instead of dumping a Python traceback

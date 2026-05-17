@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -18,11 +19,19 @@ class Task:
     by that dir's absolute path so the task can reference the fixture
     files unambiguously.
 
-    ``expected_tools`` and ``forbidden_tools`` define the pass rule:
-    pass iff at least one expected tool was invoked AND no forbidden
-    tool was invoked. Both empty is a degenerate "no-tool task" — the
-    pass rule reduces to "agent didn't invoke any forbidden tools,"
-    which trivially passes if forbidden is empty too.
+    Two verdict mechanisms are supported, depending on what the suite
+    is validating:
+
+    - ``expected_tools`` / ``forbidden_tools`` (tool-side): pass iff at
+      least one expected tool was invoked AND no forbidden tool was
+      invoked. Both empty is a degenerate "no-tool task" — the pass
+      rule reduces to "agent didn't invoke any forbidden tools," which
+      trivially passes if forbidden is empty too.
+    - ``test_command`` (skill-side): pass iff the command exits zero
+      when run in ``fixture_dir`` after the agent finishes. Use when
+      the verdict is "did the agent's edits make the planted test
+      pass" rather than "did the agent invoke the right tools." When
+      set, takes precedence over the tool-call rule.
     """
 
     task_id: str
@@ -30,6 +39,7 @@ class Task:
     expected_tools: tuple[str, ...] = ()
     forbidden_tools: tuple[str, ...] = ()
     fixture_setup: dict[str, str] = field(default_factory=dict)
+    test_command: Optional[str] = None
 
     def render_message(self, fixture_dir: Path) -> str:
         """Substitute ``{fixture_dir}`` in the message with the resolved path.
@@ -83,10 +93,16 @@ def _task_from_dict(obj: dict, *, source: str) -> Task:
         raise ValueError(
             f"{source}: fixture_setup must be a dict of relative_path -> content"
         )
+    test_command = obj.get("test_command")
+    if test_command is not None and not isinstance(test_command, str):
+        raise ValueError(
+            f"{source}: test_command must be a string (got {type(test_command).__name__})"
+        )
     return Task(
         task_id=obj["task_id"],
         user_message=obj["user_message"],
         expected_tools=tuple(obj.get("expected_tools") or ()),
         forbidden_tools=tuple(obj.get("forbidden_tools") or ()),
         fixture_setup=dict(fixture_setup),
+        test_command=test_command,
     )

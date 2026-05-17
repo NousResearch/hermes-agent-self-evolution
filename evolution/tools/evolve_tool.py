@@ -292,8 +292,8 @@ def _maybe_build_closed_loop_cache(
     return ClosedLoopFeedbackCache(
         validator=validator,
         suite=suite,
-        tool_name=tool_name,
-        baseline_description=baseline_description,
+        artifact_name=tool_name,
+        baseline_artifact_text=baseline_description,
         saturation_threshold=saturation_threshold,
         min_iters=min_iters,
         window_size=window_size,

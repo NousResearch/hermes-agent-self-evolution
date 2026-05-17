@@ -61,7 +61,7 @@ class HermesAgentRunner:
         message = ctx.user_message
         sandbox = Path(tempfile.mkdtemp(prefix="cl_hermes_home_"))
         try:
-            self._prime_sandbox(sandbox)
+            self._prime_sandbox(sandbox, ctx)
             env = {
                 **os.environ,
                 "HERMES_HOME": str(sandbox),
@@ -107,10 +107,14 @@ class HermesAgentRunner:
         finally:
             shutil.rmtree(sandbox, ignore_errors=True)
 
-    def _prime_sandbox(self, sandbox: Path) -> None:
+    def _prime_sandbox(self, sandbox: Path, ctx: TaskRunContext) -> None:
         (sandbox / "sessions").mkdir(parents=True, exist_ok=True)
         if self.user_config_path.exists():
             shutil.copy2(self.user_config_path, sandbox / "config.yaml")
+        if ctx.skills_src is not None and ctx.skills_src.is_dir():
+            # Copy (not symlink) so an in-task write by the agent corrupts
+            # only this sandbox, not the installer's persistent candidate.
+            shutil.copytree(ctx.skills_src, sandbox / "skills")
 
 
 def _find_latest_session(sessions_dir: Path) -> Optional[Path]:

@@ -43,11 +43,18 @@ class TaskRunContext:
 
     ``fixture_dir`` is the per-task ``mkdtemp`` directory the validator
     populated from ``Task.fixture_setup`` before calling the runner.
+
+    ``skills_src`` is the directory whose contents should be staged into
+    the runner's per-task sandbox under ``skills/`` — used for skill-side
+    closed-loop where the installer maintains a persistent writable
+    copy of the candidate skill that needs to be re-staged into each
+    task's ephemeral sandbox.
     """
 
     user_message: str
     fixture_dir: Path
     extra_env: dict[str, str] = field(default_factory=dict)
+    skills_src: Optional[Path] = None
 
 
 class AgentRunner(Protocol):

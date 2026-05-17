@@ -479,6 +479,17 @@ Per-task scores are deterministic over candidate text (cache is keyed by `sha256
 
 `--closed-loop-mode both` does both: trainset behavioral examples for acceptance, plus the `[CLOSED_LOOP]` feedback block on non-behavioral examples for reflection.
 
+### Skill-path equivalent
+
+`evolve_skill` exposes the same `--closed-loop-*` flags. Two differences from the tool path:
+
+- **Verdict mechanism is `test_command`, not tool-call membership.** Skill-side suites set `"test_command": "python test_solution.py"` on each task; the validator runs that command in `fixture_dir` after the agent and passes iff exit code is zero. `expected_tools` / `forbidden_tools` aren't meaningful for "did the agent debug correctly"-shape verdicts. The decision rule (two-condition: aggregate no-regression + per-task wins offset losses 2:1) is unchanged.
+- **`SkillFileInstaller` instead of in-place tool description splice.** The user's actual skill may live in a read-only plugin cache, so the installer copies the baseline skill directory into a writable workdir at construction and mutates the copy. `HermesAgentRunner._prime_sandbox` reads `TaskRunContext.skills_src` and copies that workdir's `skills/` into each per-task sandbox so `hermes -z` discovers the candidate. The user's source skill is never touched.
+
+Default `--closed-loop-mode` is `feedback` (not `trainset`) on the skill side. Skill bodies mutate heavily, so the `gate_mode="always"` that trainset needs would fire the validator on every novel candidate — N tasks × 2 phases per fire. Opt into `trainset` / `both` explicitly when the cost is acceptable.
+
+Reference suite: `evolution/validation/suites/systematic_debugging.jsonl` (5 planted-bug tasks). Manual smoke harness: `tests/manual/skill_closed_loop_smoke.py`.
+
 ## Failure-mode summary
 
 | Trigger | Outcome | Where to look |
