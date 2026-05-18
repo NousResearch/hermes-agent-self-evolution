@@ -1,8 +1,6 @@
 """Tests for skill module loading and parsing."""
 
-import pytest
-from pathlib import Path
-from evolution.skills.skill_module import load_skill, reassemble_skill
+from evolution.skills.skill_module import SkillModule, load_skill, reassemble_skill
 
 
 SAMPLE_SKILL = """---
@@ -32,7 +30,7 @@ Use this when you need to test things.
 class TestLoadSkill:
     def test_parses_frontmatter(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         assert skill["name"] == "test-skill"
@@ -41,7 +39,7 @@ class TestLoadSkill:
 
     def test_parses_body(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         assert "# Test Skill" in skill["body"]
@@ -50,23 +48,30 @@ class TestLoadSkill:
 
     def test_raw_contains_everything(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         assert skill["raw"] == SAMPLE_SKILL
 
     def test_path_is_stored(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         assert skill["path"] == skill_file
+
+    def test_loads_utf8_skill_text_on_windows(self, tmp_path):
+        skill_file = tmp_path / "SKILL.md"
+        skill_file.write_text(SAMPLE_SKILL + "\nUnicode: 🧬 ∴", encoding="utf-8")
+        skill = load_skill(skill_file)
+
+        assert "🧬" in skill["raw"]
 
 
 class TestReassembleSkill:
     def test_roundtrip(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         reassembled = reassemble_skill(skill["frontmatter"], skill["body"])
@@ -90,3 +95,19 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModule:
+    def test_skill_text_lives_in_predictor_instructions(self):
+        text = "# Procedure\n1. Do thing"
+        module = SkillModule(text)
+
+        assert module.skill_text == text
+        assert module._inner_predict().signature.instructions == text
+
+    def test_skill_text_setter_mutates_predictor_instructions(self):
+        module = SkillModule("original instructions")
+        module.skill_text = "evolved instructions"
+
+        assert module.skill_text == "evolved instructions"
+        assert module._inner_predict().signature.instructions == "evolved instructions"

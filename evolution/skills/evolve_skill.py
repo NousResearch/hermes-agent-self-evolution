@@ -8,6 +8,7 @@ Usage:
 import json
 import sys
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -15,13 +16,18 @@ from typing import Optional
 import click
 import dspy
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
-from evolution.core.config import EvolutionConfig, get_hermes_agent_path
+from evolution.core.config import EvolutionConfig
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
-from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.fitness import skill_fitness_metric
+from evolution.core.integration_adapter import HermesIntegrationAdapter
+from evolution.core.eval_integrity import validate_model_separation
+from evolution.core.phase_gate import evaluate_phase1_gate, write_phase_gate_result
+from evolution.core.reproducibility import build_reproducibility_manifest, write_manifest
+from evolution.core.rollout_policy import get_rollout_policy, should_auto_rollback
+from evolution.core.stop_loss import StopLossGuard
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -33,6 +39,38 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def score_holdout_examples(
+    holdout_examples: list[dspy.Example],
+    baseline_module: SkillModule,
+    optimized_module: SkillModule,
+    lm,
+    *,
+    evolved_text_changed: bool,
+) -> tuple[list[float], list[float]]:
+    """Score baseline/evolved modules on holdout examples.
+
+    If optimization produced identical skill text, copy baseline scores instead of
+    calling the evolved module again. This prevents stochastic LLM generations from
+    inventing a fake KPI regression for a no-op optimization pass.
+    """
+    baseline_scores = []
+    evolved_scores = []
+    for ex in holdout_examples:
+        with dspy.context(lm=lm) if lm is not None else nullcontext():
+            baseline_pred = baseline_module(task_input=ex.task_input)
+            baseline_score = skill_fitness_metric(ex, baseline_pred)
+            baseline_scores.append(baseline_score)
+
+            if evolved_text_changed:
+                evolved_pred = optimized_module(task_input=ex.task_input)
+                evolved_score = skill_fitness_metric(ex, evolved_pred)
+            else:
+                evolved_score = baseline_score
+            evolved_scores.append(evolved_score)
+
+    return baseline_scores, evolved_scores
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -40,21 +78,51 @@ def evolve(
     dataset_path: Optional[str] = None,
     optimizer_model: str = "openai/gpt-4.1",
     eval_model: str = "openai/gpt-4.1-mini",
+    judge_model: str = "openrouter/google/gemini-2.5-flash",
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    allow_two_family_mode: bool = False,
+    minimum_model_families: Optional[int] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
+
+    if minimum_model_families is None:
+        resolved_min_families = 2 if allow_two_family_mode else 3
+    else:
+        resolved_min_families = max(1, int(minimum_model_families))
 
     config = EvolutionConfig(
         iterations=iterations,
         optimizer_model=optimizer_model,
         eval_model=eval_model,
-        judge_model=eval_model,  # Use same model for dataset generation
+        judge_model=judge_model,
         run_pytest=run_tests,
+        minimum_model_families=resolved_min_families,
     )
     if hermes_repo:
         config.hermes_agent_path = Path(hermes_repo)
+
+    adapter = HermesIntegrationAdapter(config.hermes_agent_path)
+    if config.phase0_enforce:
+        try:
+            adapter.assert_compatible()
+        except RuntimeError as exc:
+            console.print(f"[red]✗ Phase 0 compatibility check failed: {exc}[/red]")
+            sys.exit(1)
+
+        separation_errors = validate_model_separation(
+            generator_model=config.judge_model,
+            judge_model=config.eval_model,
+            optimizer_model=config.optimizer_model,
+            minimum_distinct_families=config.minimum_model_families,
+        )
+        if separation_errors:
+            for error in separation_errors:
+                console.print(f"[red]✗ {error}[/red]")
+            sys.exit(1)
+
+    stop_loss = StopLossGuard(config)
 
     # ── 1. Find and load the skill ──────────────────────────────────────
     console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]\n")
@@ -71,10 +139,10 @@ def evolve(
     console.print(f"  Description: {skill['description'][:80]}...")
 
     if dry_run:
-        console.print(f"\n[bold green]DRY RUN — setup validated successfully.[/bold green]")
+        console.print("\n[bold green]DRY RUN — setup validated successfully.[/bold green]")
         console.print(f"  Would generate eval dataset (source: {eval_source})")
         console.print(f"  Would run GEPA optimization ({iterations} iterations)")
-        console.print(f"  Would validate constraints and create PR")
+        console.print("  Would validate constraints and create PR")
         return
 
     # ── 2. Build or load evaluation dataset ─────────────────────────────
@@ -117,9 +185,9 @@ def evolve(
     console.print(f"  Split: {len(dataset.train)} train / {len(dataset.val)} val / {len(dataset.holdout)} holdout")
 
     # ── 3. Validate constraints on baseline ─────────────────────────────
-    console.print(f"\n[bold]Validating baseline constraints[/bold]")
+    console.print("\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -132,7 +200,7 @@ def evolve(
         console.print("[yellow]⚠ Baseline skill has constraint violations — proceeding anyway[/yellow]")
 
     # ── 4. Set up DSPy + GEPA optimizer ─────────────────────────────────
-    console.print(f"\n[bold]Configuring optimizer[/bold]")
+    console.print("\n[bold]Configuring optimizer[/bold]")
     console.print(f"  Optimizer: GEPA ({iterations} iterations)")
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
@@ -185,8 +253,8 @@ def evolve(
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
-    console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    console.print("\n[bold]Validating evolved skill[/bold]")
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -200,7 +268,7 @@ def evolve(
         # Still save for inspection
         output_path = Path("output") / skill_name / "evolved_FAILED.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(evolved_full)
+        output_path.write_text(evolved_full, encoding="utf-8")
         console.print(f"  Saved failed variant to {output_path}")
         return
 
@@ -209,22 +277,34 @@ def evolve(
 
     holdout_examples = dataset.to_dspy_examples("holdout")
 
-    baseline_scores = []
-    evolved_scores = []
-    for ex in holdout_examples:
-        # Score baseline
-        with dspy.context(lm=lm):
-            baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
-            baseline_scores.append(baseline_score)
+    evolved_text_changed = evolved_body != skill["body"]
+    if not evolved_text_changed:
+        console.print("[yellow]No skill text changes produced; reusing baseline holdout scores[/yellow]")
 
-            evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
-            evolved_scores.append(evolved_score)
+    baseline_scores, evolved_scores = score_holdout_examples(
+        holdout_examples,
+        baseline_module,
+        optimized_module,
+        lm,
+        evolved_text_changed=evolved_text_changed,
+    )
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
+    stop_loss.register_attempt(
+        cost_usd=0.0,
+        runtime_minutes=elapsed / 60.0,
+        improvement=improvement,
+        stable=improvement >= config.minimum_detectable_effect,
+    )
+
+    rollout_policy = get_rollout_policy("skill_text")
+    rollback = should_auto_rollback(
+        kpi_delta=improvement,
+        safety_incidents=0,
+        policy=rollout_policy,
+    )
 
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
@@ -252,16 +332,56 @@ def evolve(
     console.print()
     console.print(table)
 
+    if rollback:
+        console.print("[yellow]⚠ Rollout policy recommends rollback due to KPI regression[/yellow]")
+
+    stop_loss_reasons = stop_loss.termination_reasons()
+    if stop_loss_reasons:
+        console.print("[yellow]⚠ Stop-loss triggered:[/yellow]")
+        for reason in stop_loss_reasons:
+            console.print(f"  - {reason}")
+
     # ── 10. Save output ─────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = Path("output") / skill_name / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    manifest = build_reproducibility_manifest(
+        skill_name=skill_name,
+        skill_path=skill_path,
+        dataset=dataset,
+        config=config,
+        baseline_score=avg_baseline,
+        evolved_score=avg_evolved,
+        improvement=improvement,
+        elapsed_seconds=elapsed,
+        evolution_repo_path=Path(__file__).resolve().parents[2],
+    )
+    gate_result = evaluate_phase1_gate(
+        baseline_score=avg_baseline,
+        evolved_score=avg_evolved,
+        improvement=improvement,
+        config=config,
+        manifest=manifest,
+        benchmark_regression=None,
+        safety_incidents=0,
+    )
+
     # Save evolved skill
-    (output_dir / "evolved_skill.md").write_text(evolved_full)
+    (output_dir / "evolved_skill.md").write_text(evolved_full, encoding="utf-8")
 
     # Save baseline for comparison
-    (output_dir / "baseline_skill.md").write_text(skill["raw"])
+    (output_dir / "baseline_skill.md").write_text(skill["raw"], encoding="utf-8")
+
+    # Save reproducibility and gate artifacts
+    write_manifest(output_dir / "reproducibility_manifest.json", manifest)
+    write_phase_gate_result(output_dir / "phase1_gate.json", gate_result)
+    if gate_result.passed:
+        console.print("[bold green]✓ Phase 1 gate passed[/bold green]")
+    else:
+        console.print("[yellow]⚠ Phase 1 gate failed[/yellow]")
+        for failure in gate_result.failures:
+            console.print(f"  - {failure}")
 
     # Save metrics
     metrics = {
@@ -280,8 +400,15 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "rollout_level": rollout_policy.rollout_level,
+        "rollback_recommended": rollback,
+        "stop_loss_reasons": stop_loss_reasons,
+        "phase1_gate_passed": gate_result.passed,
+        "phase1_gate_failures": gate_result.failures,
+        "reproducibility_manifest_path": str(output_dir / "reproducibility_manifest.json"),
+        "phase1_gate_path": str(output_dir / "phase1_gate.json"),
     }
-    (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
     console.print(f"\n  Output saved to {output_dir}/")
 
@@ -301,10 +428,39 @@ def evolve(
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
 @click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
 @click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
+@click.option(
+    "--judge-model",
+    default="openrouter/google/gemini-2.5-flash",
+    help="Model for dataset generation and relevance scoring",
+)
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option(
+    "--allow-two-family-mode",
+    is_flag=True,
+    help="Allow execution with two distinct model families instead of three",
+)
+@click.option(
+    "--minimum-model-families",
+    type=int,
+    default=None,
+    help="Minimum distinct model families required (overrides default/--allow-two-family-mode)",
+)
+def main(
+    skill,
+    iterations,
+    eval_source,
+    dataset_path,
+    optimizer_model,
+    eval_model,
+    judge_model,
+    hermes_repo,
+    run_tests,
+    dry_run,
+    allow_two_family_mode,
+    minimum_model_families,
+):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -313,9 +469,12 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         dataset_path=dataset_path,
         optimizer_model=optimizer_model,
         eval_model=eval_model,
+        judge_model=judge_model,
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        allow_two_family_mode=allow_two_family_mode,
+        minimum_model_families=minimum_model_families,
     )
 
 

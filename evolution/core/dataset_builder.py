@@ -8,6 +8,7 @@ C) Golden sets — hand-curated JSONL files
 
 import json
 import random
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -15,6 +16,51 @@ from typing import Optional
 import dspy
 
 from evolution.core.config import EvolutionConfig
+
+
+def _extract_json_objects(text: str) -> list[dict]:
+    """Scan text for top-level {...} JSON objects, tolerant of surrounding noise
+    or truncated arrays. Skips braces inside strings."""
+    objects: list[dict] = []
+    n = len(text)
+    i = 0
+    while i < n:
+        if text[i] != "{":
+            i += 1
+            continue
+        depth = 0
+        in_string = False
+        escape = False
+        start = i
+        j = i
+        while j < n:
+            ch = text[j]
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+            else:
+                if ch == '"':
+                    in_string = True
+                elif ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = text[start : j + 1]
+                        try:
+                            parsed = json.loads(candidate)
+                            if isinstance(parsed, dict):
+                                objects.append(parsed)
+                        except json.JSONDecodeError:
+                            pass
+                        break
+            j += 1
+        i = max(j + 1, start + 1)
+    return objects
 
 
 @dataclass
@@ -55,7 +101,7 @@ class EvalDataset:
         """Save dataset splits to JSONL files."""
         path.mkdir(parents=True, exist_ok=True)
         for split_name, split_data in [("train", self.train), ("val", self.val), ("holdout", self.holdout)]:
-            with open(path / f"{split_name}.jsonl", "w") as f:
+            with open(path / f"{split_name}.jsonl", "w", encoding="utf-8") as f:
                 for ex in split_data:
                     f.write(json.dumps(ex.to_dict()) + "\n")
 
@@ -67,7 +113,7 @@ class EvalDataset:
             split_file = path / f"{split_name}.jsonl"
             if split_file.exists():
                 examples = []
-                with open(split_file) as f:
+                with open(split_file, encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             examples.append(EvalExample.from_dict(json.loads(line)))
@@ -112,6 +158,132 @@ class SyntheticDatasetBuilder:
         self.config = config
         self.generator = dspy.ChainOfThought(self.GenerateTestCases)
 
+    @staticmethod
+    def _normalize_case_keys(case: dict) -> dict:
+        if not isinstance(case, dict):
+            return {}
+        input_aliases = (
+            "task_input",
+            "user_input",
+            "input",
+            "prompt",
+            "query",
+            "request",
+            "scenario",
+            "question",
+        )
+        expected_aliases = (
+            "expected_behavior",
+            "expected_output",
+            "expected",
+            "expected_response",
+            "expected_result",
+            "rubric",
+            "answer",
+            "ideal_output",
+            "criteria",
+        )
+
+        def first_value(keys):
+            for k in keys:
+                if k in case and case[k] not in (None, ""):
+                    return case[k]
+            return None
+
+        task_input = first_value(input_aliases)
+        expected = first_value(expected_aliases)
+
+        def stringify(value):
+            if value is None:
+                return ""
+            if isinstance(value, str):
+                return value.strip()
+            try:
+                return json.dumps(value, ensure_ascii=False)
+            except (TypeError, ValueError):
+                return str(value)
+
+        normalized = dict(case)
+        normalized["task_input"] = stringify(task_input)
+        normalized["expected_behavior"] = stringify(expected)
+        normalized.setdefault("difficulty", case.get("difficulty", "medium"))
+        normalized.setdefault("category", case.get("category", "general"))
+        return normalized
+
+    @staticmethod
+    def _parse_test_cases(raw_output: str) -> list[dict]:
+        text = (raw_output or "").strip()
+        if not text:
+            return []
+
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+        fenced = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", text, re.DOTALL | re.IGNORECASE)
+        if fenced:
+            try:
+                parsed = json.loads(fenced.group(1))
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+        start = text.find("[")
+        end = text.rfind("]")
+        if start != -1 and end > start:
+            try:
+                parsed = json.loads(text[start : end + 1])
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+        objects = _extract_json_objects(text)
+        if objects:
+            return objects
+
+        blocks = re.split(r"(?m)^\s*\d+\.\s+", text)
+        if len(blocks) <= 1:
+            return []
+
+        cases: list[dict] = []
+        for block in blocks[1:]:
+            chunk = block.strip()
+            if not chunk:
+                continue
+
+            title_match = re.match(r"\*\*(.+?)\*\*", chunk)
+            title = title_match.group(1).strip() if title_match else ""
+
+            input_match = re.search(
+                r"(?im)^\s*[-*]?\s*(?:\*\*)?(?:Input|Test Case|Task Input)(?:\*\*)?\s*:\s*(.+)$",
+                chunk,
+            )
+            expected_match = re.search(
+                r"(?im)^\s*[-*]?\s*(?:\*\*)?(?:Expected Output|Expected Behavior)(?:\*\*)?\s*:\s*(.+)$",
+                chunk,
+            )
+
+            task_input = input_match.group(1) if input_match else title
+            expected_behavior = expected_match.group(1) if expected_match else chunk[:400]
+            task_input = re.sub(r"^\*\*\s*|\s*\*\*$", "", task_input).strip(" `\"*")
+            expected_behavior = re.sub(r"^\*\*\s*|\s*\*\*$", "", expected_behavior).strip(" `\"*")
+
+            if task_input and expected_behavior:
+                cases.append(
+                    {
+                        "task_input": task_input,
+                        "expected_behavior": expected_behavior,
+                        "difficulty": "medium",
+                        "category": "general",
+                    }
+                )
+        return cases
+
     def generate(
         self,
         artifact_text: str,
@@ -132,17 +304,11 @@ class SyntheticDatasetBuilder:
                 num_cases=n,
             )
 
-        # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+        cases_raw = self._parse_test_cases(result.test_cases)
+        if not cases_raw:
+            raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+
+        cases_raw = [self._normalize_case_keys(c) for c in cases_raw]
 
         examples = [
             EvalExample(
@@ -184,7 +350,7 @@ class GoldenDatasetLoader:
             raise FileNotFoundError(f"No golden dataset found at {golden_file}")
 
         examples = []
-        with open(golden_file) as f:
+        with open(golden_file, encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     examples.append(EvalExample.from_dict(json.loads(line)))

@@ -5,7 +5,6 @@ where the skill text is the optimizable parameter. GEPA can then
 mutate the skill text and evaluate the results.
 """
 
-import re
 from pathlib import Path
 from typing import Optional
 
@@ -25,7 +24,7 @@ def load_skill(skill_path: Path) -> dict:
             "description": str,
         }
     """
-    raw = skill_path.read_text()
+    raw = skill_path.read_text(encoding="utf-8")
 
     # Parse YAML frontmatter
     frontmatter = ""
@@ -72,7 +71,7 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
     # Fuzzy match: check the name field in frontmatter
     for skill_md in skills_dir.rglob("SKILL.md"):
         try:
-            content = skill_md.read_text()[:500]
+            content = skill_md.read_text(encoding="utf-8")[:500]
             if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
                 return skill_md
         except Exception:
@@ -84,33 +83,37 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 class SkillModule(dspy.Module):
     """A DSPy module that wraps a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+    The skill text (body) is stored directly as the predictor's signature
+    instructions, so prompt optimizers like MIPROv2 and GEPA mutate the skill
+    text itself rather than a generic wrapper prompt.
     """
 
-    class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
+    class _TaskSignature(dspy.Signature):
+        """Placeholder; instructions are overridden per-instance with the skill text."""
 
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
         task_input: str = dspy.InputField(desc="The task to complete")
         output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        signature = self._TaskSignature.with_instructions(skill_text or "")
+        self.predictor = dspy.ChainOfThought(signature)
+
+    def _inner_predict(self):
+        return getattr(self.predictor, "predict", self.predictor)
+
+    @property
+    def skill_text(self) -> str:
+        sig = self._inner_predict().signature
+        return getattr(sig, "instructions", "") or ""
+
+    @skill_text.setter
+    def skill_text(self, value: str) -> None:
+        inner = self._inner_predict()
+        inner.signature = inner.signature.with_instructions(value or "")
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
 
 
