@@ -34,6 +34,7 @@ from rich.console import Console
 from rich.progress import Progress
 
 from evolution.core.dataset_builder import EvalExample, EvalDataset
+from evolution.core.governance import SessionDataGovernance
 
 console = Console()
 
@@ -646,6 +647,12 @@ def build_dataset_from_external(
 
     if not all_messages:
         console.print("[red]No messages found from any source.[/red]")
+        return EvalDataset()
+
+    governance = SessionDataGovernance()
+    all_messages = governance.sanitize_messages(all_messages)
+    if not all_messages:
+        console.print("[red]No messages remained after governance filtering.[/red]")
         return EvalDataset()
 
     console.print(f"\n[bold]Total messages: {len(all_messages)}[/bold]")

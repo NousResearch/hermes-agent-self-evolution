@@ -113,7 +113,6 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
-    task = getattr(example, "task_input", "") or ""
 
     if not agent_output.strip():
         return 0.0

@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: C:\Users\hotep\.gstack\projects\hermes-agent-self-evolution\main-autoplan-restore-20260515-205042.md -->
 # Hermes Agent Self-Evolution — Evolutionary Self-Improvement for Hermes Agent
 
 ## Vision
@@ -779,3 +780,192 @@ See the **Constraints & Guardrails** section above for the full enforcement list
 
 4. What's the minimum viable first target?
    - Recommendation: Pick 2-3 well-used skills with clear success metrics (e.g., arxiv paper search, github-code-review, systematic-debugging)
+
+---
+
+## AUTOPLAN AMENDMENTS (2026-05-15)
+
+This section is authoritative for execution. If any earlier section conflicts, follow this section.
+
+### Premise Gate Result
+- **User decision:** Keep full 5-phase premise.
+- **Constraint added:** Each phase now requires live KPI proof before the next phase starts.
+
+### Strategic Gate (Blocking)
+Before Phase 2, Phase 1 must pass all of:
+1. **Live KPI lift:** at least 2 production KPIs improve over baseline (task success, correction rate, cost per successful task, or latency p95).
+2. **No trust regression:** no increase in policy/safety incident rate.
+3. **Reproducibility pack:** run manifest with dataset hashes, model versions, judge versions, and git SHAs.
+4. **Falsification clause:** if KPI lift is not met in 30 days, freeze expansion and run a scope reset.
+
+### Updated Phase Sequencing
+Add **Phase 0 (Foundation Hardening)** before existing phases:
+- Hermes integration adapter + compatibility matrix
+- Evaluation integrity protocol
+- SessionDB governance + redaction
+- Risk-tiered rollout policy
+- Budget/time stop-loss policy
+
+Then run Phases 1-5 exactly as planned, gated by KPI and safety criteria at each phase boundary.
+
+### Evaluation Integrity Protocol (Required)
+1. Separate generator/judge/optimizer model families.
+2. Maintain frozen external holdout sets per phase.
+3. Run dual-judge scoring with periodic human adjudication slices.
+4. Report confidence intervals and minimum detectable effect, not single-run deltas.
+5. Reject “benchmark wins” that regress live KPI or safety metrics.
+
+### Data Governance & Security (Required)
+- SessionDB mining requires PII/secret redaction before dataset use.
+- Add retention windows, opt-out support, and dataset audit logs.
+- Run code evolution inside isolated containers with no network by default and no secrets mounted.
+- Track provenance for generated artifacts and mutation lineage.
+
+### Risk-Tiered Deployment Policy
+| Artifact | Rollout level | Gate strictness |
+|---|---|---|
+| Skill text | Canary first | medium |
+| Tool descriptions | Canary + replay eval | medium |
+| System prompt sections | Canary + safety eval + rollback trigger | high |
+| Tool code mutations | Full test + benchmark + security review + staged rollout | highest |
+
+### Stop-Loss Policy
+- Per-phase budget cap and wall-clock cap are mandatory.
+- If gains are unstable across repeated runs, terminate phase and write postmortem before continuing.
+
+## PHASE 1 OUTPUT — CEO REVIEW
+
+### Premise Challenge
+- Core risk: optimizing proxy metrics without guaranteed user-value transfer.
+- Core assumption: text evolution is highest-leverage bottleneck.
+- Keep full scope, but enforce KPI evidence gates and falsification.
+
+### Existing Code Leverage ("What already exists")
+| Sub-problem | Existing asset | Reuse decision |
+|---|---|---|
+| Parallel evaluation harness | `batch_runner.py` | Reuse directly |
+| Runtime traces | `agent/trajectory.py` | Reuse directly |
+| Real usage corpus | `hermes_state.py` / SessionDB | Reuse with governance layer |
+| Prompt assembly | `agent/prompt_builder.py` | Reuse via adapter interface |
+| Tool metadata | `tools/registry.py` | Reuse via adapter interface |
+| Baseline tests | `tests/` | Reuse; expand with new regression suites |
+
+### Dream State Delta
+```
+CURRENT: ad hoc manual improvements
+   -> THIS PLAN: gated multi-engine optimization with review and rollback
+   -> 12-MONTH IDEAL: reliable failure-to-fix factory tied to live KPIs
+```
+
+### CEO Dual Voices — Consensus Table
+| Dimension | Claude subagent | Codex | Consensus |
+|---|---|---|---|
+| Premises valid? | partial | partial | DISAGREE/conditional |
+| Right problem framing? | narrow first | narrow first | CONFIRMED |
+| Scope calibration? | over-broad | over-broad | CONFIRMED |
+| Alternatives explored enough? | no | no | CONFIRMED |
+| Competitive risks covered? | partial | partial | DISAGREE/conditional |
+| 6-month trajectory sound? | risky | risky | CONFIRMED |
+
+**Phase 1 summary:** strategy is viable if KPI and governance gates are mandatory.
+
+## PHASE 2 OUTPUT — DESIGN REVIEW
+
+Skipped: no UI scope detected (no substantive screen/flow/component design work in this plan).
+
+## PHASE 3 OUTPUT — ENGINEERING REVIEW
+
+### Architecture Dependency Graph (updated recommendation)
+```text
+Hermes Snapshot (pinned)
+        |
+        v
+Integration Adapter  ---> Compatibility Gate
+        |
+        v
+Data Sanitizer + Policy Gate ---> Dataset Builder ---> Eval Orchestrator
+                                           |                |
+                                           v                v
+                                   Optimizer Workers ---> Safety/Constraint Gate
+                                                           |
+                                                           v
+                                                   PR Builder + Rollout
+```
+
+### Error & Rescue Registry
+| Codepath | Failure | Rescue action | User-visible outcome |
+|---|---|---|---|
+| SessionDB mining | PII leak candidate | redact+drop sample | sample excluded, warning in report |
+| LLM judge scoring | judge disagreement | adjudicate via second judge/human slice | run paused until resolved |
+| Benchmark run | flaky score delta | rerun N times with CI bounds | no promotion on unstable result |
+| Code mutation test | full suite failure | reject candidate, keep baseline | no deployment |
+| Canary rollout | KPI regression | auto rollback to prior version | short-lived degradation, recovery logged |
+
+### Test Diagram (coverage requirements)
+```text
+[+] Phase 0 foundations
+    ├── Adapter contract tests .................. [GAP][required]
+    ├── Version compatibility matrix tests ...... [GAP][required]
+    └── Redaction pipeline tests ................ [GAP][required]
+
+[+] Phase 1 skill evolution
+    ├── Baseline vs evolved holdout eval ........ [planned]
+    ├── KPI gate verification ................... [GAP][required]
+    └── Safety regression suite ................. [GAP][required]
+
+[+] Phase 3 prompt evolution
+    ├── Prompt policy regression tests .......... [GAP][required]
+    └── Cache compatibility tests ............... [planned]
+
+[+] Phase 4 code evolution
+    ├── Impacted tests per mutation ............. [GAP][required]
+    ├── Finalist full suite + benchmarks ........ [planned]
+    └── Sandbox isolation tests ................. [GAP][required]
+```
+
+Test plan artifact: `C:\Users\hotep\.gstack\projects\hermes-agent-self-evolution\hotep-main-eng-review-test-plan-20260515-205940.md`
+
+### Failure Modes Registry
+| Failure mode | Test coverage | Error handling | Silent failure risk | Severity |
+|---|---|---|---|---|
+| Proxy metric improves, KPI worsens | missing | missing | high | critical |
+| Synthetic eval leakage inflates score | partial | missing | high | high |
+| SessionDB privacy breach | missing | missing | high | critical |
+| Upstream Hermes API drift | missing | partial | medium | high |
+| Benchmark flake accepted as signal | partial | partial | medium | medium |
+
+## NOT IN SCOPE (for this execution pass)
+- Full product-level moat strategy implementation (captured as follow-on strategy work).
+- New UI/dashboard surfaces for optimization observability.
+- Replacing benchmark stack with novel benchmark framework.
+
+## Cross-Phase Themes
+1. **Goodhart risk / proxy mismatch** appeared in CEO and Eng voices.
+2. **Scope overreach before proof** appeared in CEO and Eng voices.
+3. **Data governance and safety hardening** appeared in CEO and Eng voices.
+
+## Decision Audit Trail
+
+| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
+|---|---|---|---|---|---|---|
+| 1 | 0 | Use base branch `main` | Mechanical | Pragmatic | Detected from origin/default metadata | n/a |
+| 2 | 0 | UI scope = skipped | Mechanical | Explicit over clever | Plan has no real UI flow surface | run design review |
+| 3 | 1 | Keep full 5-phase premise | User gate | User sovereignty | User explicitly selected this | narrow-to-phase1 |
+| 4 | 1 | Add KPI gate as blocker | Auto | Completeness | Prevent proxy-only wins | benchmark-only gate |
+| 5 | 1 | Add falsification clause | Auto | Bias toward action | Fast fail if no business lift | open-ended continuation |
+| 6 | 1 | Add phase-0 hardening | Auto | Boil lakes | Close high-risk gaps before scaling | proceed without hardening |
+| 7 | 3 | Require evaluation integrity protocol | Auto | Explicit over clever | Reduce judge leakage and reward hacking | single-judge flow |
+| 8 | 3 | Add risk-tiered deployment | Auto | Pragmatic | Different blast radii need different gates | uniform gate |
+| 9 | 3 | Add stop-loss budget policy | Auto | Bias toward action | Avoid infinite optimization loops | no budget caps |
+| 10 | 3 | Mark privacy/security controls mandatory | Auto | Completeness | SessionDB and mutation loops require hard controls | best-effort controls |
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | issues_open | Proxy-metric risk, over-scope sequencing, missing KPI gate |
+| Codex Review | `/codex review` | Independent 2nd opinion | 2 | issues_open | Goodhart risk, evaluation leakage, weak live KPI linkage |
+| Eng Review | `/plan-eng-review` | Architecture & tests | 1 | issues_open | Missing adapter layer, governance controls, phased stop-loss |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | skipped | No UI scope detected |
+
+**VERDICT:** DONE_WITH_CONCERNS. Plan is now execution-ready only if the mandatory amendments in this section are treated as blocking gates.
