@@ -292,6 +292,60 @@ class TestHermesAgentRunnerSubprocess:
         assert sandbox_skills_state["present"] is True
         assert "evolved body" in sandbox_skills_state["text"]
 
+    def test_model_override_passes_minus_m_flag(self, fixture_dir, tmp_path):
+        """When model is set, hermes is invoked with `hermes -m MODEL -z ...`."""
+        runner = HermesAgentRunner(
+            user_config_path=tmp_path / "nonexistent",
+            model="gpt-4o-mini",
+        )
+        captured: dict = {}
+
+        def _fake_run(*args, **kwargs):
+            captured["args"] = args[0] if args else kwargs.get("args")
+            sandbox = Path(kwargs["env"]["HERMES_HOME"])
+            (sandbox / "sessions").mkdir(exist_ok=True)
+            _write_session(
+                sandbox / "sessions" / "session_test.json",
+                [{"role": "assistant", "content": "ok"}],
+            )
+            return type("CP", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with patch("evolution.validation.hermes_runner.subprocess.run", side_effect=_fake_run):
+            runner.run(TaskRunContext(
+                user_message="debug",
+                fixture_dir=fixture_dir,
+            ))
+
+        # -m must appear before -z so hermes parses it as a global flag,
+        # not as part of the -z message.
+        assert captured["args"][:4] == ["hermes", "-m", "gpt-4o-mini", "-z"]
+        assert captured["args"][4] == "debug"
+
+    def test_model_none_omits_minus_m_flag(self, fixture_dir, tmp_path):
+        """No model override → original argv shape (no -m), preserves the
+        existing behavior bit-for-bit for callers that don't opt in."""
+        runner = HermesAgentRunner(user_config_path=tmp_path / "nonexistent")
+        captured: dict = {}
+
+        def _fake_run(*args, **kwargs):
+            captured["args"] = args[0] if args else kwargs.get("args")
+            sandbox = Path(kwargs["env"]["HERMES_HOME"])
+            (sandbox / "sessions").mkdir(exist_ok=True)
+            _write_session(
+                sandbox / "sessions" / "session_test.json",
+                [{"role": "assistant", "content": "ok"}],
+            )
+            return type("CP", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with patch("evolution.validation.hermes_runner.subprocess.run", side_effect=_fake_run):
+            runner.run(TaskRunContext(
+                user_message="hello",
+                fixture_dir=fixture_dir,
+            ))
+
+        assert "-m" not in captured["args"]
+        assert captured["args"] == ["hermes", "-z", "hello"]
+
     def test_skills_src_none_means_no_skills_dir_created(self, fixture_dir, tmp_path):
         """Tool-side runs (no skills_src) must not create an empty skills/
         directory in the sandbox — keeps the legacy code path bit-for-bit."""

@@ -46,6 +46,7 @@ class HermesAgentRunner:
         hermes_command: str = "hermes",
         timeout_seconds: int = DEFAULT_TASK_TIMEOUT_SECONDS,
         user_config_path: Optional[Path] = None,
+        model: Optional[str] = None,
     ) -> None:
         self.hermes_command = hermes_command
         self.timeout_seconds = timeout_seconds
@@ -56,6 +57,13 @@ class HermesAgentRunner:
             if user_config_path is not None
             else Path.home() / ".hermes" / "config.yaml"
         )
+        # Optional per-invocation model override (passed as ``hermes -z -m
+        # <model>``). When unset, Hermes uses whatever is configured in
+        # the sandboxed ``config.yaml``. Useful for closed-loop validation
+        # against a deliberately weaker agent model than the user's
+        # daily-driver default — saturation on capable models hides
+        # behavioral signal that a weaker model would expose.
+        self.model = model
 
     def run(self, ctx: TaskRunContext) -> AgentRunResult:
         message = ctx.user_message
@@ -68,10 +76,15 @@ class HermesAgentRunner:
                 "HOME": str(sandbox),
                 **ctx.extra_env,
             }
+            argv = [self.hermes_command, "-z", message]
+            if self.model is not None:
+                # Insert before the -z so hermes parses it as a global flag,
+                # not as part of the -z prompt value.
+                argv = [self.hermes_command, "-m", self.model, "-z", message]
             start = time.time()
             try:
                 subprocess.run(
-                    [self.hermes_command, "-z", message],
+                    argv,
                     env=env,
                     cwd=str(ctx.fixture_dir),
                     capture_output=True,

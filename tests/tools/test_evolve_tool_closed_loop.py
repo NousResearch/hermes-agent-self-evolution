@@ -165,6 +165,72 @@ class TestEvolveSkillFlagThreadsThrough:
         # Default mode is feedback for skills (skill bodies mutate heavily
         # so opting into trainset is explicit).
         assert kwargs["closed_loop_mode"] == "feedback"
+        # Default agent_model is None (use Hermes config default).
+        assert kwargs["closed_loop_agent_model"] is None
+
+    def test_skill_side_agent_model_flag_threads_through(
+        self, tmp_path, task_suite_file
+    ):
+        from evolution.skills.evolve_skill import main
+        runner = CliRunner()
+        with patch("evolution.skills.evolve_skill.evolve") as fake_evolve:
+            fake_evolve.return_value = None
+            result = runner.invoke(main, [
+                "--skill", "some-skill",
+                "--closed-loop-during-evolution", str(task_suite_file),
+                "--closed-loop-agent-model", "gpt-4o-mini",
+            ])
+        assert result.exit_code == 0, result.output
+        assert fake_evolve.call_args.kwargs["closed_loop_agent_model"] == "gpt-4o-mini"
+
+    def test_tool_side_agent_model_flag_threads_through(
+        self, tmp_path, fake_hermes_repo, task_suite_file
+    ):
+        from evolution.tools.evolve_tool import main
+        runner = CliRunner()
+        with patch("evolution.tools.evolve_tool.evolve") as fake_evolve:
+            fake_evolve.return_value = {"ok": True}
+            result = runner.invoke(main, [
+                "--tool", "patch",
+                "--manifest", str(fake_hermes_repo / "tools"),
+                "--closed-loop-during-evolution", str(task_suite_file),
+                "--closed-loop-hermes-repo", str(fake_hermes_repo),
+                "--closed-loop-agent-model", "gpt-4o-mini",
+            ])
+        assert result.exit_code == 0, result.output
+        assert fake_evolve.call_args.kwargs["closed_loop_agent_model"] == "gpt-4o-mini"
+
+    def test_skill_side_task_timeout_flag_threads_through(
+        self, tmp_path, task_suite_file
+    ):
+        from evolution.skills.evolve_skill import main
+        runner = CliRunner()
+        with patch("evolution.skills.evolve_skill.evolve") as fake_evolve:
+            fake_evolve.return_value = None
+            result = runner.invoke(main, [
+                "--skill", "some-skill",
+                "--closed-loop-during-evolution", str(task_suite_file),
+                "--closed-loop-task-timeout-seconds", "300",
+            ])
+        assert result.exit_code == 0, result.output
+        assert fake_evolve.call_args.kwargs["closed_loop_task_timeout_seconds"] == 300
+
+    def test_tool_side_task_timeout_flag_threads_through(
+        self, tmp_path, fake_hermes_repo, task_suite_file
+    ):
+        from evolution.tools.evolve_tool import main
+        runner = CliRunner()
+        with patch("evolution.tools.evolve_tool.evolve") as fake_evolve:
+            fake_evolve.return_value = {"ok": True}
+            result = runner.invoke(main, [
+                "--tool", "patch",
+                "--manifest", str(fake_hermes_repo / "tools"),
+                "--closed-loop-during-evolution", str(task_suite_file),
+                "--closed-loop-hermes-repo", str(fake_hermes_repo),
+                "--closed-loop-task-timeout-seconds", "300",
+            ])
+        assert result.exit_code == 0, result.output
+        assert fake_evolve.call_args.kwargs["closed_loop_task_timeout_seconds"] == 300
 
 
 class TestClosedLoopModeFlag:

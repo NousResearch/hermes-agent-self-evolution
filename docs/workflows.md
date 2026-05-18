@@ -488,7 +488,19 @@ Per-task scores are deterministic over candidate text (cache is keyed by `sha256
 
 Default `--closed-loop-mode` is `feedback` (not `trainset`) on the skill side. Skill bodies mutate heavily, so the `gate_mode="always"` that trainset needs would fire the validator on every novel candidate — N tasks × 2 phases per fire. Opt into `trainset` / `both` explicitly when the cost is acceptable.
 
-Reference suite: `evolution/validation/suites/systematic_debugging.jsonl` (5 planted-bug tasks). Manual smoke harness: `tests/manual/skill_closed_loop_smoke.py`.
+Reference suites:
+- `evolution/validation/suites/systematic_debugging.jsonl` — 5 textbook bugs; good for verifying the wiring works.
+- `evolution/validation/suites/systematic_debugging_advanced.jsonl` — 5 harder bugs (generator exhaustion, shared mutable return, float-precision equality, leftmost-insert boundary, class-vs-instance attribute) designed to discriminate skill-text variants on capable agent models that saturate the basic suite at 5/5.
+
+When your daily-driver Hermes model is capable enough to solve every textbook bug regardless of skill text, the planted-bug verdict adds no signal. Three knobs to recover discrimination:
+
+- `--closed-loop-during-evolution .../systematic_debugging_advanced.jsonl` — use the harder bugs (different cognitive failure modes).
+- `--closed-loop-agent-model MODEL` — run the validator's agent against a different model than your `~/.hermes/config.yaml` default. Hermes sends `include: ['reasoning.encrypted_content']` so the model must be a reasoning model (o1-family, o3-family, o4-mini, gpt-5.x-family); non-reasoning models reject the request.
+- `--closed-loop-task-timeout-seconds N` — bump the per-task wall-clock budget. The default is 120s; most reasoning models other than the smallest take 200–300s per debugging task and would otherwise abstain (timeout) without recording a verdict.
+
+**Empirical caveat from validation.** Both suites saturate at 5/5 against capable reasoning models (`gpt-5.4-mini` saturated both; `o3-mini` was slow enough to abstain most tasks at the default timeout). For a setup where the user's default model handles textbook Python debugging easily, the closed-loop signal on this domain may be uninformative regardless of skill text — the agent's raw capability dominates. Real headroom likely needs evaluation surfaces where methodology matters more than recognition: multi-file refactoring, ambiguous specs with edge cases the agent must enumerate, tasks requiring iterative hypothesis-testing across multiple test runs.
+
+Manual smoke harness: `tests/manual/skill_closed_loop_smoke.py` (supports `--suite {basic,advanced}`, `--agent-model MODEL`, `--task-timeout-seconds N`).
 
 ## Failure-mode summary
 

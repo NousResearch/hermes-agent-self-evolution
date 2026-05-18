@@ -6,18 +6,19 @@ Why this exists:
   the real planted-bug suite, so a regression in (e.g.) how Hermes
   discovers skills inside the per-task sandbox, or how `python
   test_solution.py` actually scores in the validator, would slip
-  through CI. This smoke runs the entire closed-loop layer end-to-end
-  against:
-    - the checked-in fake target skill at tests/fixtures/skills/systematic_debugging/
-    - the checked-in planted-bug suite at evolution/validation/suites/systematic_debugging.jsonl
-    - whatever Hermes is configured with (uses the user's real ~/.hermes/config.yaml)
+  through CI. This smoke runs the entire closed-loop layer end-to-end.
 
   Drives one ClosedLoopValidator.validate() call directly — 5 tasks ×
-  2 phases (baseline + evolved) = 10 hermes -z invocations. With a
-  cheap eval model (gpt-4o-mini-ish) this is pennies, not dollars.
+  2 phases (baseline + evolved) = 10 hermes -z invocations.
 
 How to run:
+  # Wiring sanity (basic textbook bugs, uses your Hermes default model)
   uv run python tests/manual/skill_closed_loop_smoke.py
+
+  # Headroom validation: harder bugs + weaker model so the planted-bug
+  # verdicts don't all saturate at 5/5 on capable agents
+  uv run python tests/manual/skill_closed_loop_smoke.py \\
+      --suite advanced --agent-model gpt-4o-mini
 
   Exits 0 on success. Not part of CI — heavyweight (drives real
   hermes -z subprocesses + real LM spend).
@@ -29,6 +30,7 @@ Prerequisites:
 
 from __future__ import annotations
 
+import argparse
 import shutil
 import sys
 import tempfile
@@ -43,9 +45,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FAKE_SKILL_PATH = (
     REPO_ROOT / "tests" / "fixtures" / "skills" / "systematic_debugging" / "SKILL.md"
 )
-SUITE_PATH = (
-    REPO_ROOT / "evolution" / "validation" / "suites" / "systematic_debugging.jsonl"
-)
+SUITE_PATHS = {
+    "basic": REPO_ROOT / "evolution" / "validation" / "suites" / "systematic_debugging.jsonl",
+    "advanced": REPO_ROOT / "evolution" / "validation" / "suites" / "systematic_debugging_advanced.jsonl",
+}
 SKILL_NAME = "systematic_debugging"
 
 
@@ -87,12 +90,42 @@ def _section(title: str) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--suite",
+        choices=sorted(SUITE_PATHS),
+        default="basic",
+        help="Which planted-bug suite to run against. `basic` (default) is "
+             "the textbook bugs — proves wiring works on any model. `advanced` "
+             "is harder bugs designed to discriminate skill-text variants on "
+             "capable agent models.",
+    )
+    parser.add_argument(
+        "--agent-model",
+        default=None,
+        help="Override the model hermes -z runs with (passed as `hermes -m MODEL`). "
+             "Use when your default Hermes model saturates the suite at 5/5 and "
+             "you want to see the planted bugs actually fail on baseline.",
+    )
+    parser.add_argument(
+        "--task-timeout-seconds",
+        type=int,
+        default=None,
+        help="Per-task wall-clock budget (default 120s). Bump when --agent-model "
+             "selects a slow reasoning model (o1/o3-family typically need 200-300s "
+             "per debugging task). Timeouts abstain the task verdict rather than "
+             "failing it, so under-sized values silently produce no-signal runs.",
+    )
+    args = parser.parse_args()
+
+    suite_path = SUITE_PATHS[args.suite]
+
     _section("Pre-flight checks")
     if not FAKE_SKILL_PATH.is_file():
         print(f"  ✗ Missing fixture skill at {FAKE_SKILL_PATH}")
         return 1
-    if not SUITE_PATH.is_file():
-        print(f"  ✗ Missing suite at {SUITE_PATH}")
+    if not suite_path.is_file():
+        print(f"  ✗ Missing suite at {suite_path}")
         return 1
     if shutil.which("hermes") is None:
         print(
@@ -104,8 +137,16 @@ def main() -> int:
         print("  ✗ `python` not on PATH. Suite tasks use `python test_solution.py`.")
         return 1
     print(f"  ✓ Fixture skill present: {FAKE_SKILL_PATH}")
-    print(f"  ✓ Suite present: {SUITE_PATH}")
+    print(f"  ✓ Suite ({args.suite}) present: {suite_path}")
     print(f"  ✓ hermes binary present: {shutil.which('hermes')}")
+    if args.agent_model:
+        print(f"  ✓ Agent model override: {args.agent_model}")
+    else:
+        print(f"  ✓ Agent model: <Hermes config default>")
+    if args.task_timeout_seconds:
+        print(f"  ✓ Task timeout override: {args.task_timeout_seconds}s")
+    else:
+        print(f"  ✓ Task timeout: 120s (default)")
 
     _section("Constructing closed-loop cache")
     from evolution.skills.evolve_skill import _maybe_build_closed_loop_cache_skill
@@ -125,11 +166,13 @@ def main() -> int:
         skill_name=SKILL_NAME,
         skill_path=FAKE_SKILL_PATH,
         baseline_skill_body=skill["body"],
-        suite_path=SUITE_PATH,
+        suite_path=suite_path,
         saturation_threshold=0.95,
         min_iters=1,
         window_size=4,
         gate_mode="always",  # force the validator to fire
+        agent_model=args.agent_model,
+        agent_timeout_seconds=args.task_timeout_seconds,
     )
     assert cache is not None, "cache should be constructed when suite_path is set"
     print(f"  ✓ Cache constructed (gate_mode={cache.gate_mode})")
