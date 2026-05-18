@@ -256,3 +256,52 @@ def build_tool_reproducibility_manifest(
         improvement=improvement,
         elapsed_seconds=elapsed_seconds,
     )
+
+
+@dataclass(frozen=True)
+class CodeReproducibilityManifest:
+    """Run metadata for a Phase 4 code-evolution run."""
+
+    generated_at: str
+    artifact_type: str
+    tool_name: str
+    tool_source_path: str
+    baseline_source_sha256: str
+    evolution_repo_git_sha: str
+    hermes_repo_git_sha: str
+    optimizer_model: str
+    iterations: int
+    engine: str
+    best_fitness_score: float
+    best_iteration: int
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+def build_code_reproducibility_manifest(
+    *,
+    tool_name: str,
+    tool_source_path: Path,
+    baseline_source: str,
+    config: EvolutionConfig,
+    best_fitness_score: float,
+    best_iteration: int,
+    iterations: int,
+    engine: str,
+    evolution_repo_path: Path,
+) -> CodeReproducibilityManifest:
+    return CodeReproducibilityManifest(
+        generated_at=datetime.now(tz=timezone.utc).isoformat(),
+        artifact_type="tool_code",
+        tool_name=tool_name,
+        tool_source_path=str(tool_source_path),
+        baseline_source_sha256=_hash_payload((baseline_source or "").encode("utf-8")),
+        evolution_repo_git_sha=_git_head(evolution_repo_path),
+        hermes_repo_git_sha=_git_head(config.hermes_agent_path),
+        optimizer_model=config.optimizer_model,
+        iterations=iterations,
+        engine=engine,
+        best_fitness_score=best_fitness_score,
+        best_iteration=best_iteration,
+    )

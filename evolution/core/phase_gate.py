@@ -245,6 +245,88 @@ def evaluate_phase3_gate(
     )
 
 
+REQUIRED_CODE_MANIFEST_FIELDS = {
+    "generated_at",
+    "artifact_type",
+    "tool_name",
+    "tool_source_path",
+    "baseline_source_sha256",
+    "evolution_repo_git_sha",
+    "hermes_repo_git_sha",
+    "optimizer_model",
+    "iterations",
+    "engine",
+    "best_fitness_score",
+    "best_iteration",
+}
+
+
+def _code_manifest_has_required_fields(manifest) -> bool:
+    data = manifest.to_dict() if hasattr(manifest, "to_dict") else dict(manifest)
+    return REQUIRED_CODE_MANIFEST_FIELDS.issubset(set(data.keys()))
+
+
+def evaluate_phase4_gate(
+    *,
+    fitness,
+    freeze,
+    config: EvolutionConfig,
+    manifest,
+    safety_incidents: int = 0,
+) -> PhaseGateResult:
+    """Phase 4 gate: pytest 100%, signature/registry/error-handling freeze, bug-repro transition.
+
+    Unlike Phases 1-3 which gate on a relative improvement threshold, Phase 4
+    gates on structural invariants: all tests pass, no public API changed, and
+    (if a bug-repro test was supplied) the bug actually got fixed.
+    """
+    fitness_score = fitness.score if hasattr(fitness, "score") else float(fitness)
+    pytest_passed = fitness.pytest_passed if hasattr(fitness, "pytest_passed") else fitness_score > 0
+    freeze_passed = freeze.passed if hasattr(freeze, "passed") else bool(freeze)
+    bug_transitioned = fitness.bug_repro_transitioned if hasattr(fitness, "bug_repro_transitioned") else False
+    bug_evaluated = fitness.bug_repro_evaluated if hasattr(fitness, "bug_repro_evaluated") else False
+
+    checks = {
+        "pytest_passes_100pct": pytest_passed,
+        "signature_frozen": freeze_passed,
+        "registry_frozen": freeze_passed,
+        "error_handling_not_decreased": freeze_passed,
+        "bug_repro_transitioned": bug_transitioned if bug_evaluated else True,
+        "reproducibility_manifest": (
+            (not config.phase1_require_reproducibility_manifest)
+            or (manifest is not None and _code_manifest_has_required_fields(manifest))
+        ),
+        "safety_incidents": (
+            (not config.phase1_require_zero_safety_incidents) or safety_incidents == 0
+        ),
+    }
+
+    failures: list[str] = []
+    if not checks["pytest_passes_100pct"]:
+        failures.append("pytest does not pass 100% on candidate")
+    if not checks["signature_frozen"]:
+        sig_violations = getattr(freeze, "signature_violations", ["(unknown)"])
+        failures.append(f"Public function signatures changed: {sig_violations}")
+    if not checks["registry_frozen"]:
+        reg_violations = getattr(freeze, "registry_violations", ["(unknown)"])
+        failures.append(f"Registry calls changed: {reg_violations}")
+    if not checks["error_handling_not_decreased"]:
+        failures.append("Error-handling coverage decreased")
+    if not checks["bug_repro_transitioned"]:
+        failures.append("Bug reproduction test did not transition FAIL -> PASS")
+    if not checks["reproducibility_manifest"]:
+        failures.append("Reproducibility manifest missing required fields")
+    if not checks["safety_incidents"]:
+        failures.append(f"Safety incident gate failed ({safety_incidents} incidents)")
+
+    return PhaseGateResult(
+        passed=len(failures) == 0,
+        checks=checks,
+        failures=failures,
+        relative_gain=float(fitness_score),
+    )
+
+
 def evaluate_phase2_gate(
     *,
     baseline_score: float,
