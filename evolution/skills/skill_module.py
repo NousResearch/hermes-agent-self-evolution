@@ -5,11 +5,14 @@ where the skill text is the optimizable parameter. GEPA can then
 mutate the skill text and evaluate the results.
 """
 
+import logging
 import re
 from pathlib import Path
 from typing import Optional
 
 import dspy
+
+logger = logging.getLogger(__name__)
 
 
 def load_skill(skill_path: Path) -> dict:
@@ -75,7 +78,8 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
             content = skill_md.read_text()[:500]
             if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
                 return skill_md
-        except Exception:
+        except Exception as e:
+            logger.debug("Could not read %s during skill search: %s", skill_md, e)
             continue
 
     return None
