@@ -524,7 +524,8 @@ class RelevanceFilter:
                                 **validated,
                             ))
 
-                except Exception:
+                except Exception as e:
+                    console.print(f"[dim]  Scoring failed ({type(e).__name__}: {e})[/dim]")
                     errors += 1
 
                 progress.update(task, advance=1)
