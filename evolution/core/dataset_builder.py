@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import dspy
+from json_repair import repair_json
 
 from evolution.core.config import EvolutionConfig
 
@@ -123,7 +124,15 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        import os
+        api_base = os.environ.get("OPENAI_API_BASE") or os.environ.get("OPENAI_BASE_URL")
+        api_key = os.environ.get("OPENAI_API_KEY")
+        lm_kwargs = {}
+        if api_base:
+            lm_kwargs["api_base"] = api_base
+        if api_key:
+            lm_kwargs["api_key"] = api_key
+        lm = dspy.LM(self.config.judge_model, **lm_kwargs)
 
         with dspy.context(lm=lm):
             result = self.generator(
@@ -133,16 +142,23 @@ class SyntheticDatasetBuilder:
             )
 
         # Parse the generated test cases
+        raw = result.test_cases or "[]"
         try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
+            cases_raw = json.loads(repair_json(raw))
+        except Exception:
+            # Try to extract JSON array from the response
             import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
+            match = re.search(r'\[.*\]', raw, re.DOTALL)
             if match:
-                cases_raw = json.loads(match.group())
+                try:
+                    cases_raw = json.loads(repair_json(match.group()))
+                except Exception:
+                    cases_raw = []
             else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+                cases_raw = []
+
+        if not cases_raw:
+            raise ValueError(f"Could not parse test cases from LLM output: {raw[:200]}")
 
         examples = [
             EvalExample(
