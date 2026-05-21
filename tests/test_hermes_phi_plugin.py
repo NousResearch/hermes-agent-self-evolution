@@ -1029,6 +1029,50 @@ class TestStrictRegression:
                 )
 
 
+    def test_hermes_detector_fail_closed_on_dob(self):
+        """Regression: HermesDeterministicPHIDetector fail_closed=True means a
+        failing detector blocks DOB-bearing payload, not allow."""
+        from unittest.mock import MagicMock
+        from llm_common.core.kernel import SafetyKernel
+        from llm_common.core.detector import DeterministicDetector
+        from hermes_phi.plugin import HermesDeterministicPHIDetector, create_phi_policy_registry
+        from llm_common.core.safety import SafetyRequest
+        from hermes_phi.plugin import PhiSafetyUnavailable, PhiBlocked
+
+        # Create a failing HermesDeterministicPHIDetector
+        failing_detector = HermesDeterministicPHIDetector()
+        original_detect = failing_detector.detect
+        # Make it raise on any call
+        failing_detector.detect = MagicMock(side_effect=RuntimeError("Hermes PHI detector failed"))
+
+        kernel = SafetyKernel(
+            detectors=[DeterministicDetector(), failing_detector],
+            registry=create_phi_policy_registry(),
+        )
+        try:
+            # DOB is a label ONLY covered by HermesDeterministicPHIDetector
+            # DeterministicDetector does NOT have date_of_birth.
+            # When the only detector for DOB fails with fail_closed=True,
+            # the kernel must BLOCK.
+            request = SafetyRequest(
+                surface="hermes_context",
+                payload="DOB: 1972-08-22",
+                policy_set="phi_v1_strict",
+            )
+            decision = kernel.evaluate(request, timeout_sec=0.5)
+
+            # fail_closed=True + failing detector for active label => BLOCK
+            from llm_common.core.safety import SafetyVerdict
+            assert decision.verdict == SafetyVerdict.BLOCK, (
+                f"Expected BLOCK for failing HermesDetector with DOB, got {decision.verdict}"
+            )
+            # Verify the circuit breaker finding
+            assert any(f.label == "runtime_exception" for f in decision.findings), (
+                "Expected runtime_exception finding from failing detector"
+            )
+        finally:
+            kernel.shutdown()
+
 class TestUserFacingDocExamples:
     """Surface map examples: plugins must actually intercept the documented surfaces."""
 

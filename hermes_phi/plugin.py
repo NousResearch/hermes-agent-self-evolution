@@ -122,7 +122,7 @@ class HermesDeterministicPHIDetector(BaseDetector):
 
     @property
     def fail_closed(self) -> bool:
-        return False
+        return True
 
     def get_supported_labels(self, labels: list[str]) -> list[str]:
         return [lbl for lbl in labels if lbl in self.patterns]
