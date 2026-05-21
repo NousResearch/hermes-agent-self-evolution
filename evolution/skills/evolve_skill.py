@@ -33,6 +33,37 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def _uses_local_litellm_model(model: str) -> bool:
+    """Return True for local LiteLLM backends that need bounded GEPA budgets."""
+    return model.startswith(("ollama/", "ollama_chat/"))
+
+
+def _gepa_budget_kwargs(iterations: int, eval_model: str, optimizer_model: str) -> dict:
+    """Map the CLI iteration knob to GEPA budget settings.
+
+    Hosted models can use GEPA's auto presets. Local Ollama models are far
+    slower, so use explicit full-eval limits or cron will time out before a
+    candidate can be produced.
+    """
+    if _uses_local_litellm_model(eval_model) or _uses_local_litellm_model(optimizer_model):
+        return {"max_full_evals": max(1, iterations)}
+    return {"auto": "light" if iterations <= 5 else ("medium" if iterations <= 10 else "heavy")}
+
+
+def _score_holdout_example(program, example: dspy.Example, lm: dspy.LM | None) -> float:
+    """Score one holdout example, treating model format failures as zero."""
+    try:
+        with dspy.context(lm=lm):
+            prediction = program(task_input=example.task_input)
+            return float(skill_fitness_metric(example, prediction))
+    except Exception as exc:
+        console.print(
+            f"[yellow]⚠ Holdout scoring failed; assigning 0.0 "
+            f"({type(exc).__name__}: {str(exc)[:160]})[/yellow]"
+        )
+        return 0.0
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -152,15 +183,16 @@ def evolve(
 
     start_time = time.time()
 
-    # Map iterations to GEPA budget: 5 -> light, 10 -> medium, 15+ -> heavy
-    gepa_budget = "light" if iterations <= 5 else ("medium" if iterations <= 10 else "heavy")
+    # Map iterations to GEPA budget. Hosted models use GEPA presets; local
+    # models need explicit bounded budgets or nightly cron can time out.
+    gepa_budget = _gepa_budget_kwargs(iterations, eval_model, optimizer_model)
 
     try:
         # GEPA needs a reflection LM for proposing mutations
         reflection_lm = dspy.LM(optimizer_model, num_retries=8, timeout=120)
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            auto=gepa_budget,
+            **gepa_budget,
             reflection_lm=reflection_lm,
         )
 
@@ -231,15 +263,8 @@ def evolve(
     baseline_scores = []
     evolved_scores = []
     for ex in holdout_examples:
-        # Score baseline
-        with dspy.context(lm=lm):
-            baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
-            baseline_scores.append(baseline_score)
-
-            evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
-            evolved_scores.append(evolved_score)
+        baseline_scores.append(_score_holdout_example(baseline_module, ex, lm))
+        evolved_scores.append(_score_holdout_example(optimized_module, ex, lm))
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))

@@ -10,17 +10,18 @@ cadence:
   min_days_between_same_target: 21
 
 models:
-  eval: anthropic/claude-sonnet-4-5-20250929
-  optimizer: anthropic/claude-sonnet-4-5-20250929
-  fallback_eval: anthropic/claude-sonnet-4-5-20250929
-  fallback_optimizer: anthropic/claude-sonnet-4-5-20250929
+  eval: ollama_chat/gemma4-e4b:latest
+  optimizer: ollama_chat/gemma4-e4b:latest
+  fallback_eval: ollama_chat/gemma4-e4b:latest
+  fallback_optimizer: ollama_chat/gemma4-e4b:latest
 
 budget:
-  iterations: 5
+  iterations: 2
   timeout_seconds: 1700
 
 evaluation:
-  source: synthetic
+  source: auto
+  golden_root: /home/w0lf/dev/hermes-agent-self-evolution/datasets/golden/skills
 
 environment:
   env_files:

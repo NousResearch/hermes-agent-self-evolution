@@ -291,6 +291,35 @@ def read_metrics(artifact: Path | None) -> dict[str, Any] | None:
         return None
 
 
+def _has_golden_dataset(path: Path) -> bool:
+    return (path / "train.jsonl").exists() or (path / "golden.jsonl").exists()
+
+
+def resolve_eval_dataset_args(repo_root: Path, target: Target, eval_cfg: dict[str, Any]) -> tuple[str, str | None]:
+    """Resolve eval source and optional dataset path for a target.
+
+    `source: auto` prefers a hand-curated golden dataset when present, then
+    falls back to synthetic generation. Explicit `synthetic` remains synthetic
+    even if a golden set exists so operators can force exploration runs.
+    """
+    requested = str(eval_cfg.get("source", "auto") or "auto")
+    dataset_path = eval_cfg.get("dataset_path")
+    if dataset_path:
+        return requested if requested != "auto" else "golden", str(Path(str(dataset_path)).expanduser())
+
+    if requested in {"auto", "golden"}:
+        golden_root = Path(str(eval_cfg.get("golden_root", repo_root / "datasets" / "golden" / "skills"))).expanduser()
+        golden_path = golden_root / target.skill
+        if _has_golden_dataset(golden_path):
+            return "golden", str(golden_path)
+        if requested == "golden":
+            return "golden", str(golden_path)
+
+    if requested == "auto":
+        return "synthetic", None
+    return requested, None
+
+
 def summarize(target: Target, status: str, artifact: Path | None, log: Path, metrics: dict[str, Any] | None) -> str:
     lines = [f"Self-evolution: {target.profile}:{target.skill}", f"status: {status}"]
     if metrics:
@@ -300,10 +329,24 @@ def summarize(target: Target, status: str, artifact: Path | None, log: Path, met
         if isinstance(baseline, (int, float)) and isinstance(evolved, (int, float)) and isinstance(improvement, (int, float)):
             pct = improvement / max(0.001, float(baseline)) * 100
             lines.append(f"score: {baseline:.3f} -> {evolved:.3f} ({improvement:+.3f}, {pct:+.1f}%)")
+        if metrics.get("constraints_passed") is True:
+            lines.append("gate: constraints-passed")
+        elif metrics.get("constraints_passed") is False:
+            lines.append("gate: constraints-failed")
+    elif status == "constraints-failed":
+        lines.append("gate: constraints-failed")
+
+    if status == "candidate":
+        lines.append("review: candidate-review-needed")
+    elif status == "constraints-failed":
+        lines.append("review: rejected")
+    elif status in {"no-improvement", "below-threshold"}:
+        lines.append("review: no-application")
+
     if artifact:
         lines.append(f"artifact: {artifact}")
     lines.append(f"log: {log}")
-    lines.append("not applied")
+    lines.append("applied: no")
     return "\n".join(lines)
 
 
@@ -318,7 +361,7 @@ def run_evolution(repo_root: Path, policy: dict[str, Any], env: dict[str, str], 
     eval_cfg = policy.get("evaluation", {}) or {}
     timeout = int(budget.get("timeout_seconds", 1700) or 1700)
     iterations = str(int(budget.get("iterations", 5) or 5))
-    eval_source = str(eval_cfg.get("source", "synthetic"))
+    eval_source, dataset_path = resolve_eval_dataset_args(repo_root, target, eval_cfg)
     eval_model = str(models.get("eval", "openai/gpt-5.4-mini"))
     optimizer_model = str(models.get("optimizer", "openai/gpt-5.4-mini"))
 
@@ -343,6 +386,8 @@ def run_evolution(repo_root: Path, policy: dict[str, Any], env: dict[str, str], 
         "--hermes-repo",
         str(target.profile_root),
     ]
+    if dataset_path:
+        cmd.extend(["--dataset-path", dataset_path])
 
     started_at = time.time()
     with log_path.open("w") as log:
