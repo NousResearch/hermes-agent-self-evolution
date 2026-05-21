@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Evolutionary self-improvement for Hermes Agent — optimize skills, prompts, tool descriptions, and code using DSPy + GEPA"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 authors = [
     {name = "Nous Research", email = "team@nousresearch.com"},
 ]
@@ -20,6 +20,7 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.0",
     "rich>=13.0",
+    "llm-common @ git+https://github.com/stars-end/llm-common.git@396146389e9e5017cee881bea349c41e7a1f593d",
 ]
 
 [project.optional-dependencies]
@@ -36,7 +37,7 @@ Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"
 Repository = "https://github.com/NousResearch/hermes-agent-self-evolution"
 
 [tool.setuptools.packages.find]
-include = ["evolution*"]
+include = ["evolution*", "hermes_phi", "hermes_phi.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
