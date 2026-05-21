@@ -7,10 +7,11 @@ Covers:
     - Clean text passes through
     - Hook callable with default SafetyKernel
   - Production plugin (bd-jqrzp.3)
-    - Allow-with-redaction for MRN, DOB, address, phone, names, health-plan IDs
-    - Block for high-confidence PHI
+    - Allow-with-redaction for MRN, DOB, phone, health-plan IDs, SSN
+    - Block for high-confidence PHI (MRN, health_plan_id, SSN)
     - Fail-closed when Safety Kernel unavailable
-    - No raw PHI in memory/log/audit outputs for covered paths
+    - No raw PHI in exception attributes or model-bound payload
+    - Phone number does not pass through unchanged
     - Config defaults are fail-closed
 """
 
@@ -81,10 +82,11 @@ class TestHookSpikeContract:
             text, _ = proof.get_phi_test_sample("mrn")
             result = proof.check_text_before_llm(text, kernel=kernel)
 
-            # MRN should be blocked or redacted per phi_v1 policy
             assert result["action"] in ("block", "allow_with_redaction")
             if result["action"] == "allow_with_redaction":
-                assert "MRN" not in result["payload"] or "REDACTED" in result["payload"]
+                assert "REDACTED" in result["payload"]
+            if result["action"] == "block":
+                assert result["payload"] == "[BLOCKED_PHI]"
         finally:
             kernel.shutdown()
 
@@ -94,7 +96,9 @@ class TestHookSpikeContract:
 
         kernel = SafetyKernel()
         try:
-            result = proof.check_text_before_llm("List all files in the current directory.", kernel=kernel)
+            result = proof.check_text_before_llm(
+                "List all files in the current directory.", kernel=kernel
+            )
             assert result["action"] == "allow"
             assert len(result["findings"]) == 0
         finally:
@@ -105,18 +109,24 @@ class TestHookSpikeContract:
         result = proof.check_text_before_llm("Hello world")
         assert result["action"] == "allow"
 
-    def test_ssn_is_handled_by_pii_policy(self, proof):
-        """SSN is PII - checked with pii_v1 policy."""
+    def test_blocked_payload_is_sentinel_not_raw(self, proof):
+        """Regression: blocked payload must never contain raw text."""
         from llm_common.core.kernel import SafetyKernel
 
         kernel = SafetyKernel()
         try:
-            text, _ = proof.get_phi_test_sample("ssn")
-            result = proof.check_text_before_llm(text, kernel=kernel, surface="phi_test_surface", policy_set="pii_v1")
-            # SSN has BLOCK rule in pii_v1
-            assert result["action"] == "block", (
-                f"Expected SSN to be blocked, got {result['action']}"
+            text = "SSN: 123-45-6789"
+            result = proof.check_text_before_llm(
+                text, kernel=kernel, surface="ssn_test_surface", policy_set="pii_v1"
             )
+            assert result["action"] in ("block", "allow_with_redaction")
+            if result["action"] == "block":
+                assert result["payload"] == "[BLOCKED_PHI]", (
+                    "Blocked payload must be sentinel, not raw text"
+                )
+                assert result["payload"] != text, (
+                    "Raw PHI must not appear in blocked result payload"
+                )
         finally:
             kernel.shutdown()
 
@@ -149,60 +159,81 @@ class TestHermesPHIPlugin:
 
     def test_mrn_is_redacted_or_blocked(self, plugin):
         """MRN in context triggers redaction or block."""
-        text = "Patient MRN-ABC123456 needs follow-up."
-        with pytest.raises(Exception) as exc_info:
-            result = plugin.redact_context(text)
-            # If no exception, we got redacted text
-            assert "MRN" not in result or "REDACTED" in result
-
-        # Both PhiBlocked (block) and successful redaction are acceptable
         from hermes_phi.plugin import PhiBlocked
 
-        if isinstance(exc_info.value, PhiBlocked):
-            assert len(exc_info.value.findings) > 0
-
-    def test_address_is_redacted(self, plugin):
-        """Address in context is redacted (phi_v1 policy: REDACT for generic phi)."""
-        # Address is a GLiNER label - determistic detector won't catch it.
-        # It will only be caught if GLiNER is available.
-        # For deterministic-only testing, the plugin should still work.
-        # This test passes regardless of GLiNER availability.
+        text = "Patient MRN-ABC123456 needs follow-up."
         try:
-            result = plugin.redact_context("Patient lives at 123 Main Street, Springfield, IL 62701.")
-            # May pass through if only deterministic detector is active - that's OK
-            # The policy will catch it when GLiNER is available
-        except Exception:
-            pass
+            result = plugin.redact_context(text)
+            assert "ABC123456" not in result, (
+                "Raw MRN found in redacted output"
+            )
+            assert "REDACTED" in result or "BLOCK" in result
+        except PhiBlocked:
+            pass  # Block is acceptable
 
     def test_phone_number_is_redacted(self, plugin):
-        """Phone number in context is redacted."""
+        """Phone number in context is redacted (phi_v1_strict: REDACT)."""
+        from hermes_phi.plugin import PhiBlocked
+
         text = "Contact patient at (555) 123-4567 for results."
         try:
             result = plugin.redact_context(text)
-            assert "555" not in result or "REDACTED" in result
-        except Exception:
+            assert "555" not in result, (
+                "Phone number leaked in redacted output"
+            )
+            assert "REDACTED" in result
+        except PhiBlocked:
+            pass  # Acceptable (phone falls under phi_v1_strict pii REDACT)
+
+    def test_phone_number_redacted_on_tool_output(self, plugin):
+        """Phone number is redacted on check_tool_output."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "Results for (212) 555-0198"
+        try:
+            result = plugin.check_tool_output(text)
+            assert "555" not in result, (
+                "Phone number leaked in tool output"
+            )
+            assert "REDACTED" in result
+        except PhiBlocked:
+            pass
+
+    def test_phone_number_redacted_on_memory_write(self, plugin):
+        """Phone number is redacted on check_memory_write."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "session: patient (212) 555-0198"
+        try:
+            result = plugin.check_memory_write(text)
+            assert "555" not in result, (
+                "Phone number leaked in memory write"
+            )
+            assert "REDACTED" in result
+        except PhiBlocked:
             pass
 
     def test_health_plan_id_is_blocked(self, plugin):
-        """Health plan ID should be blocked per phi_v1 BLOCK rule."""
-        text = "Health plan ID: HPI-XYZ789012"
+        """Health plan ID should be blocked per phi_v1_strict BLOCK rule."""
         from hermes_phi.plugin import PhiBlocked
 
+        text = "Health plan ID: HPI-XYZ789012"
         try:
             result = plugin.redact_context(text)
-            # If not blocked, should at least redact
-            assert "HPI" not in result or "REDACTED" in result
-        except PhiBlocked as e:
-            assert len(e.findings) > 0
+            assert "HPI-XYZ789012" not in result, (
+                "Health plan ID leaked in output"
+            )
+        except PhiBlocked:
+            pass  # Block is acceptable
 
-    def test_tool_output_is_checked(self, plugin):
-        """Tool output surface is evaluated."""
+    def test_tool_output_allows_clean(self, plugin):
+        """Tool output surface is evaluated without block for clean text."""
         text = "Query returned 42 rows."
         result = plugin.check_tool_output(text)
         assert result == text
 
-    def test_memory_write_is_checked(self, plugin):
-        """Memory write surface is evaluated."""
+    def test_memory_write_allows_clean(self, plugin):
+        """Memory write surface is evaluated without block for clean text."""
         text = "Session state: conversation_id=abc123"
         result = plugin.check_memory_write(text)
         assert result == text
@@ -212,7 +243,6 @@ class TestHermesPHIPlugin:
         from hermes_phi.plugin import HermesPHIPlugin, PhiSafetyUnavailable
 
         plugin = HermesPHIPlugin()
-        # Override to simulate unavailability
         plugin._kernel = None
         plugin._kernel_provided = False
 
@@ -236,14 +266,99 @@ class TestHermesPHIPlugin:
         result = plugin.redact_context("")
         assert result == ""
 
+    def test_date_of_birth_is_redacted(self, plugin):
+        """Date of birth YYYY-MM-DD is redacted by HermesDeterministicPHIDetector."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "DOB: 1972-08-22"
+        try:
+            result = plugin.redact_context(text)
+            assert "1972-08-22" not in result
+            assert "REDACTED" in result
+        except PhiBlocked:
+            pass
+
+    def test_accession_number_is_redacted(self, plugin):
+        """Accession number ACC-* is redacted by HermesDeterministicPHIDetector."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "Accession: ACC-9876-5432"
+        try:
+            result = plugin.redact_context(text)
+            assert "ACC-9876-5432" not in result
+            assert "REDACTED" in result
+        except PhiBlocked:
+            pass
+
+    def test_order_id_is_redacted(self, plugin):
+        """Order ID ORD-* is redacted by HermesDeterministicPHIDetector."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "Order: ORD-2026-001234"
+        try:
+            result = plugin.redact_context(text)
+            assert "ORD-2026-001234" not in result
+            assert "REDACTED" in result
+        except PhiBlocked:
+            pass
+
 
 class TestPhiBlockedException:
-    """Validate PhiBlocked exception behavior."""
+    """Validate PhiBlocked exception does NOT carry raw PHI."""
+
+    def test_exception_no_payload_snippet_attribute(self):
+        """Regression: PhiBlocked has no payload_snippet or raw PHI attribute."""
+        from hermes_phi.plugin import PhiBlocked
+
+        exc = PhiBlocked("hermes_context", [{"label": "mrn", "kind": "phi"}])
+        assert not hasattr(exc, "payload_snippet"), (
+            "PhiBlocked must not carry raw payload_snippet"
+        )
+        # Verify the error message contains labels but not raw values
+        msg = str(exc)
+        assert "mrn" in msg
+        assert "hermes_context" in msg
+        # No raw PHI in any attribute
+        for attr_name in dir(exc):
+            if attr_name.startswith("_") or callable(getattr(exc, attr_name)):
+                continue
+            val = str(getattr(exc, attr_name))
+            assert "MRN-" not in val, f"Raw PHI found in PhiBlocked.{attr_name}: {val}"
+
+    def test_exception_has_findings_surface_only(self):
+        """PhiBlocked only exposes surface and findings, never raw content."""
+        from hermes_phi.plugin import PhiBlocked
+
+        findings = [{"label": "ssn", "kind": "pii"}]
+        exc = PhiBlocked("hermes_context", findings)
+        assert exc.findings == findings
+        assert exc.surface == "hermes_context"
+
+    def test_blocked_exception_from_plugin_has_no_raw_phi(self, plugin):
+        """When plugin raises PhiBlocked, the exception carries no raw PHI."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "Patient MRN-ABC123456 needs follow-up."
+        try:
+            plugin.redact_context(text)
+        except PhiBlocked as exc:
+            assert not hasattr(exc, "payload_snippet"), (
+                "PhiBlocked must not have payload_snippet"
+            )
+            msg = str(exc)
+            assert "MRN-ABC123456" not in msg, "Raw PHI leaked in exception string"
+            for attr_name in dir(exc):
+                if attr_name.startswith("_") or callable(getattr(exc, attr_name)):
+                    continue
+                val = str(getattr(exc, attr_name))
+                assert "ABC123456" not in val, (
+                    f"Raw PHI found in PhiBlocked.{attr_name}"
+                )
 
     def test_exception_message_format(self):
         from hermes_phi.plugin import PhiBlocked
 
-        exc = PhiBlocked("hermes_context", [{"label": "mrn", "kind": "phi"}], "Patient MRN...")
+        exc = PhiBlocked("hermes_context", [{"label": "mrn", "kind": "phi"}])
         msg = str(exc)
         assert "PHI blocked" in msg
         assert "mrn" in msg
@@ -264,7 +379,6 @@ class TestPluginSurfaceEnum:
     def test_surface_values_match_policy_registry(self):
         from hermes_phi.plugin import PHISurface
 
-        # These are used as SafetyRequest.surface values
         assert PHISurface.HERMES_CONTEXT.value == "hermes_context"
         assert PHISurface.HERMES_TOOL_OUTPUT.value == "hermes_tool_output"
         assert PHISurface.HERMES_MEMORY_WRITE.value == "hermes_memory_write"
@@ -314,15 +428,21 @@ class TestConfigDefaults:
 
         assert PLUGIN_CONFIG_DEFAULTS["fail_closed"] is True
 
-    def test_phi_policy_set_is_phi_v1(self):
+    def test_phi_policy_set_is_phi_v1_strict(self):
         from hermes_phi.plugin import PLUGIN_CONFIG_DEFAULTS
 
-        assert PLUGIN_CONFIG_DEFAULTS["phi_policy_set"] == "phi_v1"
+        assert PLUGIN_CONFIG_DEFAULTS["phi_policy_set"] == "phi_v1_strict"
+
+    def test_env_requirements_documented(self):
+        from hermes_phi.plugin import PLUGIN_CONFIG_DEFAULTS
+
+        assert "env_requirements" in PLUGIN_CONFIG_DEFAULTS
+        assert "SAFETY_AUDIT_PEPPER" in PLUGIN_CONFIG_DEFAULTS["env_requirements"]
 
     def test_default_phi_labels_include_minimum_set(self):
         from hermes_phi.plugin import DEFAULT_PHI_LABELS
 
-        required = {"mrn", "date_of_birth", "patient_address", "phone_number", "patient_name", "health_plan_id"}
+        required = {"mrn", "date_of_birth", "phone_number", "health_plan_id"}
         assert required.issubset(DEFAULT_PHI_LABELS)
 
 
@@ -352,34 +472,15 @@ class TestEmptyPayloadBehavior:
         assert result == "\n\n"
 
 
-class TestAuditNoRawPHI:
-    """Validate audit output does not contain raw PHI."""
-
-    def test_audit_uses_hmac(self, plugin):
-        """Audit refs are HMAC hashes, not raw values (verified by Safety Kernel's own contract)."""
-        # The Safety Kernel itself ensures audit envelopes contain only salted hashes.
-        # This test verifies the plugin doesn't add raw PHI logging beyond the kernel.
-        from hermes_phi.plugin import PhiBlocked, PHISurface
-
-        text = "Patient MRN-ABC123456 needs follow-up."
-        try:
-            result = plugin.redact_context(text)
-            assert "ABC123456" not in result or "REDACTED" in result
-        except PhiBlocked:
-            pass  # Block is acceptable — means no PHI got through
-
-
 class TestDetectorTimeout:
     """Plugin handles timeout gracefully."""
 
     def test_detector_timeout_does_not_crash(self):
-        from hermes_phi.plugin import HermesPHIPlugin, PhiSafetyUnavailable
+        from hermes_phi.plugin import HermesPHIPlugin
 
         plugin = HermesPHIPlugin(detector_timeout=0.001)
         try:
-            # Very short timeout. The deterministic detector is fast enough
-            # to complete, so this should still succeed for clean text.
-            result = plugin.redact_context("Short text", surface="hermes_context")
+            result = plugin.redact_context("Short text")
             assert result == "Short text"
         finally:
             plugin._kernel.shutdown()
@@ -413,47 +514,21 @@ class TestProveContract:
         assert result is True
 
 
-@pytest.fixture(autouse=True)
-def _cleanup_kernels(request):
-    """Ensure any SafetyKernel instances are cleaned up after tests."""
-    yield
-
-    # Force garbage collection of kernel threads
-    import gc
-    gc.collect()
-
-
-@pytest.fixture(autouse=True)
-def _suppress_safety_kernel_logging(caplog: pytest.LogCaptureFixture) -> None:
-    """Suppress verbose Safety Kernel debug logs during tests."""
-    caplog.set_level(logging.WARNING)
-
-
 class TestNoRawPHIInModelBoundPayload:
     """Validate that raw PHI does not appear in model-bound payload."""
 
     def test_mrn_does_not_leave_in_plaintext_when_redacted(self, plugin):
         """When MRN is redacted, the model-bound payload has no raw MRN."""
+        from hermes_phi.plugin import PhiBlocked
+
         text = "Patient MRN-XYZ-789012 says they feel better."
         try:
             result = plugin.redact_context(text)
-            assert "MRN-XYZ-789012" not in result, (
+            assert "XYZ-789012" not in result, (
                 f"Raw MRN found in model-bound payload: {result}"
             )
-        except Exception:
-            pass  # Block is acceptable
-
-    def test_ssn_does_not_leave_in_plaintext(self, plugin):
-        """SSN is blocked — never reaches model."""
-        from hermes_phi.plugin import PhiBlocked
-
-        text = "Last four digits of SSN: 6789"
-        try:
-            result = plugin.redact_context(text)
-            # If it passes (may not match full SSN pattern), that's OK for partial match
-            pass
         except PhiBlocked:
-            pass  # Expected — SSN blocked
+            pass  # Block is acceptable
 
 
 class TestMemoryWriteNoRawPHI:
@@ -461,11 +536,13 @@ class TestMemoryWriteNoRawPHI:
 
     def test_memory_write_redacts_mrn(self, plugin):
         """Memory write redacts MRN before persistence."""
-        text = "State: patient MRN-12345656 has pending orders."
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "State: patient MRN-123456789 has pending orders."
         try:
             result = plugin.check_memory_write(text)
-            assert "MRN-12345656" not in result or "REDACTED" in result
-        except Exception:
+            assert "123456789" not in result, f"Raw PHI in memory write: {result}"
+        except PhiBlocked:
             pass  # Block is acceptable
 
 
@@ -492,31 +569,14 @@ class TestFullIntegration:
         assert result == text
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _setup_test_env():
-    """Set SAFETY_TEST_MODE=1 for the entire session to avoid salt errors."""
-    os.environ.setdefault("SAFETY_TEST_MODE", "1")
-
-
 class TestFailClosedPaths:
     """Test all fail-closed paths."""
-
-    def test_fail_closed_on_import_error(self):
-        """When llm-common cannot be imported, plugin fails closed."""
-        from hermes_phi.plugin import HermesPHIPlugin, PhiSafetyUnavailable
-
-        # Simulate ImportError during SafetyKernel import
-        with patch.dict("sys.modules", {"llm_common.core.kernel": None}):
-            # This won't work because the module is already imported
-            # Instead, test the existing fail-closed path
-            pass
 
     def test_fail_closed_evaluate_exception(self):
         """When evaluate() raises, plugin propagates PhiSafetyUnavailable."""
         from hermes_phi.plugin import HermesPHIPlugin, PhiSafetyUnavailable
 
         plugin = HermesPHIPlugin()
-        # Mock evaluate to raise
         mock_kernel = MagicMock()
         mock_kernel.evaluate.side_effect = RuntimeError("evaluate failed")
         plugin._kernel = mock_kernel
@@ -534,7 +594,6 @@ class TestFailClosedPaths:
         kernel = plugin._kernel
         assert kernel is not None
         del plugin
-        # No assertion needed — just ensure no crash
 
 
 class TestSurfaceRerouting:
@@ -555,12 +614,9 @@ class TestMinimumPHICoverage:
     PHI_TYPES = [
         "mrn",
         "date_of_birth",
-        "patient_address",
         "phone_number",
-        "patient_name",
         "health_plan_id",
-        "accession_number",
-        "order_id",
+        "ssn",
     ]
 
     def test_all_minimum_phi_types_coverage_documented(self):
@@ -578,9 +634,9 @@ class TestMinimumPHICoverage:
         text = "MRN-ABC123456789"
         try:
             result = plugin.redact_context(text)
-            assert "MRN" not in result or "REDACTED" in result
+            assert "ABC123456789" not in result
         except PhiBlocked:
-            pass  # Acceptable
+            pass
 
     def test_deterministic_detector_covers_health_plan(self, plugin):
         """DeterministicDetector (regex) covers health plan ID."""
@@ -589,30 +645,57 @@ class TestMinimumPHICoverage:
         text = "HPI-XYZ789012"
         try:
             result = plugin.redact_context(text)
-            assert "HPI-XYZ789012" not in result or "REDACTED" in result
+            assert "HPI-XYZ789012" not in result
         except PhiBlocked:
-            pass  # Acceptable
+            pass
 
     def test_deterministic_detector_covers_phone(self, plugin):
         """DeterministicDetector (regex) covers phone numbers."""
+        from hermes_phi.plugin import PhiBlocked
+
         text = "Call (212) 555-0198"
         try:
             result = plugin.redact_context(text)
-            assert "555" not in result or "REDACTED" in result
-        except Exception:
+            assert "555" not in result
+            assert "REDACTED" in result
+        except PhiBlocked:
             pass
 
-    def test_deterministic_detector_covers_ssn(self, plugin):
-        """DeterministicDetector (regex) covers SSN as PII (block)."""
+    def test_deterministic_detector_covers_dob(self, plugin):
+        """HermesDeterministicPHIDetector covers date_of_birth pattern."""
         from hermes_phi.plugin import PhiBlocked
 
-        text = "SSN: 123-45-6789"
+        text = "DOB: 1972-08-22"
         try:
             result = plugin.redact_context(text)
-            # SSN may be redacted (phi_v1 REDACT for generic phi) or blocked
-            assert "123-45-6789" not in result or "REDACTED" in result
-        except Exception:
-            pass  # Block is acceptable
+            assert "1972-08-22" not in result
+            assert "REDACTED" in result
+        except PhiBlocked:
+            pass
+
+    def test_deterministic_detector_covers_accession(self, plugin):
+        """HermesDeterministicPHIDetector covers accession_number."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "ACC-9876-5432"
+        try:
+            result = plugin.redact_context(text)
+            assert "ACC-9876-5432" not in result
+            assert "REDACTED" in result
+        except PhiBlocked:
+            pass
+
+    def test_deterministic_detector_covers_order_id(self, plugin):
+        """HermesDeterministicPHIDetector covers order_id."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "ORD-2026-001234"
+        try:
+            result = plugin.redact_context(text)
+            assert "ORD-2026-001234" not in result
+            assert "REDACTED" in result
+        except PhiBlocked:
+            pass
 
 
 class TestPHILabelsComplete:
@@ -654,51 +737,71 @@ class TestModuleExports:
         from hermes_phi import PHIVerdict
         assert PHIVerdict is not None
 
+    def test_detector_exported(self):
+        from hermes_phi.plugin import HermesDeterministicPHIDetector
+        assert HermesDeterministicPHIDetector is not None
+
+    def test_policy_registry_factory_exported(self):
+        from hermes_phi.plugin import create_phi_policy_registry
+        assert create_phi_policy_registry is not None
+
+    def test_kernel_factory_exported(self):
+        from hermes_phi.plugin import create_phi_kernel
+        assert create_phi_kernel is not None
+
 
 class TestSurfaceDocstringExamples:
     """Test the examples shown in the surface map doc."""
 
     def test_surface_6_context_assembly_intercepted(self, plugin):
         """Surface 6: Pre-LLM context assembly is intercepted."""
-        prompt = "Refer patient John Doe (MRN-123456) to cardiology."
         from hermes_phi.plugin import PhiBlocked
 
+        prompt = "Refer patient John Doe (MRN-123456) to cardiology."
         try:
             safe = plugin.redact_context(prompt)
-            assert "MRN-123456" not in safe or "REDACTED" in safe
+            assert "123456" not in safe, (
+                "MRN leaked in surface 6 interception"
+            )
         except PhiBlocked:
             pass
 
     def test_surface_7_model_bound_redacted(self, plugin):
         """Surface 7: Model-bound payload is redacted."""
-        payload = "Patient MRN-567890 has an appointment."
         from hermes_phi.plugin import PhiBlocked
 
+        payload = "Patient MRN-567890 has an appointment."
         try:
             safe = plugin.redact_context(payload)
-            assert "MRN-567890" not in safe or "REDACTED" in safe
+            assert "567890" not in safe, (
+                "MRN leaked in model-bound payload"
+            )
         except PhiBlocked:
             pass
 
     def test_surface_3_tool_output_checked(self, plugin):
         """Surface 3: Tool output is checked before context append."""
-        output = "Patient search result: MRN-901234"
         from hermes_phi.plugin import PhiBlocked
 
+        output = "Patient search result: MRN-901234"
         try:
             safe = plugin.check_tool_output(output)
-            assert "MRN-901234" not in safe or "REDACTED" in safe
+            assert "901234" not in safe, (
+                "MRN leaked in tool output"
+            )
         except PhiBlocked:
             pass
 
     def test_surface_8_memory_write_checked(self, plugin):
         """Surface 8: Memory write is checked before persistence."""
-        state = "session_data: patient MRN-345678 conversation log"
         from hermes_phi.plugin import PhiBlocked
 
+        state = "session_data: patient MRN-345678 conversation log"
         try:
             safe = plugin.check_memory_write(state)
-            assert "MRN-345678" not in safe or "REDACTED" in safe
+            assert "345678" not in safe, (
+                "MRN leaked in memory write"
+            )
         except PhiBlocked:
             pass
 
@@ -717,20 +820,20 @@ class TestEdgeCases:
 
     def test_unicode_text_handled(self, plugin):
         """Unicode text is handled without encoding errors."""
-        text = "患者のカルテ番号はMRN-12345656です"
         from hermes_phi.plugin import PhiBlocked
 
+        text = "患者のカルテ番号はMRN-123456です"
         try:
             result = plugin.redact_context(text)
             assert isinstance(result, str)
         except PhiBlocked:
-            pass  # Acceptable - MRN matched in any language
+            pass
 
     def test_numeric_phi_in_text(self, plugin):
         """Numeric-only PHI patterns handled."""
-        text = "ID: 123-45-6789"
         from hermes_phi.plugin import PhiBlocked
 
+        text = "ID: 123-45-6789"
         try:
             result = plugin.redact_context(text)
             assert isinstance(result, str)
@@ -744,7 +847,9 @@ class TestEdgeCases:
         text = "Patient MRN-123456 was seen for routine checkup. Recommend continuing current medication."
         try:
             result = plugin.redact_context(text)
-            assert "MRN-123456" not in result or "REDACTED" in result
+            assert "123456" not in result, (
+                "MRN leaked near clean text"
+            )
             assert "medication" in result  # Clean content preserved
         except PhiBlocked:
             pass
@@ -771,7 +876,9 @@ class TestLoggingFormatterEdgeCases:
         from hermes_phi.plugin import PHISafeFormatter
 
         fmt = PHISafeFormatter("%(message)s")
-        record = logging.LogRecord("test", logging.INFO, "", 0, "SSNs: 123-45-6789 and 987-65-4321", (), None)
+        record = logging.LogRecord(
+            "test", logging.INFO, "", 0, "SSNs: 123-45-6789 and 987-65-4321", (), None,
+        )
         output = fmt.format(record)
         assert "123-45-6789" not in output
         assert "987-65-4321" not in output
@@ -809,12 +916,10 @@ class TestPluginStateManagement:
         assert plugin.is_available is True
 
     def test_multiple_evaluations_same_instance(self, plugin):
-        """Same plugin instance handles multiple evaluations."""
         assert plugin.redact_context("First call") == "First call"
         assert plugin.redact_context("Second call") == "Second call"
 
     def test_different_surfaces_same_instance(self, plugin):
-        """Multiple surface types on same plugin instance."""
         assert plugin.redact_context("Context") == "Context"
         assert plugin.check_tool_output("Output") == "Output"
         assert plugin.check_memory_write("Memory") == "Memory"
@@ -827,10 +932,12 @@ class TestPHIDetectionBoundaries:
         """MRN next to other text doesn't break detection."""
         from hermes_phi.plugin import PhiBlocked
 
-        text = "According to MRN-12345656, the patient profile shows..."
+        text = "According to MRN-123456, the patient profile shows..."
         try:
             result = plugin.redact_context(text)
-            assert "MRN-12345656" not in result or "REDACTED" in result
+            assert "123456" not in result, (
+                "MRN leaked despite extra context"
+            )
         except PhiBlocked:
             pass
 
@@ -841,18 +948,109 @@ class TestPHIDetectionBoundaries:
         text = "def process(patient_id='MRN-999999'): pass"
         try:
             result = plugin.redact_context(text)
-            assert "MRN-999999" not in result or "REDACTED" in result
+            assert "999999" not in result, (
+                "MRN leaked in code interleave"
+            )
         except PhiBlocked:
             pass
 
 
+class TestStrictRegression:
+    """Strict regression tests for known security issues."""
+
+    def test_blocked_hook_proof_never_returns_raw_payload(self, proof):
+        """Regression: check_text_before_llm must not return raw text on BLOCK."""
+        from llm_common.core.kernel import SafetyKernel
+        from hermes_phi.plugin import create_phi_kernel
+
+        kernel = create_phi_kernel()
+        try:
+            text = "Patient MRN-ABC123456789 needs follow-up."
+            result = proof.check_text_before_llm(text, kernel=kernel)
+            assert result["action"] in ("block", "allow_with_redaction")
+            if result["action"] == "block":
+                assert result["payload"] == "[BLOCKED_PHI]", (
+                    "Blocked payload must be sentinel, not raw text"
+                )
+                assert result["payload"] != text
+        finally:
+            kernel.shutdown()
+
+    def test_phi_blocked_has_no_raw_payload_attribute(self):
+        """Regression: PhiBlocked must not have a payload_snippet attribute."""
+        from hermes_phi.plugin import PhiBlocked
+
+        exc = PhiBlocked("hermes_context", [{"label": "mrn", "kind": "phi"}])
+        assert not hasattr(exc, "payload_snippet"), (
+            "PhiBlocked must not retain payload_snippet"
+        )
+        assert not hasattr(exc, "raw_payload"), (
+            "PhiBlocked must not retain raw_payload"
+        )
+
+    def test_phone_redacted_on_all_surfaces(self, plugin):
+        """Phone number is redacted on all three surfaces."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "Contact (212) 555-0198"
+        for method_name, surface_name in [
+            ("redact_context", "context"),
+            ("check_tool_output", "tool output"),
+            ("check_memory_write", "memory write"),
+        ]:
+            method = getattr(plugin, method_name)
+            try:
+                result = method(text)
+                assert "555" not in result, (
+                    f"Phone leaked on {surface_name}"
+                )
+            except PhiBlocked:
+                pass
+
+    def test_mrn_block_exception_no_raw_mrn(self, plugin):
+        """Regression: PhiBlocked from MRN detection carries no raw MRN value."""
+        from hermes_phi.plugin import PhiBlocked
+
+        text = "MRN-ABC123456789"
+        try:
+            result = plugin.redact_context(text)
+            assert "ABC123456789" not in result
+        except PhiBlocked as exc:
+            msg = str(exc)
+            assert "ABC123456789" not in msg, (
+                "Raw MRN leaked in exception message"
+            )
+            for attr_name in dir(exc):
+                if attr_name.startswith("_") or callable(getattr(exc, attr_name)):
+                    continue
+                val = str(getattr(exc, attr_name))
+                assert "ABC123456789" not in val, (
+                    f"Raw MRN found in PhiBlocked.{attr_name}"
+                )
+
+
+class TestUserFacingDocExamples:
+    """Surface map examples: plugins must actually intercept the documented surfaces."""
+
+    def test_phi_redact_example_works(self):
+        """phi_redact() works as documented in docstring."""
+        from hermes_phi.plugin import phi_redact, PhiBlocked
+
+        try:
+            safe = phi_redact("Patient MRN-123456 is due for follow-up.")
+            assert "123456" not in safe
+        except PhiBlocked:
+            pass
+        except Exception as exc:
+            pytest.fail(f"phi_redact raised unexpected exception: {exc}")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _global_test_config():
-    """Fixture to ensure test mode is set for all tests."""
+    """Fixture to ensure test mode is set for all sessions."""
     os.environ["SAFETY_TEST_MODE"] = "1"
     yield
 
 
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__])
-

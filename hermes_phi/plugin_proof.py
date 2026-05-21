@@ -10,7 +10,7 @@ Purpose:
   2. Call the llm-common Safety Kernel with surface="hermes_context" or
      surface="hermes_tool_output".
   3. Return redacted text when verdict is ALLOW.
-  4. Block model-bound text when verdict is BLOCK.
+  4. Block model-bound text when verdict is BLOCK (raw payload suppressed).
   5. Expose test seams for verification.
 
 This proof does NOT install itself as a Hermes Agent plugin — it validates
@@ -39,7 +39,7 @@ def check_text_before_llm(
     text: str,
     surface: str = SURFACE_HERMES_CONTEXT,
     kernel: Optional[SafetyKernel] = None,
-    policy_set: str = "phi_v1",
+    policy_set: str = "phi_v1_strict",
     timeout_sec: float = 0.5,
 ) -> dict:
     """Evaluate text against the Safety Kernel before it reaches an LLM.
@@ -56,7 +56,7 @@ def check_text_before_llm(
     Returns:
         dict with keys:
             - "action": "allow" | "block" | "allow_with_redaction"
-            - "payload": str — the (possibly redacted) text
+            - "payload": str — the (possibly redacted) text, or "[BLOCKED_PHI]" on block
             - "verdict": SafetyVerdict
             - "findings": list of finding dicts
             - "audit_ref": str or None
@@ -64,6 +64,9 @@ def check_text_before_llm(
     Raises:
         RuntimeError: If Safety Kernel is unavailable and fail-closed is required.
         ImportError: If llm_common is not installed.
+
+    Contract: On BLOCK verdict, payload is NEVER the raw input text. It is
+    replaced with "[BLOCKED_PHI]" to prevent accidental exfiltration.
     """
     if kernel is None:
         kernel = SafetyKernel()
@@ -89,7 +92,8 @@ def check_text_before_llm(
             len(decision.findings),
         )
         result["action"] = "block"
-        result["payload"] = text  # Return original for diagnostics; caller must suppress.
+        # NEVER return raw text on BLOCK. Use sentinel instead.
+        result["payload"] = "[BLOCKED_PHI]"
     elif decision.redacted_payload is not None:
         result["action"] = "allow_with_redaction"
         result["payload"] = decision.redacted_payload
@@ -169,6 +173,11 @@ def prove_contract() -> bool:
     assert result["action"] in ("allow_with_redaction", "block"), (
         f"Expected redaction or block for PHI, got {result['action']}"
     )
+    # Regression: blocked payload must not be raw text
+    if result["action"] == "block":
+        assert result["payload"] == "[BLOCKED_PHI]", (
+            "Blocked payload must be sentinel, not raw text"
+        )
     return True
 
 
@@ -176,4 +185,3 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     prove_contract()
     print("Hook contract smoke test passed.")
-

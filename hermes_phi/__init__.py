@@ -9,4 +9,3 @@ from hermes_phi.plugin import HermesPHIPlugin, PHISurface, PHIVerdict
 
 __version__ = "0.1.0"
 __all__ = ["HermesPHIPlugin", "PHISurface", "PHIVerdict"]
-
