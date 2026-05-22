@@ -6,7 +6,7 @@ This directory is a structured documentation set for **`agent-self-evolution`** 
 
 **Start here every time.** This file is the entry point — it describes which documents to consult for which kinds of question. Load it into context first; the other docs are loaded on demand.
 
-The codebase is mid-sized (~9K LOC of source + 37 test files / ~680 tests) and architecturally dense — most of the substance is in *why* things are shaped a certain way, not *what* they are. The docs prioritize that "why."
+The codebase is mid-sized (~9K LOC of source + 55 test files / ~1076 tests) and architecturally dense — most of the substance is in *why* things are shaped a certain way, not *what* they are. The docs prioritize that "why."
 
 ### Question routing table
 
@@ -30,6 +30,7 @@ The codebase is mid-sized (~9K LOC of source + 37 test files / ~680 tests) and a
 | **How does closed-loop signal reach GEPA during evolution** | `components.md` (closed_loop_feedback.py, behavioral_example.py) → `architecture.md` (closed-loop feedback patterns) → `workflows.md` (Workflow 11) |
 | **What does `--max-total-cost-usd` actually do on abort** | `data_models.md` (cost-ceiling-abort variant of gate_decision.json) → `components.md` (lm_timing_callback.py) |
 | **What does `--benchmark-cmd` do** | `interfaces.md` (CLI: benchmark-cmd) → `data_models.md` (benchmark block) |
+| **Why did the run abort before GEPA started / what's the saturation panel** | `components.md` (saturation_check.py) → `architecture.md` (pattern 10) → `workflows.md` (Workflow 1 Phase B.5) → `data_models.md` (SaturationReport) |
 | **What's tested vs. not** | `interfaces.md` (test surfaces locked by tests) → `workflows.md` (Workflow 8) |
 | **What dependencies are pinned and why** | `dependencies.md` |
 | **What's planned but not built** | `codebase_info.md` (implementation status table) → `PLAN.md` |
@@ -70,6 +71,7 @@ The codebase is mid-sized (~9K LOC of source + 37 test files / ~680 tests) and a
 - **The deploy gate decision** spans `architecture.md` (statistical substrate), `components.md` (`constraints.py`), `data_models.md` (`gate_decision.json` schema), and `workflows.md` (Workflow 1 Phase D, Workflow 2). Read together when debugging a deploy decision.
 - **LM observability** lives in `components.md` (`lm_timing_callback.py`), `interfaces.md` (litellm integration), and `dependencies.md` (litellm pinning rationale).
 - **Skill discovery** is in `components.md` (`skill_sources.py`), `interfaces.md` (SkillSource Protocol), and `codebase_info.md` (priority order).
+- **Saturation pre-flight** is in `components.md` (`saturation_check.py`), `architecture.md` (decision 10), `workflows.md` (Workflow 1 Phase B.5), `data_models.md` (`SaturationReport`), and `interfaces.md` (CLI flags `--no-saturation-check` / `--force-saturation-check`). Read together when debugging a "why did the run abort before GEPA" or "why was the panel suggested" question.
 
 ## Maintenance notes
 
@@ -78,8 +80,9 @@ The fast-moving parts to verify against source when consulting these docs:
 - `EvolutionConfig` defaults (especially `eval_dataset_size`, `growth_*`, `bootstrap_*`)
 - `gate_decision.json` schema_version (currently `"4"`)
 - LM model defaults in `evolve_skill.py` / `evolve_tool.py` CLI options
-- Test count (currently ~680)
+- Test count (currently ~1076)
 - LM `request_timeout` / `num_retries` — may be tuned further
 - Closed-loop CLI flags on `evolve_tool` (`--closed-loop-during-evolution`, `--closed-loop-mode`, …)
+- Saturation pre-flight default thresholds (`evolution/core/saturation_check.py:DEFAULT_THRESHOLDS`) — likely to be calibrated as more real-world bands are observed
 
 When updating: edit the relevant file, then check whether the "Question routing table" above still points to the right place. The index file is loaded into AI-assistant context every conversation, so small accuracy improvements here pay off broadly.

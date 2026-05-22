@@ -50,6 +50,7 @@ evolution/
 │   ├── fitness.py                       # LLMJudge + GEPA-shaped metric + behavioral score helper
 │   ├── lm_timing_callback.py            # LM-call observability + cost ledger + cost-ceiling kill switch
 │   ├── quality_gate.py                  # preset table + write_gate_decision (shared by skill/tool pipelines)
+│   ├── saturation_check.py              # pre-flight: classify baseline into healthy/no_headroom/weak_signal/uniform_failure + Rich panel + abort
 │   ├── skill_sources.py                 # SkillSource protocol + 3 implementations
 │   └── stats.py                         # paired_bootstrap CI
 ├── skills/                              # Tier 1: skill-file evolution
@@ -90,7 +91,8 @@ evolution/
 | `evolution/core/fitness.py` | ~380 | LLMJudge + skill/tool fitness metrics + behavioral score helper |
 | `evolution/core/constraints.py` | ~320 | static + growth-with-quality + size constraints |
 | `evolution/skills/budget_aware_proposer.py` | ~300 | char-budget reflection prompt |
-| `evolution/core/closed_loop_feedback.py` | ~295 | cache + saturation gate + deterministic feedback block |
+| `evolution/core/closed_loop_feedback.py` | ~320 | cache + saturation gate + deterministic feedback block + `force_run` (bypasses gate for pre-flight) |
+| `evolution/core/saturation_check.py` | ~255 | pre-flight: band classifier + `SaturationReport` + Rich panel + interactive confirm |
 | `evolution/tools/tool_judge.py` | ~230 | tool-flavored judge + GEPA-shaped metric with behavioral branch |
 | `evolution/validation/validator.py` | ~220 | mutate + restore live agent file with flock + checksum drift check |
 | `evolution/validation/report.py` | ~225 | ValidationReport JSON + Rich rendering + two-condition decision |
@@ -109,7 +111,7 @@ evolution/
 | `evolution/core/behavioral_example.py` | ~35 | builder for behavioral dspy.Examples |
 | **Total** | **~9,000** | excludes empty `__init__.py` shims |
 
-Test suite: 37 test files under `tests/core/`, `tests/skills/`, `tests/tools/`, `tests/validation/`. **681 tests** collected.
+Test suite: 55 test files under `tests/core/`, `tests/skills/`, `tests/tools/`, `tests/validation/`. **1076 tests** collected.
 
 ## Runtime dependencies
 

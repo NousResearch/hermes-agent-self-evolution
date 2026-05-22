@@ -24,6 +24,12 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig
 from evolution.core.auth_check import preflight as _preflight_lm_credentials
+from evolution.core.saturation_check import (
+    saturation_preflight,
+    render_saturation_panel,
+    interactive_confirm,
+    is_non_interactive,
+)
 from evolution.core.cost_advisor import (
     find_cheaper_alternative as _find_cheaper_alternative,
     render_suggestion_panel as _render_cost_suggestion_panel,
@@ -598,6 +604,8 @@ def evolve(
     benchmark_timeout_seconds: int = 600,
     skip_preflight: bool = False,
     skip_cost_suggest: bool = False,
+    skip_saturation_check: bool = False,
+    force_saturation_check: bool = False,
     closed_loop_suite_path: Optional[Path] = None,
     closed_loop_saturation_threshold: float = 0.95,
     closed_loop_min_iters: int = 3,
@@ -879,6 +887,39 @@ def evolve(
                 if closed_loop_in_valset:
                     valset = valset + behavioral_examples
 
+            cached_baseline_holdout_per_example = None
+            if not skip_saturation_check:
+                holdout_examples_for_preflight = dataset.to_dspy_examples("holdout")
+                sat_report = saturation_preflight(
+                    baseline_module=baseline_module,
+                    holdout_examples=holdout_examples_for_preflight,
+                    metric=metric,
+                    lm=lm,
+                    closed_loop_cache=closed_loop_cache,
+                    baseline_artifact_text=skill["body"],
+                )
+                if sat_report.band != "healthy":
+                    render_saturation_panel(sat_report, console=console)
+                    if not force_saturation_check:
+                        if is_non_interactive():
+                            console.print(
+                                "[yellow]Non-interactive context; refusing to "
+                                "proceed. Pass --force-saturation-check to "
+                                "override.[/yellow]"
+                            )
+                            # Exit code 3 distinguishes "refused to run for
+                            # lack of a TTY to confirm against" from clean
+                            # success (0) or hard user errors (1). Lets a
+                            # wrapping CI / cron / scheduled runner detect
+                            # silent denial.
+                            sys.exit(3)
+                        if not interactive_confirm():
+                            console.print("[yellow]Aborted by user.[/yellow]")
+                            sys.exit(0)
+                else:
+                    render_saturation_panel(sat_report, console=console)
+                cached_baseline_holdout_per_example = sat_report.holdout_per_example
+
             console.print(f"\n[bold cyan]Running GEPA optimization (budget={gepa_budget})...[/bold cyan]\n")
 
             start_time = time.time()
@@ -1004,9 +1045,13 @@ def evolve(
             )
 
             holdout_examples = dataset.to_dspy_examples("holdout")
-            avg_baseline, baseline_per_example = _holdout_evaluate_with_metric(
-                baseline_module, holdout_examples, metric, lm,
-            )
+            if cached_baseline_holdout_per_example is not None:
+                baseline_per_example = cached_baseline_holdout_per_example
+                avg_baseline = sum(baseline_per_example) / len(baseline_per_example)
+            else:
+                avg_baseline, baseline_per_example = _holdout_evaluate_with_metric(
+                    baseline_module, holdout_examples, metric, lm,
+                )
             avg_evolved, evolved_per_example = _holdout_evaluate_with_metric(
                 optimized_module, holdout_examples, metric, lm,
             )
@@ -1502,6 +1547,26 @@ def evolve(
          "Pass this to suppress the panel.",
 )
 @click.option(
+    "--no-saturation-check",
+    "skip_saturation_check",
+    is_flag=True,
+    default=False,
+    help="Skip the saturation pre-flight. By default, the framework "
+         "scores the baseline on the holdout (and the closed-loop suite, "
+         "if --closed-loop-during-evolution is set) BEFORE GEPA starts "
+         "and refuses to spend on a saturated target. Pass this to skip "
+         "(useful when you've already validated headroom externally).",
+)
+@click.option(
+    "--force-saturation-check",
+    "force_saturation_check",
+    is_flag=True,
+    default=False,
+    help="Run the saturation pre-flight, render the panel, but proceed "
+         "regardless of band. Required to override a non-healthy verdict "
+         "in non-interactive contexts (no TTY).",
+)
+@click.option(
     "--closed-loop-during-evolution",
     "closed_loop_suite_path",
     default=None,
@@ -1592,6 +1657,8 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          benchmark_cmd, benchmark_timeout_seconds,
          skip_preflight,
          skip_cost_suggest,
+         skip_saturation_check,
+         force_saturation_check,
          closed_loop_suite_path,
          closed_loop_saturation_threshold,
          closed_loop_min_iters,
@@ -1637,6 +1704,8 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             benchmark_timeout_seconds=benchmark_timeout_seconds,
             skip_preflight=skip_preflight,
             skip_cost_suggest=skip_cost_suggest,
+            skip_saturation_check=skip_saturation_check,
+            force_saturation_check=force_saturation_check,
             closed_loop_suite_path=closed_loop_suite_path,
             closed_loop_saturation_threshold=closed_loop_saturation_threshold,
             closed_loop_min_iters=closed_loop_min_iters,

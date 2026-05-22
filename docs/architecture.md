@@ -13,12 +13,17 @@ flowchart LR
     A[CLI<br/>--skill X] --> B[Resolve SKILL.md<br/>SkillSource]
     B --> C[Build eval dataset<br/>synthetic / golden / sessiondb]
     C --> D[Wrap as<br/>SkillModule dspy.Module]
-    D --> E[GEPA optimizer<br/>+ BudgetAwareProposer]
+    D --> SAT[Saturation pre-flight<br/>baseline holdout + closed-loop probe]
+    SAT --> SATB{band ==<br/>healthy?}
+    SATB -- no --> SATA[Rich panel + prompt<br/>or default-deny]
+    SATA -- abort --> Z[sys.exit 0]
+    SATA -- proceed --> E
+    SATB -- yes --> E[GEPA optimizer<br/>+ BudgetAwareProposer]
     E --> F[Knee-point<br/>Pareto selection]
     F --> G[Static<br/>constraints]
     G --> H{pass?}
     H -- no --> I[Write evolved_FAILED.md<br/>+ gate_decision.json]
-    H -- yes --> J[Holdout eval<br/>dspy.Evaluate × 2]
+    H -- yes --> J[Holdout eval<br/>dspy.Evaluate × 1 evolved<br/>baseline reused from SAT]
     J --> K[Paired bootstrap<br/>per-example deltas]
     K --> L[Growth-with-quality<br/>gate]
     L --> M{deploy?}
@@ -166,7 +171,10 @@ When growth is below the free threshold, the gate degrades to "no-regression onl
 ### 9. Cost-ceiling kill switch
 `LMTimingCallback` also drives a per-run `CostLedger` that accumulates per-call cost from litellm's `_hidden_params`. `--max-total-cost-usd <N>` arms the ledger; once the accumulated cost crosses `N`, the next LM call raises `CostCeilingExceeded` from `LMTimingCallback.on_lm_start`. The orchestrator catches this at the top level and writes a `decision="aborted"` `gate_decision.json` with `cost_at_abort_usd` + `cost_ceiling_usd` + `cost_summary`. Worst-case overshoot is one LM call past the ceiling.
 
-### 10. Closed-loop validation as a separate surface
+### 10. Saturation pre-flight as a separate concern from the gate
+`evolution/core/saturation_check.py` runs BEFORE GEPA setup: scores the baseline on the holdout (and the closed-loop suite when configured), classifies into four bands (`healthy` / `no_headroom` / `weak_signal` / `uniform_failure`), and renders a Rich panel. Non-healthy bands prompt for confirmation in interactive contexts; default-deny in non-interactive contexts (no TTY) with a `--force-saturation-check` override. Skippable with `--no-saturation-check`. The probe's `holdout_per_example` is stashed and reused at the post-GEPA holdout site so net cost stays ~zero. Mirrors the `evolution/core/auth_check.py` pattern: pure helper returns a structured `SaturationReport`; rendering + exit handled by the call site. This is independent of the deploy gate (which runs AFTER GEPA on the evolved artifact) — the pre-flight is a "should we even start" decision; the gate is a "did we improve" decision.
+
+### 11. Closed-loop validation as a separate surface
 `evolution/validation/` runs a real agent (`hermes -z`) through a JSONL task suite with baseline vs evolved artifacts spliced into the live install. Available three ways:
 - **Post-gate veto** (`--benchmark-cmd "python -m evolution.validation.closed_loop ..."`) — runs after the deploy gate passes; nonzero exit flips the decision to reject with `reason="benchmark_failed"`.
 - **Reflection feedback** (`--closed-loop-during-evolution <suite.jsonl> --closed-loop-mode feedback`) — `ClosedLoopFeedbackCache` runs the validator during the GEPA loop, saturation-gated, and the verdict is rendered into the reflection LM's input via the metric's `dspy.Prediction.feedback` string. Score channel untouched.

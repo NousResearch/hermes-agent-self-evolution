@@ -69,6 +69,45 @@ sequenceDiagram
 
 Baseline static checks here are **warn-only** — they never block the run. The metric is built once so DSPy's LM cache lines up across GEPA per-iteration scoring and the holdout eval in Phase D.
 
+### Phase B.5 — Saturation pre-flight (default on; abort before GEPA spends budget)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_skill
+    participant Sat as saturation_preflight
+    participant Eval as dspy.Evaluate
+    participant CLC as ClosedLoopFeedbackCache
+    participant Panel as render_saturation_panel
+    participant U as User
+
+    CLI->>Sat: saturation_preflight(baseline, holdout, metric, lm, cl_cache?, baseline_text)
+    Sat->>Eval: evaluate(baseline_module, holdout)
+    Eval-->>Sat: avg_baseline, baseline_per_example
+    opt --closed-loop-during-evolution is set
+        Sat->>CLC: force_run(baseline_text)
+        CLC-->>Sat: ValidationReport (bypasses should_run)
+    end
+    Sat->>Sat: _classify_band(holdout, closed_loop?, DEFAULT_THRESHOLDS)
+    Sat-->>CLI: SaturationReport(band, holdout_per_example, suggestions, ...)
+
+    alt band == "healthy"
+        CLI->>Panel: one-line dim acknowledgement
+    else non-healthy
+        CLI->>Panel: render Rich panel (band + scores + suggestions)
+        alt --force-saturation-check
+            Note over CLI: proceed regardless
+        else interactive
+            CLI->>U: "Continue anyway? [y/N]"
+            U-->>CLI: y → proceed | n → sys.exit(0)
+        else non-interactive
+            CLI->>CLI: print "Use --force-saturation-check to override"; sys.exit(0)
+        end
+    end
+```
+
+Skippable with `--no-saturation-check`. The probe's `baseline_per_example` is stashed and reused at Phase D's holdout comparison (the baseline isn't re-scored at run end), so net cost is ~zero when the run proceeds. On an abort, GEPA never starts — the user is left with a clear panel explaining why and what to try next. See `components.md` (`saturation_check.py`) for the four-band classifier and `data_models.md` (`SaturationReport`) for the report shape.
+
 ### Phase C — Optimize: GEPA loop, then knee-point pick
 
 ```mermaid
@@ -122,8 +161,12 @@ sequenceDiagram
     CLI->>Val: validate_static(evolved_full, "skill")
     Val-->>CLI: pass
 
-    CLI->>Eval: evaluate(baseline_module, holdout)
-    Eval-->>CLI: avg_baseline, baseline_per_example
+    alt Phase B.5 cached baseline_per_example
+        Note over CLI,Eval: skip baseline call; reuse from saturation_preflight
+    else fresh
+        CLI->>Eval: evaluate(baseline_module, holdout)
+        Eval-->>CLI: avg_baseline, baseline_per_example
+    end
     CLI->>Eval: evaluate(optimized_module, holdout)
     Eval-->>CLI: avg_evolved, evolved_per_example
 
@@ -137,7 +180,7 @@ sequenceDiagram
     CLI-->>U: ✓ Evolution improved skill by +0.054 (+6.1%)
 ```
 
-Holdout costs ≈ 2 × |holdout| judge calls (baseline + evolved). The bootstrap runs on the per-example improvement vector; `validate_growth_with_quality` then applies the curve `required(growth) = max(0, slope * (growth - free))` and only deploys if both `mean ≥ required` and `lower_bound > 0`.
+Holdout costs ≈ 1 × |holdout| judge calls when the saturation pre-flight ran (the baseline scores are reused from `SaturationReport.holdout_per_example`); 2 × |holdout| when `--no-saturation-check` is set. The bootstrap runs on the per-example improvement vector; `validate_growth_with_quality` then applies the curve `required(growth) = max(0, slope * (growth - free))` and only deploys if both `mean ≥ required` and `lower_bound > 0`.
 
 ## Workflow 2: Evolve a skill (rejected on quality gate)
 

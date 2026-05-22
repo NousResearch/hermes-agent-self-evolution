@@ -44,6 +44,12 @@ The fitness function is a composite LLM-as-judge metric: separate scores for cor
 
 Files: `evolution/skills/budget_aware_proposer.py`, `evolution/core/fitness.py`.
 
+### Saturation pre-flight that refuses to spend budget on hopeless runs
+
+GEPA will happily burn an hour optimizing a target that has no measurable headroom — every reflective mutation gets rejected because the minibatch ties at 100%, and you end up with the baseline byte-for-byte plus a bill. The framework's pre-flight (`evolution/core/saturation_check.py`) catches this BEFORE GEPA starts: scores the baseline on the holdout (and the closed-loop suite, if configured), classifies into `healthy` / `no_headroom` / `weak_signal` / `uniform_failure`, and either prompts the user (interactive) or default-denies with a `--force-saturation-check` override (non-interactive). Net cost is ~zero — the probe's holdout scores are reused at the post-GEPA evaluation site. When the run does proceed, the user has band-specific suggestions for the warn cases (try a stronger validator model, try a harder suite, increase iterations). Raw `dspy.GEPA` has no equivalent.
+
+Files: `evolution/core/saturation_check.py`.
+
 ## Telemetry as a first-class feature
 
 Every run writes `gate_decision.json` (schema_version `"4"`) capturing the deploy decision, the paired-bootstrap statistics, the static-constraint results, the knee-point band roster, and an explicit comparison against the candidate stock GEPA would have picked. Combined with `metrics.json` (deploy summary) and `run.log` (every LM call timing), this means a deploy decision is auditable post-hoc and the system can be re-calibrated on accumulated runs. Most upstream users won't realize they're missing this until they need to debug a bad ship.

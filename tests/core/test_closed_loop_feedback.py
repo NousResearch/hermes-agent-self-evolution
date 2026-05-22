@@ -533,3 +533,101 @@ class TestArtifactWriterInjection:
         path = tmp_path / "out.md"
         write_text_artifact("hello world\n", path)
         assert path.read_text() == "hello world\n"
+
+
+class TestForceRun:
+    """`force_run` bypasses should_run() and propagates errors (unlike
+    get_or_run which swallows expected validator errors)."""
+
+    def test_force_run_fires_in_sampled_mode_before_any_judge_scores(self, tmp_path):
+        """In default sampled mode with empty judge history, should_run()
+        returns False — but force_run runs the validator anyway."""
+        suite = _build_suite(tmp_path)
+        report = _build_report()
+        validator = MagicMock()
+        validator.validate.return_value = report
+        cache = ClosedLoopFeedbackCache(
+            validator=validator,
+            suite=suite,
+            artifact_name="write_file",
+            baseline_artifact_text="baseline desc",
+            gate_mode="sampled",
+        )
+        assert cache.should_run() is False
+
+        result = cache.force_run("candidate desc")
+
+        assert result is report
+        validator.validate.assert_called_once()
+
+    def test_force_run_uses_cache_on_repeat_calls(self, tmp_path):
+        """Second call with same candidate_text returns the cached report
+        without re-running the validator."""
+        suite = _build_suite(tmp_path)
+        report = _build_report()
+        validator = MagicMock()
+        validator.validate.return_value = report
+        cache = ClosedLoopFeedbackCache(
+            validator=validator, suite=suite, artifact_name="t",
+            baseline_artifact_text="b", gate_mode="sampled",
+        )
+
+        first = cache.force_run("cand")
+        second = cache.force_run("cand")
+
+        assert first is second
+        assert validator.validate.call_count == 1
+
+    def test_force_run_propagates_validator_errors(self, tmp_path):
+        """force_run propagates ConcurrentRunError (unlike get_or_run,
+        which swallows it and returns None to keep GEPA going). Preflight
+        callers want to know the probe failed."""
+        suite = _build_suite(tmp_path)
+        validator = MagicMock()
+        validator.validate.side_effect = ConcurrentRunError("locked")
+        cache = ClosedLoopFeedbackCache(
+            validator=validator, suite=suite, artifact_name="t",
+            baseline_artifact_text="b", gate_mode="sampled",
+        )
+
+        with pytest.raises(ConcurrentRunError):
+            cache.force_run("cand")
+
+    def test_force_run_preserves_first_fire_for_subsequent_get_or_run(self, tmp_path):
+        """force_run at preflight must not eat the first-fire allowance.
+
+        The init contract is _iters_since_last_run = min_iters so that the
+        first GEPA-time record_judge_score call pushes the counter above the
+        periodic floor and the immediately following get_or_run fires.
+        force_run must restore that same value so the guarantee holds even
+        when preflight ran before GEPA started.
+
+        In sampled mode, should_run() returns False when judge_history is
+        empty (there's an early-return guard). The allowance only takes effect
+        after the first record_judge_score — at that point _iters_since_last_run
+        must be >= min_iters.  When force_run incorrectly reset to 0, one
+        record_judge_score call would leave _iters_since_last_run = 1 < min_iters,
+        and should_run() would return False, delaying the first GEPA fire."""
+        suite = _build_suite(tmp_path)
+        report = _build_report()
+        validator = MagicMock()
+        validator.validate.return_value = report
+        cache = ClosedLoopFeedbackCache(
+            validator=validator, suite=suite, artifact_name="t",
+            baseline_artifact_text="b", gate_mode="sampled",
+            min_iters=3,
+        )
+
+        # Preflight fires once (simulates saturation_preflight at init time)
+        cache.force_run("baseline")
+
+        # Simulate the first GEPA metric call recording a judge score.
+        # After this, _iters_since_last_run must be >= min_iters so
+        # should_run() returns True (periodic floor is met).
+        cache.record_judge_score(0.7)  # non-saturating score
+
+        assert cache.should_run() is True, (
+            "After force_run + one record_judge_score, should_run() must be True "
+            "(_iters_since_last_run should be min_iters+1 >= min_iters). "
+            "force_run reset to 0 would leave it at 1 < 3 (min_iters), causing False."
+        )

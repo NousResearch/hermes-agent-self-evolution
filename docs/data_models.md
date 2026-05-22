@@ -285,6 +285,26 @@ Both must hold to return `"pass"`; else `"regression"`. The 2:1 win-loss ratio i
 
 `ValidationReport.to_dict()` round-trips to `validation_report.json` written under `output/validation/<tool>/<timestamp>/`.
 
+## SaturationReport (`evolution/core/saturation_check.py`)
+
+In-memory only. Built by `saturation_preflight(...)` before GEPA setup, consumed by the call site in `evolve_skill` / `evolve_tool` to decide whether to abort or proceed. Not currently serialized to disk — the `holdout_per_example` list flows directly into the post-GEPA `_holdout_evaluate_with_metric` baseline-cache reuse path.
+
+```python
+@dataclass
+class SaturationReport:
+    band: SaturationBand                          # "healthy" | "no_headroom" | "weak_signal" | "uniform_failure"
+    holdout_score: float                          # baseline mean on holdout
+    holdout_n: int                                # number of holdout examples scored
+    holdout_per_example: list[float]              # per-example scores (reused at post-GEPA evaluation)
+    closed_loop_score: Optional[float] = None     # None when no --closed-loop-during-evolution suite
+    closed_loop_n: Optional[int] = None           # number of behavioral tasks scored
+    closed_loop_per_example: Optional[list[float]] = None
+    suggestions: list[str] = field(default_factory=list)   # band-specific user-facing strings
+    thresholds: dict[str, float] = field(default_factory=dict)   # snapshot of values that produced the band
+```
+
+`SaturationBand` is a `Literal` of four strings. `DEFAULT_THRESHOLDS` ships as `{no_headroom_synthetic: 0.99, weak_signal_synthetic: 0.95, no_headroom_closed_loop: 0.95, uniform_failure_closed_loop: 0.15}`. See `components.md`'s `saturation_check.py` section for the classifier logic.
+
 ## Evolved manifest output JSON
 
 `output/tools/<tool>/<timestamp>/evolved_manifest.json` (deploy) and `evolved_FAILED.json` (reject) have the same shape as the input MCP-shape manifest:

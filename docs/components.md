@@ -163,12 +163,38 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 - `.should_run() -> bool` — the gate. `gate_mode="sampled"` (default, opportunistic feedback-only use): fire when `min(recent_window) >= saturation_threshold` OR `iters_since_last_run >= min_iters`. `gate_mode="always"` (selection-affecting trainset use): always open — every novel candidate must score every time.
 - `.get_or_run(candidate_text) -> Optional[ValidationReport]` — cache key is `sha256(candidate + suite.sha256)`. Cache hit returns cached report; miss writes the candidate's description into a tmp JSON manifest and calls `validator.validate()`. Validator failures (`ConcurrentRunError`, `StaleBackupError`, `ChecksumDriftError`) log `WARNING` and return `None` — closed-loop failure must never take the GEPA run down.
 - `.get_task_verdict(candidate_text, task_id) -> Optional[TaskResult]` — calls `get_or_run` and indexes `report.evolved.tasks` by `task_id`. Returns `None` if the gate is closed or the validator raised a swallowed error or the task isn't present.
+- `.force_run(candidate_text) -> ValidationReport` — same shape as `get_or_run` but bypasses `should_run()` and propagates validator exceptions (instead of logging + returning `None`). Used by the saturation pre-flight (`evolution/core/saturation_check.py`) to fire the validator on the baseline once before any judge scores have been recorded — in default `gate_mode="sampled"`, `should_run()` returns `False` until either a judge score saturates or the periodic floor elapses, so `get_or_run` would silently no-op at preflight time. Preserves the "next `get_or_run` is allowed to fire immediately" guarantee by resetting `_iters_since_last_run` to `min_iters` (the same value `__init__` uses), so the saturation gate's first-fire allowance for downstream callers is intact.
 - `render_feedback_block(report: ValidationReport) -> str` — module-level function. Renders the cached report as a deterministic `[CLOSED_LOOP]` block (or `[CLOSED_LOOP-NOISY]` when `|Δpass_rate| < 0.15`) with decision, decision_reasons, win/loss/tie counts, and per-task diffs for tasks whose verdict changed. Determinism is required because GEPA hashes reflective-dataset entries for caching.
 
 **Two use modes**, both wired through `evolve_tool` CLI flags:
 
 1. **Feedback enricher** (`--closed-loop-mode feedback`, default): the metric's `_augment_feedback_with_closed_loop` helper calls `get_or_run` on the candidate currently under reflection, then appends the rendered block to the metric's `dspy.Prediction.feedback`. Saturation-gated so it only fires when the judge has converged. Score is unchanged.
 2. **Trainset score channel** (`--closed-loop-mode trainset`): `build_behavioral_examples(suite)` injects per-task `dspy.Example`s into the trainset. The metric's behavioral branch calls `get_task_verdict` on each behavioral example and returns the binary verdict as score. Behavioral wins contribute to `sum(minibatch_scores)`, breaking judge ties at acceptance.
+
+## evolution/core/saturation_check.py — pre-flight that detects doomed runs
+
+**Owns:** the pre-GEPA probe that scores the baseline on the holdout (and the closed-loop suite, if configured), classifies the result into one of four bands, and lets the call site decide whether to prompt for confirmation or default-deny. Independent of any GEPA-side change; mirrors the shape of `evolution/core/auth_check.py` (pure helper returns a structured report; rendering + exit handled by the call site).
+
+**Public surface:**
+
+- `SaturationBand: Literal["healthy", "no_headroom", "weak_signal", "uniform_failure"]` — the four-band classification.
+- `DEFAULT_THRESHOLDS: dict[str, float]` — `no_headroom_synthetic=0.99`, `weak_signal_synthetic=0.95`, `no_headroom_closed_loop=0.95`, `uniform_failure_closed_loop=0.15`.
+- `SaturationReport` dataclass — the contract between the helper and the call site. Carries the band, holdout score + per-example list (reused downstream for cache reuse), the closed-loop score + per-example list when present, the band-specific suggestion strings, and the thresholds that produced the band.
+- `saturation_preflight(baseline_module, holdout_examples, metric, lm, closed_loop_cache=None, baseline_artifact_text=None, thresholds=None) -> SaturationReport` — pure function. Scores baseline via `_score_baseline_on_holdout` (a thin wrapper around `dspy.Evaluate` carved out so tests can patch the DSPy boundary), then fires `closed_loop_cache.force_run(baseline_artifact_text)` when the cache is provided. Raises `ValueError` on empty `holdout_examples` before any LM call.
+- `render_saturation_panel(report, console=None) -> None` — emits a one-line dim acknowledgement for the `healthy` band, or a Rich `Panel` (yellow border) with band, score lines, and bulleted suggestions for the warn bands.
+- `interactive_confirm(prompt="Continue anyway? [y/N] ") -> bool` — reads stdin; returns `True` only for `{y, yes}` case-insensitive. Catches `KeyboardInterrupt` and `EOFError`, returning `False` (treats as "n", no traceback noise).
+- `is_non_interactive() -> bool` — `not sys.stdin.isatty()`. Call sites use it to decide between prompting and printing the override hint.
+
+**Band classifier logic** (`_classify_band`, in priority order):
+
+1. **`uniform_failure`** if `closed_loop_score is not None AND closed_loop_score <= 0.15` — validator agent too weak to use the artifact at all; signal isn't discriminating.
+2. **`no_headroom`** if either:
+   - `holdout_score >= 0.99 AND closed_loop_score is None` — only signal available is the judge, and it's pegged, OR
+   - `closed_loop_score >= 0.95 AND holdout_score >= 0.95` — both signals effectively saturated. The `holdout_score >= 0.95` gate on this clause keeps `(synthetic=0.5, CL=1.0)` classified as `healthy` (there's real judge headroom even with behavioral pegged; usually means misconfigured eval rather than true saturation).
+3. **`weak_signal`** if `holdout_score >= 0.95 AND 0.15 < closed_loop_score < 0.95` — judge saturating but closed-loop discriminates; GEPA's small-minibatch acceptance will struggle (per the deviation #8 finding); expect many proposals rejected.
+4. **`healthy`** otherwise — no panel, just a one-line dim log.
+
+**Call-site integration:** both `evolve_skill.py` and `evolve_tool.py` invoke the helper after the dataset is built and `baseline_module`/`metric`/`closed_loop_cache` are constructed but before GEPA setup. The `holdout_per_example` list from the report is stashed and reused at the post-GEPA `_holdout_evaluate_with_metric` site — so the baseline isn't re-scored at run end. Net cost: ~zero (the probe is the holdout eval shifted earlier). See `--no-saturation-check` / `--force-saturation-check` in `interfaces.md`.
 
 ## evolution/core/constraints.py — deploy gate
 

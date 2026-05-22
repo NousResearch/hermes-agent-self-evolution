@@ -72,6 +72,8 @@ Both delivery flags are no-ops on a reject decision and emit a one-line stderr n
 | `--benchmark-cmd "<shell command>"` | off | Deploy-gate hook: shell command run AFTER the framework's own deploy gate passes; nonzero exit flips the decision to `reject` with `reason="benchmark_failed"`. Receives `EVOLVED_PATH`, `BASELINE_PATH`, `RUN_DIR`, `TARGET_NAME`, `ARTIFACT_TYPE` via env. Runs under `/bin/sh -c`; aliases and shell functions from your interactive shell are not available. Trust boundary: the command string is yours; do not pass strings you didn't write. Adds a `benchmark` block to `gate_decision.json`. |
 | `--benchmark-timeout-seconds INT` | `600` | Wall-clock cap for the `--benchmark-cmd` hook. Timeout treated as a benchmark fail with `reason="timeout"`. |
 | `--closed-loop-during-evolution <suite.jsonl>` | off | Wired symmetrically with `evolve_tool` for CLI consistency. Skill-side closed-loop validation requires a `SkillFileInstaller` that doesn't exist yet, so setting this flag raises with a clear error. |
+| `--no-saturation-check` | off | Skip the saturation pre-flight (`evolution/core/saturation_check.py`). By default, the framework scores the baseline on the holdout (and the closed-loop suite, if `--closed-loop-during-evolution` is set) BEFORE GEPA starts; non-`healthy` bands prompt for confirmation (interactive) or default-deny (non-interactive) with a `--force-saturation-check` override. Pass `--no-saturation-check` to skip the probe entirely. |
+| `--force-saturation-check` | off | Run the saturation pre-flight, render the panel, but proceed regardless of band. Required to override a non-`healthy` verdict in non-interactive contexts (no TTY on stdin). Without this in such a context, the framework exits cleanly without spending GEPA budget. |
 
 ### Exit conditions
 - `sys.exit(1)` if skill not found across all `SkillSource`s — prints available skills per source.
@@ -112,6 +114,8 @@ Evolves one tool's top-level `description` field inside an MCP-shape manifest. T
 | `--closed-loop-saturation-threshold FLOAT` | `0.95` | Min judge score over the recent window for the saturation gate to open. Only consumed in `feedback` mode (`trainset` / `both` use `gate_mode="always"`). |
 | `--closed-loop-min-iters INT` | `3` | Periodic-fire floor: fire closed-loop at least every N reflective iterations even when the judge isn't saturating. `feedback` mode only. |
 | `--closed-loop-window-size INT` | `8` | Number of recent judge scores the saturation gate inspects. `feedback` mode only. |
+| `--no-saturation-check` | off | Skip the saturation pre-flight (`evolution/core/saturation_check.py`). By default, the framework scores the baseline on the holdout (and the closed-loop suite, if configured) BEFORE GEPA starts; non-`healthy` bands prompt for confirmation (interactive) or default-deny (non-interactive) with a `--force-saturation-check` override. Pass `--no-saturation-check` to skip the probe entirely. |
+| `--force-saturation-check` | off | Run the saturation pre-flight, render the panel, but proceed regardless of band. Required to override a non-`healthy` verdict in non-interactive contexts (no TTY on stdin). |
 
 `main()` rejects `--closed-loop-during-evolution` without `--closed-loop-hermes-repo`, and rejects `--closed-loop-mode != feedback` without `--closed-loop-during-evolution`. Local imports keep the validation stack out of cold-path runs.
 

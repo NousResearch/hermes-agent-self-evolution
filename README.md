@@ -245,6 +245,27 @@ uv run python -m evolution.tools.evolve_tool --tool X --manifest Y \
 
 Env vars: `EVOLVED_PATH`, `BASELINE_PATH`, `RUN_DIR`, `TARGET_NAME`, `ARTIFACT_TYPE`. The hook runs under `/bin/sh -c` — interactive aliases are not available; invoke binaries by full name. Trust boundary: the command string is yours, do not pass strings you didn't write yourself.
 
+### Saturation pre-flight (don't burn GEPA budget on hopeless runs)
+
+By default, every `evolve_skill` / `evolve_tool` run does a pre-flight: score the baseline on the holdout (and the closed-loop suite, if `--closed-loop-during-evolution` is set), classify into one of four bands (`healthy` / `no_headroom` / `weak_signal` / `uniform_failure`), and refuse to spend GEPA budget on a baseline that's already saturated.
+
+```
+Saturation check: holdout=0.987 (50 ex), closed-loop=1.000 (7 tasks)
+╭─── No measurable headroom ───────────╮
+│ Band: no_headroom                    │
+│ • Baseline already saturates the eval│
+│ • Try a harder closed-loop suite     │
+│ • Sanity check: synthetic generator? │
+╰──────────────────────────────────────╯
+Non-interactive context; refusing to proceed.
+Pass --force-saturation-check to override.
+```
+
+In interactive contexts, non-`healthy` bands prompt for confirmation (`Continue anyway? [y/N]`). In non-interactive contexts (no TTY on stdin — CI, background jobs, cron), the framework default-denies and exits cleanly with the override hint. Net cost is ~zero: the probe's holdout scores are reused at the post-GEPA evaluation site, so the baseline isn't re-scored at run end.
+
+- `--no-saturation-check` skips the probe entirely (useful when you've already validated headroom externally)
+- `--force-saturation-check` runs the probe + renders the panel but proceeds regardless of band
+
 ### Closed-loop validation (real agent on real tasks)
 
 The framework's deploy gate scores evolved artifacts against an LM-judge on a synthetic eval set. That's a closed loop: an LM scoring another LM's output on tasks a third LM made up. To break the loop, point a real agent at a small task suite with the baseline and evolved artifacts and see whether real agent behavior actually shifted:

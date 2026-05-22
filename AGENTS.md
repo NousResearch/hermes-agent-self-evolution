@@ -74,9 +74,9 @@ The `evolution/<tier>/` directories form **a clean layering**: `evolution/core/`
 
 1. CLI resolves `--skill <name>` to a `SKILL.md` via the `SkillSource` walk.
 2. Eval dataset is built (synthetic LM gen / golden file / sessiondb mining).
-3. Skill body wrapped as `dspy.Module`; GEPA optimizes it with `BudgetAwareProposer` injecting a char budget into the reflection prompt.
+3. Skill body wrapped as `dspy.Module`. **Saturation pre-flight** (`evolution/core/saturation_check.py`) scores the baseline on the holdout + closed-loop suite, classifies into one of four bands, and aborts (or prompts) on non-`healthy` bands — `--no-saturation-check` to skip, `--force-saturation-check` to override the default-deny in non-interactive contexts. Then GEPA optimizes the candidate with `BudgetAwareProposer` injecting a char budget into the reflection prompt.
 4. Knee-point Pareto selection walks the candidates within ε of the best valset score in `--knee-point-strategy` order. Default `val-best`: highest val first, smallest body as tiebreak. `smallest` (greedy parsimony) is available via the flag for users explicitly chasing compression.
-5. Static constraints + paired-bootstrap growth-quality gate decide deploy vs. reject; both outcomes write `gate_decision.json`. The default rule is `no_regression` (`mean >= 0`); `--quality-gate non-inferiority` switches to `lower_bound > -inferiority_tolerance` (recommended for compression-focused runs at small N where the bootstrap CI swamps tiny effects).
+5. Static constraints + paired-bootstrap growth-quality gate decide deploy vs. reject; both outcomes write `gate_decision.json`. The default rule is `no_regression` (`mean >= 0`); `--quality-gate non-inferiority` switches to `lower_bound > -inferiority_tolerance` (recommended for compression-focused runs at small N where the bootstrap CI swamps tiny effects). The post-GEPA holdout eval reuses the baseline scores from the pre-flight, so net cost stays ~zero when the pre-flight ran.
 
 ## What lives where
 
@@ -101,6 +101,7 @@ The `evolution/<tier>/` directories form **a clean layering**: `evolution/core/`
 | Tool-flavored judge + tool metric | `evolution/tools/tool_judge.py` |
 | Behavioral `dspy.Example` builder for closed-loop trainset | `evolution/core/behavioral_example.py` |
 | Closed-loop verdict cache + deterministic feedback rendering | `evolution/core/closed_loop_feedback.py` |
+| Saturation pre-flight (band classifier + Rich panel + interactive confirm) | `evolution/core/saturation_check.py` |
 | Deploy gate (static + growth-quality) | `evolution/core/constraints.py` |
 | Preset table + gate-decision persistence (shared by skill/tool) | `evolution/core/quality_gate.py` |
 | Paired-bootstrap CI | `evolution/core/stats.py` |
@@ -268,6 +269,7 @@ Open questions deferred to future PRs (per `PLAN.md` deviation notes):
 - GEPA Pareto-frontier checkpointing (so a `TimeoutError` mid-run doesn't lose all candidates)
 - Skill-size-based reflection-LM timeout scaling
 - BCa bootstrap upgrade once N≥20 routinely
+- **GEPA acceptance-gate work** (deviation #8 follow-up): the saturation pre-flight (`evolution/core/saturation_check.py`) addresses the user-visible symptom on saturated baselines (abort before GEPA spends budget). The underlying mechanism gap — stochastic small-minibatch `sum()` acceptance discarding per-instance signal — is tracked as Path D/E/C in `reports/pareto_frontier_feasibility.md` and remains future work (likely an upstream DSPy or GEPA PR).
 
 ## When to consult which doc
 
