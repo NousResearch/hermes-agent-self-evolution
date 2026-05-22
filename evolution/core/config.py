@@ -26,6 +26,17 @@ class EvolutionConfig:
     iterations: int = 10
     population_size: int = 5
 
+    # GEPA's reflective minibatch size — the number of training examples
+    # sampled per reflective step for the sum() acceptance gate at
+    # gepa/core/engine.py:491-493. Default 3 matches GEPA's own default
+    # (no behavior change). Users hitting the weak_signal saturation
+    # band can bump this to ~8 to widen the sampling window so
+    # discriminating examples appear more often per minibatch — see
+    # reports/pareto_frontier_feasibility.md spike #2 for the
+    # motivating case and saturation_check.py's weak_signal suggestions
+    # for the actionable hint surfaced to users.
+    reflection_minibatch_size: int = 3
+
     # Per-role model overrides. When set, treated as explicit LiteLLM model
     # strings that bypass Hermes resolution. When None, get_lm() falls back
     # to resolve_default_lm() against ~/.hermes/config.yaml + auth.json +

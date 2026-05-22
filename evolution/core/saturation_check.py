@@ -97,8 +97,8 @@ def _classify_band(
     ):
         return "weak_signal", [
             "Judge saturating but closed-loop has signal; GEPA's small-minibatch acceptance will struggle.",
-            "Expect many proposals rejected — bump --iterations above 5.",
-            "Larger minibatch (Path E follow-up) would help once landed.",
+            "Try --gepa-minibatch-size 8 (default 3) — widens the sampling window so discriminating examples appear in ~68% of minibatches vs ~34% at default.",
+            "Larger minibatch means fewer proposals per budget: on evolve_tool bump --iterations to ~10, on evolve_skill use --budget heavy.",
         ]
 
     return "healthy", []

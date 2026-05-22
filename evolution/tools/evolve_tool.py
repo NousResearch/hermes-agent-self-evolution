@@ -376,6 +376,7 @@ def evolve(
     skip_cost_suggest: bool = False,
     skip_saturation_check: bool = False,
     force_saturation_check: bool = False,
+    gepa_minibatch_size: int = 3,
 ) -> dict[str, Any]:
     """Evolve one tool description inside a manifest.
 
@@ -421,6 +422,7 @@ def evolve(
         eval_dataset_size=eval_dataset_size,
         holdout_ratio=holdout_ratio,
         enable_confusable_bucket=enable_confusable_bucket,
+        reflection_minibatch_size=gepa_minibatch_size,
     )
 
     console.print(
@@ -573,6 +575,18 @@ def evolve(
                 )
                 sys.exit(1)
 
+            # Guard: GEPA's reflective batch sampler asserts
+            # len(trainset) >= reflection_minibatch_size mid-optimization
+            # (gepa/strategies/batch_sampler.py). Catch the misconfiguration
+            # at startup with an actionable message instead.
+            if config.reflection_minibatch_size > len(dataset.train):
+                console.print(
+                    f"[red]✗ --gepa-minibatch-size={config.reflection_minibatch_size} "
+                    f"exceeds trainset size {len(dataset.train)}. Pick a value ≤ "
+                    f"{len(dataset.train)} or increase --eval-dataset-size.[/red]"
+                )
+                sys.exit(1)
+
             console.print(f"\n[bold]Validating baseline description[/bold]")
             validator = ConstraintValidator(config)
             baseline_constraints = validator.validate_static(baseline_description, "tool_description")
@@ -712,6 +726,7 @@ def evolve(
                 seed=config.seed,
                 track_stats=True,
                 instruction_proposer=proposer,
+                reflection_minibatch_size=config.reflection_minibatch_size,
             )
             optimized_module = optimizer.compile(
                 baseline_module, trainset=trainset, valset=valset,
@@ -1256,6 +1271,22 @@ def evolve(
          "context, the framework exits cleanly without spending GEPA budget.",
 )
 @click.option(
+    "--gepa-minibatch-size",
+    "gepa_minibatch_size",
+    default=3,
+    type=click.IntRange(min=1),
+    help="GEPA's reflective minibatch size — number of training examples "
+         "sampled per reflective step for the sum() acceptance gate. "
+         "Default 3 matches GEPA's own default. Bump to ~8 when the "
+         "saturation pre-flight flags the weak_signal band: the wider "
+         "sampling window makes discriminating examples appear in "
+         "~68% of minibatches vs ~34% at default. Trade-off: larger "
+         "minibatch means each accepted proposal consumes more of the "
+         "metric-call budget, so consider also bumping --iterations to "
+         "~10 to preserve the proposal count. Aborts at startup if the "
+         "value exceeds the trainset size.",
+)
+@click.option(
     "--closed-loop-in-valset/--no-closed-loop-in-valset",
     "closed_loop_in_valset",
     default=False,
@@ -1308,6 +1339,7 @@ def main(
     skip_cost_suggest: bool,
     skip_saturation_check: bool,
     force_saturation_check: bool,
+    gepa_minibatch_size: int,
     closed_loop_suite_path: Optional[Path],
     closed_loop_hermes_repo: Optional[Path],
     closed_loop_saturation_threshold: float,
@@ -1360,6 +1392,7 @@ def main(
             skip_cost_suggest=skip_cost_suggest,
             skip_saturation_check=skip_saturation_check,
             force_saturation_check=force_saturation_check,
+            gepa_minibatch_size=gepa_minibatch_size,
         )
     except HermesProviderError as exc:
         # Render a clean error panel instead of dumping a Python traceback —

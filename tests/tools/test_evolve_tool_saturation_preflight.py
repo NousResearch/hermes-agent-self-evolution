@@ -295,3 +295,99 @@ class TestSaturationPreflightCLI:
                 f"Expected baseline holdout to be reused from preflight cache "
                 f"(1 call for evolved only), got {mock_holdout_eval.call_count}"
             )
+
+
+class TestGepaMinibatchSizeFlag:
+    """--gepa-minibatch-size threads through to dspy.GEPA's
+    reflection_minibatch_size kwarg, and the post-dataset-build guard
+    rejects values that exceed the trainset size with an actionable
+    message instead of an opaque assertion deep inside GEPA."""
+
+    def test_flag_passes_through_to_dspy_gepa(self, manifest_dir):
+        """Patch dspy.GEPA's __init__ to record the value, then invoke the
+        CLI with --gepa-minibatch-size 7. Assert the constructed instance
+        carries the value on the documented attribute. Catches future
+        DSPy refactors that rename reflection_minibatch_size."""
+        from evolution.core.saturation_check import SaturationReport
+        from evolution.skills.knee_point import CandidatePick
+        captured: dict = {}
+        original_init = __import__("dspy").GEPA.__init__
+
+        def recording_init(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            captured["reflection_minibatch_size"] = self.reflection_minibatch_size
+
+        healthy = SaturationReport(
+            band="healthy", holdout_score=0.6, holdout_n=10,
+            holdout_per_example=[0.6] * 10, suggestions=[], thresholds={},
+        )
+        fake_module = MagicMock()
+        knee_pick = CandidatePick(
+            module=fake_module, skill_text="evolved desc", body_chars=12,
+            val_score=0.8, val_rank_in_band=1, band_size=1, epsilon=0.1,
+            fallback="knee", picked_idx=0, gepa_default_idx=0,
+            gepa_default_body_chars=12, band_roster=[],
+        )
+        fake_builder = MagicMock()
+        fake_builder.generate_tool_selection.return_value = _fake_tool_examples()
+        with patch(
+            "evolution.tools.evolve_tool.SyntheticDatasetBuilder", return_value=fake_builder
+        ), patch(
+            "evolution.tools.evolve_tool.saturation_preflight", return_value=healthy
+        ), patch(
+            "evolution.tools.evolve_tool._preflight_lm_credentials"
+        ), patch("evolution.tools.evolve_tool.dspy.GEPA.__init__", recording_init), patch(
+            "evolution.tools.evolve_tool.dspy.GEPA.compile", return_value=fake_module
+        ), patch(
+            "evolution.tools.evolve_tool.select_knee_point", return_value=knee_pick
+        ), patch(
+            "evolution.tools.evolve_tool._candidate_description", return_value="evolved desc"
+        ), patch(
+            "evolution.tools.evolve_tool._holdout_evaluate_with_metric",
+            return_value=(0.6, [0.6] * 10),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                evolve_tool_main,
+                ["--tool", "write_file", "--manifest", str(manifest_dir),
+                 "--iterations", "1", "--no-preflight",
+                 "--gepa-minibatch-size", "7"],
+            )
+            assert captured.get("reflection_minibatch_size") == 7, (
+                f"Expected dspy.GEPA.reflection_minibatch_size=7; got "
+                f"{captured!r}. CLI output: {result.output}"
+            )
+
+    def test_minibatch_exceeding_trainset_aborts_at_startup(self, manifest_dir):
+        """--gepa-minibatch-size larger than the trainset triggers the
+        post-dataset guard (sys.exit(1) with an actionable message),
+        not a mid-optimization assertion inside EpochShuffledBatchSampler."""
+        from evolution.core.saturation_check import SaturationReport
+        healthy = SaturationReport(
+            band="healthy", holdout_score=0.6, holdout_n=10,
+            holdout_per_example=[0.6] * 10, suggestions=[], thresholds={},
+        )
+        # _fake_tool_examples() returns 30 — so 1000 exceeds it.
+        fake_builder = MagicMock()
+        fake_builder.generate_tool_selection.return_value = _fake_tool_examples()
+        gepa_mock = MagicMock()
+        with patch(
+            "evolution.tools.evolve_tool.SyntheticDatasetBuilder", return_value=fake_builder
+        ), patch(
+            "evolution.tools.evolve_tool.saturation_preflight", return_value=healthy
+        ), patch(
+            "evolution.tools.evolve_tool._preflight_lm_credentials"
+        ), patch("evolution.tools.evolve_tool.dspy.GEPA", gepa_mock):
+            runner = CliRunner()
+            result = runner.invoke(
+                evolve_tool_main,
+                ["--tool", "write_file", "--manifest", str(manifest_dir),
+                 "--iterations", "1", "--no-preflight",
+                 "--gepa-minibatch-size", "1000"],
+            )
+            assert result.exit_code == 1, (
+                f"Expected exit 1 from trainset-ceiling guard, got "
+                f"{result.exit_code}. Output: {result.output}"
+            )
+            assert "exceeds trainset size" in result.output
+            gepa_mock.assert_not_called()

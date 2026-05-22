@@ -270,6 +270,7 @@ def _default_gepa_runner(
     seed: int,
     instruction_proposer=None,
     reflection_model: Optional[str] = None,
+    reflection_minibatch_size: int = 3,
 ):
     # max_tokens=32000 satisfies DSPy's reasoning-model floor of 16000
     # (DSPy raises ValueError below that).
@@ -298,6 +299,7 @@ def _default_gepa_runner(
         # (.candidates, .val_aggregate_scores) on the returned module.
         track_stats=True,
         instruction_proposer=instruction_proposer,
+        reflection_minibatch_size=reflection_minibatch_size,
     )
     return optimizer.compile(baseline_module, trainset=trainset, valset=valset)
 
@@ -355,6 +357,7 @@ def _build_optimizer_and_compile(
     failure_log_path: Optional[Path] = None,
     instruction_proposer=None,
     reflection_model: Optional[str] = None,
+    reflection_minibatch_size: int = 3,
     _gepa_runner=_default_gepa_runner,
     _mipro_runner=_default_mipro_runner,
 ):
@@ -376,6 +379,7 @@ def _build_optimizer_and_compile(
             seed=seed,
             instruction_proposer=instruction_proposer,
             reflection_model=reflection_model,
+            reflection_minibatch_size=reflection_minibatch_size,
         )
         return optimized, "GEPA"
     except CostCeilingExceeded:
@@ -606,6 +610,7 @@ def evolve(
     skip_cost_suggest: bool = False,
     skip_saturation_check: bool = False,
     force_saturation_check: bool = False,
+    gepa_minibatch_size: int = 3,
     closed_loop_suite_path: Optional[Path] = None,
     closed_loop_saturation_threshold: float = 0.95,
     closed_loop_min_iters: int = 3,
@@ -656,6 +661,7 @@ def evolve(
         config_kwargs["eval_dataset_size"] = eval_dataset_size
     if holdout_ratio is not None:
         config_kwargs["holdout_ratio"] = holdout_ratio
+    config_kwargs["reflection_minibatch_size"] = gepa_minibatch_size
     config = EvolutionConfig(**config_kwargs)
     explicit_dirs = [Path(d) for d in (skill_source_dirs or [])]
     if explicit_dirs:
@@ -790,6 +796,18 @@ def evolve(
                 console.print(
                     f"[red]✗ Holdout has only {len(dataset.holdout)} examples; need ≥{config.min_holdout_size} "
                     f"to gate on improvement signal. Increase eval_dataset_size or holdout_ratio.[/red]"
+                )
+                sys.exit(1)
+
+            # Guard: GEPA's reflective batch sampler asserts
+            # len(trainset) >= reflection_minibatch_size mid-optimization
+            # (gepa/strategies/batch_sampler.py). Catch the misconfiguration
+            # at startup with an actionable message instead.
+            if config.reflection_minibatch_size > len(dataset.train):
+                console.print(
+                    f"[red]✗ --gepa-minibatch-size={config.reflection_minibatch_size} "
+                    f"exceeds trainset size {len(dataset.train)}. Pick a value ≤ "
+                    f"{len(dataset.train)} or increase --eval-dataset-size.[/red]"
                 )
                 sys.exit(1)
 
@@ -953,6 +971,7 @@ def evolve(
                 failure_log_path=failure_log_path,
                 instruction_proposer=proposer,
                 reflection_model=config.reflection_model,
+                reflection_minibatch_size=config.reflection_minibatch_size,
             )
 
             elapsed = time.time() - start_time
@@ -1567,6 +1586,23 @@ def evolve(
          "in non-interactive contexts (no TTY).",
 )
 @click.option(
+    "--gepa-minibatch-size",
+    "gepa_minibatch_size",
+    default=3,
+    type=click.IntRange(min=1),
+    help="GEPA's reflective minibatch size — number of training examples "
+         "sampled per reflective step for the sum() acceptance gate. "
+         "Default 3 matches GEPA's own default. Bump to ~8 when the "
+         "saturation pre-flight flags the weak_signal band: the wider "
+         "sampling window makes discriminating examples appear in "
+         "~68% of minibatches vs ~34% at default. Trade-off: larger "
+         "minibatch means each accepted proposal consumes more of the "
+         "metric-call budget. The skill pipeline uses --budget (not "
+         "--iterations) for its budget knob, so consider --budget heavy "
+         "to preserve the proposal count. Aborts at startup if the "
+         "value exceeds the trainset size.",
+)
+@click.option(
     "--closed-loop-during-evolution",
     "closed_loop_suite_path",
     default=None,
@@ -1659,6 +1695,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          skip_cost_suggest,
          skip_saturation_check,
          force_saturation_check,
+         gepa_minibatch_size,
          closed_loop_suite_path,
          closed_loop_saturation_threshold,
          closed_loop_min_iters,
@@ -1706,6 +1743,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             skip_cost_suggest=skip_cost_suggest,
             skip_saturation_check=skip_saturation_check,
             force_saturation_check=force_saturation_check,
+            gepa_minibatch_size=gepa_minibatch_size,
             closed_loop_suite_path=closed_loop_suite_path,
             closed_loop_saturation_threshold=closed_loop_saturation_threshold,
             closed_loop_min_iters=closed_loop_min_iters,
