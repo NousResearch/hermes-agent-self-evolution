@@ -7,6 +7,7 @@ without depending on the skill pipeline.
 """
 
 import json
+import math
 import os
 import subprocess
 import time
@@ -15,12 +16,85 @@ from typing import Any
 
 from rich.console import Console
 
+from evolution.core.constraints import ConstraintResult
 from evolution.core.lm_timing_callback import COST_LEDGER, CostCeilingExceeded
 from evolution.skills.budget_aware_proposer import ProposerMode
 
 _console = Console()
 
 _BENCHMARK_OUTPUT_TAIL_BYTES = 4096
+
+
+# CL-primary deploy-gate formula constants. Mirrors the synthetic
+# growth_quality_gate's free-threshold-then-slope shape (constraints.py
+# _check_growth_with_quality_gate) but adapted to integer CL task gains.
+#
+# free_threshold matches EvolutionConfig.growth_free_threshold so both
+# gates agree on the "free growth" boundary. slope=1.0 means "one extra
+# task required per +100% growth above the free threshold."
+CL_PRIMARY_GROWTH_FREE_THRESHOLD = 0.20
+CL_PRIMARY_GROWTH_SLOPE = 1.0
+CL_PRIMARY_SYNTH_TOLERANCE = 0.05
+
+
+def _check_cl_primary_gate(
+    *,
+    baseline_cl_passes: int,
+    evolved_cl_passes: int,
+    baseline_synth_mean: float,
+    evolved_synth_mean: float,
+    growth_pct: float,
+    synth_tolerance: float = CL_PRIMARY_SYNTH_TOLERANCE,
+) -> ConstraintResult:
+    """Deploy-gate decision rule used when the saturation pre-flight
+    classifies the run as ``weak_signal`` (synthetic judge saturated,
+    closed-loop signal has a gradient).
+
+    ACCEPT iff (gain >= required_gain) AND (synthetic not catastrophically
+    collapsed). ``required_gain`` scales with description growth so a
+    +1 task win can't deploy +400% wallpaper.
+
+    Parameters are scalars (not SaturationReport) so this helper is
+    independent of the preflight subsystem and trivially unit-testable.
+    Returns the standard ``ConstraintResult`` so the deploy gate's
+    existing aggregation code works without changes.
+    """
+    cl_gain = evolved_cl_passes - baseline_cl_passes
+    required_gain = max(
+        1,
+        math.ceil(
+            max(0.0, CL_PRIMARY_GROWTH_SLOPE * (growth_pct - CL_PRIMARY_GROWTH_FREE_THRESHOLD))
+        ),
+    )
+    synth_delta = evolved_synth_mean - baseline_synth_mean
+    synth_passed = synth_delta >= -synth_tolerance
+
+    if cl_gain < required_gain:
+        return ConstraintResult(
+            passed=False,
+            constraint_name="cl_primary_gate",
+            message=(
+                f"CL gained {cl_gain:+d} tasks but required {required_gain} "
+                f"for {growth_pct:+.2%} growth"
+            ),
+        )
+    if not synth_passed:
+        return ConstraintResult(
+            passed=False,
+            constraint_name="cl_primary_gate",
+            message=(
+                f"CL gained {cl_gain:+d} tasks but synthetic regressed "
+                f"{synth_delta:+.3f} > tolerance {synth_tolerance:.3f}"
+            ),
+        )
+    return ConstraintResult(
+        passed=True,
+        constraint_name="cl_primary_gate",
+        message=(
+            f"CL gained +{cl_gain} tasks (required {required_gain}); "
+            f"synth Δ {synth_delta:+.3f} within ±{synth_tolerance:.3f}"
+        ),
+    )
 
 
 # `default` is calibrated against the obsidian deploy (+24.2% growth,
@@ -83,10 +157,15 @@ def write_cost_ceiling_abort(
     output_dir: Path,
     run_inputs: dict[str, Any],
     extra_fields: dict[str, Any] | None = None,
+    schema_version: str = "4",
 ) -> Path:
     """Write a ``decision="aborted"`` gate_decision for a cost-ceiling trip.
+
     ``extra_fields`` lets callers add path-specific keys (e.g.,
-    ``artifact_type``, ``target_tool``).
+    ``artifact_type``, ``target_tool``). ``schema_version`` defaults to
+    ``"4"`` so skill-side callers (which haven't bumped past v4 yet) keep
+    working unchanged; tool-side callers pass ``"5"`` to stay consistent
+    with the rest of the gate_decision write sites in that ``output_dir``.
     """
     cost_summary = COST_LEDGER.summary()
     _console.print(
@@ -94,7 +173,7 @@ def write_cost_ceiling_abort(
         f"ceiling ${exc.ceiling_usd:.4f}[/bold red]"
     )
     payload: dict[str, Any] = {
-        "schema_version": "4",
+        "schema_version": schema_version,
         "decision": "aborted",
         "reason": "cost_ceiling_exceeded",
         "cost_ceiling_usd": exc.ceiling_usd,
