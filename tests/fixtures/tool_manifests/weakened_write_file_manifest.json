@@ -1,0 +1,38 @@
+{
+  "_evolution_metadata": {
+    "confusable_neighbors": {
+      "write_file": "patch",
+      "patch": "write_file"
+    }
+  },
+  "tools": [
+    {
+      "name": "write_file",
+      "description": "Write content to a file.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Path to the file to write (will be created if it doesn't exist, overwritten if it does)"},
+          "content": {"type": "string", "description": "Complete content to write to the file"}
+        },
+        "required": ["path", "content"]
+      }
+    },
+    {
+      "name": "patch",
+      "description": "Targeted find-and-replace edits in files. Use this instead of sed/awk in terminal. Uses fuzzy matching so minor whitespace/indentation differences won't break it. Returns a unified diff. Replace mode: find a unique string and replace it. Patch mode: apply V4A multi-file patches for bulk changes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mode": {"type": "string", "enum": ["replace", "patch"], "description": "Edit mode: 'replace' for targeted find-and-replace, 'patch' for V4A multi-file patches", "default": "replace"},
+          "path": {"type": "string", "description": "File path to edit (required for 'replace' mode)"},
+          "old_string": {"type": "string", "description": "Text to find in the file (required for 'replace' mode). Must be unique unless replace_all=true."},
+          "new_string": {"type": "string", "description": "Replacement text (required for 'replace' mode). Can be empty string to delete the matched text."},
+          "replace_all": {"type": "boolean", "description": "Replace all occurrences instead of requiring a unique match", "default": false},
+          "patch": {"type": "string", "description": "V4A format patch content (required for 'patch' mode)"}
+        },
+        "required": ["mode"]
+      }
+    }
+  ]
+}

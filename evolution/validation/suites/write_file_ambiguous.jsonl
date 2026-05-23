@@ -1,0 +1,19 @@
+# Ambiguous-task closed-loop suite for write_file, designed so the right
+# tool choice depends on understanding write_file's wholesale-overwrite
+# semantics. With the production description (which says "OVERWRITES the
+# entire file — use 'patch' for targeted edits"), a capable validator
+# picks the right tool. With a weakened description that omits the
+# overwriting cue, the validator misuses write_file on tasks where
+# existing file content matters, producing a stable weak_signal band.
+#
+# Task categories:
+#   - wf_*: write_file is the right tool, picking patch would fail
+#   - pt_*: patch is the right tool, picking write_file would wipe content
+#   - mixed_*: either tool is acceptable (control)
+{"task_id": "wf_overwrite_existing", "user_message": "Replace the contents of {fixture_dir}/notes.md with just the single line 'archived'. The old content should be discarded.", "expected_tools": ["write_file"], "forbidden_tools": ["patch"], "fixture_setup": {"notes.md": "# Meeting Notes\n\n- Discussed Q3 roadmap\n- Action items: prepare design doc\n- Next meeting: Thursday\n\n## Decisions\n- Ship feature X by end of month\n- Defer feature Y to next quarter\n"}}
+{"task_id": "pt_preserve_when_adding_entry", "user_message": "Add a new user with id=2 and name='bob' to the array in {fixture_dir}/users.json. The existing users must be preserved.", "expected_tools": ["patch"], "forbidden_tools": ["write_file"], "fixture_setup": {"users.json": "[\n  {\"id\": 1, \"name\": \"alice\"}\n]\n"}}
+{"task_id": "pt_change_single_setting", "user_message": "In {fixture_dir}/config.toml, change the port value from 8080 to 9090. Don't touch anything else.", "expected_tools": ["patch"], "forbidden_tools": ["write_file"], "fixture_setup": {"config.toml": "[server]\nhost = \"localhost\"\nport = 8080\ntimeout_seconds = 30\n\n[logging]\nlevel = \"info\"\npath = \"/var/log/app.log\"\n"}}
+{"task_id": "wf_create_new", "user_message": "Create a new file at {fixture_dir}/greeting.py with the content `print(\"hello world\")`. The file does not exist yet.", "expected_tools": ["write_file"], "forbidden_tools": ["patch"], "fixture_setup": {}}
+{"task_id": "wf_reset_to_minimal", "user_message": "Reset the contents of {fixture_dir}/state.json so it contains just `{}` and nothing else. Discard the existing state entirely.", "expected_tools": ["write_file"], "forbidden_tools": ["patch"], "fixture_setup": {"state.json": "{\n  \"sessions\": [\n    {\"id\": \"abc\", \"started\": \"2026-01-01\"},\n    {\"id\": \"def\", \"started\": \"2026-01-02\"}\n  ],\n  \"cache\": {\"hits\": 142, \"misses\": 17},\n  \"version\": 3\n}\n"}}
+{"task_id": "pt_add_import_to_existing", "user_message": "Add `import json` to the imports section at the top of {fixture_dir}/script.py. Keep the existing imports and the rest of the file unchanged.", "expected_tools": ["patch"], "forbidden_tools": ["write_file"], "fixture_setup": {"script.py": "import os\nimport sys\nfrom pathlib import Path\n\n\ndef main():\n    print(\"running\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n"}}
+{"task_id": "mixed_either_acceptable", "user_message": "Update {fixture_dir}/app.py so that DEBUG is False, port is 8080, and host is '0.0.0.0'. Make exactly those three changes.", "expected_tools": ["write_file", "patch"], "forbidden_tools": [], "fixture_setup": {"app.py": "DEBUG = True\nport = 5000\nhost = 'localhost'\n\ndef start():\n    return f\"serving on {host}:{port}\"\n"}}
