@@ -154,9 +154,12 @@ def evolve(
     start_time = time.time()
 
     try:
+        # DSPy 3.0 used max_steps (iteration count). DSPy 3.2 removed it
+        # in favor of max_metric_calls (total metric evaluations). Each GEPA
+        # step does roughly 10 metric calls, so multiply for equivalent budget.
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_metric_calls=max(iterations * 10, 30),
         )
 
         optimized_module = optimizer.compile(
