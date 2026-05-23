@@ -19,8 +19,41 @@ import pytest
 from evolution.validation.agent_runner import TaskRunContext
 from evolution.validation.hermes_runner import (
     HermesAgentRunner,
+    _strip_litellm_provider_prefix,
     parse_session_result,
 )
+
+
+class TestStripLitellmProviderPrefix:
+    """The hermes -m flag interprets '<word>/<model>' as openrouter-style
+    routing. Direct-provider users naturally pass litellm-formatted names
+    like 'openai/gpt-4o-mini' from elsewhere in the framework; this helper
+    normalizes them back to bare model names that hermes -m accepts."""
+
+    def test_strips_openai_prefix(self):
+        assert _strip_litellm_provider_prefix("openai/gpt-4o-mini") == "gpt-4o-mini"
+
+    def test_strips_anthropic_prefix(self):
+        assert _strip_litellm_provider_prefix("anthropic/claude-opus-4-7") == "claude-opus-4-7"
+
+    def test_strips_azure_prefix(self):
+        assert _strip_litellm_provider_prefix("azure/gpt-4") == "gpt-4"
+
+    def test_strips_gemini_prefix(self):
+        assert _strip_litellm_provider_prefix("gemini/gemini-1.5-pro") == "gemini-1.5-pro"
+
+    def test_leaves_bare_model_unchanged(self):
+        assert _strip_litellm_provider_prefix("gpt-4o-mini") == "gpt-4o-mini"
+
+    def test_leaves_unknown_prefix_unchanged(self):
+        # Unknown providers pass through so openrouter-style routing through
+        # an unrecognized vendor still works.
+        assert _strip_litellm_provider_prefix("custom-vendor/model-x") == "custom-vendor/model-x"
+
+    def test_only_strips_first_prefix(self):
+        # Defensive: nested prefixes (e.g. openrouter passthrough) shouldn't be
+        # double-stripped — keep the second segment intact.
+        assert _strip_litellm_provider_prefix("openai/foo/bar") == "foo/bar"
 
 
 def _write_session(path: Path, messages: list[dict], **extra) -> None:
@@ -345,6 +378,39 @@ class TestHermesAgentRunnerSubprocess:
 
         assert "-m" not in captured["args"]
         assert captured["args"] == ["hermes", "-z", "hello"]
+
+    def test_litellm_prefix_stripped_before_minus_m(self, fixture_dir, tmp_path):
+        """Regression: hermes -m treats '<provider>/<model>' as openrouter-style
+        routing (silently switches base_url to openrouter.ai and breaks auth
+        for direct-provider configs). Users naturally pass litellm-formatted
+        names like 'openai/gpt-4o-mini' from elsewhere in the framework, so
+        the runner must strip known litellm provider prefixes before -m to
+        avoid a silent 0-turn 'agent never ran' failure that misreports as
+        'validator too weak' at the saturation pre-flight."""
+        runner = HermesAgentRunner(
+            user_config_path=tmp_path / "nonexistent",
+            model="openai/gpt-4o-mini",
+        )
+        captured: dict = {}
+
+        def _fake_run(*args, **kwargs):
+            captured["args"] = args[0] if args else kwargs.get("args")
+            sandbox = Path(kwargs["env"]["HERMES_HOME"])
+            (sandbox / "sessions").mkdir(exist_ok=True)
+            _write_session(
+                sandbox / "sessions" / "session_test.json",
+                [{"role": "assistant", "content": "ok"}],
+            )
+            return type("CP", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with patch("evolution.validation.hermes_runner.subprocess.run", side_effect=_fake_run):
+            runner.run(TaskRunContext(
+                user_message="debug",
+                fixture_dir=fixture_dir,
+            ))
+
+        assert captured["args"][:4] == ["hermes", "-m", "gpt-4o-mini", "-z"]
+        assert "openai/" not in captured["args"][2]
 
     def test_skills_src_none_means_no_skills_dir_created(self, fixture_dir, tmp_path):
         """Tool-side runs (no skills_src) must not create an empty skills/

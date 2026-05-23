@@ -32,6 +32,36 @@ logger = logging.getLogger(__name__)
 _FINAL_TEXT_TAIL_BYTES = 4096
 DEFAULT_TASK_TIMEOUT_SECONDS = 120
 
+# Known LiteLLM provider prefixes the rest of the framework uses
+# (DSPy / litellm convention: ``<provider>/<model>``). The hermes -m flag
+# interprets the same shape as openrouter-style routing — passing
+# ``openai/gpt-4o-mini`` silently switches base_url to openrouter.ai and
+# breaks auth for direct-provider configs, producing a 0-turn session that
+# the saturation pre-flight misreports as "validator too weak". We strip
+# these prefixes at the hermes boundary so users get the behavior they
+# expect when they pass the same model string they use elsewhere.
+_LITELLM_PROVIDER_PREFIXES = (
+    "openai/",
+    "anthropic/",
+    "azure/",
+    "gemini/",
+    "cohere/",
+    "bedrock/",
+    "mistral/",
+)
+
+
+def _strip_litellm_provider_prefix(model: str) -> str:
+    """Strip a known LiteLLM provider prefix from a model name.
+
+    Returns ``model`` unchanged when no recognized prefix is present, so
+    openrouter-style routing through an unrecognized vendor still works.
+    """
+    for prefix in _LITELLM_PROVIDER_PREFIXES:
+        if model.startswith(prefix):
+            return model[len(prefix):]
+    return model
+
 
 class HermesAgentRunner:
     """Invoke ``hermes -z`` and parse the resulting session JSON.
@@ -63,7 +93,22 @@ class HermesAgentRunner:
         # against a deliberately weaker agent model than the user's
         # daily-driver default — saturation on capable models hides
         # behavioral signal that a weaker model would expose.
-        self.model = model
+        #
+        # Normalize LiteLLM-style provider prefixes (``openai/``, etc.)
+        # before storing: hermes -m treats ``<provider>/<model>`` as
+        # openrouter routing which silently switches the base_url. See
+        # ``_strip_litellm_provider_prefix`` for the full rationale.
+        if model is not None:
+            normalized = _strip_litellm_provider_prefix(model)
+            if normalized != model:
+                logger.info(
+                    "Stripped LiteLLM provider prefix from hermes -m model: "
+                    "%r → %r (avoids accidental openrouter routing)",
+                    model, normalized,
+                )
+            self.model = normalized
+        else:
+            self.model = None
 
     def run(self, ctx: TaskRunContext) -> AgentRunResult:
         message = ctx.user_message
