@@ -60,9 +60,9 @@ def _classify_band(
 
     if closed_loop_score is not None and closed_loop_score <= uniform_cl:
         return "uniform_failure", [
-            "Validator agent appears too weak to use the tool/skill — all behavioral tasks fail uniformly.",
-            "Try a stronger --closed-loop-agent-model.",
-            "Or harden the suite tasks so failure modes are interesting, not 'model can't execute'.",
+            "Baseline scored 0 on every behavioral task — GEPA has nothing to optimize for.",
+            "First check the validator actually ran: look in run.log for a 'Stripped LiteLLM provider prefix' line confirming --closed-loop-agent-model routed correctly, and for a non-zero number of subprocess LM calls.",
+            "If the validator did run: try a stronger --closed-loop-agent-model, or harden the suite tasks so failure modes are interesting rather than 'model can't execute the task.'",
         ]
 
     synthetic_saturated = holdout_score >= no_head_syn
@@ -200,7 +200,7 @@ _BAND_TITLES: dict[SaturationBand, str] = {
     "healthy": "Saturation check passed",
     "no_headroom": "No measurable headroom",
     "weak_signal": "Weak signal — expect a hard run",
-    "uniform_failure": "Uniform failure — validator too weak",
+    "uniform_failure": "Uniform failure — closed-loop scored zero on every task",
 }
 
 _BAND_STYLES: dict[SaturationBand, str] = {

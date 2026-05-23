@@ -50,6 +50,15 @@ class TestClassifyBand:
         )
         assert band == "uniform_failure"
         assert any("validator" in s.lower() or "stronger" in s.lower() for s in suggestions)
+        # The "first check the validator actually ran" hint guards against
+        # the historical silent-failure: hermes -m treated litellm-formatted
+        # model strings as openrouter routing, broke auth, returned 0-turn
+        # sessions, and the framework reported it as "validator too weak."
+        # The hint points users at the run.log line that confirms routing.
+        assert any(
+            "stripped litellm" in s.lower() or "run.log" in s.lower() or "routed correctly" in s.lower()
+            for s in suggestions
+        )
 
     def test_boundary_exactly_at_no_headroom_synthetic_triggers(self):
         """0.99 exactly should trigger no_headroom (>= comparison)."""
