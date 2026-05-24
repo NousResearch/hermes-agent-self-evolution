@@ -12,7 +12,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from rich.console import Console
 
@@ -95,6 +95,46 @@ def _check_cl_primary_gate(
             f"synth Δ {synth_delta:+.3f} within ±{synth_tolerance:.3f}"
         ),
     )
+
+
+def append_cl_decision_fields(
+    decision_payload: dict,
+    *,
+    cached_baseline_cl_per_example: list[float],
+    evolved_cl_per_example: list[float],
+    avg_baseline: float,
+    avg_evolved: float,
+    growth_pct: float,
+    cl_eval_cost_usd: float,
+    preflight_holdout_score: Optional[float],
+    preflight_cl_score: Optional[float],
+    closed_loop_agent_model: str,
+) -> None:
+    """Append the closed-loop deploy-gate decision fields to ``decision_payload``."""
+    decision_payload["baseline_closed_loop_per_example"] = cached_baseline_cl_per_example
+    decision_payload["evolved_closed_loop_per_example"] = evolved_cl_per_example
+    decision_payload["evolved_closed_loop_errored_tasks"] = []
+    decision_payload["cl_tasks_gained"] = (
+        int(sum(evolved_cl_per_example)) - int(sum(cached_baseline_cl_per_example))
+    )
+    decision_payload["cl_required_gain"] = max(
+        1,
+        math.ceil(
+            max(0.0, CL_PRIMARY_GROWTH_SLOPE * (growth_pct - CL_PRIMARY_GROWTH_FREE_THRESHOLD))
+        ),
+    )
+    decision_payload["synthetic_sanity_check"] = {
+        "tolerance": CL_PRIMARY_SYNTH_TOLERANCE,
+        "baseline_mean": avg_baseline,
+        "evolved_mean": avg_evolved,
+        "passed": (avg_evolved - avg_baseline) >= -CL_PRIMARY_SYNTH_TOLERANCE,
+    }
+    decision_payload["evolved_cl_eval_cost_usd"] = cl_eval_cost_usd
+    decision_payload["band_trigger_score"] = {
+        "holdout": preflight_holdout_score,
+        "closed_loop": preflight_cl_score,
+    }
+    decision_payload["validator_agent_model"] = closed_loop_agent_model
 
 
 # `default` is calibrated against the obsidian deploy (+24.2% growth,

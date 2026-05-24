@@ -873,3 +873,90 @@ class TestSchemaV5Regression:
         assert payload["decision_signal"] == "synthetic"
         assert payload["decision"] == "reject"
         assert payload["reason"] == "static_constraint_failure"
+
+
+def test_summary_panel_reflects_cl_decision_when_cl_primary_deploys(
+    temp_manifest: Path, tmp_path: Path, capsys: pytest.CaptureFixture,
+):
+    """CL-primary deploy → summary line announces the CL gain instead of
+    the synthetic delta. Without the CL-aware branch the panel says
+    'did not improve' even though gate_decision.json deployed the artifact,
+    so the operator gets a contradictory signal."""
+    fake_cache = MagicMock()
+    fake_cache.force_run.return_value = _fake_validation_report(
+        baseline_pass=[True, True, True, True, True, False, False],
+        evolved_pass=[True, True, True, True, True, True, True],
+    )
+    run_dir = tmp_path / "run"
+
+    # _weak_signal_report pins baseline holdout to 0.95; evolved=0.90
+    # forces a negative synthetic improvement so the pre-change panel
+    # would render 'did not improve' even though CL-primary just deployed.
+    with _patch_stack(
+        sat_report=_weak_signal_report(),
+        fake_cache=fake_cache,
+        evolved_description=_LOW_GROWTH_EVOLVED,
+        holdout_evolved_mean=0.90,
+    ):
+        _run_evolve(manifest_path=temp_manifest, output_dir=run_dir)
+
+    out = capsys.readouterr().out
+    assert "CL gained +2" in out, f"missing CL-gain line in summary: {out!r}"
+    assert "did not improve" not in out, (
+        f"synthetic 'did not improve' line leaked through CL-primary deploy: {out!r}"
+    )
+
+
+def test_summary_panel_reflects_cl_decision_when_cl_primary_rejects(
+    temp_manifest: Path, tmp_path: Path, capsys: pytest.CaptureFixture,
+):
+    """CL-primary reject → summary line explains the CL shortfall instead
+    of falling back to the generic synthetic-rejected line."""
+    fake_cache = MagicMock()
+    # 5/7 → 5/7: zero CL gain, required_gain stays at 1 → reject.
+    fake_cache.force_run.return_value = _fake_validation_report(
+        baseline_pass=[True, True, True, True, True, False, False],
+        evolved_pass=[True, True, True, True, True, False, False],
+    )
+    run_dir = tmp_path / "run"
+
+    with _patch_stack(
+        sat_report=_weak_signal_report(),
+        fake_cache=fake_cache,
+        evolved_description=_LOW_GROWTH_EVOLVED,
+    ):
+        _run_evolve(manifest_path=temp_manifest, output_dir=run_dir)
+
+    out = capsys.readouterr().out
+    assert "CL gain 0 < required 1" in out, (
+        f"missing CL-reject line in summary: {out!r}"
+    )
+
+
+def test_summary_panel_uses_synthetic_delta_when_not_cl_primary(
+    temp_manifest: Path, tmp_path: Path, capsys: pytest.CaptureFixture,
+):
+    """healthy band → synthetic gate → existing 'improved/did not improve'
+    wording is unchanged. Regression guard for the synthetic path.
+
+    _healthy_report() pins baseline holdout to 0.5 (cached per-example);
+    evolved=0.5 produces a zero synthetic delta that still clears the
+    non-inferiority gate (within tolerance) so the deploy-path 'did not
+    improve' line fires — that's the legacy branch we must preserve.
+    """
+    fake_cache = MagicMock()
+    run_dir = tmp_path / "run"
+
+    with _patch_stack(
+        sat_report=_healthy_report(),
+        fake_cache=fake_cache,
+        holdout_evolved_mean=0.5,
+    ):
+        _run_evolve(manifest_path=temp_manifest, output_dir=run_dir)
+
+    out = capsys.readouterr().out
+    assert "did not improve" in out, (
+        f"synthetic path must keep 'did not improve' on a zero delta: {out!r}"
+    )
+    assert "CL gained" not in out
+    assert "CL gain" not in out

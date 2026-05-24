@@ -10,7 +10,6 @@ from __future__ import annotations
 import difflib
 import json
 import logging
-import math
 import sys
 import time
 from datetime import datetime
@@ -60,16 +59,15 @@ from evolution.core.lm_timing_callback import (
     register_litellm_failure_callback,
 )
 from evolution.core.quality_gate import (
-    CL_PRIMARY_GROWTH_FREE_THRESHOLD,
-    CL_PRIMARY_GROWTH_SLOPE,
-    CL_PRIMARY_SYNTH_TOLERANCE,
     QUALITY_GATE_PRESETS,
     _check_cl_primary_gate,
+    append_cl_decision_fields,
     resolve_proposer_mode,
     run_benchmark_hook,
     write_cost_ceiling_abort,
     write_gate_decision,
 )
+from evolution.core.run_inputs import build_run_inputs
 from evolution.core.stats import paired_bootstrap
 from evolution.skills.knee_point import CandidatePick, select_knee_point
 from evolution.tools.session_mining import (
@@ -791,23 +789,15 @@ def evolve(
                 if not c.passed:
                     static_pass = False
 
-            run_inputs = {
-                "seed": config.seed,
-                "iterations": iterations,
-                "optimizer_model": optimizer_model,
-                "reflection_model": config.reflection_model,
-                "eval_model": config.eval_model,
-                "resolved_lms": resolved_lms_dump(
-                    optimizer=optimizer_model,
-                    reflection=config.reflection_model,
-                    eval_=config.eval_model,
-                ),
-                "eval_dataset_size": config.eval_dataset_size,
-                "holdout_ratio": config.holdout_ratio,
-                "quality_gate_preset": quality_gate,
-                "fitness_profile": fitness_profile,
-                "enable_confusable_bucket": config.enable_confusable_bucket,
-            }
+            run_inputs = build_run_inputs(
+                config=config,
+                iterations=iterations,
+                optimizer_model=optimizer_model,
+                quality_gate_preset=quality_gate,
+                eval_source=eval_source,
+                fitness_profile=fitness_profile,
+                enable_confusable_bucket=config.enable_confusable_bucket,
+            )
             tool_payload_fields = {
                 "artifact_type": "tool_description",
                 "target_tool": tool_name,
@@ -1085,32 +1075,18 @@ def evolve(
             if benchmark_block is not None:
                 decision_payload["benchmark"] = benchmark_block
             if use_cl_primary:
-                decision_payload["baseline_closed_loop_per_example"] = cached_baseline_cl_per_example
-                decision_payload["evolved_closed_loop_per_example"] = evolved_cl_per_example
-                # Populated only on the abort path (cl_eval_incomplete); empty
-                # here because we reach this block only when no task errored.
-                decision_payload["evolved_closed_loop_errored_tasks"] = []
-                decision_payload["cl_tasks_gained"] = (
-                    int(sum(evolved_cl_per_example)) - int(sum(cached_baseline_cl_per_example))
+                append_cl_decision_fields(
+                    decision_payload,
+                    cached_baseline_cl_per_example=cached_baseline_cl_per_example,
+                    evolved_cl_per_example=evolved_cl_per_example,
+                    avg_baseline=avg_baseline,
+                    avg_evolved=avg_evolved,
+                    growth_pct=growth_pct,
+                    cl_eval_cost_usd=cl_eval_cost_usd,
+                    preflight_holdout_score=preflight_holdout_score,
+                    preflight_cl_score=preflight_cl_score,
+                    closed_loop_agent_model=closed_loop_agent_model,
                 )
-                decision_payload["cl_required_gain"] = max(
-                    1,
-                    math.ceil(
-                        max(0.0, CL_PRIMARY_GROWTH_SLOPE * (growth_pct - CL_PRIMARY_GROWTH_FREE_THRESHOLD))
-                    ),
-                )
-                decision_payload["synthetic_sanity_check"] = {
-                    "tolerance": CL_PRIMARY_SYNTH_TOLERANCE,
-                    "baseline_mean": avg_baseline,
-                    "evolved_mean": avg_evolved,
-                    "passed": (avg_evolved - avg_baseline) >= -CL_PRIMARY_SYNTH_TOLERANCE,
-                }
-                decision_payload["evolved_cl_eval_cost_usd"] = cl_eval_cost_usd
-                decision_payload["band_trigger_score"] = {
-                    "holdout": preflight_holdout_score,
-                    "closed_loop": preflight_cl_score,
-                }
-                decision_payload["validator_agent_model"] = closed_loop_agent_model
 
             if not use_cl_primary and preflight_band is None:
                 # User passed --no-saturation-check; record why CL-primary
@@ -1123,6 +1099,12 @@ def evolve(
 
             if not growth_pass:
                 console.print("[red]✗ Evolved description REJECTED by quality gate — not deploying[/red]")
+                if use_cl_primary:
+                    console.print(
+                        f"[yellow]⚠ Evolution rejected: "
+                        f"CL gain {decision_payload['cl_tasks_gained']} < "
+                        f"required {decision_payload['cl_required_gain']}[/yellow]"
+                    )
                 evolved_manifest = manifest.replace_description(tool_name, evolved_description)
                 failed_path = output_dir / "evolved_FAILED.json"
                 failed_path.write_text(json.dumps(_manifest_to_dict(evolved_manifest), indent=2) + "\n")
@@ -1145,13 +1127,28 @@ def evolve(
             table.add_column("Baseline", justify="right")
             table.add_column("Evolved", justify="right")
             table.add_column("Change", justify="right")
-            change_color = "green" if improvement > 0 else "red"
+            # Under CL-primary, the gate verdict — not the synthetic delta —
+            # decides the row color; the synthetic delta is informational.
+            row_color = (
+                ("green" if growth_pass else "yellow")
+                if use_cl_primary
+                else ("green" if improvement > 0 else "red")
+            )
             table.add_row(
                 "Holdout Score",
                 f"{avg_baseline:.3f}",
                 f"{avg_evolved:.3f}",
-                f"[{change_color}]{improvement:+.3f}[/{change_color}]",
+                f"[{row_color}]{improvement:+.3f}[/{row_color}]",
             )
+            if use_cl_primary:
+                baseline_cl = int(sum(cached_baseline_cl_per_example))
+                evolved_cl = int(sum(evolved_cl_per_example))
+                table.add_row(
+                    "Closed-loop (behavioral)",
+                    f"{baseline_cl} tasks",
+                    f"{evolved_cl} tasks",
+                    f"[{row_color}]{evolved_cl - baseline_cl:+d} tasks[/{row_color}]",
+                )
             table.add_row(
                 "Description Size",
                 f"{baseline_chars:,} chars",
@@ -1212,7 +1209,12 @@ def evolve(
                 )
                 console.print(f"  --apply: wrote evolved description to {manifest_path}")
 
-            if improvement > 0:
+            if use_cl_primary:
+                console.print(
+                    f"\n[bold green]✓ Evolution improved tool description "
+                    f"(CL gained +{decision_payload['cl_tasks_gained']} tasks)[/bold green]"
+                )
+            elif improvement > 0:
                 console.print(
                     f"\n[bold green]✓ Evolution improved tool description by "
                     f"{improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]"
@@ -1226,23 +1228,15 @@ def evolve(
         except CostCeilingExceeded as exc:
             # Abort may fire before `run_inputs` is built in the deploy path;
             # fall back to a minimal equivalent so gate_decision.json is still useful.
-            run_inputs_for_abort = locals().get("run_inputs") or {
-                "seed": config.seed,
-                "iterations": iterations,
-                "optimizer_model": optimizer_model,
-                "reflection_model": config.reflection_model,
-                "eval_model": config.eval_model,
-                "resolved_lms": resolved_lms_dump(
-                    optimizer=optimizer_model,
-                    reflection=config.reflection_model,
-                    eval_=config.eval_model,
-                ),
-                "eval_dataset_size": config.eval_dataset_size,
-                "holdout_ratio": config.holdout_ratio,
-                "quality_gate_preset": quality_gate,
-                "fitness_profile": fitness_profile,
-                "eval_source": eval_source,
-            }
+            run_inputs_for_abort = locals().get("run_inputs") or build_run_inputs(
+                config=config,
+                iterations=iterations,
+                optimizer_model=optimizer_model,
+                quality_gate_preset=quality_gate,
+                eval_source=eval_source,
+                fitness_profile=fitness_profile,
+                enable_confusable_bucket=config.enable_confusable_bucket,
+            )
             write_cost_ceiling_abort(
                 exc,
                 output_dir=output_dir,

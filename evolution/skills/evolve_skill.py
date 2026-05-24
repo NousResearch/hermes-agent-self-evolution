@@ -8,7 +8,6 @@ Usage:
 import difflib
 import json
 import logging
-import math
 import random
 import sys
 import time
@@ -42,16 +41,15 @@ from evolution.core.hermes_provider import (
     resolved_lms_dump,
 )
 from evolution.core.quality_gate import (
-    CL_PRIMARY_GROWTH_FREE_THRESHOLD,
-    CL_PRIMARY_GROWTH_SLOPE,
-    CL_PRIMARY_SYNTH_TOLERANCE,
     QUALITY_GATE_PRESETS,
     _check_cl_primary_gate,
+    append_cl_decision_fields,
     resolve_proposer_mode,
     run_benchmark_hook,
     write_cost_ceiling_abort,
     write_gate_decision,
 )
+from evolution.core.run_inputs import build_run_inputs
 from evolution.core.skill_sources import discover_skill_sources
 
 # Without this, the BudgetAwareProposer + LMTimingCallback logs stay
@@ -1053,22 +1051,13 @@ def evolve(
                     "messages": [c.message for c in static_constraints if not c.passed],
                     "knee_point": _knee_point_payload(knee_pick),
                     "dataset": _dataset_payload(dataset),
-                    "run_inputs": {
-                        "seed": config.seed,
-                        "iterations": iterations,
-                        "optimizer_model": optimizer_model,
-                        "reflection_model": config.reflection_model,
-                        "eval_model": config.eval_model,
-                        "resolved_lms": resolved_lms_dump(
-                            optimizer=optimizer_model,
-                            reflection=config.reflection_model,
-                            eval_=config.eval_model,
-                        ),
-                        "eval_dataset_size": config.eval_dataset_size,
-                        "holdout_ratio": config.holdout_ratio,
-                        "quality_gate_preset": quality_gate,
-                        "eval_source": eval_source,
-                    },
+                    "run_inputs": build_run_inputs(
+                        config=config,
+                        iterations=iterations,
+                        optimizer_model=optimizer_model,
+                        quality_gate_preset=quality_gate,
+                        eval_source=eval_source,
+                    ),
                 })
                 console.print(f"  Saved failed variant to {failed_path}")
                 return
@@ -1102,24 +1091,13 @@ def evolve(
             evolved_chars = len(evolved_full)
             growth_pct = (evolved_chars - baseline_chars) / max(1, baseline_chars)
 
-            # Hoist run_inputs to a local — referenced from 3 sites (the
-            # two CL-primary abort paths + the main decision_payload).
-            run_inputs = {
-                "seed": config.seed,
-                "iterations": iterations,
-                "optimizer_model": optimizer_model,
-                "reflection_model": config.reflection_model,
-                "eval_model": config.eval_model,
-                "resolved_lms": resolved_lms_dump(
-                    optimizer=optimizer_model,
-                    reflection=config.reflection_model,
-                    eval_=config.eval_model,
-                ),
-                "eval_dataset_size": config.eval_dataset_size,
-                "holdout_ratio": config.holdout_ratio,
-                "quality_gate_preset": quality_gate,
-                "eval_source": eval_source,
-            }
+            run_inputs = build_run_inputs(
+                config=config,
+                iterations=iterations,
+                optimizer_model=optimizer_model,
+                quality_gate_preset=quality_gate,
+                eval_source=eval_source,
+            )
 
             use_cl_primary = (
                 preflight_band == "weak_signal"
@@ -1363,30 +1341,18 @@ def evolve(
                 decision_payload["benchmark"] = benchmark_block
 
             if use_cl_primary:
-                decision_payload["baseline_closed_loop_per_example"] = cached_baseline_cl_per_example
-                decision_payload["evolved_closed_loop_per_example"] = evolved_cl_per_example
-                decision_payload["evolved_closed_loop_errored_tasks"] = []  # populated only on abort path
-                decision_payload["cl_tasks_gained"] = (
-                    int(sum(evolved_cl_per_example)) - int(sum(cached_baseline_cl_per_example))
+                append_cl_decision_fields(
+                    decision_payload,
+                    cached_baseline_cl_per_example=cached_baseline_cl_per_example,
+                    evolved_cl_per_example=evolved_cl_per_example,
+                    avg_baseline=avg_baseline,
+                    avg_evolved=avg_evolved,
+                    growth_pct=growth_pct,
+                    cl_eval_cost_usd=cl_eval_cost_usd,
+                    preflight_holdout_score=preflight_holdout_score,
+                    preflight_cl_score=preflight_cl_score,
+                    closed_loop_agent_model=closed_loop_agent_model,
                 )
-                decision_payload["cl_required_gain"] = max(
-                    1,
-                    math.ceil(
-                        max(0.0, CL_PRIMARY_GROWTH_SLOPE * (growth_pct - CL_PRIMARY_GROWTH_FREE_THRESHOLD))
-                    ),
-                )
-                decision_payload["synthetic_sanity_check"] = {
-                    "tolerance": CL_PRIMARY_SYNTH_TOLERANCE,
-                    "baseline_mean": avg_baseline,
-                    "evolved_mean": avg_evolved,
-                    "passed": (avg_evolved - avg_baseline) >= -CL_PRIMARY_SYNTH_TOLERANCE,
-                }
-                decision_payload["evolved_cl_eval_cost_usd"] = cl_eval_cost_usd
-                decision_payload["band_trigger_score"] = {
-                    "holdout": preflight_holdout_score,
-                    "closed_loop": preflight_cl_score,
-                }
-                decision_payload["validator_agent_model"] = closed_loop_agent_model
 
             if not use_cl_primary and preflight_band is None:
                 # User passed --no-saturation-check; record why CL-primary
@@ -1398,6 +1364,12 @@ def evolve(
 
             if not growth_pass:
                 console.print("[red]✗ Evolved skill REJECTED by quality gate — not deploying[/red]")
+                if use_cl_primary:
+                    console.print(
+                        f"[yellow]⚠ Evolution rejected: "
+                        f"CL gain {decision_payload['cl_tasks_gained']} < "
+                        f"required {decision_payload['cl_required_gain']}[/yellow]"
+                    )
                 failed_path = output_dir / "evolved_FAILED.md"
                 failed_path.write_text(evolved_full)
                 console.print(f"  Saved failed variant to {failed_path}")
@@ -1420,13 +1392,28 @@ def evolve(
             table.add_column("Evolved", justify="right")
             table.add_column("Change", justify="right")
 
-            change_color = "green" if improvement > 0 else "red"
+            # Under CL-primary, the gate verdict — not the synthetic delta —
+            # decides the row color; the synthetic delta is informational.
+            row_color = (
+                ("green" if growth_pass else "yellow")
+                if use_cl_primary
+                else ("green" if improvement > 0 else "red")
+            )
             table.add_row(
                 "Holdout Score",
                 f"{avg_baseline:.3f}",
                 f"{avg_evolved:.3f}",
-                f"[{change_color}]{improvement:+.3f}[/{change_color}]",
+                f"[{row_color}]{improvement:+.3f}[/{row_color}]",
             )
+            if use_cl_primary:
+                baseline_cl = int(sum(cached_baseline_cl_per_example))
+                evolved_cl = int(sum(evolved_cl_per_example))
+                table.add_row(
+                    "Closed-loop (behavioral)",
+                    f"{baseline_cl} tasks",
+                    f"{evolved_cl} tasks",
+                    f"[{row_color}]{evolved_cl - baseline_cl:+d} tasks[/{row_color}]",
+                )
             table.add_row(
                 "Skill Size",
                 f"{len(skill['body']):,} chars",
@@ -1478,7 +1465,13 @@ def evolve(
                     if applied:
                         console.print(f"  --apply: wrote evolved skill to {skill_path}")
 
-            if improvement > 0:
+            if use_cl_primary:
+                console.print(
+                    f"\n[bold green]✓ Evolution improved skill "
+                    f"(CL gained +{decision_payload['cl_tasks_gained']} tasks)[/bold green]"
+                )
+                console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+            elif improvement > 0:
                 console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
                 console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
             else:
@@ -1488,22 +1481,13 @@ def evolve(
             write_cost_ceiling_abort(
                 exc,
                 output_dir=output_dir,
-                run_inputs={
-                    "seed": config.seed,
-                    "iterations": iterations,
-                    "optimizer_model": optimizer_model,
-                    "reflection_model": config.reflection_model,
-                    "eval_model": config.eval_model,
-                    "resolved_lms": resolved_lms_dump(
-                        optimizer=optimizer_model,
-                        reflection=config.reflection_model,
-                        eval_=config.eval_model,
-                    ),
-                    "eval_dataset_size": config.eval_dataset_size,
-                    "holdout_ratio": config.holdout_ratio,
-                    "quality_gate_preset": quality_gate,
-                    "eval_source": eval_source,
-                },
+                run_inputs=build_run_inputs(
+                    config=config,
+                    iterations=iterations,
+                    optimizer_model=optimizer_model,
+                    quality_gate_preset=quality_gate,
+                    eval_source=eval_source,
+                ),
                 schema_version="5",
             )
             return
