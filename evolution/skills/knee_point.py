@@ -13,8 +13,6 @@ References:
 
 from __future__ import annotations
 
-import math
-import random
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Protocol
 
@@ -22,56 +20,6 @@ from typing import Any, Callable, Optional, Protocol
 class _SupportsSkillText(Protocol):
     @property
     def skill_text(self) -> str: ...
-
-
-def _estimate_val_noise(
-    val_subscores: list[list[float]],
-    best_idx: int,
-    *,
-    n_bootstrap: int = 1000,
-    confidence: float = 0.90,
-    seed: int = 0,
-) -> float:
-    """Estimate the noise floor on val scores via paired bootstrap.
-
-    Returns the half-width of the ``confidence``-level CI on the mean
-    pairwise diff between the best candidate and each competitor. Used as
-    the knee-point ε so the band reflects the empirical resolution of
-    valset scoring rather than the geometric 1/n_val floor, which sits
-    an order of magnitude below the actual paired noise at typical
-    n_val (8–50).
-
-    Single-candidate fallback: with no competitor to pair against, returns
-    ``0.5 / sqrt(n_val)`` — the worst-case binomial SE at p=0.5.
-    """
-    if len(val_subscores) < 2:
-        return 0.5 / math.sqrt(len(val_subscores[best_idx]))
-
-    best = val_subscores[best_idx]
-    diffs: list[float] = []
-    for k, other in enumerate(val_subscores):
-        if k == best_idx:
-            continue
-        covered = min(len(best), len(other))
-        diffs.extend(best[i] - other[i] for i in range(covered))
-
-    if not diffs or all(d == 0.0 for d in diffs):
-        return 0.0
-
-    rng = random.Random(seed)
-    n = len(diffs)
-    boot_means: list[float] = []
-    for _ in range(n_bootstrap):
-        sample_sum = 0.0
-        for _ in range(n):
-            sample_sum += diffs[rng.randrange(n)]
-        boot_means.append(sample_sum / n)
-
-    boot_means.sort()
-    tail = (1.0 - confidence) / 2.0
-    lower = boot_means[int(tail * n_bootstrap)]
-    upper = boot_means[min(int((1.0 - tail) * n_bootstrap), n_bootstrap - 1)]
-    return (upper - lower) / 2.0
 
 
 @dataclass(frozen=True)

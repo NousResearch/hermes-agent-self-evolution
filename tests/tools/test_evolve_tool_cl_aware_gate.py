@@ -25,7 +25,6 @@ import pytest
 
 from evolution.core.dataset_builder import EvalExample
 from evolution.core.saturation_check import SaturationReport
-from evolution.skills.knee_point import CandidatePick
 from evolution.tools.evolve_tool import evolve
 from evolution.validation.report import (
     PhaseResult,
@@ -122,25 +121,6 @@ def _fake_validation_report(
     )
 
 
-def _make_knee_pick(evolved_description: str) -> CandidatePick:
-    """Build a CandidatePick that select_knee_point would return."""
-    fake_module = MagicMock()
-    return CandidatePick(
-        module=fake_module,
-        skill_text=evolved_description,
-        body_chars=len(evolved_description),
-        val_score=0.8,
-        val_rank_in_band=1,
-        band_size=1,
-        epsilon=0.1,
-        fallback="knee",
-        picked_idx=0,
-        gepa_default_idx=0,
-        gepa_default_body_chars=len(evolved_description),
-        band_roster=[],
-    )
-
-
 def _make_fake_gepa(evolved_description: str):
     """Build a fake dspy.GEPA whose ``compile()`` returns a module with
     the detailed_results shape the knee-point path expects."""
@@ -195,7 +175,6 @@ def _patch_stack(
     """
     fake_builder = MagicMock()
     fake_builder.generate_tool_selection.return_value = _fake_tool_examples()
-    knee_pick = _make_knee_pick(evolved_description)
     evolved_per = [holdout_evolved_mean] * holdout_n
 
     def _maybe_build(**kwargs):
@@ -225,10 +204,6 @@ def _patch_stack(
         stack.enter_context(patch(
             "evolution.tools.evolve_tool.dspy.GEPA",
             new=_make_fake_gepa(evolved_description),
-        ))
-        stack.enter_context(patch(
-            "evolution.tools.evolve_tool.select_knee_point",
-            return_value=knee_pick,
         ))
         stack.enter_context(patch(
             "evolution.tools.evolve_tool._candidate_description",

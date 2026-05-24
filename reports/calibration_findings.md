@@ -41,6 +41,25 @@ The four campaign studies produced robust observations even though the (free, sl
 
 These are starting points for a future campaign with a richer corpus, not current defaults.
 
+### 2026-05-24 update — knee-point ε confirmed as a no-op on val-best
+
+A targeted regeneration replayed the four-skill calibration corpus
+(nano-pdf, apple-notes, polymarket, huggingface-hub) at N\*=250,
+ratio\*=0.65 across 10 runs and five ε modes:
+
+| Mode | Mean transfer error | Deploy rate |
+|---|---|---|
+| 1.0 / n\_val (status quo) | 0.0466 | 70% |
+| 0.5 / n\_val | 0.0466 | 70% |
+| 2.0 / n\_val | 0.0466 | 70% |
+| 3.0 / n\_val | 0.0466 | 70% |
+| noise-estimated (paired-bootstrap) | 0.0466 | 70% |
+
+10/10 mode agreement on a 10-run replay across nano-pdf, apple-notes,
+polymarket, huggingface-hub at N\*=250, ratio\*=0.65. Selector dropped
+from val-best path; `--knee-point-strategy smallest` preserved for
+compression-bias users.
+
 ## Finding 4 — Non-inferiority gate at tolerance 0.05 strictly improves on `no_regression`
 
 A post-hoc gate-rule replay (script: `scripts/analysis/option1_replay_gate_rule.py` on the campaign's archive branch) tested whether the **non-inferiority** rule (`bootstrap.lower_bound ≥ -tolerance`) better matches the campaign's compression-bias behavior than the current `no_regression_only` rule (`bootstrap.mean ≥ 0`). Sweep across the 17 instrumented runs:

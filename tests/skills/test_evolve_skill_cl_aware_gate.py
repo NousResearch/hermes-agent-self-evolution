@@ -35,7 +35,6 @@ import pytest
 from evolution.core.dataset_builder import EvalDataset, EvalExample
 from evolution.core.saturation_check import SaturationReport
 from evolution.skills.evolve_skill import evolve
-from evolution.skills.knee_point import CandidatePick
 from evolution.validation.report import (
     PhaseResult,
     TaskResult,
@@ -154,31 +153,6 @@ def _fake_validation_report(
     )
 
 
-def _make_knee_pick(evolved_body: str) -> CandidatePick:
-    """Build a CandidatePick that select_knee_point would return.
-
-    ``skill_text`` IS the evolved body (no frontmatter). evolve_skill.py
-    then reassembles the full file via reassemble_skill(frontmatter, body)
-    for the static checks, but force_run() is called with the body alone.
-    """
-    fake_module = MagicMock()
-    fake_module.skill_text = evolved_body
-    return CandidatePick(
-        module=fake_module,
-        skill_text=evolved_body,
-        body_chars=len(evolved_body),
-        val_score=0.8,
-        val_rank_in_band=1,
-        band_size=1,
-        epsilon=0.1,
-        fallback="knee",
-        picked_idx=0,
-        gepa_default_idx=0,
-        gepa_default_body_chars=len(evolved_body),
-        band_roster=[],
-    )
-
-
 def _make_fake_gepa(evolved_body: str):
     """Build a fake dspy.GEPA whose ``compile()`` returns a module with
     the detailed_results shape the knee-point path expects."""
@@ -228,7 +202,6 @@ def _patch_stack(
     """
     fake_builder = MagicMock()
     fake_builder.generate.return_value = _fake_skill_dataset()
-    knee_pick = _make_knee_pick(evolved_body)
     evolved_per = [holdout_evolved_mean] * holdout_n
 
     def _maybe_build(**kwargs):
@@ -258,10 +231,6 @@ def _patch_stack(
         stack.enter_context(patch(
             "evolution.skills.evolve_skill.dspy.GEPA",
             new=_make_fake_gepa(evolved_body),
-        ))
-        stack.enter_context(patch(
-            "evolution.skills.evolve_skill.select_knee_point",
-            return_value=knee_pick,
         ))
         stack.enter_context(patch(
             "evolution.skills.evolve_skill._holdout_evaluate_with_metric",

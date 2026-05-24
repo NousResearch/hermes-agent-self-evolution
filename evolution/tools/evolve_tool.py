@@ -69,7 +69,6 @@ from evolution.core.quality_gate import (
 )
 from evolution.core.run_inputs import build_run_inputs
 from evolution.core.stats import paired_bootstrap
-from evolution.skills.knee_point import CandidatePick, select_knee_point
 from evolution.tools.session_mining import (
     HermesToolImporter,
     build_tool_dataset_from_sessions,
@@ -187,21 +186,24 @@ def _compute_win_loss(
     }
 
 
-def _knee_point_payload(knee_pick: Optional[CandidatePick]) -> dict[str, Any]:
-    if knee_pick is None:
-        return {"applied": False, "reason": "no_detailed_results"}
+def _deferred_knee_point_payload(
+    *, best_idx: int, val_score: float, body_chars: int,
+) -> dict[str, Any]:
+    """Payload for the val-best path that defers to GEPA's best_idx.
+
+    Mirrors evolve_skill's deferred payload. `band_roster` stays a list so
+    downstream calibration scripts that access it via
+    ``.get("band_roster", [])`` keep working.
+    """
     return {
-        "applied": True,
-        "fallback": knee_pick.fallback,
-        "epsilon": knee_pick.epsilon,
-        "band_size": knee_pick.band_size,
-        "picked_idx": knee_pick.picked_idx,
-        "picked_val_score": knee_pick.val_score,
-        "picked_val_rank_in_band": knee_pick.val_rank_in_band,
-        "picked_body_chars": knee_pick.body_chars,
-        "gepa_default_idx": knee_pick.gepa_default_idx,
-        "gepa_default_body_chars": knee_pick.gepa_default_body_chars,
-        "band_roster": knee_pick.band_roster,
+        "applied": False,
+        "fallback": "gepa_default",
+        "picked_idx": best_idx,
+        "gepa_default_idx": best_idx,
+        "picked_val_score": val_score,
+        "picked_body_chars": body_chars,
+        "gepa_default_body_chars": body_chars,
+        "band_roster": [],
     }
 
 
@@ -751,30 +753,33 @@ def evolve(
             elapsed = time.time() - start_time
             console.print(f"\n  GEPA optimization completed in {elapsed:.1f}s")
 
-            knee_pick: Optional[CandidatePick] = None
+            # Defer to GEPA's val-argmax (details.best_idx). Regenerated
+            # calibration showed the epsilon-band selector picked GEPA's
+            # default 10/10 across five epsilon modes; see
+            # reports/calibration_findings.md Finding 3.
+            knee_payload: dict[str, Any] = {
+                "applied": False, "reason": "no_detailed_results",
+            }
             if hasattr(optimized_module, "detailed_results"):
                 details = optimized_module.detailed_results
-                knee_pick = select_knee_point(
-                    candidates=details.candidates,
-                    val_aggregate_scores=details.val_aggregate_scores,
-                    n_val=len(valset),
-                    static_validator=lambda txt: validator.validate_static(txt, "tool_description"),
-                    gepa_default_idx=details.best_idx,
-                    text_extractor=lambda c: _candidate_description(c, tool_name),
+                evolved_description = _candidate_description(
+                    details.candidates[details.best_idx], tool_name,
                 )
-                evolved_description = _candidate_description(knee_pick.module, tool_name)
                 optimized_module = ToolModule(
                     target_tool_name=tool_name,
                     manifest=manifest,
                     target_description=evolved_description,
                 )
+                knee_payload = _deferred_knee_point_payload(
+                    best_idx=details.best_idx,
+                    val_score=float(details.val_aggregate_scores[details.best_idx]),
+                    body_chars=len(evolved_description),
+                )
                 console.print(
-                    f"\n[bold]Knee-point selection[/bold]: picked candidate "
-                    f"{knee_pick.picked_idx} (val={knee_pick.val_score:.3f}, "
-                    f"rank {knee_pick.val_rank_in_band} of {knee_pick.band_size} in band, "
-                    f"{knee_pick.body_chars} chars vs GEPA default "
-                    f"{knee_pick.gepa_default_body_chars}; ε={knee_pick.epsilon:.3f}; "
-                    f"fallback={knee_pick.fallback})"
+                    f"\n[bold]Candidate selection[/bold]: GEPA val-argmax "
+                    f"(candidate {details.best_idx}, val="
+                    f"{details.val_aggregate_scores[details.best_idx]:.3f}, "
+                    f"{len(evolved_description)} chars)"
                 )
             else:
                 evolved_description = optimized_module.description_text
@@ -817,7 +822,7 @@ def evolve(
                     "decision_signal": "synthetic",
                     "failed_constraints": [c.constraint_name for c in static_constraints if not c.passed],
                     "messages": [c.message for c in static_constraints if not c.passed],
-                    "knee_point": _knee_point_payload(knee_pick),
+                    "knee_point": knee_payload,
                     "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools, sessiondb_drops=sessiondb_drops),
                     "run_inputs": run_inputs,
                     **tool_payload_fields,
@@ -895,7 +900,7 @@ def evolve(
                         "baseline_chars": baseline_chars,
                         "evolved_chars": evolved_chars,
                         "growth_pct": growth_pct,
-                        "knee_point": _knee_point_payload(knee_pick),
+                        "knee_point": knee_payload,
                         "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools, sessiondb_drops=sessiondb_drops),
                         "run_inputs": run_inputs,
                         **tool_payload_fields,
@@ -940,7 +945,7 @@ def evolve(
                         "baseline_chars": baseline_chars,
                         "evolved_chars": evolved_chars,
                         "growth_pct": growth_pct,
-                        "knee_point": _knee_point_payload(knee_pick),
+                        "knee_point": knee_payload,
                         "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools, sessiondb_drops=sessiondb_drops),
                         "run_inputs": run_inputs,
                         **tool_payload_fields,
@@ -1067,7 +1072,7 @@ def evolve(
                 "win_loss": _compute_win_loss(baseline_per_example, evolved_per_example),
                 "failed_constraints": [c.constraint_name for c in growth_constraints if not c.passed],
                 "messages": [c.message for c in growth_constraints if not c.passed],
-                "knee_point": _knee_point_payload(knee_pick),
+                "knee_point": knee_payload,
                 "dataset": _dataset_payload(dataset, dropped_tools=manifest.dropped_tools, sessiondb_drops=sessiondb_drops),
                 "run_inputs": run_inputs,
                 **tool_payload_fields,

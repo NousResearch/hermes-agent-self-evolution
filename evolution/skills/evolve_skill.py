@@ -164,6 +164,29 @@ def _knee_point_payload(knee_pick: Optional[CandidatePick]) -> dict[str, Any]:
     }
 
 
+def _deferred_knee_point_payload(
+    *, best_idx: int, val_score: float, body_chars: int,
+) -> dict[str, Any]:
+    """Payload for the val-best path that defers to GEPA's best_idx.
+
+    Regenerated calibration showed the epsilon-band selector picked
+    GEPA's default in every run across five epsilon modes; the val-best
+    short-circuit skips the band walk entirely. `band_roster` stays a
+    list so downstream calibration scripts that access it via
+    ``.get("band_roster", [])`` keep working.
+    """
+    return {
+        "applied": False,
+        "fallback": "gepa_default",
+        "picked_idx": best_idx,
+        "gepa_default_idx": best_idx,
+        "picked_val_score": val_score,
+        "picked_body_chars": body_chars,
+        "gepa_default_body_chars": body_chars,
+        "band_roster": [],
+    }
+
+
 def _holdout_evaluate_with_metric(module, holdout_examples, metric, lm) -> tuple[float, list[float]]:
     """Score `module` on the holdout via dspy.Evaluate.
 
@@ -992,36 +1015,57 @@ def evolve(
             elapsed = time.time() - start_time
             console.print(f"\n  {optimizer_name} optimization completed in {elapsed:.1f}s")
 
-            # GEPA's default ("best by aggregate valset score") overfits on small
-            # valsets — observed 1.000 valset / 0.78 holdout on obsidian. Knee-point
-            # picks the most parsimonious candidate within ε=1/n_val instead.
+            # The val-best path defers to GEPA's argmax (details.best_idx).
+            # Regenerated calibration showed the epsilon-band selector picked
+            # GEPA's default 10/10 across five epsilon modes; see
+            # reports/calibration_findings.md Finding 3. The --knee-point-strategy
+            # smallest path still routes through select_knee_point for users
+            # explicitly chasing compression.
             # Skipped cleanly when MIPROv2 fallback fired (no detailed_results).
             knee_pick: Optional[CandidatePick] = None
+            knee_payload: dict[str, Any] = {
+                "applied": False, "reason": "no_detailed_results",
+            }
             if hasattr(optimized_module, "detailed_results"):
                 details = optimized_module.detailed_results
-                knee_pick = select_knee_point(
-                    candidates=details.candidates,
-                    val_aggregate_scores=details.val_aggregate_scores,
-                    n_val=len(valset),
-                    static_validator=lambda txt: validator.validate_static(
-                        reassemble_skill(skill["frontmatter"], txt), "skill",
-                    ),
-                    gepa_default_idx=details.best_idx,
-                    epsilon=knee_point_epsilon,
-                    strategy=knee_point_strategy,
-                )
-                # Fresh module instead of mutating in place: avoids carrying
-                # ChainOfThought state (demos, etc.) from the GEPA-default module —
-                # we only want the picked candidate's instruction text.
-                optimized_module = SkillModule(knee_pick.skill_text)
-                console.print(
-                    f"\n[bold]Knee-point selection[/bold]: picked candidate "
-                    f"{knee_pick.picked_idx} (val={knee_pick.val_score:.3f}, "
-                    f"rank {knee_pick.val_rank_in_band} of {knee_pick.band_size} "
-                    f"in band, {knee_pick.body_chars} chars vs GEPA default "
-                    f"{knee_pick.gepa_default_body_chars} chars; ε={knee_pick.epsilon:.3f}; "
-                    f"fallback={knee_pick.fallback})"
-                )
+                if knee_point_strategy == "smallest":
+                    knee_pick = select_knee_point(
+                        candidates=details.candidates,
+                        val_aggregate_scores=details.val_aggregate_scores,
+                        n_val=len(valset),
+                        static_validator=lambda txt: validator.validate_static(
+                            reassemble_skill(skill["frontmatter"], txt), "skill",
+                        ),
+                        gepa_default_idx=details.best_idx,
+                        epsilon=knee_point_epsilon,
+                        strategy=knee_point_strategy,
+                    )
+                    optimized_module = SkillModule(knee_pick.skill_text)
+                    knee_payload = _knee_point_payload(knee_pick)
+                    console.print(
+                        f"\n[bold]Knee-point selection[/bold]: picked candidate "
+                        f"{knee_pick.picked_idx} (val={knee_pick.val_score:.3f}, "
+                        f"rank {knee_pick.val_rank_in_band} of {knee_pick.band_size} "
+                        f"in band, {knee_pick.body_chars} chars vs GEPA default "
+                        f"{knee_pick.gepa_default_body_chars} chars; ε={knee_pick.epsilon:.3f}; "
+                        f"fallback={knee_pick.fallback})"
+                    )
+                else:
+                    # val-best no longer walks the band on static failure;
+                    # --knee-point-strategy smallest preserves that behavior.
+                    best_text = details.candidates[details.best_idx].skill_text
+                    optimized_module = SkillModule(best_text)
+                    knee_payload = _deferred_knee_point_payload(
+                        best_idx=details.best_idx,
+                        val_score=float(details.val_aggregate_scores[details.best_idx]),
+                        body_chars=len(best_text),
+                    )
+                    console.print(
+                        f"\n[bold]Candidate selection[/bold]: GEPA val-argmax "
+                        f"(candidate {details.best_idx}, val="
+                        f"{details.val_aggregate_scores[details.best_idx]:.3f}, "
+                        f"{len(best_text)} chars)"
+                    )
 
             evolved_body = optimized_module.skill_text
             evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
@@ -1049,7 +1093,7 @@ def evolve(
                     "decision_signal": "synthetic",
                     "failed_constraints": [c.constraint_name for c in static_constraints if not c.passed],
                     "messages": [c.message for c in static_constraints if not c.passed],
-                    "knee_point": _knee_point_payload(knee_pick),
+                    "knee_point": knee_payload,
                     "dataset": _dataset_payload(dataset),
                     "run_inputs": build_run_inputs(
                         config=config,
@@ -1148,7 +1192,7 @@ def evolve(
                         "baseline_chars": baseline_chars,
                         "evolved_chars": evolved_chars,
                         "growth_pct": growth_pct,
-                        "knee_point": _knee_point_payload(knee_pick),
+                        "knee_point": knee_payload,
                         "dataset": _dataset_payload(dataset),
                         "run_inputs": run_inputs,
                     })
@@ -1191,7 +1235,7 @@ def evolve(
                         "baseline_chars": baseline_chars,
                         "evolved_chars": evolved_chars,
                         "growth_pct": growth_pct,
-                        "knee_point": _knee_point_payload(knee_pick),
+                        "knee_point": knee_payload,
                         "dataset": _dataset_payload(dataset),
                         "run_inputs": run_inputs,
                     })
@@ -1333,7 +1377,7 @@ def evolve(
                 "win_loss": _compute_win_loss(baseline_per_example, evolved_per_example),
                 "failed_constraints": [c.constraint_name for c in growth_constraints if not c.passed],
                 "messages": [c.message for c in growth_constraints if not c.passed],
-                "knee_point": _knee_point_payload(knee_pick),
+                "knee_point": knee_payload,
                 "dataset": _dataset_payload(dataset),
                 "run_inputs": run_inputs,
             }
@@ -1610,19 +1654,19 @@ def evolve(
     "--knee-point-epsilon",
     default=None,
     type=float,
-    help="Advanced: ε tolerance for knee-point Pareto selection. Default = "
-    "1/n_val (one valset example's worth of disagreement). Override only when "
-    "you have a calibrated reason — random tightening narrows the band and "
-    "biases selection back toward the GEPA default.",
+    help="Advanced: ε tolerance for the knee-point band. Only used by "
+    "--knee-point-strategy=smallest; the default val-best path defers to "
+    "GEPA's val-argmax and ignores ε. Default = 1/n_val (one valset "
+    "example's worth of disagreement).",
 )
 @click.option(
     "--knee-point-strategy",
     default="val-best",
     type=click.Choice(["val-best", "smallest"]),
-    help="Within the ε-band, which candidate to pick. val-best (default): "
-    "highest val score wins, smallest body as tiebreak. smallest: greedy "
-    "parsimony — picks the smallest body regardless of val cost; "
-    "available for users explicitly chasing compression.",
+    help="How to pick the deployed candidate from GEPA's output. val-best "
+    "(default): defer to GEPA's val-argmax (best_idx) — does not walk an "
+    "ε-band. smallest: walk the ε-band and pick the smallest body, "
+    "accepting val cost for compression.",
 )
 @click.option(
     "--bap-safety-margin",
