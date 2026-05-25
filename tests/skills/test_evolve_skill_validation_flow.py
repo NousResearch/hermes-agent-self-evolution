@@ -965,3 +965,104 @@ class TestGepaAcceptanceFlag:
             f"Expected acceptance_criterion=strict_improvement; "
             f"got {captured['gepa_kwargs']!r}. CLI output: {result.output}"
         )
+
+
+class TestPRAutomationWiring:
+    """Wiring tests for the --create-pr flag's pr_created block. The flag
+    is off by default; when on with no git-backed source, create_pr returns
+    a skipped PRResult that should round-trip into gate_decision.json."""
+
+    @pytest.fixture
+    def skill_dir(self, tmp_path):
+        skills_root = tmp_path / "skills"
+        skill_path = skills_root / "demo-skill"
+        skill_path.mkdir(parents=True)
+        (skill_path / "SKILL.md").write_text(
+            "---\nname: demo-skill\ndescription: a test skill\n---\n\nDo X.\n"
+        )
+        return skills_root
+
+    def _run(self, skill_dir: Path, extra_cli_args: list[str], monkeypatch, *, find_git_root_return=None):
+        fake_candidate = MagicMock()
+        fake_candidate.skill_text = "evolved skill text"
+        fake_module = MagicMock()
+        fake_module.skill_text = "evolved skill text"
+        fake_module.detailed_results = SimpleNamespace(
+            candidates=[fake_candidate],
+            val_aggregate_scores=[1.0],
+            best_idx=0,
+        )
+        fake_builder = MagicMock()
+        fake_builder.generate.return_value = _fake_skill_dataset()
+        # Pin cwd to a tmp dir so the orchestrator's "output/" parent
+        # doesn't pile inside the repo's working tree.
+        monkeypatch.chdir(skill_dir.parent)
+        with patch(
+            "evolution.skills.evolve_skill.SyntheticDatasetBuilder", return_value=fake_builder,
+        ), patch(
+            "evolution.skills.evolve_skill._preflight_lm_credentials",
+        ), patch(
+            "evolution.skills.evolve_skill.dspy.GEPA.compile", return_value=fake_module,
+        ), patch(
+            "evolution.skills.evolve_skill._holdout_evaluate_with_metric",
+            return_value=(0.6, [0.6] * 10),
+        ), patch(
+            "evolution.skills.evolve_skill.find_git_root",
+            return_value=find_git_root_return,
+        ):
+            runner = CliRunner()
+            return runner.invoke(
+                evolve_skill_cli,
+                ["--skill", "demo-skill", "--skill-source-dir", str(skill_dir),
+                 "--iterations", "1", "--no-preflight",
+                 "--no-saturation-check", "--quality-gate", "non-inferiority",
+                 *extra_cli_args],
+                catch_exceptions=False,
+            )
+
+    def _read_latest_gate_decision(self, base_dir: Path) -> dict:
+        # The orchestrator writes to output/<skill>/<ts>/gate_decision.json
+        # under cwd; pull the only run under the demo-skill bucket.
+        runs = sorted((base_dir / "output" / "demo-skill").iterdir())
+        assert runs, "no run directory produced under output/demo-skill"
+        path = runs[-1] / "gate_decision.json"
+        assert path.exists(), f"gate_decision.json missing at {path}"
+        return json.loads(path.read_text())
+
+    def test_pr_created_block_disabled_when_create_pr_false(
+        self, skill_dir, tmp_path, monkeypatch,
+    ):
+        # Default --no-create-pr → gate_decision.json carries pr_created with
+        # status "disabled". The key is always present so calibration scripts
+        # don't have to check for absence.
+        result = self._run(skill_dir, extra_cli_args=[], monkeypatch=monkeypatch)
+        assert result.exit_code == 0, result.output
+        payload = self._read_latest_gate_decision(skill_dir.parent)
+        # All 5 fields present even when disabled — keeps downstream
+        # consumers free to use payload["pr_created"]["url"] without
+        # special-casing the absence of the key.
+        assert payload["pr_created"] == {
+            "status": "disabled",
+            "reason": None,
+            "branch": None,
+            "commit_sha": None,
+            "url": None,
+        }
+        assert payload["run_inputs"]["create_pr"] is False
+
+    def test_pr_created_block_records_skip_when_create_pr_true_and_no_repo(
+        self, skill_dir, tmp_path, monkeypatch,
+    ):
+        # --create-pr on + find_git_root → None (no git-backed source) lands
+        # a skipped PRResult in pr_created with the right reason string.
+        result = self._run(
+            skill_dir,
+            extra_cli_args=["--create-pr"],
+            monkeypatch=monkeypatch,
+            find_git_root_return=None,
+        )
+        assert result.exit_code == 0, result.output
+        payload = self._read_latest_gate_decision(skill_dir.parent)
+        assert payload["pr_created"]["status"] == "skipped"
+        assert "git-backed" in payload["pr_created"]["reason"]
+        assert payload["run_inputs"]["create_pr"] is True

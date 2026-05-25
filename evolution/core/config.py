@@ -108,7 +108,11 @@ class EvolutionConfig:
     enable_confusable_bucket: bool = False
 
     output_dir: Path = field(default_factory=lambda: Path("./output"))
-    create_pr: bool = True
+    # Reserved for future ergonomic-default support; the per-run boolean
+    # is currently carried via the `--create-pr/--no-create-pr` CLI flag,
+    # not this field. Kept here so users programming against
+    # EvolutionConfig have an obvious surface to extend.
+    create_pr: bool = False
 
     seed: int = 42
 

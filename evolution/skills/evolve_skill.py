@@ -40,6 +40,12 @@ from evolution.core.hermes_provider import (
     resolve_default_lm,
     resolved_lms_dump,
 )
+from evolution.core.pr_automation import (
+    create_pr,
+    disabled_pr_block,
+    find_git_root,
+    pr_block_from_result,
+)
 from evolution.core.quality_gate import (
     QUALITY_GATE_PRESETS,
     _check_cl_primary_gate,
@@ -651,6 +657,11 @@ def evolve(
     closed_loop_in_valset: bool = False,
     closed_loop_agent_model: Optional[str] = None,
     closed_loop_task_timeout_seconds: Optional[int] = None,
+    create_pr_flag: bool = False,
+    pr_base_branch: str = "main",
+    pr_branch_prefix: str = "evolve/",
+    pr_draft: bool = False,
+    pr_allow_dirty: bool = False,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -1109,6 +1120,7 @@ def evolve(
                         quality_gate_preset=quality_gate,
                         eval_source=eval_source,
                         gepa_acceptance=config.gepa_acceptance,
+                        create_pr=create_pr_flag,
                     ),
                 })
                 console.print(f"  Saved failed variant to {failed_path}")
@@ -1150,6 +1162,7 @@ def evolve(
                 quality_gate_preset=quality_gate,
                 eval_source=eval_source,
                 gepa_acceptance=config.gepa_acceptance,
+                create_pr=create_pr_flag,
             )
 
             use_cl_primary = (
@@ -1412,8 +1425,57 @@ def evolve(
                 # didn't fire even though CL may be configured.
                 decision_payload["reason_synthetic"] = "preflight_skipped"
 
+            # Persist evolved + baseline artifacts once on the deploy path
+            # for both the PR hook (needs the path) and the post-table
+            # reporting (needs them on disk for the user).
+            if growth_pass:
+                evolved_skill_path = output_dir / "evolved_skill.md"
+                evolved_skill_path.write_text(evolved_full)
+                (output_dir / "baseline_skill.md").write_text(skill["raw"])
+
+            # Run PR automation BEFORE writing gate_decision.json so the PR
+            # outcome lands in the same single-write block — calibration
+            # scripts grepping pr_created don't have to special-case a
+            # re-write or missing key.
+            pr_created_block: dict[str, Any] = disabled_pr_block()
+            if growth_pass and create_pr_flag:
+                source_repo_root = find_git_root(skill_path)
+                source_artifact_relpath = (
+                    str(skill_path.relative_to(source_repo_root))
+                    if source_repo_root is not None
+                    else str(skill_path)
+                )
+                pr_result = create_pr(
+                    source_repo_root=source_repo_root,
+                    source_artifact_relpath=source_artifact_relpath,
+                    evolved_artifact_path=evolved_skill_path,
+                    artifact_name=skill_name,
+                    gate_decision=decision_payload,
+                    metrics={
+                        "baseline_mean": avg_baseline,
+                        "evolved_mean": avg_evolved,
+                        "delta": improvement,
+                    },
+                    base_branch=pr_base_branch,
+                    branch_prefix=pr_branch_prefix,
+                    draft=pr_draft,
+                    allow_dirty=pr_allow_dirty,
+                    console=console,
+                )
+                pr_created_block = pr_block_from_result(pr_result)
+            decision_payload["pr_created"] = pr_created_block
+
             gate_path = write_gate_decision(output_dir, decision_payload)
             console.print(f"  [dim]Gate decision logged to {gate_path}[/dim]")
+            if pr_created_block["status"] == "created":
+                console.print(
+                    f"  [green]✓ PR opened: {pr_created_block['url']}[/green]"
+                )
+            elif pr_created_block["status"] in ("skipped", "failed"):
+                console.print(
+                    f"  [yellow]PR automation {pr_created_block['status']}: "
+                    f"{pr_created_block['reason']}[/yellow]"
+                )
 
             if not growth_pass:
                 console.print("[red]✗ Evolved skill REJECTED by quality gate — not deploying[/red]")
@@ -1479,9 +1541,6 @@ def evolve(
             console.print()
             console.print(table)
 
-            evolved_skill_path = output_dir / "evolved_skill.md"
-            evolved_skill_path.write_text(evolved_full)
-            (output_dir / "baseline_skill.md").write_text(skill["raw"])
             metrics = {
                 "skill_name": skill_name,
                 "timestamp": timestamp,
@@ -1541,6 +1600,7 @@ def evolve(
                     quality_gate_preset=quality_gate,
                     eval_source=eval_source,
                     gepa_acceptance=config.gepa_acceptance,
+                    create_pr=create_pr_flag,
                 ),
                 schema_version="5",
             )
@@ -1849,6 +1909,48 @@ def evolve(
          "~50% of true-equal mutations.",
 )
 @click.option(
+    "--create-pr/--no-create-pr",
+    "create_pr_flag",
+    is_flag=True,
+    default=False,
+    help="On a deploy decision, branch the source repo, commit the evolved "
+         "artifact, push, and open a GitHub PR. Off by default — opt in "
+         "per-run. No-op on reject. Skips cleanly when the source isn't "
+         "git-backed (e.g. Claude Code plugin cache).",
+)
+@click.option(
+    "--pr-base-branch",
+    "pr_base_branch",
+    default="main",
+    type=str,
+    help="Target branch for the PR opened by --create-pr (default: main).",
+)
+@click.option(
+    "--pr-branch-prefix",
+    "pr_branch_prefix",
+    default="evolve/",
+    type=str,
+    help="Prefix for the PR's head branch under --create-pr. Branch names "
+         "become '{prefix}{artifact}-{timestamp}-{hex}'.",
+)
+@click.option(
+    "--pr-draft",
+    "pr_draft",
+    is_flag=True,
+    default=False,
+    help="Open the --create-pr PR as a draft (recommended for personal "
+         "automation pipelines that want a human review gate before merge).",
+)
+@click.option(
+    "--pr-allow-dirty",
+    "pr_allow_dirty",
+    is_flag=True,
+    default=False,
+    help="Override --create-pr's dirty-tree refusal. Default behavior "
+         "skips PR creation when the source repo has uncommitted changes "
+         "to avoid sweeping unrelated edits into the evolution PR.",
+)
+@click.option(
     "--closed-loop-during-evolution",
     "closed_loop_suite_path",
     default=None,
@@ -1943,6 +2045,11 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          force_saturation_check,
          gepa_minibatch_size,
          gepa_acceptance,
+         create_pr_flag,
+         pr_base_branch,
+         pr_branch_prefix,
+         pr_draft,
+         pr_allow_dirty,
          closed_loop_suite_path,
          closed_loop_saturation_threshold,
          closed_loop_min_iters,
@@ -2000,6 +2107,11 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             closed_loop_in_valset=closed_loop_in_valset,
             closed_loop_agent_model=closed_loop_agent_model,
             closed_loop_task_timeout_seconds=closed_loop_task_timeout_seconds,
+            create_pr_flag=create_pr_flag,
+            pr_base_branch=pr_base_branch,
+            pr_branch_prefix=pr_branch_prefix,
+            pr_draft=pr_draft,
+            pr_allow_dirty=pr_allow_dirty,
         )
     except HermesProviderError as exc:
         # Render a clean error panel instead of dumping a Python traceback

@@ -28,6 +28,7 @@ class TestBuildRunInputs:
             quality_gate_preset="default",
             eval_source="synthetic",
             gepa_acceptance="improvement_or_equal",
+            create_pr=False,
         )
         assert set(result.keys()) == {
             "seed",
@@ -41,8 +42,10 @@ class TestBuildRunInputs:
             "quality_gate_preset",
             "eval_source",
             "gepa_acceptance",
+            "create_pr",
         }
         assert result["gepa_acceptance"] == "improvement_or_equal"
+        assert result["create_pr"] is False
 
     def test_tool_side_adds_fitness_profile_and_confusable_bucket(self):
         config = _fake_config()
@@ -54,6 +57,7 @@ class TestBuildRunInputs:
             quality_gate_preset="default",
             eval_source="synthetic",
             gepa_acceptance="strict_improvement",
+            create_pr=True,
             fitness_profile="balanced",
             enable_confusable_bucket=True,
         )
@@ -69,12 +73,14 @@ class TestBuildRunInputs:
             "quality_gate_preset",
             "eval_source",
             "gepa_acceptance",
+            "create_pr",
             "fitness_profile",
             "enable_confusable_bucket",
         }
         assert result["gepa_acceptance"] == "strict_improvement"
         assert result["fitness_profile"] == "balanced"
         assert result["enable_confusable_bucket"] is True
+        assert result["create_pr"] is True
 
     def test_resolved_lms_matches_helper_output(self):
         config = _fake_config()
@@ -85,6 +91,7 @@ class TestBuildRunInputs:
             quality_gate_preset="default",
             eval_source="synthetic",
             gepa_acceptance="improvement_or_equal",
+            create_pr=False,
         )
         expected = resolved_lms_dump(
             optimizer="openai/gpt-4.1",
@@ -106,6 +113,7 @@ class TestBuildRunInputs:
             quality_gate_preset="default",
             eval_source="synthetic",
             gepa_acceptance="improvement_or_equal",
+            create_pr=False,
             fitness_profile="balanced",
             enable_confusable_bucket=config.enable_confusable_bucket,
         )

@@ -318,6 +318,10 @@ Every evolved variant must pass:
 4. **Semantic preservation** — Must not drift from original purpose
 5. **PR review** — All changes go through human review, never direct commit
 
+### Automated PR opening (opt-in)
+
+`--create-pr` branches the source repo, commits the evolved artifact, pushes, and opens a GitHub PR via `gh` on a deploy decision. Off by default; intended for personal-use direct-push workflows against a repo you own. Pair with `--pr-draft` for a human review gate, and `--pr-base-branch`/`--pr-branch-prefix` to control where the PR lands. The default refuses to run against a dirty source tree (escape hatch: `--pr-allow-dirty`) and against non-git-backed sources like the Claude Code plugin cache. **Do not pair with campaign loops** — every accepted run opens its own PR, so a 10-skill sweep is 10 PRs to review.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.

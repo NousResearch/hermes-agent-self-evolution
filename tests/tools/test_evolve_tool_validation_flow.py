@@ -237,6 +237,85 @@ class TestGateDecisionSchemaOnDeploy:
         assert result["baseline_score"] < result["evolved_score"]
 
 
+class TestPRAutomationWiring:
+    """Wiring tests for the --create-pr flag's pr_created block. The flag
+    is off by default; when on with no git-backed source, create_pr returns
+    a skipped PRResult that should round-trip into gate_decision.json."""
+
+    def _run(self, temp_manifest, run_dir, *, create_pr_flag, find_git_root_return=None):
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        with (
+            patch.object(
+                SyntheticDatasetBuilder,
+                "_call_lm_for_bucket",
+                side_effect=_bucket_side_effect(15, 9, 6),
+            ),
+            patch(
+                "evolution.tools.evolve_tool.dspy.GEPA",
+                new=_make_fake_gepa(
+                    _build_evolved_module(manifest, EVOLVED_DESCRIPTION)
+                ),
+            ),
+            patch.object(
+                ToolJudge,
+                "score",
+                new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
+            ),
+            patch.object(
+                ToolModule,
+                "forward",
+                new=_scripted_module_forward(expected_tool_for_evolved="search_files"),
+            ),
+            patch(
+                "evolution.tools.evolve_tool.find_git_root",
+                return_value=find_git_root_return,
+            ),
+        ):
+            evolve(
+                tool_name="search_files",
+                manifest_path=temp_manifest,
+                iterations=1,
+                eval_dataset_size=30,
+                holdout_ratio=0.5,
+                quality_gate="non-inferiority",
+                enable_confusable_bucket=True,
+                output_dir=run_dir,
+                create_pr_flag=create_pr_flag,
+            )
+
+    def test_pr_created_block_disabled_when_create_pr_false(
+        self, temp_manifest: Path, tmp_path: Path,
+    ):
+        run_dir = tmp_path / "run"
+        self._run(temp_manifest, run_dir, create_pr_flag=False)
+        payload = json.loads((run_dir / "gate_decision.json").read_text())
+        # All 5 fields present even when disabled — keeps downstream
+        # consumers free to use payload["pr_created"]["url"] without
+        # special-casing the absence of the key.
+        assert payload["pr_created"] == {
+            "status": "disabled",
+            "reason": None,
+            "branch": None,
+            "commit_sha": None,
+            "url": None,
+        }
+        assert payload["run_inputs"]["create_pr"] is False
+
+    def test_pr_created_block_records_skip_when_create_pr_true_and_no_repo(
+        self, temp_manifest: Path, tmp_path: Path,
+    ):
+        run_dir = tmp_path / "run"
+        self._run(
+            temp_manifest, run_dir,
+            create_pr_flag=True,
+            find_git_root_return=None,
+        )
+        payload = json.loads((run_dir / "gate_decision.json").read_text())
+        assert payload["pr_created"]["status"] == "skipped"
+        assert "git-backed" in payload["pr_created"]["reason"]
+        assert payload["run_inputs"]["create_pr"] is True
+
+
 class TestApplyOverwritesSourceManifest:
     """`apply=True` writes the evolved description back to the source manifest."""
 

@@ -20,6 +20,7 @@ def build_run_inputs(
     quality_gate_preset: str,
     eval_source: str,
     gepa_acceptance: str,
+    create_pr: bool,
     fitness_profile: Optional[str] = None,
     enable_confusable_bucket: Optional[bool] = None,
 ) -> dict[str, Any]:
@@ -39,6 +40,7 @@ def build_run_inputs(
         "quality_gate_preset": quality_gate_preset,
         "eval_source": eval_source,
         "gepa_acceptance": gepa_acceptance,
+        "create_pr": create_pr,
     }
     if fitness_profile is not None:
         run_inputs["fitness_profile"] = fitness_profile
