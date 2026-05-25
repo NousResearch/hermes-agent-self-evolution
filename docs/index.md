@@ -6,7 +6,7 @@ This directory is a structured documentation set for **`agent-self-evolution`** 
 
 **Start here every time.** This file is the entry point — it describes which documents to consult for which kinds of question. Load it into context first; the other docs are loaded on demand.
 
-The codebase is mid-sized (~9K LOC of source + 55 test files / ~1076 tests) and architecturally dense — most of the substance is in *why* things are shaped a certain way, not *what* they are. The docs prioritize that "why."
+The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and architecturally dense — most of the substance is in *why* things are shaped a certain way, not *what* they are. The docs prioritize that "why."
 
 ### Question routing table
 
@@ -56,7 +56,6 @@ The codebase is mid-sized (~9K LOC of source + 55 test files / ~1076 tests) and 
 | [`workflows.md`](workflows.md) | Step-by-step workflows with mermaid sequence diagrams: skill deploy path, reject paths, GEPA→MIPROv2 fallback, sessiondb mining, tool evolution, closed-loop validation, closed-loop signal during evolution |
 | [`dependencies.md`](dependencies.md) | Each external package — what it's used for, why it's pinned, what we don't depend on |
 | [`framework_advantages.md`](framework_advantages.md) | User-facing explainer of how this framework's selection layer, deploy gate, proposer, and composite fitness differ from raw DSPy + GEPA — and when raw GEPA is the right choice |
-| [`review_notes.md`](review_notes.md) | Consistency + completeness gaps found during this docs pass |
 
 ## Documents elsewhere worth knowing about
 
@@ -78,9 +77,9 @@ The codebase is mid-sized (~9K LOC of source + 55 test files / ~1076 tests) and 
 The fast-moving parts to verify against source when consulting these docs:
 
 - `EvolutionConfig` defaults (especially `eval_dataset_size`, `growth_*`, `bootstrap_*`)
-- `gate_decision.json` schema_version (currently `"4"`)
+- `gate_decision.json` schema_version (currently `"5"`)
 - LM model defaults in `evolve_skill.py` / `evolve_tool.py` CLI options
-- Test count (currently ~1076)
+- Test count (currently ~1166)
 - LM `request_timeout` / `num_retries` — may be tuned further
 - Closed-loop CLI flags on `evolve_tool` (`--closed-loop-during-evolution`, `--closed-loop-mode`, …)
 - Saturation pre-flight default thresholds (`evolution/core/saturation_check.py:DEFAULT_THRESHOLDS`) — likely to be calibrated as more real-world bands are observed

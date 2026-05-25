@@ -2,11 +2,13 @@
 
 External packages the framework depends on, what each is used for, and how they're constrained.
 
+Last verified against `pyproject.toml` + `uv.lock` on 2026-05-25.
+
 ## Hard runtime dependencies
 
 ### `dspy>=3.2.0,<3.3`
 
-The optimization engine. Used pervasively:
+The optimization engine. DSPy 3.2.0 is the floor; in practice the lock pins it at 3.2.0 because that's the version whose `gepa[dspy]==0.0.27` transitive constraint is what forced the gepa override below. Used pervasively:
 
 | Module | Usage |
 |---|---|
@@ -24,6 +26,23 @@ The optimization engine. Used pervasively:
 | `dspy.utils.callback.BaseCallback` | Subclassed by `LMTimingCallback`. **Internal-ish API.** |
 
 **Why pinned to `<3.3`:** `BaseCallback` lives at `dspy.utils.callback.BaseCallback` and is not in `dspy.__all__`. A 3.3 minor bump could move or rename it. Same for the `DspyAdapter` / `propose_new_texts` interaction in `gepa/api.py:317-321` that forces our use of `instruction_proposer` instead of `reflection_prompt_template`.
+
+### `gepa @ git+https://github.com/gepa-ai/gepa.git@5e24ee5c8e1857a62a1ba19731de9da45ffb6f1b`
+
+GEPA itself is pinned to an exact git SHA — the merge commit for the upstream `acceptance_criterion` API. The framework's `--gepa-acceptance` flag forwards `acceptance_criterion="improvement_or_equal"` to `dspy.GEPA(..., gepa_kwargs={...})`; the latest released `gepa==0.1.1` on PyPI predates that merge and doesn't accept the kwarg.
+
+**Why a git pin instead of a version range:** the version that ships with the merged API (`0.1.2`) hadn't been published at the time the framework adopted it. When `0.1.2` (or newer) lands on PyPI, swap the dep to `gepa>=0.1.2,<0.2` and drop the `[tool.uv]` override below.
+
+**`[tool.uv] override-dependencies`:** DSPy 3.2.0 hard-pins `gepa[dspy]==0.0.27` as a transitive constraint. Without the override, `uv sync` would resolve to that pre-`acceptance_criterion` build and the `improvement-or-equal` default would error at GEPA construction time. The override block forces every resolver path — direct dep, transitive via `dspy[optuna]`, transitive via anything else — onto the same git SHA:
+
+```toml
+[tool.uv]
+override-dependencies = [
+    "gepa @ git+https://github.com/gepa-ai/gepa.git@5e24ee5c8e1857a62a1ba19731de9da45ffb6f1b",
+]
+```
+
+This is uv-specific (PEP 735 doesn't standardize overrides). Users installing with pip pick up the direct git dep but not the override — if they also install `dspy[optuna]`, pip's resolver will report a conflict. `uv sync` is the supported install path.
 
 ### `litellm>=1.82.0,<2.0`
 

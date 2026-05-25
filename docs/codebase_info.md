@@ -111,7 +111,7 @@ evolution/
 | `evolution/core/behavioral_example.py` | ~35 | builder for behavioral dspy.Examples |
 | **Total** | **~9,000** | excludes empty `__init__.py` shims |
 
-Test suite: 55 test files under `tests/core/`, `tests/skills/`, `tests/tools/`, `tests/validation/`. **1076 tests** collected.
+Test suite: 61 test files under `tests/core/`, `tests/skills/`, `tests/tools/`, `tests/validation/`. **1166 tests** collected.
 
 ## Runtime dependencies
 

@@ -1,3 +1,5 @@
+> **Superseded.** Historical analysis from 2026-05-03. The knee-point ε-band selector was empirically dropped as a no-op for the val-best path in May 2026 (10/10 mode agreement across 5 ε modes on a regenerated calibration corpus). The selector survives only for the `--knee-point-strategy smallest` opt-in path. See [`reports/calibration_findings.md`](../../reports/calibration_findings.md) for current status.
+
 # Knee-point Pareto Selection: Analysis
 
 This document evaluates the framework's custom Pareto selector at

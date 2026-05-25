@@ -27,3 +27,6 @@ snapshots/
 .vscode/
 *.swp
 *.swo
+
+# Local-only design specs and implementation plans (never committed)
+docs/superpowers/

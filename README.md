@@ -6,7 +6,7 @@
 
 Agent Self-Evolution evolves and optimizes agent skills, tool descriptions, system prompts, and code — producing measurably better versions through reflective evolutionary search. Built on DSPy + GEPA (Genetic-Pareto Prompt Evolution), with extra safeguards on top so what ships is reliably better than the original.
 
-**No GPU training required.** Everything operates via API calls — mutating text, evaluating results, and selecting the best variants. ~$2-10 per optimization run.
+**No GPU training required.** Everything operates via API calls — mutating text, evaluating results, and selecting the best variants. ~$1-5 per optimization run.
 
 Works on any agent framework that emits `SKILL.md` markdown files. [Hermes Agent](https://github.com/NousResearch/hermes-agent) skills are the original target; Claude Code skills (and any other agent's `<dir>/<skill>/SKILL.md` layout) are also supported via a pluggable skill-source abstraction.
 
@@ -32,9 +32,8 @@ GEPA reads execution traces to understand *why* things fail (not just that they 
 
 GEPA was designed against benchmarks with hundreds of validation examples per task. Skill evolution typically has 20-60 examples, which is small enough that picking the highest-scoring candidate often picks one that won by chance — there's a real risk of shipping a "winner" that just got lucky on the eval set.
 
-This framework adds three checks on top of GEPA so the candidate that ships is one that genuinely improved the skill:
+This framework adds two checks on top of GEPA so the candidate that ships is one that genuinely improved the skill:
 
-- **Knee-point selection** — instead of strictly the highest-scoring candidate, looks at every candidate close to the top score and prefers shorter ones. Filters out wins that came from a single lucky example.
 - **Held-out deploy check** — before a candidate ships, it's compared against the baseline on examples it never saw during optimization. Several rules available, including a lenient one that's appropriate for compression-style refactors.
 - **Three-dimensional scoring** — instead of pass/fail, the LLM judge rates each output on correctness, whether it followed the right procedure, and how concise it is. GEPA's reflection step uses these as feedback to guide the next mutation.
 
@@ -211,9 +210,21 @@ The chosen profile is recorded in `gate_decision.json` so any deployed variant c
 
 Each profile also selects a reflection-prompt proposer template. `compression` tells the LM to cut redundancy under a tight char budget; `growth` tells it to add only what the failure feedback explicitly identifies as missing; `balanced` (the default) is direction-agnostic — it asks the LM to fix the failures without prescribing cuts or additions, and uses a soft "stay near N characters, ±20%" budget. All three share the same anti-hallucination guardrails: every change must ground in a specific feedback phrase, and empty feedback returns the instruction unchanged.
 
-### Ship the evolved skill back to source
+### Tune GEPA's search behavior
 
-By default, the evolved skill lands in `output/<skill>/<timestamp>/evolved_skill.md` and stops there. Two opt-in flags automate the next step:
+A few knobs control how aggressively GEPA explores the candidate space and how the deployed candidate is picked from the final population. Defaults are tuned for the typical 20-60-example skill-evolution regime; reach for these on calibration runs or when the saturation pre-flight flags a degenerate signal.
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--gepa-acceptance` | `improvement-or-equal` | Whether GEPA accepts plateau-equal candidates (`improvement-or-equal`) or only strictly-better ones (`strict-improvement`). The default allows more lateral exploration; the strict mode is the legacy `gepa<0.1.2` behavior. |
+| `--gepa-minibatch-size` | `3` | Training examples sampled per reflective step. Bump to ~8 when saturation pre-flight flags `weak_signal` so discriminating examples appear more often in the minibatch. Larger minibatches consume more metric budget per accepted proposal — pair with `--budget heavy`. |
+| `--knee-point-strategy` | `val-best` | How to pick the deployed candidate from GEPA's output. `val-best` defers to GEPA's val-argmax. `smallest` walks every candidate within ε of the top val score and picks the shortest body, trading val score for parsimony on compression-mode runs. |
+
+### Shipping the evolved artifact
+
+By default, the evolved artifact lands in `output/<artifact>/<timestamp>/` and stops there. Three opt-in flags automate the next step. They are independent and can be combined or used alone; all three are no-ops on a reject decision (with a stderr notice).
+
+#### `--apply` / `--patch`: local file delivery
 
 ```bash
 # Copy evolved_skill.md over the source SKILL.md in place on a deploy decision.
@@ -224,7 +235,26 @@ uv run python -m evolution.skills.evolve_skill --skill X --apply
 uv run python -m evolution.skills.evolve_skill --skill X --patch | git apply
 ```
 
-Both flags are no-ops on a reject decision (with a stderr notice). `--apply` also skips with a warning when the source path is under Claude Code's plugin cache (read-only by design).
+`--apply` skips with a warning when the source path is under Claude Code's plugin cache (read-only by design). `--patch` is the review-by-hand path: it prints the diff and never touches the source.
+
+#### `--create-pr`: open a draft PR against the source repo
+
+```bash
+uv run python -m evolution.skills.evolve_skill --skill X \
+    --create-pr --pr-draft
+```
+
+Branches the source repo from `origin/<pr-base-branch>` (default `main`), commits the evolved artifact via atomic write, pushes, and opens a GitHub PR via `gh` with a structured body. Off by default; intended for personal-use direct-push workflows against a repo you own.
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--create-pr` / `--no-create-pr` | off | Toggle PR creation. |
+| `--pr-base-branch` | `main` | Target branch for the PR. |
+| `--pr-branch-prefix` | `evolve/` | Head branch becomes `{prefix}{artifact}-{timestamp}-{hex}`. |
+| `--pr-draft` | off | Open as draft (recommended for a human review gate). |
+| `--pr-allow-dirty` | off | Override the default refusal when the source tree has uncommitted changes. |
+
+Skips cleanly when the source isn't git-backed (e.g. the Claude Code plugin cache). **Do not pair with campaign loops** — every accepted run opens its own PR, so a 10-skill sweep is 10 PRs to review.
 
 ### Safety knobs
 
@@ -317,10 +347,6 @@ Every evolved variant must pass:
 3. **Caching compatibility** — No mid-conversation changes
 4. **Semantic preservation** — Must not drift from original purpose
 5. **PR review** — All changes go through human review, never direct commit
-
-### Automated PR opening (opt-in)
-
-`--create-pr` branches the source repo, commits the evolved artifact, pushes, and opens a GitHub PR via `gh` on a deploy decision. Off by default; intended for personal-use direct-push workflows against a repo you own. Pair with `--pr-draft` for a human review gate, and `--pr-base-branch`/`--pr-branch-prefix` to control where the PR lands. The default refuses to run against a dirty source tree (escape hatch: `--pr-allow-dirty`) and against non-git-backed sources like the Claude Code plugin cache. **Do not pair with campaign loops** — every accepted run opens its own PR, so a 10-skill sweep is 10 PRs to review.
 
 ## Full Plan
 

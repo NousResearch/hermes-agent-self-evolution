@@ -4,7 +4,7 @@ Mirrors the shape of evolution.core.auth_check: a pure helper that
 returns a structured report. Call sites in evolve_skill / evolve_tool
 render a Rich panel and decide whether to prompt or default-deny.
 
-See docs/superpowers/specs/2026-05-21-path-f-saturation-preflight-design.md
+See reports/calibration_findings.md for the calibration data behind DEFAULT_THRESHOLDS.
 """
 
 from __future__ import annotations

@@ -323,7 +323,7 @@ class SaturationReport:
 
 Only the target tool's `description` is changed; every other tool's `description`, `inputSchema`, and any `_evolution_metadata` block are preserved verbatim. With `--apply`, the source manifest file is rewritten in place with the same preservation guarantees. With `--patch`, a unified diff of (baseline → evolved) manifest JSON is written to stdout.
 
-## gate_decision.json (schema_version "4")
+## gate_decision.json (schema_version "5")
 
 The structured deploy-gate decision, written to `output/<skill>/<timestamp>/gate_decision.json` on every run regardless of outcome. The schema is the **calibration substrate** — `tests/skills/test_evolve_skill_validation_flow.py:TestGrowthGateDecisionSchema` locks the field list so future calibration scripts (`jq -s '...' output/*/*/gate_decision.json`) don't break.
 
@@ -333,7 +333,7 @@ Written when any `validate_static` check fails on the evolved artifact (short-ci
 
 ```json
 {
-  "schema_version": "4",
+  "schema_version": "5",
   "decision": "reject",
   "reason": "static_constraint_failure",
   "failed_constraints": ["non_empty"],
@@ -367,7 +367,7 @@ Written when `--max-total-cost-usd` is set and cumulative LM cost exceeds the ce
 
 ```json
 {
-  "schema_version": "4",
+  "schema_version": "5",
   "decision": "aborted",
   "reason": "cost_ceiling_exceeded",
   "cost_ceiling_usd": 0.50,
@@ -399,7 +399,7 @@ Written when `--max-total-cost-usd` is set and cumulative LM cost exceeds the ce
 
 ```json
 {
-  "schema_version": "4",
+  "schema_version": "5",
   "decision": "deploy",                          // or "reject"
   "reason": "passed",                            // or "growth_quality_gate"
   "decision_rule_used": "dual_check",            // or "no_regression_only" | "non_inferiority"
@@ -529,6 +529,31 @@ Runs of `evolution.tools.evolve_tool` write the same schema with four extra top-
 |---|---|---|
 | `dataset.sessiondb_drops` | `dict[str, int]` | Per-reason drop counts across the two pipeline stages. Importer keys: `short_task`, `slash_command`, `secret`, `no_tool_calls`, `non_manifest`. Judge keys: `judge_irrelevant`, `judge_error`, `noisy_middle`, `low_confidence`, `unknown_correct_tool`. Judge keys are absent when zero candidates reached the judge stage. |
 | `dataset.dropped_non_manifest_count` | `int` | Pulled out of `sessiondb_drops["non_manifest"]` as a top-level int so calibration scripts don't have to know the inner key set. Counts session invocations of tools that exist in the historical session but not in the current manifest under evolution. |
+
+### Schema v5 additions
+
+v5 adds always-present `decision_signal` and `pr_created` fields, plus a closed-loop-primary field group that is present only when the deploy gate was decided on closed-loop signal rather than the synthetic holdout.
+
+| Field | Type | Notes |
+|---|---|---|
+| `decision_signal` | `"synthetic" \| "closed_loop"` | Always present. Which signal the deploy gate actually decided on. `"closed_loop"` lands when the run executed CL-primary scoring (closed-loop tasks gained ≥ `cl_required_gain` AND synthetic non-inferiority held); `"synthetic"` otherwise. Calibration scripts should branch on this before interpreting `bootstrap` vs `cl_tasks_gained`. |
+| `pr_created` | `dict` | Always present. Shape-stable across `--create-pr` on/off and across success/failure. Keys: `status` (`"created" \| "skipped" \| "failed" \| "disabled"`), `reason` (`str \| None`), `branch` (`str \| None`), `commit_sha` (`str \| None`), `url` (`str \| None`). `"disabled"` is the default when `--create-pr` is off. |
+
+#### Closed-loop-primary fields (`decision_signal == "closed_loop"`)
+
+Written by `evolution/core/quality_gate.py::append_cl_decision_fields` when the gate decision is taken on closed-loop signal.
+
+| Field | Type | Notes |
+|---|---|---|
+| `baseline_closed_loop_per_example` | `list[float]` | Cached per-task closed-loop scores for the baseline artifact (0.0/1.0 per task). |
+| `evolved_closed_loop_per_example` | `list[float]` | Per-task closed-loop scores for the evolved artifact (0.0/1.0 per task). Same length and task order as `baseline_closed_loop_per_example`. |
+| `evolved_closed_loop_errored_tasks` | `list` | Task identifiers (or empty) for closed-loop evaluations that errored rather than scored. Empty list is the common case. |
+| `cl_tasks_gained` | `int` | `int(sum(evolved)) - int(sum(baseline))` — the net delta of tasks passing closed-loop. The CL-primary gate requires this to meet `cl_required_gain`. |
+| `cl_required_gain` | `int` | The CL-primary threshold the run had to clear, computed from `growth_pct` via the CL-primary slope/free-threshold constants. At least `1` for any non-zero growth. |
+| `synthetic_sanity_check` | `dict` | The non-inferiority guard that runs alongside CL-primary. Keys: `tolerance` (float), `baseline_mean` (float), `evolved_mean` (float), `passed` (bool — `(evolved - baseline) >= -tolerance`). |
+| `evolved_cl_eval_cost_usd` | `float` | LM cost in USD attributable to the evolved closed-loop evaluation pass — surfaces the CL-primary path's incremental spend. |
+| `band_trigger_score` | `dict` | Pre-flight scores that decided whether CL-primary fired. Keys: `holdout` (`float \| None`), `closed_loop` (`float \| None`). |
+| `validator_agent_model` | `str` | The LiteLLM model id used for the closed-loop validator agent. Recorded so historical decisions stay analysable if the default changes. |
 
 ## metrics.json (deploy-only summary)
 

@@ -52,7 +52,7 @@ Files: `evolution/core/saturation_check.py`.
 
 ## Telemetry as a first-class feature
 
-Every run writes `gate_decision.json` (schema_version `"4"`) capturing the deploy decision, the paired-bootstrap statistics, the static-constraint results, the knee-point band roster, and an explicit comparison against the candidate stock GEPA would have picked. Combined with `metrics.json` (deploy summary) and `run.log` (every LM call timing), this means a deploy decision is auditable post-hoc and the system can be re-calibrated on accumulated runs. Most upstream users won't realize they're missing this until they need to debug a bad ship.
+Every run writes `gate_decision.json` (schema_version `"5"`) capturing the deploy decision, the paired-bootstrap statistics, the static-constraint results, the knee-point band roster, and an explicit comparison against the candidate stock GEPA would have picked. Combined with `metrics.json` (deploy summary) and `run.log` (every LM call timing), this means a deploy decision is auditable post-hoc and the system can be re-calibrated on accumulated runs. Most upstream users won't realize they're missing this until they need to debug a bad ship.
 
 ## When raw GEPA is the right choice
 

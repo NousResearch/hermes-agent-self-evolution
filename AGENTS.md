@@ -75,7 +75,7 @@ The `evolution/<tier>/` directories form **a clean layering**: `evolution/core/`
 1. CLI resolves `--skill <name>` to a `SKILL.md` via the `SkillSource` walk.
 2. Eval dataset is built (synthetic LM gen / golden file / sessiondb mining).
 3. Skill body wrapped as `dspy.Module`. **Saturation pre-flight** (`evolution/core/saturation_check.py`) scores the baseline on the holdout + closed-loop suite, classifies into one of four bands, and aborts (or prompts) on non-`healthy` bands — `--no-saturation-check` to skip, `--force-saturation-check` to override the default-deny in non-interactive contexts. Then GEPA optimizes the candidate with `BudgetAwareProposer` injecting a char budget into the reflection prompt.
-4. Knee-point Pareto selection walks the candidates within ε of the best valset score in `--knee-point-strategy` order. Default `val-best`: highest val first, smallest body as tiebreak. `smallest` (greedy parsimony) is available via the flag for users explicitly chasing compression.
+4. Candidate selection happens per `--knee-point-strategy`. Default `val-best` defers to GEPA's val-argmax (`detailed_results.best_idx`) — empirical calibration showed the ε-band walker picked GEPA's default on every run, so the val-best path skips the band entirely. `--knee-point-strategy smallest` walks the ε-band in ascending body-char order (greedy parsimony) for users explicitly chasing compression.
 5. Static constraints + paired-bootstrap growth-quality gate decide deploy vs. reject; both outcomes write `gate_decision.json`. The default rule is `no_regression` (`mean >= 0`); `--quality-gate non-inferiority` switches to `lower_bound > -inferiority_tolerance` (recommended for compression-focused runs at small N where the bootstrap CI swamps tiny effects). The post-GEPA holdout eval reuses the baseline scores from the pre-flight, so net cost stays ~zero when the pre-flight ran.
 
 ## What lives where
@@ -210,7 +210,7 @@ Per-run dir: `output/<skill>/<YYYYMMDD_HHMMSS>/`. Contents vary by outcome:
 | File | When | Purpose |
 |---|---|---|
 | `run.log` | always | Every LM call (start, end, heartbeats), every retry |
-| `gate_decision.json` | always | Structured deploy decision (schema_version `"4"`) |
+| `gate_decision.json` | always | Structured deploy decision (schema_version `"5"`) |
 | `evolved_skill.md` | deploy only | New SKILL.md ready to ship |
 | `baseline_skill.md` | deploy only | Original (for diffing) |
 | `metrics.json` | deploy only | Top-level run summary |
@@ -230,7 +230,7 @@ Per-run dir: `output/<skill>/<YYYYMMDD_HHMMSS>/`. Contents vary by outcome:
 - **`max_tokens=16000` on dataset gen LM** — load-bearing. At `eval_dataset_size>=60` the JSON output truncates mid-string with anything lower; the current default `eval_dataset_size=150` makes this even more critical. Locked by `TestSyntheticGeneratorLMConfig`.
 - **`eval_dataset_size=150` is the current default**, sized for a ~53-example holdout that's tight enough on the bootstrap CI to detect ±2% effects. Per-skill calibration runs at smaller N are no longer authoritative.
 - **Reflection LM `request_timeout=300, num_retries=2`** (vs `=5` for judge) — deliberate fast-fail. A reflection-LM `TimeoutError` triggers MIPROv2 fallback rather than burning more time on a stuck call.
-- **Knee-point reads `optimized_module.detailed_results`** — only present when GEPA succeeded (and `track_stats=True`). MIPROv2 fallback path skips knee-point cleanly. `gate_decision.json.knee_point.applied=false` with `reason="no_detailed_results"` is the signal.
+- **Candidate selection reads `optimized_module.detailed_results`** — only present when GEPA succeeded (and `track_stats=True`). The val-best path reads `details.candidates[details.best_idx]` directly; the `smallest` path additionally consumes `val_aggregate_scores` to walk the ε-band. MIPROv2 fallback path skips both cleanly. `gate_decision.json.knee_point.applied=false` with `reason="no_detailed_results"` is the signal.
 - **`SkillModule.TaskWithSkill` docstring is a placeholder** — `__init__` overwrites the signature instructions per-instance via `with_instructions(skill_text)`. Don't rely on the class-level docstring.
 - **`reassemble_skill` strips a leading `---` block** — defensive against the reflection LM mimicking YAML frontmatter (would otherwise produce a double-frontmatter file). Logged at WARNING when it fires; see if the prompt needs tightening.
 - **Test uses both `~/.hermes/skills/` and `~/.hermes/hermes-agent/skills/`** — `external_importers._load_skill_text` (standalone CLI only) reads the former; `HermesSkillSource` (the optimizer's path) reads the latter. Same prefix, different paths.

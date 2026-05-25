@@ -18,6 +18,8 @@ The primary user-facing interface.
 | `--iterations <int>` | `10` | DEPRECATED. Maps `1→light`, `2→medium`, `3→heavy`; anything else collapses to `light`. |
 | `--no-fallback` | off | Re-raise GEPA exceptions instead of falling back to MIPROv2. Debug only. |
 | `--seed <int>` | `42` | RNG seed for dataset shuffles + DSPy optimizer. |
+| `--gepa-minibatch-size <int>` | `3` | GEPA's reflective minibatch size. Default matches GEPA's own default. Bump to ~8 when the saturation pre-flight flags `weak_signal` (wider sampling window makes discriminating examples appear in ~68% of minibatches vs ~34% at default). Aborts at startup if value exceeds trainset size. |
+| `--gepa-acceptance {strict-improvement,improvement-or-equal}` | `improvement-or-equal` | GEPA's acceptance criterion under the `sum(minibatch_scores)` gate. `improvement-or-equal` (default) allows plateau-equal candidates through — the literature-recommended fix for noisy LM-judge fitness where strict acceptance rejects ~50% of true-equal mutations. `strict-improvement` is the legacy `gepa<0.1.2` default; pass it only to reproduce strict-acceptance behavior for comparison runs. Mapped to GEPA's underlying `acceptance_criterion` kwarg with hyphens converted to underscores. |
 
 ### Models
 | Flag | Default | Notes |
@@ -45,8 +47,8 @@ The primary user-facing interface.
 | `--max-absolute-chars <int>` | (preset) | Override absolute char ceiling. |
 | `--bootstrap-confidence <float>` | `0.90` | Two-sided CI confidence for the holdout improvement bootstrap. |
 | `--bootstrap-resamples <int>` | `2000` | Bootstrap iterations. |
-| `--knee-point-epsilon <float>` | `1/n_val` | ε for knee-point Pareto band. Override only with calibrated reason. |
-| `--knee-point-strategy {val-best,smallest}` | `val-best` | Within the ε-band, which candidate to pick. `val-best` (default): highest val score wins, smallest body as tiebreak. `smallest`: greedy parsimony — picks the smallest body in the band regardless of val cost; available for users explicitly chasing compression. |
+| `--knee-point-epsilon <float>` | `1/n_val` | ε for knee-point Pareto band. Only consulted by `--knee-point-strategy smallest`; the default `val-best` path defers to GEPA's val-argmax and ignores ε. Override only with calibrated reason. |
+| `--knee-point-strategy {val-best,smallest}` | `val-best` | How to pick the deployed candidate from GEPA's output. `val-best` (default): defer to GEPA's `detailed_results.best_idx` — empirical calibration showed the ε-band walker picked GEPA's default on every observed run, so this path skips the band entirely. `smallest`: walk the ε-band in ascending body-char order (greedy parsimony) for users explicitly chasing compression even at val cost. |
 | `--fitness-profile {balanced,compression,growth}` | `balanced` | Composite fitness weighting profile for the LLM judge. `balanced` (0.5/0.3/0.2 for correctness/procedure/conciseness) is general-purpose. `compression` (0.4/0.2/0.4) upweights conciseness for shrink-direction work. `growth` (0.6/0.4/0.0) drops conciseness so the optimizer doesn't punish necessary additions. Also selects the `BudgetAwareProposer` template: `compression` → compression-mode (cut redundancy under a tight budget), `balanced` → balanced-mode (direction-agnostic, soft ±20% target), `growth` → growth-mode (add only what feedback identifies as missing). Both the profile and the resolved proposer mode are recorded in `gate_decision.json`. |
 
 ### Proposer
@@ -60,8 +62,13 @@ The primary user-facing interface.
 |---|---|---|
 | `--apply` | off | On a deploy decision, copy `evolved_skill.md` over the source `SKILL.md` in place. No git operations — leaves workflow to the user. No-op (with warning) when the skill source is read-only (Claude Code plugin cache under `~/.claude/plugins/cache`). |
 | `--patch` | off | On a deploy decision, emit a unified diff of (baseline → evolved) to stdout, labelled with the source path. Pipe to `patch`, `git apply`, or a code-review tool. |
+| `--create-pr / --no-create-pr` | off | On a deploy decision, branch the source repo, atomically copy the evolved artifact in, commit, push, and open a GitHub PR via `gh pr create`. Skips cleanly when the source isn't git-backed (e.g. Claude Code plugin cache). Skips when the working tree is dirty unless `--pr-allow-dirty` is also set. Requires `gh` on `$PATH`. |
+| `--pr-base-branch <name>` | `main` | Target branch for the PR opened by `--create-pr`. The PR's head branch is created from `origin/<base>`. |
+| `--pr-branch-prefix <prefix>` | `evolve/` | Prefix for the PR's head branch under `--create-pr`. Branch names become `{prefix}{artifact}-{timestamp}-{hex}`. |
+| `--pr-draft` | off | Open the `--create-pr` PR as a draft. Recommended for personal automation pipelines that want a human review gate before merge. |
+| `--pr-allow-dirty` | off | Override `--create-pr`'s dirty-tree refusal. Default behavior skips PR creation when the source repo has uncommitted changes, to avoid sweeping unrelated edits into the evolution PR. |
 
-Both delivery flags are no-ops on a reject decision and emit a one-line stderr notice in that case. Both default off; they only fire when the user opts in.
+`--apply`, `--patch`, and `--create-pr` are all no-ops on a reject decision and emit a one-line stderr notice in that case. All three default off; they only fire when the user opts in.
 
 ### Misc
 | Flag | Default | Notes |
@@ -71,7 +78,7 @@ Both delivery flags are no-ops on a reject decision and emit a one-line stderr n
 | `--max-total-cost-usd FLOAT` | off | Safety net: abort cleanly when cumulative LM cost exceeds this dollar amount. Worst-case overshoot is one LM call past the ceiling (the cost callback fires AFTER the call returns; the next call aborts at start). 0 is accepted (aborts on first call). Negatives rejected. Writes a `decision="aborted"` `gate_decision.json` with `cost_at_abort_usd`, `cost_ceiling_usd`, and the full `cost_summary` block. |
 | `--benchmark-cmd "<shell command>"` | off | Deploy-gate hook: shell command run AFTER the framework's own deploy gate passes; nonzero exit flips the decision to `reject` with `reason="benchmark_failed"`. Receives `EVOLVED_PATH`, `BASELINE_PATH`, `RUN_DIR`, `TARGET_NAME`, `ARTIFACT_TYPE` via env. Runs under `/bin/sh -c`; aliases and shell functions from your interactive shell are not available. Trust boundary: the command string is yours; do not pass strings you didn't write. Adds a `benchmark` block to `gate_decision.json`. |
 | `--benchmark-timeout-seconds INT` | `600` | Wall-clock cap for the `--benchmark-cmd` hook. Timeout treated as a benchmark fail with `reason="timeout"`. |
-| `--closed-loop-during-evolution <suite.jsonl>` | off | Wired symmetrically with `evolve_tool` for CLI consistency. Skill-side closed-loop validation requires a `SkillFileInstaller` that doesn't exist yet, so setting this flag raises with a clear error. |
+| `--closed-loop-during-evolution <suite.jsonl>` | off | Path to a closed-loop JSONL task suite. The skill-side flow drives `hermes -z` against a temporary working copy of the resolved `SKILL.md` for each task; same `--closed-loop-mode`/`--closed-loop-in-valset` semantics as `evolve_tool`. The full closed-loop flag family (`--closed-loop-mode`, `--closed-loop-saturation-threshold`, `--closed-loop-min-iters`, `--closed-loop-window-size`, `--closed-loop-in-valset`, `--closed-loop-agent-model`, `--closed-loop-task-timeout-seconds`) is wired symmetrically with `evolve_tool`. |
 | `--no-saturation-check` | off | Skip the saturation pre-flight (`evolution/core/saturation_check.py`). By default, the framework scores the baseline on the holdout (and the closed-loop suite, if `--closed-loop-during-evolution` is set) BEFORE GEPA starts; non-`healthy` bands prompt for confirmation (interactive) or default-deny (non-interactive) with a `--force-saturation-check` override. Pass `--no-saturation-check` to skip the probe entirely. |
 | `--force-saturation-check` | off | Run the saturation pre-flight, render the panel, but proceed regardless of band. Required to override a non-`healthy` verdict in non-interactive contexts (no TTY on stdin). Without this in such a context, the framework exits cleanly without spending GEPA budget. |
 
@@ -99,8 +106,15 @@ Evolves one tool's top-level `description` field inside an MCP-shape manifest. T
 | `--fitness-profile {compression,balanced,growth}` | `balanced` | Same composite-weighting profile as `evolve_skill`. Maps to `BudgetAwareToolProposer` mode via `resolve_proposer_mode`. |
 | `--quality-gate {strict,default,lenient,off,non-inferiority}` | `default` | Same preset semantics as `evolve_skill`. |
 | `--max-absolute-chars <int>` | preset value | Override the description's absolute-length ceiling. |
+| `--gepa-minibatch-size <int>` | `3` | GEPA's reflective minibatch size; same meaning as the skill-path flag. Bump alongside `--iterations` when the saturation pre-flight flags `weak_signal`. Aborts at startup if value exceeds trainset size. |
+| `--gepa-acceptance {strict-improvement,improvement-or-equal}` | `improvement-or-equal` | Same meaning as the skill-path flag. `improvement-or-equal` (default) lets plateau-equal candidates through GEPA's acceptance gate. `strict-improvement` is the legacy `gepa<0.1.2` default; pass it only to reproduce strict-acceptance behavior for comparison runs. |
 | `--apply` | off | Rewrite the source manifest file in place with the evolved description on a deploy decision. Preserves every non-target tool's description, `inputSchema`, and any `_evolution_metadata` block. No-op (with stderr notice) when the manifest is under `~/.claude/plugins/cache`. Mutually exclusive with `--patch`. |
 | `--patch` | off | Emit a unified diff of (baseline → evolved) manifest JSON to stdout. Mutually exclusive with `--apply`. |
+| `--create-pr / --no-create-pr` | off | On a deploy decision, branch the source repo, atomically copy the evolved manifest in, commit, push, and open a GitHub PR via `gh pr create`. Skips cleanly when the source isn't git-backed. Skips when the working tree is dirty unless `--pr-allow-dirty` is also set. Requires `gh` on `$PATH`. |
+| `--pr-base-branch <name>` | `main` | Target branch for the PR opened by `--create-pr`. |
+| `--pr-branch-prefix <prefix>` | `evolve/` | Prefix for the PR's head branch. Branch names become `{prefix}{tool}-{timestamp}-{hex}`. |
+| `--pr-draft` | off | Open the `--create-pr` PR as a draft. |
+| `--pr-allow-dirty` | off | Override `--create-pr`'s dirty-tree refusal. |
 | `--seed <int>` | `42` | RNG seed for dataset splitting. |
 | `--eval-source {synthetic,sessiondb}` | `synthetic` | Where the eval dataset comes from. `synthetic` runs the three-bucket generator (50%/30%/20% target-correct / confusable-neighbor / regression-detection). `sessiondb` mines Hermes session JSON for `(task, invoked_tool)` pairs and re-judges them against the current manifest; misselections at judge confidence ≥0.85 become flipped-label training examples. Claude Code and Copilot logs aren't mined (no tool-call data). |
 | `--dry-run` | off | Build the eval dataset and stop. Useful for confirming sessiondb discovery before spending judge + GEPA budget. Returns `{"decision": "dry-run", "dataset_size": N}`. |
@@ -119,7 +133,7 @@ Evolves one tool's top-level `description` field inside an MCP-shape manifest. T
 
 `main()` rejects `--closed-loop-during-evolution` without `--closed-loop-hermes-repo`, and rejects `--closed-loop-mode != feedback` without `--closed-loop-during-evolution`. Local imports keep the validation stack out of cold-path runs.
 
-Both `--apply` and `--patch` are no-ops on a reject decision and emit a one-line stderr notice in that case.
+`--apply`, `--patch`, and `--create-pr` are all no-ops on a reject decision and emit a one-line stderr notice in that case.
 
 ### Exit conditions
 - `sys.exit(1)` if `--eval-source sessiondb` produces zero usable examples — the run.log includes a per-reason drop breakdown (importer + judge stages); the suggestion is to switch to `--eval-source synthetic`.
@@ -270,7 +284,7 @@ Per-run directory: `output/<skill_name>/<YYYYMMDD_HHMMSS>/`. Contents vary by ou
 These are technically internal but tested directly because downstream calibration scripts depend on them:
 
 - `_write_gate_decision(output_dir, payload) -> Path` — keep filename `gate_decision.json`.
-- `gate_decision.json` schema fields — `tests/skills/test_evolve_skill_validation_flow.py:TestGrowthGateDecisionSchema` and `TestStaticValidationShortCircuitsBeforeHoldout` lock `schema_version="4"` plus the full key list. See [data_models.md](data_models.md).
+- `gate_decision.json` schema fields — `tests/skills/test_evolve_skill_validation_flow.py:TestGrowthGateDecisionSchema` and `TestStaticValidationShortCircuitsBeforeHoldout` lock `schema_version="5"` plus the full key list. See [data_models.md](data_models.md).
 - `_dataset_payload(dataset)` — `size_total`, `size_train`, `size_val`, `size_holdout`, `sources` (per-source counter; "unknown" bucket for `source=""`). Locked by `TestDatasetPayloadHelper`.
 - `_knee_point_payload(pick)` — applied/skipped shapes both locked by `TestKneePointPayloadHelper`.
 - `paired_bootstrap()` return shape — `mean`, `lower_bound`, `upper_bound`, `n_examples`, `n_resamples`, `confidence`. Calibration scripts depend on these key names.

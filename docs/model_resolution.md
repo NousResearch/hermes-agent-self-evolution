@@ -2,6 +2,8 @@
 
 How `agent-self-evolution` decides which model to call for each LM role.
 
+Last verified against `evolution/core/hermes_provider.py`, `evolution/core/codex_lm.py`, and `evolution/core/nous_lm.py` on 2026-05-25. Unchanged behavior since the OpenAI Codex Responses API + Nous Portal OAuth + AWS Bedrock provider work landed.
+
 ## TL;DR
 
 If you have Hermes Agent configured (`~/.hermes/config.yaml` exists), the framework uses your Hermes-configured model and provider automatically — for the optimizer, reflection, eval, and judge roles. No env vars to set.
