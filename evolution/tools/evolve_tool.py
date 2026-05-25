@@ -383,6 +383,7 @@ def evolve(
     skip_saturation_check: bool = False,
     force_saturation_check: bool = False,
     gepa_minibatch_size: int = 3,
+    gepa_acceptance: str = "improvement-or-equal",
 ) -> dict[str, Any]:
     """Evolve one tool description inside a manifest.
 
@@ -429,6 +430,7 @@ def evolve(
         holdout_ratio=holdout_ratio,
         enable_confusable_bucket=enable_confusable_bucket,
         reflection_minibatch_size=gepa_minibatch_size,
+        gepa_acceptance=gepa_acceptance.replace("-", "_"),
     )
 
     console.print(
@@ -745,6 +747,7 @@ def evolve(
                 track_stats=True,
                 instruction_proposer=proposer,
                 reflection_minibatch_size=config.reflection_minibatch_size,
+                gepa_kwargs={"acceptance_criterion": config.gepa_acceptance},
             )
             optimized_module = optimizer.compile(
                 baseline_module, trainset=trainset, valset=valset,
@@ -800,6 +803,7 @@ def evolve(
                 optimizer_model=optimizer_model,
                 quality_gate_preset=quality_gate,
                 eval_source=eval_source,
+                gepa_acceptance=config.gepa_acceptance,
                 fitness_profile=fitness_profile,
                 enable_confusable_bucket=config.enable_confusable_bucket,
             )
@@ -1239,6 +1243,7 @@ def evolve(
                 optimizer_model=optimizer_model,
                 quality_gate_preset=quality_gate,
                 eval_source=eval_source,
+                gepa_acceptance=config.gepa_acceptance,
                 fitness_profile=fitness_profile,
                 enable_confusable_bucket=config.enable_confusable_bucket,
             )
@@ -1477,6 +1482,18 @@ def evolve(
          "value exceeds the trainset size.",
 )
 @click.option(
+    "--gepa-acceptance",
+    "gepa_acceptance",
+    default="improvement-or-equal",
+    type=click.Choice(["strict-improvement", "improvement-or-equal"]),
+    help="GEPA acceptance criterion. 'strict-improvement': only accept "
+         "candidates with strictly better minibatch score (legacy gepa<0.1.2 "
+         "default). 'improvement-or-equal' (default): allow plateau-equal "
+         "candidates for more lateral exploration — the literature-recommended "
+         "fix for noisy LM-judge fitness where strict acceptance rejects "
+         "~50% of true-equal mutations.",
+)
+@click.option(
     "--closed-loop-in-valset/--no-closed-loop-in-valset",
     "closed_loop_in_valset",
     default=False,
@@ -1530,6 +1547,7 @@ def main(
     skip_saturation_check: bool,
     force_saturation_check: bool,
     gepa_minibatch_size: int,
+    gepa_acceptance: str,
     closed_loop_suite_path: Optional[Path],
     closed_loop_hermes_repo: Optional[Path],
     closed_loop_saturation_threshold: float,
@@ -1583,6 +1601,7 @@ def main(
             skip_saturation_check=skip_saturation_check,
             force_saturation_check=force_saturation_check,
             gepa_minibatch_size=gepa_minibatch_size,
+            gepa_acceptance=gepa_acceptance,
         )
     except HermesProviderError as exc:
         # Render a clean error panel instead of dumping a Python traceback —

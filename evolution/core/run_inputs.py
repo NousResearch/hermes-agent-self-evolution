@@ -19,6 +19,7 @@ def build_run_inputs(
     optimizer_model: str,
     quality_gate_preset: str,
     eval_source: str,
+    gepa_acceptance: str,
     fitness_profile: Optional[str] = None,
     enable_confusable_bucket: Optional[bool] = None,
 ) -> dict[str, Any]:
@@ -37,6 +38,7 @@ def build_run_inputs(
         "holdout_ratio": config.holdout_ratio,
         "quality_gate_preset": quality_gate_preset,
         "eval_source": eval_source,
+        "gepa_acceptance": gepa_acceptance,
     }
     if fitness_profile is not None:
         run_inputs["fitness_profile"] = fitness_profile

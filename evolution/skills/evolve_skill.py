@@ -298,6 +298,7 @@ def _default_gepa_runner(
     instruction_proposer=None,
     reflection_model: Optional[str] = None,
     reflection_minibatch_size: int = 3,
+    gepa_acceptance: str = "improvement_or_equal",
 ):
     # max_tokens=32000 satisfies DSPy's reasoning-model floor of 16000
     # (DSPy raises ValueError below that).
@@ -327,6 +328,7 @@ def _default_gepa_runner(
         track_stats=True,
         instruction_proposer=instruction_proposer,
         reflection_minibatch_size=reflection_minibatch_size,
+        gepa_kwargs={"acceptance_criterion": gepa_acceptance},
     )
     return optimizer.compile(baseline_module, trainset=trainset, valset=valset)
 
@@ -385,6 +387,7 @@ def _build_optimizer_and_compile(
     instruction_proposer=None,
     reflection_model: Optional[str] = None,
     reflection_minibatch_size: int = 3,
+    gepa_acceptance: str = "improvement_or_equal",
     _gepa_runner=_default_gepa_runner,
     _mipro_runner=_default_mipro_runner,
 ):
@@ -407,6 +410,7 @@ def _build_optimizer_and_compile(
             instruction_proposer=instruction_proposer,
             reflection_model=reflection_model,
             reflection_minibatch_size=reflection_minibatch_size,
+            gepa_acceptance=gepa_acceptance,
         )
         return optimized, "GEPA"
     except CostCeilingExceeded:
@@ -638,6 +642,7 @@ def evolve(
     skip_saturation_check: bool = False,
     force_saturation_check: bool = False,
     gepa_minibatch_size: int = 3,
+    gepa_acceptance: str = "improvement-or-equal",
     closed_loop_suite_path: Optional[Path] = None,
     closed_loop_saturation_threshold: float = 0.95,
     closed_loop_min_iters: int = 3,
@@ -689,6 +694,7 @@ def evolve(
     if holdout_ratio is not None:
         config_kwargs["holdout_ratio"] = holdout_ratio
     config_kwargs["reflection_minibatch_size"] = gepa_minibatch_size
+    config_kwargs["gepa_acceptance"] = gepa_acceptance.replace("-", "_")
     config = EvolutionConfig(**config_kwargs)
     explicit_dirs = [Path(d) for d in (skill_source_dirs or [])]
     if explicit_dirs:
@@ -1010,6 +1016,7 @@ def evolve(
                 instruction_proposer=proposer,
                 reflection_model=config.reflection_model,
                 reflection_minibatch_size=config.reflection_minibatch_size,
+                gepa_acceptance=config.gepa_acceptance,
             )
 
             elapsed = time.time() - start_time
@@ -1101,6 +1108,7 @@ def evolve(
                         optimizer_model=optimizer_model,
                         quality_gate_preset=quality_gate,
                         eval_source=eval_source,
+                        gepa_acceptance=config.gepa_acceptance,
                     ),
                 })
                 console.print(f"  Saved failed variant to {failed_path}")
@@ -1141,6 +1149,7 @@ def evolve(
                 optimizer_model=optimizer_model,
                 quality_gate_preset=quality_gate,
                 eval_source=eval_source,
+                gepa_acceptance=config.gepa_acceptance,
             )
 
             use_cl_primary = (
@@ -1531,6 +1540,7 @@ def evolve(
                     optimizer_model=optimizer_model,
                     quality_gate_preset=quality_gate,
                     eval_source=eval_source,
+                    gepa_acceptance=config.gepa_acceptance,
                 ),
                 schema_version="5",
             )
@@ -1827,6 +1837,18 @@ def evolve(
          "value exceeds the trainset size.",
 )
 @click.option(
+    "--gepa-acceptance",
+    "gepa_acceptance",
+    default="improvement-or-equal",
+    type=click.Choice(["strict-improvement", "improvement-or-equal"]),
+    help="GEPA acceptance criterion. 'strict-improvement': only accept "
+         "candidates with strictly better minibatch score (legacy gepa<0.1.2 "
+         "default). 'improvement-or-equal' (default): allow plateau-equal "
+         "candidates for more lateral exploration — the literature-recommended "
+         "fix for noisy LM-judge fitness where strict acceptance rejects "
+         "~50% of true-equal mutations.",
+)
+@click.option(
     "--closed-loop-during-evolution",
     "closed_loop_suite_path",
     default=None,
@@ -1920,6 +1942,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          skip_saturation_check,
          force_saturation_check,
          gepa_minibatch_size,
+         gepa_acceptance,
          closed_loop_suite_path,
          closed_loop_saturation_threshold,
          closed_loop_min_iters,
@@ -1968,6 +1991,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             skip_saturation_check=skip_saturation_check,
             force_saturation_check=force_saturation_check,
             gepa_minibatch_size=gepa_minibatch_size,
+            gepa_acceptance=gepa_acceptance,
             closed_loop_suite_path=closed_loop_suite_path,
             closed_loop_saturation_threshold=closed_loop_saturation_threshold,
             closed_loop_min_iters=closed_loop_min_iters,

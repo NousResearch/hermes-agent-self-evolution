@@ -6,6 +6,9 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
+[manifest]
+overrides = [{ name = "gepa", git = "https://github.com/gepa-ai/gepa.git?rev=5e24ee5c8e1857a62a1ba19731de9da45ffb6f1b" }]
+
 [[package]]
 name = "agent-self-evolution"
 version = "0.1.0"
@@ -13,6 +16,7 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "dspy" },
+    { name = "gepa" },
     { name = "litellm" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -38,6 +42,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.0" },
     { name = "dspy", specifier = ">=3.2.0,<3.3" },
     { name = "dspy", extras = ["optuna"], marker = "extra == 'miprov2'", specifier = ">=3.2.0,<3.3" },
+    { name = "gepa", git = "https://github.com/gepa-ai/gepa.git?rev=5e24ee5c8e1857a62a1ba19731de9da45ffb6f1b" },
     { name = "litellm", specifier = ">=1.82.0,<2.0" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "openai", specifier = ">=1.0.0" },
@@ -715,12 +720,8 @@ wheels = [
 
 [[package]]
 name = "gepa"
-version = "0.0.27"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4e/99/6840f84498f2dcbfd27e8a15eeb4e637e84e9dbbd6331977b71f6ffad9c7/gepa-0.0.27.tar.gz", hash = "sha256:02ecb19e4aa6a1f5bb2994cd54b2057f25cd5e8cd662fee514303b2a8ba0a738", size = 155106, upload-time = "2026-01-28T00:33:51.72Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/bd/f9e83519099a9fd5d090520ab0c51a6278e473b914a9b32d1e812662dd3b/gepa-0.0.27-py3-none-any.whl", hash = "sha256:592beb084fd638d525edae84ca75ad8e9e9c3758e5498b933c17153addf5dd2d", size = 146454, upload-time = "2026-01-28T00:33:50.262Z" },
-]
+version = "0.1.1"
+source = { git = "https://github.com/gepa-ai/gepa.git?rev=5e24ee5c8e1857a62a1ba19731de9da45ffb6f1b#5e24ee5c8e1857a62a1ba19731de9da45ffb6f1b" }
 
 [[package]]
 name = "greenlet"

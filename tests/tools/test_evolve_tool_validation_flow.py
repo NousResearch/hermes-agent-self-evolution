@@ -913,3 +913,78 @@ class TestBenchmarkCmdHook:
         assert payload["reason"] == "growth_quality_gate"
         assert "benchmark" not in payload
         assert ran["called"] is False
+
+
+class TestGepaAcceptanceFlag:
+    """--gepa-acceptance threads through to dspy.GEPA's gepa_kwargs,
+    forwarded onward to gepa.optimize as acceptance_criterion."""
+
+    def _make_capturing_fake_gepa(self, evolved_module: ToolModule, captured: dict):
+        class _FakeGEPA:
+            def __init__(self, **kwargs):
+                captured["gepa_kwargs"] = dict(kwargs.get("gepa_kwargs") or {})
+                self.kwargs = kwargs
+
+            def compile(self, baseline_module, *, trainset, valset):
+                evolved_module.detailed_results = SimpleNamespace(
+                    candidates=[evolved_module],
+                    val_aggregate_scores=[1.0],
+                    best_idx=0,
+                )
+                return evolved_module
+
+        return _FakeGEPA
+
+    def _run(self, temp_manifest: Path, tmp_path: Path, **evolve_kwargs):
+        manifest = ToolManifest.from_json_file(temp_manifest)
+        run_dir = tmp_path / "run"
+        captured: dict = {}
+        evolved = _build_evolved_module(manifest, EVOLVED_DESCRIPTION)
+        with (
+            patch.object(
+                SyntheticDatasetBuilder,
+                "_call_lm_for_bucket",
+                side_effect=_bucket_side_effect(15, 9, 6),
+            ),
+            patch(
+                "evolution.tools.evolve_tool.dspy.GEPA",
+                new=self._make_capturing_fake_gepa(evolved, captured),
+            ),
+            patch.object(
+                ToolJudge, "score",
+                new=_scripted_judge_score(target_score=0.95, regression_score=0.0),
+            ),
+            patch.object(
+                ToolModule, "forward",
+                new=_scripted_module_forward(expected_tool_for_evolved="search_files"),
+            ),
+        ):
+            evolve(
+                tool_name="search_files",
+                manifest_path=temp_manifest,
+                iterations=1,
+                eval_dataset_size=30,
+                holdout_ratio=0.5,
+                quality_gate="non-inferiority",
+                enable_confusable_bucket=True,
+                output_dir=run_dir,
+                **evolve_kwargs,
+            )
+        return captured
+
+    def test_gepa_acceptance_default_passes_improvement_or_equal(
+        self, temp_manifest: Path, tmp_path: Path
+    ):
+        captured = self._run(temp_manifest, tmp_path)
+        assert captured.get("gepa_kwargs", {}).get("acceptance_criterion") == "improvement_or_equal", (
+            f"Expected default acceptance_criterion=improvement_or_equal; "
+            f"got {captured!r}"
+        )
+
+    def test_gepa_acceptance_strict_passes_strict(
+        self, temp_manifest: Path, tmp_path: Path
+    ):
+        captured = self._run(temp_manifest, tmp_path, gepa_acceptance="strict")
+        assert captured.get("gepa_kwargs", {}).get("acceptance_criterion") == "strict", (
+            f"Expected acceptance_criterion=strict; got {captured!r}"
+        )

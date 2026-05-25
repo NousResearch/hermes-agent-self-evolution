@@ -878,3 +878,90 @@ class TestFileHandlerLifecycle:
             f"evolve_skill.evolve() leaked {after - before} root-logger "
             f"handler(s) across two calls"
         )
+
+
+def _fake_skill_dataset(n: int = 50):
+    """Real-shaped EvalDataset with n fake examples — no LM calls."""
+    examples = [
+        EvalExample(task_input=f"task {i}", expected_behavior=f"rubric {i}")
+        for i in range(n)
+    ]
+    return EvalDataset(
+        train=examples[:30], val=examples[30:40], holdout=examples[40:50],
+    )
+
+
+class TestGepaAcceptanceFlag:
+    """--gepa-acceptance threads through to dspy.GEPA's gepa_kwargs,
+    forwarded onward to gepa.optimize as acceptance_criterion."""
+
+    @pytest.fixture
+    def skill_dir(self, tmp_path):
+        skills_root = tmp_path / "skills"
+        skill_path = skills_root / "demo-skill"
+        skill_path.mkdir(parents=True)
+        (skill_path / "SKILL.md").write_text(
+            "---\nname: demo-skill\ndescription: a test skill\n---\n\nDo X.\n"
+        )
+        return skills_root
+
+    def _run_with_capture(self, skill_dir: Path, extra_cli_args: list[str]):
+        captured: dict = {}
+        import dspy
+        original_init = dspy.GEPA.__init__
+
+        def recording_init(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            captured["gepa_kwargs"] = dict(self.gepa_kwargs)
+
+        fake_candidate = MagicMock()
+        fake_candidate.skill_text = "evolved skill text"
+        fake_module = MagicMock()
+        fake_module.skill_text = "evolved skill text"
+        fake_module.detailed_results = SimpleNamespace(
+            candidates=[fake_candidate],
+            val_aggregate_scores=[1.0],
+            best_idx=0,
+        )
+        fake_builder = MagicMock()
+        fake_builder.generate.return_value = _fake_skill_dataset()
+        with patch(
+            "evolution.skills.evolve_skill.SyntheticDatasetBuilder", return_value=fake_builder
+        ), patch(
+            "evolution.skills.evolve_skill._preflight_lm_credentials"
+        ), patch("evolution.skills.evolve_skill.dspy.GEPA.__init__", recording_init), patch(
+            "evolution.skills.evolve_skill.dspy.GEPA.compile", return_value=fake_module
+        ), patch(
+            "evolution.skills.evolve_skill._holdout_evaluate_with_metric",
+            return_value=(0.6, [0.6] * 10),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                evolve_skill_cli,
+                ["--skill", "demo-skill", "--skill-source-dir", str(skill_dir),
+                 "--iterations", "1", "--no-preflight",
+                 "--no-saturation-check", *extra_cli_args],
+            )
+        return captured, result
+
+    def test_gepa_acceptance_default_passes_improvement_or_equal(self, skill_dir):
+        captured, result = self._run_with_capture(skill_dir, extra_cli_args=[])
+        assert "gepa_kwargs" in captured, (
+            f"dspy.GEPA was never constructed; CLI output: {result.output}"
+        )
+        assert captured["gepa_kwargs"].get("acceptance_criterion") == "improvement_or_equal", (
+            f"Expected default acceptance_criterion=improvement_or_equal; "
+            f"got {captured['gepa_kwargs']!r}. CLI output: {result.output}"
+        )
+
+    def test_gepa_acceptance_strict_passes_strict_improvement(self, skill_dir):
+        captured, result = self._run_with_capture(
+            skill_dir, extra_cli_args=["--gepa-acceptance", "strict-improvement"],
+        )
+        assert "gepa_kwargs" in captured, (
+            f"dspy.GEPA was never constructed; CLI output: {result.output}"
+        )
+        assert captured["gepa_kwargs"].get("acceptance_criterion") == "strict_improvement", (
+            f"Expected acceptance_criterion=strict_improvement; "
+            f"got {captured['gepa_kwargs']!r}. CLI output: {result.output}"
+        )

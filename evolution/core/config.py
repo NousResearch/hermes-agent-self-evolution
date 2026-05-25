@@ -37,6 +37,14 @@ class EvolutionConfig:
     # for the actionable hint surfaced to users.
     reflection_minibatch_size: int = 3
 
+    # GEPA acceptance criterion. "improvement_or_equal" (default) accepts
+    # plateau-equal candidates so noisy LM-judge ties don't reject "true
+    # zero-difference" mutations ~50% of the time; "strict_improvement"
+    # preserves the gepa<0.1.2 implicit behavior. Forwarded as the literal
+    # kwarg expected by gepa.optimize via dspy.GEPA's gepa_kwargs passthrough
+    # (valid gepa values: "strict_improvement", "improvement_or_equal").
+    gepa_acceptance: str = "improvement_or_equal"
+
     # Per-role model overrides. When set, treated as explicit LiteLLM model
     # strings that bypass Hermes resolution. When None, get_lm() falls back
     # to resolve_default_lm() against ~/.hermes/config.yaml + auth.json +

@@ -87,3 +87,25 @@ The `--max-absolute-chars 12000` override applied to Stage 7 validation runs (so
 ## Audit trail
 
 Full campaign artifacts — runbook, analysis scripts, `study_*_results.json`, and per-run `output/<skill>/<ts>/{gate_decision,band_holdout,metrics}.json` — live on the `archive/2026-deploy-gate-calibration` branch. No-op merge to main; the report and the one-line preset change are the only durable changes from this campaign.
+
+## Path D — GEPA acceptance criterion (improvement-or-equal default)
+
+The framework now defaults `acceptance_criterion` to `improvement_or_equal`
+for the underlying `gepa.optimize` call, replacing the implicit strict
+behavior baked into gepa <0.1.2. Flag: `--gepa-acceptance
+{strict-improvement,improvement-or-equal}` on `evolve_skill` and `evolve_tool`.
+
+Why: strict-elitist acceptance under noisy LM-judge fitness rejects
+"true zero-difference" candidates roughly half the time, narrowing
+search and reducing Pareto-frontier diversity for no benefit. GEPA's
+Algorithm 1 only says "if σ′ improved" — the strict tiebreak was an
+implementation artifact, not a paper claim. Literature on this is
+unambiguous (Beyer 2000 on noisy elitism; Aizawa & Wah 1994 and
+Rakshit et al. 2017 on threshold/relaxed acceptance for noisy fitness).
+
+Upstream: gepa-ai/gepa PR #304 (merged 2026-04-06) introduced the
+configurable `acceptance_criterion` API with `"strict"` and
+`"improvement_or_equal"` shortcuts. We pin gepa to the merge SHA via a
+git dependency until 0.1.2 ships on PyPI (0.1.1 was uploaded
+2026-03-16, three weeks before the merge); migration path is a one-line
+swap to `"gepa>=0.1.2"` once it's published.

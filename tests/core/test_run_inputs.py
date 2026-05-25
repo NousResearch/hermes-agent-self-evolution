@@ -27,6 +27,7 @@ class TestBuildRunInputs:
             optimizer_model="openai/gpt-4.1",
             quality_gate_preset="default",
             eval_source="synthetic",
+            gepa_acceptance="improvement_or_equal",
         )
         assert set(result.keys()) == {
             "seed",
@@ -39,7 +40,9 @@ class TestBuildRunInputs:
             "holdout_ratio",
             "quality_gate_preset",
             "eval_source",
+            "gepa_acceptance",
         }
+        assert result["gepa_acceptance"] == "improvement_or_equal"
 
     def test_tool_side_adds_fitness_profile_and_confusable_bucket(self):
         config = _fake_config()
@@ -50,6 +53,7 @@ class TestBuildRunInputs:
             optimizer_model="openai/gpt-4.1",
             quality_gate_preset="default",
             eval_source="synthetic",
+            gepa_acceptance="strict_improvement",
             fitness_profile="balanced",
             enable_confusable_bucket=True,
         )
@@ -64,9 +68,11 @@ class TestBuildRunInputs:
             "holdout_ratio",
             "quality_gate_preset",
             "eval_source",
+            "gepa_acceptance",
             "fitness_profile",
             "enable_confusable_bucket",
         }
+        assert result["gepa_acceptance"] == "strict_improvement"
         assert result["fitness_profile"] == "balanced"
         assert result["enable_confusable_bucket"] is True
 
@@ -78,6 +84,7 @@ class TestBuildRunInputs:
             optimizer_model="openai/gpt-4.1",
             quality_gate_preset="default",
             eval_source="synthetic",
+            gepa_acceptance="improvement_or_equal",
         )
         expected = resolved_lms_dump(
             optimizer="openai/gpt-4.1",
@@ -98,6 +105,7 @@ class TestBuildRunInputs:
             optimizer_model="openai/gpt-4.1",
             quality_gate_preset="default",
             eval_source="synthetic",
+            gepa_acceptance="improvement_or_equal",
             fitness_profile="balanced",
             enable_confusable_bucket=config.enable_confusable_bucket,
         )
