@@ -24,8 +24,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from reportlab.lib.colors import HexColor, white
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.lib.colors import HexColor, black, white
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
@@ -65,6 +65,12 @@ def _extract_run_data(run_dir: Path) -> dict[str, Any]:
     log = (run_dir / "run.log").read_text() if (run_dir / "run.log").is_file() else ""
     lm_calls_judge = len(re.findall(r"LM #\d+ start.*model=openai/gpt-4\.1-mini", log))
     lm_calls_reflection = len(re.findall(r"LM #\d+ start.*model=openai/gpt-5-mini", log))
+    # Sum of calls reported by metrics.json's per-model cost summary — model-agnostic
+    # (correct even when the run uses an LM other than the legacy gpt-4.1-mini / gpt-5-mini pair).
+    lm_calls_metrics = sum(
+        int(m.get("calls", 0))
+        for m in (metrics.get("cost", {}).get("by_model") or {}).values()
+    )
 
     skill_name = metrics.get("skill_name") or run_dir.parent.name
 
@@ -116,6 +122,27 @@ def _extract_run_data(run_dir: Path) -> dict[str, Any]:
     else:
         knee_default_match_phrase = ""
 
+    # CL-primary fields (v5 schema; absent on synthetic-only runs)
+    decision_signal = gate.get("decision_signal", "synthetic")
+    cl_tasks_gained = gate.get("cl_tasks_gained")
+    cl_required_gain = gate.get("cl_required_gain")
+    baseline_cl_per_example = gate.get("baseline_closed_loop_per_example") or []
+    evolved_cl_per_example = gate.get("evolved_closed_loop_per_example") or []
+    cl_baseline_pass = int(sum(baseline_cl_per_example)) if baseline_cl_per_example else None
+    cl_evolved_pass = int(sum(evolved_cl_per_example)) if evolved_cl_per_example else None
+    cl_total_tasks = len(baseline_cl_per_example) if baseline_cl_per_example else None
+    validator_agent_model = gate.get("validator_agent_model")
+    cl_eval_cost_usd = gate.get("evolved_cl_eval_cost_usd")
+    synth_sanity = gate.get("synthetic_sanity_check") or {}
+    synth_sanity_passed = synth_sanity.get("passed")
+    synth_sanity_passed_phrase = (
+        "passed" if synth_sanity_passed else ("failed" if synth_sanity_passed is False else "n/a")
+    )
+    decision_signal_phrase = {
+        "closed_loop": "the closed-loop behavioral signal",
+        "synthetic": "the synthetic holdout signal",
+    }.get(decision_signal, decision_signal)
+
     return {
         "skill_name": skill_name,
         "baseline_chars": int(gate["baseline_chars"]),
@@ -144,9 +171,11 @@ def _extract_run_data(run_dir: Path) -> dict[str, Any]:
         "bootstrap_interpretation": bootstrap_interpretation,
         "elapsed_seconds": int(metrics.get("elapsed_seconds", 0)),
         "elapsed_minutes": int(metrics.get("elapsed_seconds", 0) // 60),
+        "cost_total_usd": float((metrics.get("cost") or {}).get("total_usd", 0.0)),
         "lm_calls_judge": lm_calls_judge,
         "lm_calls_reflection": lm_calls_reflection,
         "lm_calls_total": lm_calls_judge + lm_calls_reflection,
+        "lm_calls_metrics": lm_calls_metrics,
         "knee_picked_idx": knee_picked_idx,
         "knee_picked_val_score": float(knee.get("picked_val_score", 0.0)),
         "knee_picked_rank": int(knee.get("picked_val_rank_in_band", 0)),
@@ -154,6 +183,17 @@ def _extract_run_data(run_dir: Path) -> dict[str, Any]:
         "knee_band_size": int(knee.get("band_size", 0)),
         "knee_default_idx": knee_default_idx,
         "knee_default_match_phrase": knee_default_match_phrase,
+        "decision_signal": decision_signal,
+        "decision_signal_phrase": decision_signal_phrase,
+        "cl_tasks_gained": cl_tasks_gained,
+        "cl_required_gain": cl_required_gain,
+        "cl_baseline_pass": cl_baseline_pass,
+        "cl_evolved_pass": cl_evolved_pass,
+        "cl_total_tasks": cl_total_tasks,
+        "validator_agent_model": validator_agent_model,
+        "cl_eval_cost_usd": cl_eval_cost_usd,
+        "synth_sanity_passed": synth_sanity_passed,
+        "synth_sanity_passed_phrase": synth_sanity_passed_phrase,
     }
 
 
@@ -180,22 +220,10 @@ def _load_eval_examples(run_dir: Path, skill_name: str, n: int = 3) -> list[tupl
     return []
 
 
-def _wrap(text: str, width: int = 42) -> str:
-    """Newline-wrap a short string at ~width chars for table-cell display."""
-    words = text.split()
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        if not current:
-            current = word
-        elif len(current) + 1 + len(word) <= width:
-            current = f"{current} {word}"
-        else:
-            lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-    return "\n".join(lines)
+def _wrap_cell(value: Any, style: ParagraphStyle) -> Any:
+    """Wrap a string cell in a Paragraph so it auto-wraps at column width.
+    Pass-through for non-string content (e.g., nested flowables)."""
+    return Paragraph(value, style) if isinstance(value, str) else value
 
 
 def _fmt(template: str, ctx: dict[str, Any]) -> str:
@@ -244,6 +272,24 @@ def _styles() -> Any:
     base.add(ParagraphStyle(
         name='Footer', parent=base['Normal'],
         fontSize=8, textColor=HexColor('#999999'), alignment=TA_CENTER,
+    ))
+    base.add(ParagraphStyle(
+        name='TableCell',
+        parent=base['Normal'],
+        fontName='Helvetica',
+        fontSize=9,
+        leading=11,
+        alignment=TA_LEFT,
+        textColor=black,
+    ))
+    base.add(ParagraphStyle(
+        name='TableHeaderCell',
+        parent=base['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=11,
+        alignment=TA_LEFT,
+        textColor=white,
     ))
     return base
 
@@ -299,12 +345,8 @@ def _title_page(prose: dict, styles, logo_path: Path) -> list:
     return flow
 
 
-def _key_result_box(prose: dict, ctx: dict) -> Table:
+def _key_result_box(prose: dict, ctx: dict, styles) -> Table:
     box_cfg = prose["key_result_box"]
-    rows = [[_fmt(box_cfg["title_template"], ctx)]]
-    rows += [[_fmt(r, ctx)] for r in box_cfg["rows"]]
-    table = Table(rows, colWidths=[5.5 * inch])
-
     if ctx["decision"] == "deploy":
         body_bg = HexColor('#e8f5e9')
         body_fg = HexColor('#2e7d32')
@@ -312,16 +354,23 @@ def _key_result_box(prose: dict, ctx: dict) -> Table:
         body_bg = HexColor('#fff8e1')
         body_fg = HexColor('#5d4037')
 
+    title_style = ParagraphStyle(
+        'KeyTitle', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=11, leading=14,
+        alignment=TA_CENTER, textColor=white,
+    )
+    body_style = ParagraphStyle(
+        'KeyBody', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=11, leading=14,
+        alignment=TA_CENTER, textColor=body_fg,
+    )
+
+    rows = [[Paragraph(_fmt(box_cfg["title_template"], ctx), title_style)]]
+    rows += [[Paragraph(_fmt(r, ctx), body_style)] for r in box_cfg["rows"]]
+    table = Table(rows, colWidths=[5.5 * inch])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1a1a2e')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTSIZE', (0, 0), (-1, 0), 11),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('BACKGROUND', (0, 1), (-1, -1), body_bg),
-        ('FONTSIZE', (0, 1), (-1, -1), 11),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (0, 1), (-1, -1), body_fg),
         ('TOPPADDING', (0, 0), (-1, -1), 8),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ('BOX', (0, 0), (-1, -1), 1, HexColor('#1a1a2e')),
@@ -336,7 +385,7 @@ def _executive_summary(prose: dict, ctx: dict, styles) -> list:
         Paragraph(_fmt(es["framework_intro"], ctx), styles['BodyJust']),
         Paragraph(_fmt(es["run_summary"], ctx), styles['BodyJust']),
         Spacer(1, 0.2 * inch),
-        _key_result_box(prose, ctx),
+        _key_result_box(prose, ctx, styles),
         Spacer(1, 0.3 * inch),
     ]
 
@@ -345,16 +394,18 @@ def _highlight_table(
     header: list[str],
     rows: list[list[str]],
     col_widths: list[float],
+    styles,
     highlight_row: int | None = None,
     highlight_color: str = '#fff9c4',
 ) -> Table:
-    data = [header] + rows
+    hdr_style = styles['TableHeaderCell']
+    cell_style = styles['TableCell']
+    data = [[_wrap_cell(c, hdr_style) for c in header]] + [
+        [_wrap_cell(c, cell_style) for c in row] for row in rows
+    ]
     table = Table(data, colWidths=col_widths)
     style = [
         ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1a1a2e')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#cccccc')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
@@ -379,6 +430,7 @@ def _background(prose: dict, ctx: dict, styles) -> list:
             header=layers["header"],
             rows=layers["rows"],
             col_widths=[1.2 * inch, 2.3 * inch, 2.5 * inch],
+            styles=styles,
             highlight_row=layers.get("highlight_row"),
         ),
         Spacer(1, 0.15 * inch),
@@ -395,8 +447,10 @@ def _approach(prose: dict, ctx: dict, styles) -> list:
         _highlight_table(
             header=engines["header"],
             rows=engines["rows"],
-            col_widths=[1.4 * inch, 2.0 * inch, 0.8 * inch, 1.8 * inch],
+            col_widths=[1.4 * inch, 2.3 * inch, 0.7 * inch, 1.8 * inch],
+            styles=styles,
         ),
+        Spacer(1, 0.15 * inch),
         Paragraph(_fmt(ap["gepa_narrative"], ctx), styles['BodyJust']),
         Paragraph("The Optimization Pipeline", styles['SubSection']),
     ]
@@ -413,6 +467,17 @@ def _experiment(prose: dict, ctx: dict, styles, examples: list[tuple[str, str]])
     exp = prose["experiment"]
     overrides = exp["config_overrides"]
 
+    # Phase 1 runs counted gpt-4.1-mini + gpt-5-mini explicitly via run.log grep;
+    # Phase 2 runs use a single optimizer LM tier (e.g., gpt-5.4-mini), so fall
+    # back to the metrics.json per-model summary when the legacy regex matches nothing.
+    if ctx["lm_calls_total"] > 0:
+        lm_calls_cell = (
+            f'~{ctx["lm_calls_total"]:,} ({ctx["lm_calls_judge"]:,} gpt-4.1-mini '
+            f'+ {ctx["lm_calls_reflection"]} gpt-5-mini)'
+        )
+    else:
+        lm_calls_cell = f'{ctx["lm_calls_metrics"]:,} (from metrics.json per-model summary)'
+
     config_rows = [
         ['Target Skill', _fmt(overrides["target_skill_label"], ctx)],
         ['Baseline Size', f'{ctx["baseline_chars"]:,} characters'],
@@ -424,37 +489,45 @@ def _experiment(prose: dict, ctx: dict, styles, examples: list[tuple[str, str]])
          f'{ctx["n_examples"]} examples ({ctx["n_train"]} train / {ctx["n_val"]} val / {ctx["n_holdout"]} holdout)'],
         ['Total Optimization Time',
          f'{ctx["elapsed_seconds"]:,} seconds (~{ctx["elapsed_minutes"]} minutes)'],
-        ['Total LM Calls',
-         f'~{ctx["lm_calls_total"]:,} ({ctx["lm_calls_judge"]:,} gpt-4.1-mini + {ctx["lm_calls_reflection"]} gpt-5-mini)'],
+        ['Total LM Calls', lm_calls_cell],
+        ['Total Cost (USD)', f'${ctx["cost_total_usd"]:.2f}'],
         ['Quality Gate', overrides["quality_gate_label"]],
         ['Knee-point Strategy', overrides["knee_point_strategy_label"]],
     ]
-    config_table = Table([['Parameter', 'Value']] + config_rows, colWidths=[2.2 * inch, 3.8 * inch])
+    # Phase 2: surface the closed-loop validator + benchmark when present.
+    if ctx.get("validator_agent_model"):
+        config_rows.append(['Closed-loop Validator', ctx["validator_agent_model"]])
+    if ctx.get("cl_total_tasks"):
+        config_rows.append([
+            'Closed-loop Suite',
+            f'{ctx["cl_total_tasks"]} tasks (behavioral benchmark, scored end-to-end)',
+        ])
+    config_data = [[_wrap_cell(c, styles['TableHeaderCell']) for c in ['Parameter', 'Value']]]
+    config_data += [
+        [_wrap_cell(c, styles['TableCell']) for c in row] for row in config_rows
+    ]
+    # Labels are short; the Value column is where overflow happens, so widen it.
+    config_table = Table(config_data, colWidths=[1.8 * inch, 4.2 * inch])
     config_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1a1a2e')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9.5),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#cccccc')),
         ('TOPPADDING', (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
     ]))
 
     examples_rows = (
-        [[_wrap(t, 38), _wrap(b, 38)] for t, b in examples]
+        [[t, b] for t, b in examples]
         or [["(no train.jsonl found)", ""]]
     )
+    examples_data = [[_wrap_cell(c, styles['TableHeaderCell']) for c in ['Task Input', 'Expected Behavior (Rubric)']]]
+    examples_data += [[_wrap_cell(c, styles['TableCell']) for c in row] for row in examples_rows]
     examples_table = Table(
-        [['Task Input', 'Expected Behavior (Rubric)']] + examples_rows,
+        examples_data,
         colWidths=[2.5 * inch, 3.5 * inch],
     )
     examples_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1a1a2e')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#cccccc')),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
@@ -463,7 +536,7 @@ def _experiment(prose: dict, ctx: dict, styles, examples: list[tuple[str, str]])
     ]))
 
     return [
-        Paragraph("Phase 1 Experiment", styles['SectionHead']),
+        Paragraph(exp.get("section_title", "Phase 1 Experiment"), styles['SectionHead']),
         Paragraph("Configuration", styles['SubSection']),
         config_table,
         Paragraph("Evaluation Dataset", styles['SubSection']),
@@ -484,7 +557,12 @@ def _results(prose: dict, ctx: dict, styles) -> list:
     res = prose["results"]
     if ctx["decision"] == "deploy":
         decision_cell = "DEPLOYED"
-        decision_note = "CI excludes 0" if ctx["bootstrap_lower"] > 0 else "non-inferiority"
+        if ctx.get("decision_signal") == "closed_loop":
+            decision_note = "via closed-loop"
+        elif ctx["bootstrap_lower"] > 0:
+            decision_note = "CI excludes 0"
+        else:
+            decision_note = "non-inferiority"
         accent_bg = HexColor('#e8f5e9')
         accent_fg = HexColor('#2e7d32')
     else:
@@ -501,25 +579,62 @@ def _results(prose: dict, ctx: dict, styles) -> list:
         ['Bootstrap mean diff', '—', f'{ctx["bootstrap_mean"]:+.3f}', '—'],
         ['Bootstrap 90% CI lower', '—', f'{ctx["bootstrap_lower"]:+.3f}', '—'],
         ['Bootstrap 90% CI upper', '—', f'{ctx["bootstrap_upper"]:+.3f}', '—'],
-        ['Decision', '—', decision_cell, decision_note],
     ]
-    results_table = Table(results_rows, colWidths=[1.9 * inch, 1.3 * inch, 1.7 * inch, 1.1 * inch])
+    # Phase 2: surface the closed-loop behavioral signal when the v5 schema
+    # exposed it (absent on synthetic-only runs).
+    if ctx.get("cl_total_tasks"):
+        results_rows.append([
+            f'Closed-loop tasks (n={ctx["cl_total_tasks"]})',
+            f'{ctx["cl_baseline_pass"]}/{ctx["cl_total_tasks"]}',
+            f'{ctx["cl_evolved_pass"]}/{ctx["cl_total_tasks"]}',
+            f'+{ctx["cl_tasks_gained"]} (req ≥{ctx["cl_required_gain"]})',
+        ])
+    results_rows.append(['Decision', '—', decision_cell, decision_note])
+
+    # Per-cell style picks: header row uses bold/white; first column (metric
+    # labels) is bold black; the "evolved" cell on the body-size row and the
+    # final decision-note cell get the accent foreground in bold; everything
+    # else is plain.
+    accent_cell = ParagraphStyle(
+        'ResultsAccentCell', parent=styles['TableCell'],
+        fontName='Helvetica-Bold', textColor=accent_fg, alignment=TA_CENTER,
+    )
+    label_cell = ParagraphStyle(
+        'ResultsLabelCell', parent=styles['TableCell'], fontName='Helvetica-Bold',
+    )
+    center_cell = ParagraphStyle(
+        'ResultsCenterCell', parent=styles['TableCell'], alignment=TA_CENTER,
+    )
+    header_center = ParagraphStyle(
+        'ResultsHeaderCenter', parent=styles['TableHeaderCell'], alignment=TA_CENTER,
+    )
+
+    last_row_i = len(results_rows) - 1
+
+    def _cell_for(row_i: int, col_i: int, last_col_i: int, value: str) -> Any:
+        if row_i == 0:
+            return _wrap_cell(value, styles['TableHeaderCell'] if col_i == 0 else header_center)
+        if col_i == 0:
+            return _wrap_cell(value, label_cell)
+        # Accent the evolved-column body-size highlight and the decision-row note.
+        is_evolved_body_size = (row_i == 1 and col_i == 2)
+        is_decision_note = (row_i == last_row_i and col_i == last_col_i)
+        if is_evolved_body_size or is_decision_note:
+            return _wrap_cell(value, accent_cell)
+        return _wrap_cell(value, center_cell)
+
+    results_data = [
+        [_cell_for(i, j, len(row) - 1, c) for j, c in enumerate(row)]
+        for i, row in enumerate(results_rows)
+    ]
+    results_table = Table(results_data, colWidths=[1.9 * inch, 1.3 * inch, 1.7 * inch, 1.1 * inch])
     results_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1a1a2e')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#cccccc')),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
         ('BACKGROUND', (2, 1), (2, 1), accent_bg),
-        ('TEXTCOLOR', (2, 1), (2, 1), accent_fg),
-        ('FONTNAME', (2, 1), (2, 1), 'Helvetica-Bold'),
         ('BACKGROUND', (0, -1), (-1, -1), accent_bg),
-        ('TEXTCOLOR', (-1, -1), (-1, -1), accent_fg),
-        ('FONTNAME', (-1, -1), (-1, -1), 'Helvetica-Bold'),
     ]))
 
     flow = [
@@ -549,6 +664,7 @@ def _safety(prose: dict, ctx: dict, styles) -> list:
             header=table["header"],
             rows=table["rows"],
             col_widths=[1.6 * inch, 2.8 * inch, 1.1 * inch],
+            styles=styles,
         ),
         Spacer(1, 0.1 * inch),
         Paragraph(_fmt(sf["closing"], ctx), styles['BodyJust']),
@@ -564,6 +680,7 @@ def _roadmap(prose: dict, ctx: dict, styles) -> list:
             header=table["header"],
             rows=table["rows"],
             col_widths=[0.9 * inch, 1.6 * inch, 1.3 * inch, 1.0 * inch, 1.0 * inch],
+            styles=styles,
             highlight_row=table.get("highlight_row"),
             highlight_color='#e8f5e9',
         ),
@@ -581,7 +698,9 @@ def _next_steps(prose: dict, ctx: dict, styles) -> list:
 
 def _footer(prose: dict, styles) -> list:
     meta = prose["meta"]
-    parts = [meta['title'], meta['subtitle'], datetime.now().strftime('%B %d, %Y')]
+    # Strip title-page-only line breaks so the footer reads as one row.
+    footer_subtitle = meta['subtitle'].replace('<br/>', ' — ')
+    parts = [meta['title'], footer_subtitle, datetime.now().strftime('%B %d, %Y')]
     if meta.get("organization"):
         parts.append(meta["organization"])
     return [

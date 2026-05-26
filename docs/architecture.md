@@ -23,9 +23,11 @@ flowchart LR
     F --> G[Static<br/>constraints]
     G --> H{pass?}
     H -- no --> I[Write evolved_FAILED.md<br/>+ gate_decision.json]
-    H -- yes --> J[Holdout eval<br/>dspy.Evaluate × 1 evolved<br/>baseline reused from SAT]
+    H -- yes --> J[Synthetic holdout<br/>dspy.Evaluate × 1 evolved<br/>baseline reused from SAT]
+    H -- yes --> CL[Closed-loop behavioral suite<br/>validator agent on JSONL tasks]
     J --> K[Paired bootstrap<br/>per-example deltas]
-    K --> L[Growth-with-quality<br/>gate]
+    K --> L[Dual-signal deploy gate<br/>synth + CL; decision_signal field<br/>CL-primary on synth-tie]
+    CL --> L
     L --> M{deploy?}
     M -- no --> I
     M -- yes --> N[Write evolved_skill.md<br/>+ metrics.json + gate_decision.json]
@@ -195,6 +197,7 @@ sequenceDiagram
     participant Val as ConstraintValidator
     participant Eval as dspy.Evaluate
     participant Boot as paired_bootstrap
+    participant CLV as ClosedLoopValidator
 
     CLI->>Disc: find_skill("obsidian")
     Disc-->>CLI: Path to SKILL.md
@@ -219,8 +222,12 @@ sequenceDiagram
     Eval-->>CLI: avg_evolved, evolved_per_example
     CLI->>Boot: paired_bootstrap(baseline_per_ex, evolved_per_ex)
     Boot-->>CLI: {mean, lower_bound, upper_bound, ...}
-    CLI->>Val: validate_growth_with_quality(evolved, baseline, bootstrap)
-    Val-->>CLI: [growth_quality_gate, absolute_char_ceiling]
+    opt closed-loop suite configured
+        CLI->>CLV: validate(baseline, evolved, suite.jsonl)
+        CLV-->>CLI: per-task pass/fail + aggregate deltas
+    end
+    CLI->>Val: validate_growth_with_quality(evolved, baseline, bootstrap, cl_report)
+    Val-->>CLI: [growth_quality_gate, cl_aware_gate, decision_signal]
     CLI->>CLI: write gate_decision.json + evolved_skill.md
 ```
 

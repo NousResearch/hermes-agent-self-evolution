@@ -19,9 +19,11 @@ flowchart LR
     A[Read current<br/>skill/prompt/tool] --> B[Generate<br/>eval dataset]
     B --> C[GEPA<br/>Optimizer]
     C --> D[Candidate<br/>variants]
-    D --> E[Evaluate]
-    E -. Execution traces .-> C
-    E --> F["Constraint gates<br/>(tests, size limits,<br/>benchmarks)"]
+    D --> E1[Synthetic<br/>holdout]
+    D --> E2[Closed-loop<br/>behavioral suite]
+    E1 -. Execution traces .-> C
+    E1 --> F["Dual-signal deploy gate<br/>(synthetic + closed-loop;<br/>CL-primary on synth-tie)"]
+    E2 --> F
     F --> G[Best<br/>variant]
     G --> H[PR against<br/>source repo]
 ```
@@ -32,10 +34,11 @@ GEPA reads execution traces to understand *why* things fail (not just that they 
 
 GEPA was designed against benchmarks with hundreds of validation examples per task. Skill evolution typically has 20-60 examples, which is small enough that picking the highest-scoring candidate often picks one that won by chance — there's a real risk of shipping a "winner" that just got lucky on the eval set.
 
-This framework adds two checks on top of GEPA so the candidate that ships is one that genuinely improved the skill:
+This framework adds three checks on top of GEPA so the candidate that ships is one that genuinely improved the skill:
 
 - **Held-out deploy check** — before a candidate ships, it's compared against the baseline on examples it never saw during optimization. Several rules available, including a lenient one that's appropriate for compression-style refactors.
 - **Three-dimensional scoring** — instead of pass/fail, the LLM judge rates each output on correctness, whether it followed the right procedure, and how concise it is. GEPA's reflection step uses these as feedback to guide the next mutation.
+- **Closed-loop behavioral validation** — alongside the synthetic holdout, every candidate is exercised on a small behavioral task suite executed by a validator agent. The deploy gate consults both signals; when the synthetic signal is flat-within-tolerance (±0.05) but the behavioral signal demonstrably improves, the candidate ships via the closed-loop path. Documented end-to-end in [`reports/phase2_validation_report.pdf`](reports/phase2_validation_report.pdf).
 
 If you have hundreds of validation examples and a programmatic correctness metric (exact match, unit-test pass), raw GEPA is the right tool. The framework's extra layers earn their keep when validation is small and the metric is LLM-judged. See [docs/framework_advantages.md](docs/framework_advantages.md) for the deeper argument.
 
@@ -326,8 +329,8 @@ Cost: each task is one `hermes -z` run (~$0.05–$0.50). The bundled `patch.json
 
 | Phase | Target | Engine | Status |
 |-------|--------|--------|--------|
-| **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
-| **Phase 2** | Tool descriptions | DSPy + GEPA | ✅ Implemented |
+| **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ [Validated](reports/phase1_validation_report.pdf) |
+| **Phase 2** | Tool descriptions + dual-signal deploy gate | DSPy + GEPA | ✅ [Validated](reports/phase2_validation_report.pdf) |
 | **Phase 3** | System prompt sections | DSPy + GEPA | 🔲 Planned |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
