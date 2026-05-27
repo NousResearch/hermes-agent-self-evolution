@@ -1,0 +1,560 @@
+"""Candidate-only evaluation scaffold for tool description evolution.
+
+Phase 2B intentionally does not write to Hermes Agent's active tool registry,
+schemas, or source tree.  It provides deterministic, JSON-serializable metrics
+that can be used to compare candidate tool descriptions before any apply step is
+considered by a human.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Mapping, Sequence
+
+
+_TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
+_DANGEROUS_DESCRIPTION_PATTERNS = (
+    "ignore previous instructions",
+    "ignore system instructions",
+    "reveal secrets",
+    "leak secrets",
+    "exfiltrate",
+    "password",
+    "private key",
+)
+
+
+@dataclass(frozen=True)
+class ToolInventoryRecord:
+    """Read-only snapshot of one active Hermes tool definition."""
+
+    name: str
+    toolset: str
+    description: str
+    schema: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ToolDescriptionCandidate:
+    """A baseline/candidate description pair for one Hermes tool."""
+
+    name: str
+    toolset: str
+    baseline_description: str
+    candidate_description: str
+    parameter_descriptions: Mapping[str, str] = field(default_factory=dict)
+
+    @property
+    def description_delta(self) -> int:
+        return len(self.candidate_description) - len(self.baseline_description)
+
+
+@dataclass(frozen=True)
+class ToolSelectionCase:
+    """Golden case for wrong-tool avoidance and expected-tool selection."""
+
+    user_request: str
+    expected_tool: str
+    confusing_tools: tuple[str, ...] = ()
+    required_cues: tuple[str, ...] = ()
+    required_arguments: tuple[str, ...] = ()
+    category: str = "tool-selection"
+
+
+@dataclass(frozen=True)
+class ToolCaseResult:
+    """Per-case deterministic ranking result."""
+
+    user_request: str
+    expected_tool: str
+    selected_tool: str | None
+    expected_score: float
+    confusing_scores: dict[str, float]
+    passed: bool
+    cue_coverage: float
+    notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ToolDescriptionEvalResult:
+    """Aggregate Phase 2B metrics.
+
+    apply_ready is deliberately always false in this scaffold.  A future Phase 2C
+    may add an explicit human-gated apply workflow, but Phase 2B only reports.
+    """
+
+    candidate_only: bool
+    apply_ready: bool
+    case_count: int
+    selection_accuracy: float
+    wrong_tool_avoidance: float
+    argument_cue_coverage: float
+    constraint_pass_rate: float
+    case_results: tuple[ToolCaseResult, ...]
+    warnings: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict:
+        return {
+            "candidate_only": self.candidate_only,
+            "apply_ready": self.apply_ready,
+            "case_count": self.case_count,
+            "selection_accuracy": self.selection_accuracy,
+            "wrong_tool_avoidance": self.wrong_tool_avoidance,
+            "argument_cue_coverage": self.argument_cue_coverage,
+            "constraint_pass_rate": self.constraint_pass_rate,
+            "case_results": [asdict(case) for case in self.case_results],
+            "warnings": list(self.warnings),
+        }
+
+
+def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
+    """Small hand-curated golden set for common Hermes tool confusions."""
+
+    return (
+        ToolSelectionCase(
+            user_request="Show the first 40 lines of README.md without using a shell pager.",
+            expected_tool="read_file",
+            confusing_tools=("terminal", "search_files"),
+            required_cues=("read", "file", "line", "cat", "head", "tail"),
+            category="file-read-vs-shell",
+        ),
+        ToolSelectionCase(
+            user_request="Find Python files mentioning browser_navigate in the tools directory.",
+            expected_tool="search_files",
+            confusing_tools=("terminal", "read_file"),
+            required_cues=("search", "files", "grep", "rg", "find"),
+            category="search-vs-shell",
+        ),
+        ToolSelectionCase(
+            user_request="Run the focused pytest target for the new tool evaluation tests.",
+            expected_tool="terminal",
+            confusing_tools=("execute_code", "read_file"),
+            required_cues=("pytest", "command", "shell", "build", "test"),
+            category="shell-execution",
+        ),
+        ToolSelectionCase(
+            user_request="Make a targeted replacement in one Python file and preserve surrounding content.",
+            expected_tool="patch",
+            confusing_tools=("write_file", "terminal"),
+            required_cues=("replace", "targeted", "edit", "diff", "sed"),
+            category="edit-vs-overwrite",
+        ),
+        ToolSelectionCase(
+            user_request="Overwrite a new Markdown report with complete content.",
+            expected_tool="write_file",
+            confusing_tools=("patch", "terminal"),
+            required_cues=("write", "overwrite", "complete", "file"),
+            category="write-vs-patch",
+        ),
+        ToolSelectionCase(
+            user_request="Search prior conversations about release update policy.",
+            expected_tool="session_search",
+            confusing_tools=("web", "search_files"),
+            required_cues=("past", "sessions", "conversation", "history"),
+            category="session-vs-web-search",
+        ),
+        ToolSelectionCase(
+            user_request="Find the previous chat where we discussed the HSE Phase 2B evaluator and summarize where we left off.",
+            expected_tool="session_search",
+            confusing_tools=("browser_navigate", "web", "search_files"),
+            required_cues=("past", "previous", "session", "conversation", "left"),
+            category="session-vs-browser-history",
+        ),
+        ToolSelectionCase(
+            user_request="Open the web app and click through the login-free settings screen to see what changes dynamically.",
+            expected_tool="browser_navigate",
+            confusing_tools=("session_search", "web", "read_file"),
+            required_cues=("navigate", "open", "click", "dynamic", "web"),
+            category="browser-vs-session-search",
+        ),
+        ToolSelectionCase(
+            user_request="After navigating, capture the current page structure and available buttons.",
+            expected_tool="browser_snapshot",
+            confusing_tools=("browser_vision", "read_file"),
+            required_cues=("snapshot", "page", "buttons", "structure"),
+            category="browser-snapshot-vs-vision",
+        ),
+        ToolSelectionCase(
+            user_request="Click the Save button already visible in the browser snapshot.",
+            expected_tool="browser_click",
+            confusing_tools=("browser_type", "computer_use", "terminal"),
+            required_cues=("click", "button", "snapshot", "ref"),
+            category="browser-click-vs-desktop",
+        ),
+        ToolSelectionCase(
+            user_request="Check the browser console for JavaScript errors after the failed form submission.",
+            expected_tool="browser_console",
+            confusing_tools=("terminal", "search_files", "browser_snapshot"),
+            required_cues=("console", "javascript", "errors", "page"),
+            category="browser-console-vs-shell",
+        ),
+        ToolSelectionCase(
+            user_request="Use the macOS app window in the background to press the visible Export button.",
+            expected_tool="computer_use",
+            confusing_tools=("browser_click", "terminal"),
+            required_cues=("macos", "background", "window", "click", "desktop"),
+            category="desktop-vs-browser",
+        ),
+        ToolSelectionCase(
+            user_request="Calculate the exact total cost from these numeric line items.",
+            expected_tool="execute_code",
+            confusing_tools=("terminal", "read_file"),
+            required_cues=("calculate", "math", "python", "exact"),
+            category="calculation-vs-shell",
+        ),
+        ToolSelectionCase(
+            user_request="Run git status and the focused pytest command in this repository.",
+            expected_tool="terminal",
+            confusing_tools=("execute_code", "search_files"),
+            required_cues=("git", "pytest", "command", "repository"),
+            category="repo-command-vs-python",
+        ),
+        ToolSelectionCase(
+            user_request="Find every file named config.yaml below the project without shell find.",
+            expected_tool="search_files",
+            confusing_tools=("terminal", "read_file"),
+            required_cues=("find", "files", "glob", "name"),
+            category="file-search-vs-shell-find",
+        ),
+        ToolSelectionCase(
+            user_request="Read only lines 120 through 180 of gateway/run.py.",
+            expected_tool="read_file",
+            confusing_tools=("terminal", "search_files"),
+            required_cues=("read", "lines", "offset", "limit"),
+            category="file-read-range-vs-shell",
+        ),
+        ToolSelectionCase(
+            user_request="Apply a small unique string replacement in SKILL.md and show the diff.",
+            expected_tool="patch",
+            confusing_tools=("write_file", "terminal"),
+            required_cues=("replace", "unique", "diff", "patch"),
+            category="patch-vs-overwrite",
+        ),
+        ToolSelectionCase(
+            user_request="Create a brand new complete Markdown artifact with the supplied full text.",
+            expected_tool="write_file",
+            confusing_tools=("patch", "terminal"),
+            required_cues=("create", "complete", "markdown", "overwrite"),
+            category="write-complete-artifact",
+        ),
+        ToolSelectionCase(
+            user_request="Track these four implementation steps and mark the current one in progress.",
+            expected_tool="todo",
+            confusing_tools=("write_file", "session_search"),
+            required_cues=("track", "steps", "in_progress", "task"),
+            category="todo-vs-notes",
+        ),
+        ToolSelectionCase(
+            user_request="Split three independent code inspection subtasks across isolated workers and summarize their findings.",
+            expected_tool="delegate_task",
+            confusing_tools=("terminal", "todo", "cronjob"),
+            required_cues=("subtasks", "workers", "parallel", "isolated"),
+            category="delegation-vs-shell",
+        ),
+        ToolSelectionCase(
+            user_request="Schedule a self-contained reminder to check the release feed every two hours.",
+            expected_tool="cronjob",
+            confusing_tools=("todo", "terminal", "send_message"),
+            required_cues=("schedule", "every", "recurring", "job"),
+            category="cron-vs-todo",
+        ),
+        ToolSelectionCase(
+            user_request="Analyze the screenshot file and tell me what text is visible.",
+            expected_tool="vision_analyze",
+            confusing_tools=("read_file", "browser_vision", "browser_snapshot"),
+            required_cues=("image", "screenshot", "visible", "analyze"),
+            category="vision-vs-file-read",
+        ),
+        ToolSelectionCase(
+            user_request="From the current browser page, take a screenshot and inspect the visual layout.",
+            expected_tool="browser_vision",
+            confusing_tools=("vision_analyze", "browser_snapshot"),
+            required_cues=("browser", "screenshot", "visual", "page"),
+            category="browser-vision-vs-image-file",
+        ),
+        ToolSelectionCase(
+            user_request="Send this final status update to the configured Discord home channel.",
+            expected_tool="send_message",
+            confusing_tools=("cronjob", "write_file"),
+            required_cues=("send", "discord", "message", "channel"),
+            category="message-send-vs-file",
+        ),
+        ToolSelectionCase(
+            user_request="Remember that the user prefers release-tag updates as a durable preference.",
+            expected_tool="memory",
+            confusing_tools=("write_file", "session_search", "todo"),
+            required_cues=("remember", "durable", "preference", "user"),
+            category="memory-vs-session-search",
+        ),
+    )
+
+
+def evaluate_candidate_descriptions(
+    candidates: Sequence[ToolDescriptionCandidate],
+    cases: Sequence[ToolSelectionCase],
+    *,
+    max_description_chars: int = 500,
+    max_parameter_description_chars: int = 200,
+) -> ToolDescriptionEvalResult:
+    """Evaluate candidates against golden tool-selection cases.
+
+    The scoring is intentionally deterministic and cheap: it is not a substitute
+    for model-in-the-loop evaluation, but it provides a stable baseline and
+    catches obvious regressions before GEPA/DSPy optimization is introduced.
+    """
+
+    candidate_map = {candidate.name: candidate for candidate in candidates}
+    case_results: list[ToolCaseResult] = []
+    warnings: list[str] = []
+
+    for case in cases:
+        result, result_warnings = _evaluate_case(candidate_map, case)
+        case_results.append(result)
+        warnings.extend(result_warnings)
+
+    if not cases:
+        warnings.append("No evaluation cases supplied")
+
+    selection_accuracy = _mean(1.0 if result.passed else 0.0 for result in case_results)
+    wrong_tool_avoidance = _mean(
+        1.0 if all(result.expected_score > score for score in result.confusing_scores.values()) else 0.0
+        for result in case_results
+    )
+    argument_cue_coverage = _mean(result.cue_coverage for result in case_results)
+    candidate_constraint_rate = _constraint_pass_rate(
+        candidates,
+        max_description_chars=max_description_chars,
+        max_parameter_description_chars=max_parameter_description_chars,
+        warnings=warnings,
+    )
+    expected_tool_coverage = _expected_tool_coverage(candidate_map, cases)
+    constraint_pass_rate = _mean([candidate_constraint_rate, expected_tool_coverage])
+
+    return ToolDescriptionEvalResult(
+        candidate_only=True,
+        apply_ready=False,
+        case_count=len(cases),
+        selection_accuracy=selection_accuracy,
+        wrong_tool_avoidance=wrong_tool_avoidance,
+        argument_cue_coverage=argument_cue_coverage,
+        constraint_pass_rate=constraint_pass_rate,
+        case_results=tuple(case_results),
+        warnings=tuple(dict.fromkeys(warnings)),
+    )
+
+
+def build_candidate_only_report(
+    candidates: Sequence[ToolDescriptionCandidate],
+    cases: Sequence[ToolSelectionCase] | None = None,
+) -> dict:
+    """Build a JSON-serializable Phase 2B report with no apply payload."""
+
+    eval_cases = tuple(cases) if cases is not None else default_tool_selection_cases()
+    result = evaluate_candidate_descriptions(candidates, eval_cases)
+    return {
+        "phase": "2B",
+        "mode": "candidate-only",
+        "apply_ready": False,
+        "summary": "Tool description evaluation scaffold report; active tool schemas are not modified.",
+        "candidate_count": len(candidates),
+        "metrics": result.to_dict(),
+        "candidates": [asdict(candidate) | {"description_delta": candidate.description_delta} for candidate in candidates],
+    }
+
+
+def candidates_from_inventory(records: Sequence[ToolInventoryRecord]) -> list[ToolDescriptionCandidate]:
+    """Create baseline-equals-candidate entries from a read-only inventory.
+
+    Optimizers can replace candidate_description later, but Phase 2B starts from
+    an identity candidate so baseline metrics are measurable without mutation.
+    """
+
+    return [
+        ToolDescriptionCandidate(
+            name=record.name,
+            toolset=record.toolset,
+            baseline_description=record.description,
+            candidate_description=record.description,
+            parameter_descriptions=_extract_parameter_descriptions(record.schema),
+        )
+        for record in records
+    ]
+
+
+def write_default_golden_cases(path: str | Path) -> Path:
+    """Write the default tool-selection golden set as JSONL."""
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w") as handle:
+        for case in default_tool_selection_cases():
+            handle.write(json.dumps(asdict(case), sort_keys=True) + "\n")
+    return output_path
+
+
+def write_candidate_only_report(
+    path: str | Path,
+    candidates: Sequence[ToolDescriptionCandidate],
+    cases: Sequence[ToolSelectionCase] | None = None,
+) -> Path:
+    """Write a candidate-only report to disk.
+
+    This function writes only the requested report path.  It never writes Hermes
+    Agent source, registry, schema, or configuration files.
+    """
+
+    report_path = Path(path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report = build_candidate_only_report(candidates, cases)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return report_path
+
+
+def _evaluate_case(
+    candidate_map: Mapping[str, ToolDescriptionCandidate],
+    case: ToolSelectionCase,
+) -> tuple[ToolCaseResult, list[str]]:
+    warnings: list[str] = []
+    expected = candidate_map.get(case.expected_tool)
+    if expected is None:
+        warnings.append(f"Missing expected tool candidate: {case.expected_tool}")
+        return ToolCaseResult(
+            user_request=case.user_request,
+            expected_tool=case.expected_tool,
+            selected_tool=None,
+            expected_score=0.0,
+            confusing_scores={name: 0.0 for name in case.confusing_tools},
+            passed=False,
+            cue_coverage=0.0,
+            notes=("missing expected tool",),
+        ), warnings
+
+    expected_score = _rank_score(case.user_request, expected)
+    confusing_scores = {
+        name: _rank_score(case.user_request, candidate_map[name])
+        for name in case.confusing_tools
+        if name in candidate_map
+    }
+    for missing in sorted(set(case.confusing_tools) - set(confusing_scores)):
+        warnings.append(f"Missing confusing tool candidate: {missing}")
+
+    selected_tool = case.expected_tool
+    selected_score = expected_score
+    for name, score in confusing_scores.items():
+        if score > selected_score:
+            selected_tool = name
+            selected_score = score
+
+    cue_coverage = _cue_coverage(expected, case.required_cues, case.required_arguments)
+    passed = selected_tool == case.expected_tool and expected_score > max(confusing_scores.values(), default=-1.0)
+    return ToolCaseResult(
+        user_request=case.user_request,
+        expected_tool=case.expected_tool,
+        selected_tool=selected_tool,
+        expected_score=round(expected_score, 4),
+        confusing_scores={name: round(score, 4) for name, score in confusing_scores.items()},
+        passed=passed,
+        cue_coverage=round(cue_coverage, 4),
+    ), warnings
+
+
+def _rank_score(user_request: str, candidate: ToolDescriptionCandidate) -> float:
+    request_tokens = _tokens(user_request)
+    name_tokens = set(candidate.name.lower().split("_")) | {candidate.name.lower()}
+    description_tokens = _tokens(candidate.candidate_description)
+    baseline_tokens = _tokens(candidate.baseline_description)
+
+    if not request_tokens:
+        return 0.0
+
+    description_overlap = len(request_tokens & description_tokens) / len(request_tokens)
+    baseline_overlap = len(request_tokens & baseline_tokens) / len(request_tokens)
+    name_overlap = len(request_tokens & name_tokens) / len(request_tokens)
+    return (0.65 * description_overlap) + (0.2 * baseline_overlap) + (0.15 * name_overlap)
+
+
+def _cue_coverage(
+    candidate: ToolDescriptionCandidate,
+    required_cues: Sequence[str],
+    required_arguments: Sequence[str],
+) -> float:
+    checks = list(required_cues) + list(required_arguments)
+    if not checks:
+        return 1.0
+    haystack = " ".join(
+        [candidate.candidate_description, *candidate.parameter_descriptions.keys(), *candidate.parameter_descriptions.values()]
+    ).lower()
+    covered = sum(1 for cue in checks if cue.lower() in haystack)
+    return covered / len(checks)
+
+
+def _constraint_pass_rate(
+    candidates: Sequence[ToolDescriptionCandidate],
+    *,
+    max_description_chars: int,
+    max_parameter_description_chars: int,
+    warnings: list[str],
+) -> float:
+    checks: list[bool] = []
+    for candidate in candidates:
+        description = candidate.candidate_description.strip()
+        length_ok = 0 < len(description) <= max_description_chars
+        checks.append(length_ok)
+        if not length_ok:
+            warnings.append(f"Description length constraint failed: {candidate.name}")
+
+        safety_ok = not any(pattern in description.lower() for pattern in _DANGEROUS_DESCRIPTION_PATTERNS)
+        checks.append(safety_ok)
+        if not safety_ok:
+            warnings.append(f"Dangerous wording constraint failed: {candidate.name}")
+
+        for param_name, param_description in candidate.parameter_descriptions.items():
+            param_ok = 0 < len(param_description.strip()) <= max_parameter_description_chars
+            checks.append(param_ok)
+            if not param_ok:
+                warnings.append(f"Parameter description length constraint failed: {candidate.name}.{param_name}")
+
+    return _mean(1.0 if check else 0.0 for check in checks)
+
+
+def _expected_tool_coverage(
+    candidate_map: Mapping[str, ToolDescriptionCandidate],
+    cases: Sequence[ToolSelectionCase],
+) -> float:
+    """Return whether golden expected tools are present in the candidate set."""
+
+    if not cases:
+        return 0.0
+    return _mean(1.0 if case.expected_tool in candidate_map else 0.0 for case in cases)
+
+
+def _extract_parameter_descriptions(schema: Mapping[str, object]) -> dict[str, str]:
+    parameters = schema.get("parameters")
+    if not isinstance(parameters, Mapping):
+        return {}
+    properties = parameters.get("properties")
+    if not isinstance(properties, Mapping):
+        return {}
+
+    descriptions: dict[str, str] = {}
+    for name, raw_spec in properties.items():
+        if not isinstance(name, str) or not isinstance(raw_spec, Mapping):
+            continue
+        description = raw_spec.get("description")
+        if isinstance(description, str) and description.strip():
+            descriptions[name] = description
+    return descriptions
+
+
+def _tokens(text: str) -> set[str]:
+    return {token.lower() for token in _TOKEN_RE.findall(text)}
+
+
+def _mean(values) -> float:
+    materialized = list(values)
+    if not materialized:
+        return 0.0
+    return round(sum(materialized) / len(materialized), 4)
