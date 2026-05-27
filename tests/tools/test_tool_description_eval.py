@@ -15,13 +15,46 @@ from evolution.tools.tool_description_eval import (
 def test_default_tool_selection_cases_cover_confusing_tool_pairs():
     cases = default_tool_selection_cases()
 
-    assert len(cases) >= 20
+    assert len(cases) >= 30
     assert all(case.expected_tool for case in cases)
     assert any("read_file" == case.expected_tool and "terminal" in case.confusing_tools for case in cases)
     assert any("search_files" == case.expected_tool and "terminal" in case.confusing_tools for case in cases)
     assert any("browser" in case.category for case in cases)
     assert any("session" in case.category for case in cases)
     assert any("session_search" == case.expected_tool and "browser_navigate" in case.confusing_tools for case in cases)
+
+
+def test_default_tool_selection_cases_cover_phase2b_plus_focus_set():
+    cases = default_tool_selection_cases()
+    expected_tools = {case.expected_tool for case in cases}
+    confusion_pairs = {
+        (case.expected_tool, confusing_tool)
+        for case in cases
+        for confusing_tool in case.confusing_tools
+    }
+
+    for expected_tool in (
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_click",
+        "browser_console",
+        "browser_vision",
+        "computer_use",
+        "execute_code",
+        "terminal",
+        "session_search",
+    ):
+        assert expected_tool in expected_tools
+
+    for pair in (
+        ("computer_use", "browser_click"),
+        ("execute_code", "terminal"),
+        ("terminal", "execute_code"),
+        ("session_search", "browser_navigate"),
+        ("browser_click", "computer_use"),
+        ("browser_snapshot", "computer_use"),
+    ):
+        assert pair in confusion_pairs
 
 
 def test_evaluator_rewards_expected_tool_over_confusing_tool():

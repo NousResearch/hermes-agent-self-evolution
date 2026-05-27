@@ -289,6 +289,41 @@ def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
             required_cues=("remember", "durable", "preference", "user"),
             category="memory-vs-session-search",
         ),
+        ToolSelectionCase(
+            user_request="Use the visible native macOS menu bar item in Safari's window, without relying on browser DOM refs.",
+            expected_tool="computer_use",
+            confusing_tools=("browser_click", "browser_snapshot", "terminal"),
+            required_cues=("macos", "native", "menu", "window", "background"),
+            category="computer-use-vs-browser-dom",
+        ),
+        ToolSelectionCase(
+            user_request="From this pasted JSON array, compute grouped totals and return exact percentages.",
+            expected_tool="execute_code",
+            confusing_tools=("terminal", "read_file"),
+            required_cues=("json", "compute", "grouped", "totals", "percentages"),
+            category="execute-code-vs-terminal-calculation",
+        ),
+        ToolSelectionCase(
+            user_request="Install the project dependencies and run the npm build script.",
+            expected_tool="terminal",
+            confusing_tools=("execute_code", "patch"),
+            required_cues=("install", "dependencies", "npm", "build", "shell"),
+            category="terminal-package-manager-vs-python",
+        ),
+        ToolSelectionCase(
+            user_request="Find the prior conversation where I defined what '안전모드로 진행해' means.",
+            expected_tool="session_search",
+            confusing_tools=("search_files", "memory", "browser_navigate"),
+            required_cues=("prior", "conversation", "defined", "means", "session"),
+            category="session-search-vs-memory-file-search",
+        ),
+        ToolSelectionCase(
+            user_request="Inspect the current loaded browser page's accessible structure before deciding what to click.",
+            expected_tool="browser_snapshot",
+            confusing_tools=("computer_use", "vision_analyze", "browser_click"),
+            required_cues=("browser", "accessible", "structure", "snapshot", "click"),
+            category="browser-snapshot-vs-computer-use",
+        ),
     )
 
 
