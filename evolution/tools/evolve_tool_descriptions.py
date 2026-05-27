@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import logging
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -37,6 +38,25 @@ console = Console()
 
 
 @dataclass(frozen=True)
+class InventoryImportWarning:
+    """A non-candidate warning emitted while importing Hermes tool modules."""
+
+    module: str
+    message: str
+    exception: str
+    classification: str
+    candidate_quality: bool = False
+
+
+@dataclass(frozen=True)
+class ToolInventoryCollectionResult:
+    """Read-only Hermes inventory plus import-time metadata."""
+
+    records: list[ToolInventoryRecord]
+    import_warnings: tuple[InventoryImportWarning, ...] = ()
+
+
+@dataclass(frozen=True)
 class CandidateGenerationResult:
     """Paths and formal-gate status from one candidate-only Phase 2C/2D run."""
 
@@ -49,6 +69,52 @@ class CandidateGenerationResult:
     phase2d_failed_checks: tuple[str, ...]
 
 
+class _InventoryImportWarningHandler(logging.Handler):
+    """Capture Hermes registry import warnings without treating them as candidate warnings."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.import_warnings: list[InventoryImportWarning] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        warning = _inventory_import_warning_from_record(record)
+        if warning is not None:
+            self.import_warnings.append(warning)
+
+
+def _inventory_import_warning_from_record(record: logging.LogRecord) -> InventoryImportWarning | None:
+    if not record.getMessage().startswith("Could not import tool module"):
+        return None
+
+    args = record.args if isinstance(record.args, tuple) else ()
+    module = str(args[0]) if args else "unknown"
+    exception = str(args[1]) if len(args) > 1 else ""
+    message = record.getMessage()
+    classification = "optional_dependency_import_warning" if "No module named" in exception else "tool_module_import_warning"
+    return InventoryImportWarning(
+        module=module,
+        message=message,
+        exception=exception,
+        classification=classification,
+        candidate_quality=False,
+    )
+
+
+def _inventory_metadata(
+    *,
+    source: str,
+    records: Sequence[ToolInventoryRecord],
+    import_warnings: Sequence[InventoryImportWarning],
+) -> dict[str, object]:
+    return {
+        "source": source,
+        "tool_count": len(records),
+        "import_warning_count": len(import_warnings),
+        "import_warnings": [asdict(warning) for warning in import_warnings],
+        "candidate_quality_warnings_are_separate": True,
+    }
+
+
 def collect_hermes_tool_inventory(hermes_repo: str | Path | None = None) -> list[ToolInventoryRecord]:
     """Collect a read-only inventory from a Hermes Agent checkout.
 
@@ -57,6 +123,14 @@ def collect_hermes_tool_inventory(hermes_repo: str | Path | None = None) -> list
     configuration. Because discovery imports Python modules, point this only at
     trusted Hermes Agent checkouts.
     """
+
+    return collect_hermes_tool_inventory_with_metadata(hermes_repo).records
+
+
+def collect_hermes_tool_inventory_with_metadata(
+    hermes_repo: str | Path | None = None,
+) -> ToolInventoryCollectionResult:
+    """Collect a read-only inventory and separate import warnings as metadata."""
 
     repo = Path(hermes_repo).expanduser() if hermes_repo else get_hermes_agent_path()
     tools_dir = repo / "tools"
@@ -68,9 +142,15 @@ def collect_hermes_tool_inventory(hermes_repo: str | Path | None = None) -> list
     if repo_string not in sys.path:
         sys.path.insert(0, repo_string)
         inserted = True
+    warning_handler = _InventoryImportWarningHandler()
+    registry_logger = logging.getLogger("tools.registry")
+    previous_handlers = list(registry_logger.handlers)
+    previous_propagate = registry_logger.propagate
     try:
         from tools.registry import discover_builtin_tools, registry  # type: ignore
 
+        registry_logger.handlers = [warning_handler]
+        registry_logger.propagate = False
         discover_builtin_tools(tools_dir)
         records: list[ToolInventoryRecord] = []
         for name in registry.get_all_tool_names():
@@ -85,8 +165,13 @@ def collect_hermes_tool_inventory(hermes_repo: str | Path | None = None) -> list
                     schema=dict(entry.schema),
                 )
             )
-        return sorted(records, key=lambda record: (record.toolset, record.name))
+        return ToolInventoryCollectionResult(
+            records=sorted(records, key=lambda record: (record.toolset, record.name)),
+            import_warnings=tuple(warning_handler.import_warnings),
+        )
     finally:
+        registry_logger.handlers = previous_handlers
+        registry_logger.propagate = previous_propagate
         if inserted:
             try:
                 sys.path.remove(repo_string)
@@ -170,7 +255,15 @@ def run_candidate_generation(
 ) -> CandidateGenerationResult:
     """Run Phase 2C/2D in candidate-only mode and write review artifacts."""
 
-    records = load_inventory_from_json(inventory_json) if inventory_json else collect_hermes_tool_inventory(hermes_repo)
+    if inventory_json:
+        records = load_inventory_from_json(inventory_json)
+        inventory_source = "inventory_json"
+        import_warnings: tuple[InventoryImportWarning, ...] = ()
+    else:
+        inventory_collection = collect_hermes_tool_inventory_with_metadata(hermes_repo)
+        records = inventory_collection.records
+        inventory_source = "hermes_repo_import"
+        import_warnings = inventory_collection.import_warnings
     eval_cases = tuple(cases) if cases is not None else default_tool_selection_cases()
     candidates = generate_candidate_descriptions(records, eval_cases)
 
@@ -200,6 +293,11 @@ def run_candidate_generation(
             "summary": "Candidate-only tool description generation plus formal Phase 2D cross-tool gate; active Hermes tool schemas are not modified.",
             "phase_index_executed": ["2A", "2B", "2C", "2D"],
             "phase2d_gate": phase2d_gate.to_dict(),
+            "inventory_metadata": _inventory_metadata(
+                source=inventory_source,
+                records=records,
+                import_warnings=import_warnings,
+            ),
             "artifacts": {
                 "inventory": str(inventory_path),
                 "candidates": str(candidates_path),
