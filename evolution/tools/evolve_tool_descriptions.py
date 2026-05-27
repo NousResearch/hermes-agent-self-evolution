@@ -22,6 +22,7 @@ from rich.console import Console
 
 from evolution.core.config import get_hermes_agent_path
 from evolution.tools.tool_description_eval import (
+    DEFAULT_MAX_PARAMETER_DESCRIPTION_CHARS,
     ToolDescriptionCandidate,
     ToolInventoryRecord,
     ToolSelectionCase,
@@ -29,6 +30,7 @@ from evolution.tools.tool_description_eval import (
     candidates_from_inventory,
     default_tool_selection_cases,
     evaluate_cross_tool_gate,
+    normalize_parameter_description,
 )
 
 console = Console()
@@ -134,6 +136,7 @@ def generate_candidate_descriptions(
     cases: Sequence[ToolSelectionCase] | None = None,
     *,
     max_description_chars: int = 500,
+    max_parameter_description_chars: int = DEFAULT_MAX_PARAMETER_DESCRIPTION_CHARS,
 ) -> list[ToolDescriptionCandidate]:
     """Generate deterministic Phase 2C candidate descriptions from golden cases."""
 
@@ -149,7 +152,10 @@ def generate_candidate_descriptions(
                 toolset=record.toolset,
                 baseline_description=baseline,
                 candidate_description=candidate,
-                parameter_descriptions=_extract_parameter_descriptions(record.schema),
+                parameter_descriptions=_extract_parameter_descriptions(
+                    record.schema,
+                    max_chars=max_parameter_description_chars,
+                ),
             )
         )
     return candidates
@@ -284,7 +290,11 @@ def _candidate_diff(candidates: Sequence[ToolDescriptionCandidate]) -> str:
     return "\n".join(chunks).rstrip() + "\n" if chunks else "No candidate description changes.\n"
 
 
-def _extract_parameter_descriptions(schema: Mapping[str, object]) -> dict[str, str]:
+def _extract_parameter_descriptions(
+    schema: Mapping[str, object],
+    *,
+    max_chars: int = DEFAULT_MAX_PARAMETER_DESCRIPTION_CHARS,
+) -> dict[str, str]:
     parameters = schema.get("parameters")
     if not isinstance(parameters, dict):
         return {}
@@ -294,7 +304,7 @@ def _extract_parameter_descriptions(schema: Mapping[str, object]) -> dict[str, s
     descriptions: dict[str, str] = {}
     for name, spec in properties.items():
         if isinstance(name, str) and isinstance(spec, dict) and isinstance(spec.get("description"), str):
-            descriptions[name] = spec["description"]
+            descriptions[name] = normalize_parameter_description(spec["description"], max_chars=max_chars)
     return descriptions
 
 

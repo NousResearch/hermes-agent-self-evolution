@@ -53,10 +53,14 @@ def test_default_tool_selection_cases_cover_phase2b_plus_focus_set():
         ("execute_code", "terminal"),
         ("terminal", "execute_code"),
         ("session_search", "browser_navigate"),
+        ("session_search", "web_search"),
+        ("browser_navigate", "web_search"),
         ("browser_click", "computer_use"),
         ("browser_snapshot", "computer_use"),
     ):
         assert pair in confusion_pairs
+
+    assert all(confusing_tool != "web" for _, confusing_tool in confusion_pairs)
 
 
 def test_evaluator_rewards_expected_tool_over_confusing_tool():

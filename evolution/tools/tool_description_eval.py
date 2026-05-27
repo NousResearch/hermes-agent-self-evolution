@@ -25,6 +25,30 @@ _DANGEROUS_DESCRIPTION_PATTERNS = (
     "password",
     "private key",
 )
+DEFAULT_MAX_PARAMETER_DESCRIPTION_CHARS = 200
+
+
+def normalize_parameter_description(
+    description: str,
+    *,
+    max_chars: int = DEFAULT_MAX_PARAMETER_DESCRIPTION_CHARS,
+) -> str:
+    """Normalize a parameter description for candidate-only reporting.
+
+    Active Hermes schemas can contain long parameter guidance. Phase 2E keeps the
+    active schema read-only, but candidate artifacts should fit the Phase 2
+    parameter-description budget so reports measure actionable candidate quality
+    instead of repeating known live-schema verbosity warnings.
+    """
+
+    normalized = " ".join(description.split())
+    if len(normalized) <= max_chars:
+        return normalized
+    if max_chars <= 0:
+        return ""
+    if max_chars == 1:
+        return "…"
+    return normalized[: max_chars - 1].rstrip(" ,;.") + "…"
 
 
 @dataclass(frozen=True)
@@ -209,21 +233,21 @@ def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
         ToolSelectionCase(
             user_request="Search prior conversations about release update policy.",
             expected_tool="session_search",
-            confusing_tools=("web", "search_files"),
+            confusing_tools=("web_search", "search_files"),
             required_cues=("past", "sessions", "conversation", "history"),
             category="session-vs-web-search",
         ),
         ToolSelectionCase(
             user_request="Find the previous chat where we discussed the HSE Phase 2B evaluator and summarize where we left off.",
             expected_tool="session_search",
-            confusing_tools=("browser_navigate", "web", "search_files"),
+            confusing_tools=("browser_navigate", "web_search", "search_files"),
             required_cues=("past", "previous", "session", "conversation", "left"),
             category="session-vs-browser-history",
         ),
         ToolSelectionCase(
             user_request="Open the web app and click through the login-free settings screen to see what changes dynamically.",
             expected_tool="browser_navigate",
-            confusing_tools=("session_search", "web", "read_file"),
+            confusing_tools=("session_search", "web_search", "read_file"),
             required_cues=("navigate", "open", "click", "dynamic", "web"),
             category="browser-vs-session-search",
         ),
@@ -746,7 +770,11 @@ def _expected_tool_coverage(
     return _mean(1.0 if case.expected_tool in candidate_map else 0.0 for case in cases)
 
 
-def _extract_parameter_descriptions(schema: Mapping[str, object]) -> dict[str, str]:
+def _extract_parameter_descriptions(
+    schema: Mapping[str, object],
+    *,
+    max_chars: int = DEFAULT_MAX_PARAMETER_DESCRIPTION_CHARS,
+) -> dict[str, str]:
     parameters = schema.get("parameters")
     if not isinstance(parameters, Mapping):
         return {}
@@ -760,7 +788,7 @@ def _extract_parameter_descriptions(schema: Mapping[str, object]) -> dict[str, s
             continue
         description = raw_spec.get("description")
         if isinstance(description, str) and description.strip():
-            descriptions[name] = description
+            descriptions[name] = normalize_parameter_description(description, max_chars=max_chars)
     return descriptions
 
 

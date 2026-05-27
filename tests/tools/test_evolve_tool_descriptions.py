@@ -83,6 +83,40 @@ def test_candidate_generation_reserves_budget_for_golden_cues_on_long_baselines(
     assert "browser_navigate" in candidate.candidate_description
 
 
+def test_candidate_generation_normalizes_overlong_parameter_descriptions_before_reporting(tmp_path):
+    long_parameter_description = " ".join(["Long parameter guidance for candidate-only report normalization."] * 8)
+    records = [
+        ToolInventoryRecord(
+            name="read_file",
+            toolset="file",
+            description="Read file lines.",
+            schema={
+                "parameters": {
+                    "properties": {
+                        "path": {"description": long_parameter_description},
+                    }
+                }
+            },
+        )
+    ]
+    inventory_path = tmp_path / "inventory.json"
+    output_dir = tmp_path / "phase2e"
+    inventory_path.write_text(json.dumps({"tools": [record.__dict__ for record in records]}))
+
+    result = run_candidate_generation(inventory_json=inventory_path, output_dir=output_dir, cases=[])
+
+    candidates = json.loads(result.candidates_path.read_text())
+    normalized = candidates[0]["parameter_descriptions"]["path"]
+    assert 0 < len(normalized) <= 200
+    assert normalized.endswith("…")
+
+    report = json.loads(result.report_path.read_text())
+    assert not any(
+        warning.startswith("Parameter description length constraint failed")
+        for warning in report["metrics"]["warnings"]
+    )
+
+
 def test_load_inventory_from_json_accepts_candidate_report_shape(tmp_path):
     inventory_path = tmp_path / "inventory.json"
     inventory_path.write_text(json.dumps({"tools": [record.__dict__ for record in _minimal_inventory_records()]}))
