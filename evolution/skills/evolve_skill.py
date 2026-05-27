@@ -34,19 +34,19 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
-def _uses_local_litellm_model(model: str) -> bool:
-    """Return True for local LiteLLM backends that need bounded GEPA budgets."""
-    return model.startswith(("ollama/", "ollama_chat/"))
+def _uses_explicit_gepa_budget_model(model: str) -> bool:
+    """Return True for backends that need bounded GEPA budgets in cron.
+
+    GEPA's hosted-model auto presets can expand a small iteration knob into
+    hundreds of metric calls. That is too large for slow local models and for
+    Hermes Codex OAuth cron runs, where the policy timeout is the hard budget.
+    """
+    return model.startswith(("ollama/", "ollama_chat/", "openai-codex/"))
 
 
 def _gepa_budget_kwargs(iterations: int, eval_model: str, optimizer_model: str) -> dict:
-    """Map the CLI iteration knob to GEPA budget settings.
-
-    Hosted models can use GEPA's auto presets. Local Ollama models are far
-    slower, so use explicit full-eval limits or cron will time out before a
-    candidate can be produced.
-    """
-    if _uses_local_litellm_model(eval_model) or _uses_local_litellm_model(optimizer_model):
+    """Map the CLI iteration knob to GEPA budget settings."""
+    if _uses_explicit_gepa_budget_model(eval_model) or _uses_explicit_gepa_budget_model(optimizer_model):
         return {"max_full_evals": max(1, iterations)}
     return {"auto": "light" if iterations <= 5 else ("medium" if iterations <= 10 else "heavy")}
 

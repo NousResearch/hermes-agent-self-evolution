@@ -5,19 +5,24 @@ import dspy
 from evolution.skills.evolve_skill import _gepa_budget_kwargs, _score_holdout_example
 
 
-def test_gepa_budget_uses_explicit_full_evals_for_ollama_models():
+def test_gepa_budget_uses_explicit_full_evals_for_ollama_and_codex_models():
     assert _gepa_budget_kwargs(
         5,
         'ollama_chat/gemma4-e4b:latest',
         'ollama_chat/gemma4-e4b:latest',
     ) == {'max_full_evals': 5}
+    assert _gepa_budget_kwargs(
+        2,
+        'openai-codex/gpt-5.4-mini',
+        'openai-codex/gpt-5.4-mini',
+    ) == {'max_full_evals': 2}
 
 
-def test_gepa_budget_keeps_auto_presets_for_hosted_models():
+def test_gepa_budget_keeps_auto_presets_for_other_hosted_models():
     assert _gepa_budget_kwargs(
         5,
-        'openai-codex/gpt-5.4-mini',
-        'openai-codex/gpt-5.4-mini',
+        'openai/gpt-4.1-mini',
+        'openai/gpt-4.1-mini',
     ) == {'auto': 'light'}
     assert _gepa_budget_kwargs(
         10,
