@@ -2,9 +2,12 @@
 
 import json
 
+from click.testing import CliRunner
+
 from evolution.tools.evolve_tool_descriptions import (
     generate_candidate_descriptions,
     load_inventory_from_json,
+    main,
     run_candidate_generation,
 )
 from evolution.tools.tool_description_eval import (
@@ -99,7 +102,7 @@ def test_load_inventory_from_json_accepts_empty_inventory_container(tmp_path):
 
 def test_run_candidate_generation_writes_candidate_only_artifacts(tmp_path):
     inventory_path = tmp_path / "inventory.json"
-    output_dir = tmp_path / "phase2c"
+    output_dir = tmp_path / "phase2d"
     inventory_path.write_text(json.dumps({"tools": [record.__dict__ for record in _minimal_inventory_records()]}))
 
     result = run_candidate_generation(inventory_json=inventory_path, output_dir=output_dir)
@@ -122,3 +125,28 @@ def test_run_candidate_generation_writes_candidate_only_artifacts(tmp_path):
     assert report["phase2d_gate"]["candidate_metrics"]["case_count"] >= 30
     assert report["phase2d_gate"]["candidate_only"] is True
     assert "read_file" in result.diff_path.read_text()
+
+
+def test_cli_returns_nonzero_when_phase2d_gate_fails(tmp_path):
+    inventory_path = tmp_path / "inventory.json"
+    output_dir = tmp_path / "phase2d-fail"
+    incomplete_inventory = [
+        ToolInventoryRecord(
+            name="read_file",
+            toolset="file",
+            description="Read file lines.",
+            schema={"parameters": {"properties": {}}},
+        )
+    ]
+    inventory_path.write_text(json.dumps({"tools": [record.__dict__ for record in incomplete_inventory]}))
+
+    result = CliRunner().invoke(
+        main,
+        ["--inventory-json", str(inventory_path), "--output-dir", str(output_dir)],
+    )
+
+    assert result.exit_code != 0
+    assert "Phase 2D gate failed" in result.output
+    report = json.loads((output_dir / "candidate_only_report.json").read_text())
+    assert report["phase2d_gate"]["passed"] is False
+    assert report["phase2d_gate"]["failed_checks"]

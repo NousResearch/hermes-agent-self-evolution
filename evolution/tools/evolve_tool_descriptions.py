@@ -36,13 +36,15 @@ console = Console()
 
 @dataclass(frozen=True)
 class CandidateGenerationResult:
-    """Paths written by one candidate-only Phase 2C/2D run."""
+    """Paths and formal-gate status from one candidate-only Phase 2C/2D run."""
 
     output_dir: Path
     inventory_path: Path
     candidates_path: Path
     report_path: Path
     diff_path: Path
+    phase2d_gate_passed: bool
+    phase2d_failed_checks: tuple[str, ...]
 
 
 def collect_hermes_tool_inventory(hermes_repo: str | Path | None = None) -> list[ToolInventoryRecord]:
@@ -208,6 +210,8 @@ def run_candidate_generation(
         candidates_path=candidates_path,
         report_path=report_path,
         diff_path=diff_path,
+        phase2d_gate_passed=phase2d_gate.passed,
+        phase2d_failed_checks=phase2d_gate.failed_checks,
     )
 
 
@@ -329,6 +333,14 @@ def main(inventory_json: str | None, hermes_repo: str | None, output_dir: str | 
     console.print(f"  output: {result.output_dir}")
     console.print(f"  report: {result.report_path}")
     console.print("  active Hermes tool schemas modified: no")
+    if result.phase2d_gate_passed:
+        console.print("  Phase 2D gate: passed")
+        return
+
+    console.print("  Phase 2D gate: failed")
+    for failed_check in result.phase2d_failed_checks:
+        console.print(f"    - {failed_check}")
+    raise click.ClickException(f"Phase 2D gate failed; inspect report: {result.report_path}")
 
 
 if __name__ == "__main__":
