@@ -436,6 +436,79 @@ These descriptions are sent with every API call as part of the tool schema — e
 - Must remain factually accurate (can't claim a tool does something it doesn't)
 - Schema structure (parameter names, types, required fields) is FROZEN — only text evolves
 
+#### Phase 2D/2E Candidate-Only Report Contract
+
+Phase 2 closeout standardizes `candidate_only_report.json` as the review and automation contract for tool-description candidates. The report is intentionally **candidate-only**:
+
+- It may reject or approve a candidate set for review.
+- It must not modify active Hermes Agent tool schemas, registry entries, source files, or runtime config.
+- It must keep `apply_ready: false` and must not include an apply payload.
+- If `phase2d_gate.passed` is `false`, the CLI must exit non-zero so automation cannot mistake a failed gate for success.
+
+Each Phase 2 candidate-only run writes four artifacts:
+
+| Artifact | Purpose |
+|----------|---------|
+| `inventory.json` | Read-only tool inventory snapshot from either `--inventory-json` or a trusted Hermes repo import. |
+| `candidate_descriptions.json` | Baseline/candidate descriptions plus normalized parameter descriptions. |
+| `candidate.diff` | Human-readable baseline-vs-candidate diff. |
+| `candidate_only_report.json` | Canonical schema for metrics, gate state, inventory metadata, and artifact paths. |
+
+`candidate_only_report.json` top-level fields:
+
+| Field | Required meaning |
+|-------|------------------|
+| `phase` | Current emitted value is `"2D"`: candidate generation plus formal cross-tool gate. |
+| `mode` | Must be `"candidate-only"`. |
+| `apply_ready` | Must be `false`. |
+| `summary` | Human-readable run summary. |
+| `candidate_count` | Count of tool candidates evaluated. |
+| `metrics` | Candidate-quality evaluation result. Contains `candidate_only`, `apply_ready`, `case_count`, `selection_accuracy`, `wrong_tool_avoidance`, `argument_cue_coverage`, `constraint_pass_rate`, `case_results`, and `warnings`. |
+| `candidates` | Candidate records: `name`, `toolset`, `baseline_description`, `candidate_description`, `parameter_descriptions`, and `description_delta`. |
+| `phase_index_executed` | Phase markers represented by the report, currently `["2A", "2B", "2C", "2D"]`. |
+| `phase2d_gate` | Formal gate result, including thresholds, baseline metrics, candidate metrics, per-tool regressions, and failed checks. |
+| `inventory_metadata` | Inventory collection metadata that is separate from candidate-quality metrics. |
+| `artifacts` | Paths to generated inventory, candidates, and diff artifacts. |
+
+`phase2d_gate` contract:
+
+| Field | Required meaning |
+|-------|------------------|
+| `phase` | `"2D"`. |
+| `candidate_only` | `true`. |
+| `passed` | Overall pass/fail boolean. |
+| `thresholds` | Gate thresholds: `min_case_count`, `min_selection_accuracy`, `min_wrong_tool_avoidance`, `max_per_tool_regression`. |
+| `baseline_metrics` / `candidate_metrics` | Metric snapshots with `case_count`, `selection_accuracy`, `wrong_tool_avoidance`, `argument_cue_coverage`, `constraint_pass_rate`, and `warning_count`. |
+| `per_tool_regressions` | Per expected-tool pass-rate comparison: `expected_tool`, case/pass counts, pass rates, `delta`, and `passed`. |
+| `failed_checks` | Human-readable gate failures; empty only when the gate passes. |
+
+Default Phase 2D thresholds for the current 30-case golden set:
+
+```json
+{
+  "min_case_count": 30,
+  "min_selection_accuracy": 0.7,
+  "min_wrong_tool_avoidance": 0.7,
+  "max_per_tool_regression": 0.0
+}
+```
+
+`inventory_metadata` contract:
+
+| Field | Required meaning |
+|-------|------------------|
+| `source` | `"inventory_json"` or `"hermes_repo_import"`. |
+| `tool_count` | Number of inventory records used for candidate generation. |
+| `import_warning_count` | Count of import-time warnings captured while collecting inventory. |
+| `import_warnings` | Structured warning records with `module`, `message`, `exception`, `classification`, and `candidate_quality`. |
+| `candidate_quality_warnings_are_separate` | Must be `true`. |
+
+Warning separation rule:
+
+- `metrics.warnings` and `phase2d_gate.candidate_metrics.warning_count` are candidate-quality warnings only.
+- Optional inventory/import warnings, such as `tools.browser_dialog_tool` missing `websockets`, are reported under `inventory_metadata.import_warnings` with `classification: "optional_dependency_import_warning"` and `candidate_quality: false`.
+- This separation is a report contract, not suppression: operational inventory issues remain visible without polluting candidate-quality gate metrics.
+
 ### Phase 3: System Prompt Evolution
 
 **Goal:** Optimize the sections of the system prompt that guide agent behavior.
