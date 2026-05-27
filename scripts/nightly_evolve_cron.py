@@ -309,6 +309,17 @@ def read_metrics(artifact: Path | None) -> dict[str, Any] | None:
         return None
 
 
+def artifact_has_material_diff(artifact: Path | None) -> bool:
+    """Return whether a saved evolution artifact changed the skill text."""
+    if not artifact:
+        return False
+    baseline = artifact / "baseline_skill.md"
+    evolved = artifact / "evolved_skill.md"
+    if baseline.exists() and evolved.exists():
+        return baseline.read_bytes() != evolved.read_bytes()
+    return True
+
+
 def _has_golden_dataset(path: Path) -> bool:
     return (path / "train.jsonl").exists() or (path / "golden.jsonl").exists()
 
@@ -357,6 +368,9 @@ def summarize(target: Target, status: str, artifact: Path | None, log: Path, met
     if status == "candidate":
         lines.append("review: candidate-review-needed")
     elif status == "constraints-failed":
+        lines.append("review: rejected")
+    elif status == "no-change":
+        lines.append("gate: no-material-diff")
         lines.append("review: rejected")
     elif status in {"no-improvement", "below-threshold"}:
         lines.append("review: no-application")
@@ -438,7 +452,10 @@ def run_evolution(repo_root: Path, policy: dict[str, Any], env: dict[str, str], 
         status = f"failed rc={returncode}"
     elif metrics:
         improvement = float(metrics.get("improvement", 0.0) or 0.0)
-        if improvement >= min_improvement:
+        material_diff = bool(metrics.get("material_diff", True)) and artifact_has_material_diff(artifact)
+        if not material_diff:
+            status = "no-change"
+        elif improvement >= min_improvement:
             status = "candidate"
         elif improvement > 0:
             status = "below-threshold"

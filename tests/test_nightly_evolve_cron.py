@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from scripts import nightly_evolve_cron as cron
-from scripts.nightly_evolve_cron import Target, resolve_eval_dataset_args, summarize
+from scripts.nightly_evolve_cron import Target, artifact_has_material_diff, resolve_eval_dataset_args, summarize
 
 
 def _target(tmp_path: Path) -> Target:
@@ -90,6 +90,38 @@ def test_summarize_reports_constraint_rejection(tmp_path):
     assert "gate: constraints-failed" in summary
     assert "review: rejected" in summary
     assert "applied: no" in summary
+
+
+def test_summarize_reports_no_change_rejection(tmp_path):
+    summary = summarize(
+        _target(tmp_path),
+        "no-change",
+        tmp_path / "artifact",
+        tmp_path / "run.log",
+        {
+            "baseline_score": 0.5,
+            "evolved_score": 0.7,
+            "improvement": 0.2,
+            "constraints_passed": True,
+        },
+    )
+
+    assert "gate: constraints-passed" in summary
+    assert "gate: no-material-diff" in summary
+    assert "review: rejected" in summary
+    assert "applied: no" in summary
+
+
+def test_artifact_material_diff_detects_identical_skill_files(tmp_path):
+    artifact = tmp_path / "artifact"
+    artifact.mkdir()
+    (artifact / "baseline_skill.md").write_text("same skill")
+    (artifact / "evolved_skill.md").write_text("same skill")
+
+    assert artifact_has_material_diff(artifact) is False
+
+    (artifact / "evolved_skill.md").write_text("changed skill")
+    assert artifact_has_material_diff(artifact) is True
 
 
 def test_codex_models_validate_against_hermes_oauth_not_openai_key(monkeypatch):
