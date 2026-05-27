@@ -1,0 +1,2 @@
+{"task_input": "time-rewind validation coverage: safe-mode-both", "expected_behavior": "안전모드로 진행해; Hermes built-in checkpoints; dry-run", "difficulty": "medium", "category": "safe_mode", "source": "session-derived"}
+{"task_input": "time-rewind validation coverage: medium-edit-anchor", "expected_behavior": "Medium; anchor \"before <task>\"; record-file; verify --lint; release last", "difficulty": "medium", "category": "anchor", "source": "golden"}

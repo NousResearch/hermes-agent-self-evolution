@@ -95,6 +95,13 @@ def evolve(
     if eval_source == "golden" and dataset_path:
         dataset = GoldenDatasetLoader.load(Path(dataset_path))
         console.print(f"  Loaded golden dataset: {len(dataset.all_examples)} examples")
+    elif eval_source == "golden":
+        dataset_path_resolved = GoldenDatasetLoader.find_regression_fixture(skill_name)
+        dataset = GoldenDatasetLoader.load(dataset_path_resolved)
+        console.print(
+            f"  Loaded promoted regression fixture: {dataset_path_resolved} "
+            f"({len(dataset.all_examples)} examples)"
+        )
     elif eval_source == "sessiondb":
         save_path = Path(dataset_path) if dataset_path else Path("datasets") / "skills" / skill_name
         dataset = build_dataset_from_external(

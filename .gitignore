@@ -14,6 +14,13 @@ venv/
 datasets/**/*.jsonl
 datasets/**/*.json
 !datasets/.gitkeep
+!datasets/golden/
+!datasets/golden/skill-fixtures.json
+!datasets/golden/tool-description/
+!datasets/golden/tool-description/*.jsonl
+!datasets/golden/*-phase1-validation-*-corrected/
+!datasets/golden/*-phase1-validation-*-corrected/README.md
+!datasets/golden/*-phase1-validation-*-corrected/*.jsonl
 
 # Evolution snapshots
 snapshots/
