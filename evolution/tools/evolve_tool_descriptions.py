@@ -1,9 +1,10 @@
-"""Phase 2C candidate-only tool description generation.
+"""Phase 2C/2D candidate-only tool description generation and gating.
 
 This module deliberately does not patch Hermes Agent tool schemas. It reads a
 Hermes tool inventory, generates deterministic candidate descriptions from the
 Phase 2B golden tool-selection cases, evaluates them with the existing
-candidate-only scaffold, and writes review artifacts.
+candidate-only scaffold, applies the formal Phase 2D cross-tool gate, and writes
+review artifacts.
 """
 
 from __future__ import annotations
@@ -25,7 +26,9 @@ from evolution.tools.tool_description_eval import (
     ToolInventoryRecord,
     ToolSelectionCase,
     build_candidate_only_report,
+    candidates_from_inventory,
     default_tool_selection_cases,
+    evaluate_cross_tool_gate,
 )
 
 console = Console()
@@ -33,7 +36,7 @@ console = Console()
 
 @dataclass(frozen=True)
 class CandidateGenerationResult:
-    """Paths written by one Phase 2C candidate-generation run."""
+    """Paths written by one candidate-only Phase 2C/2D run."""
 
     output_dir: Path
     inventory_path: Path
@@ -157,13 +160,13 @@ def run_candidate_generation(
     output_dir: str | Path | None = None,
     cases: Sequence[ToolSelectionCase] | None = None,
 ) -> CandidateGenerationResult:
-    """Run Phase 2C in candidate-only mode and write review artifacts."""
+    """Run Phase 2C/2D in candidate-only mode and write review artifacts."""
 
     records = load_inventory_from_json(inventory_json) if inventory_json else collect_hermes_tool_inventory(hermes_repo)
     eval_cases = tuple(cases) if cases is not None else default_tool_selection_cases()
     candidates = generate_candidate_descriptions(records, eval_cases)
 
-    target_dir = Path(output_dir) if output_dir else Path("output") / "tool-description" / datetime.now().strftime("%Y%m%d_%H%M%S_phase2c")
+    target_dir = Path(output_dir) if output_dir else Path("output") / "tool-description" / datetime.now().strftime("%Y%m%d_%H%M%S_phase2d")
     target_dir.mkdir(parents=True, exist_ok=True)
 
     inventory_path = target_dir / "inventory.json"
@@ -182,10 +185,13 @@ def run_candidate_generation(
     )
 
     report = build_candidate_only_report(candidates, eval_cases)
+    phase2d_gate = evaluate_cross_tool_gate(candidates_from_inventory(records), candidates, eval_cases)
     report.update(
         {
-            "phase": "2C",
-            "summary": "Candidate-only tool description generation report; active Hermes tool schemas are not modified.",
+            "phase": "2D",
+            "summary": "Candidate-only tool description generation plus formal Phase 2D cross-tool gate; active Hermes tool schemas are not modified.",
+            "phase_index_executed": ["2A", "2B", "2C", "2D"],
+            "phase2d_gate": phase2d_gate.to_dict(),
             "artifacts": {
                 "inventory": str(inventory_path),
                 "candidates": str(candidates_path),
@@ -225,8 +231,26 @@ def _candidate_description_for_tool(
         suffix_parts.append(f"Prefer over {confusing_text}")
 
     suffix = "; ".join(suffix_parts)
-    candidate = f"{baseline.rstrip()} {suffix}." if suffix else baseline
-    return _fit_description(candidate, max_description_chars)
+    if not suffix:
+        return _fit_description(baseline, max_description_chars)
+    return _fit_description_with_suffix(baseline, f"{suffix}.", max_description_chars)
+
+
+def _fit_description_with_suffix(description: str, suffix: str, max_chars: int) -> str:
+    """Fit a description while preserving generated disambiguation cues."""
+
+    normalized = " ".join(description.split())
+    normalized_suffix = " ".join(suffix.split())
+    candidate = f"{normalized.rstrip()} {normalized_suffix}".strip()
+    if len(candidate) <= max_chars:
+        return candidate
+
+    suffix_with_separator = f" {normalized_suffix}"
+    if len(suffix_with_separator) >= max_chars:
+        return _fit_description(normalized_suffix, max_chars)
+
+    baseline_budget = max_chars - len(suffix_with_separator)
+    return f"{_fit_description(normalized, baseline_budget)}{suffix_with_separator}"
 
 
 def _fit_description(description: str, max_chars: int) -> str:
@@ -294,14 +318,14 @@ def _unique_in_order(values) -> list[str]:
 )
 @click.option("--output-dir", default=None, type=click.Path(file_okay=False), help="Directory for candidate-only artifacts")
 def main(inventory_json: str | None, hermes_repo: str | None, output_dir: str | None):
-    """Generate Phase 2C candidate tool descriptions without applying them."""
+    """Generate Phase 2C candidates and Phase 2D gate artifacts without applying them."""
 
     result = run_candidate_generation(
         inventory_json=inventory_json,
         hermes_repo=hermes_repo,
         output_dir=output_dir,
     )
-    console.print("[bold green]Phase 2C candidate-only artifacts written[/bold green]")
+    console.print("[bold green]Phase 2D candidate-only artifacts written[/bold green]")
     console.print(f"  output: {result.output_dir}")
     console.print(f"  report: {result.report_path}")
     console.print("  active Hermes tool schemas modified: no")

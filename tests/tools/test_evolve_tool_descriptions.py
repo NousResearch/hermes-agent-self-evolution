@@ -1,4 +1,4 @@
-"""Tests for Phase 2C candidate-only tool description generation."""
+"""Tests for Phase 2C/2D candidate-only tool description generation and gating."""
 
 import json
 
@@ -60,6 +60,26 @@ def test_candidate_generation_adds_golden_case_cues_but_keeps_baseline_metadata(
     assert len(terminal.candidate_description) <= 500
 
 
+def test_candidate_generation_reserves_budget_for_golden_cues_on_long_baselines():
+    records = [
+        ToolInventoryRecord(
+            name="session_search",
+            toolset="session_search",
+            description=" ".join(["Search past sessions and local conversation history."] * 20),
+            schema={"parameters": {"properties": {}}},
+        )
+    ]
+
+    candidates = generate_candidate_descriptions(records, default_tool_selection_cases(), max_description_chars=220)
+
+    candidate = candidates[0]
+    assert len(candidate.candidate_description) <= 220
+    assert "previous" in candidate.candidate_description
+    assert "left" in candidate.candidate_description
+    assert "Prefer over" in candidate.candidate_description
+    assert "browser_navigate" in candidate.candidate_description
+
+
 def test_load_inventory_from_json_accepts_candidate_report_shape(tmp_path):
     inventory_path = tmp_path / "inventory.json"
     inventory_path.write_text(json.dumps({"tools": [record.__dict__ for record in _minimal_inventory_records()]}))
@@ -90,10 +110,15 @@ def test_run_candidate_generation_writes_candidate_only_artifacts(tmp_path):
     assert result.diff_path.exists()
 
     report = json.loads(result.report_path.read_text())
-    assert report["phase"] == "2C"
+    assert report["phase"] == "2D"
     assert report["mode"] == "candidate-only"
     assert report["apply_ready"] is False
     assert "patch" not in report
     assert "write_paths" not in report
     assert report["metrics"]["case_count"] >= 30
+    assert report["phase2d_gate"]["phase"] == "2D"
+    assert report["phase_index_executed"] == ["2A", "2B", "2C", "2D"]
+    assert report["phase2d_gate"]["thresholds"]["min_case_count"] == 30
+    assert report["phase2d_gate"]["candidate_metrics"]["case_count"] >= 30
+    assert report["phase2d_gate"]["candidate_only"] is True
     assert "read_file" in result.diff_path.read_text()

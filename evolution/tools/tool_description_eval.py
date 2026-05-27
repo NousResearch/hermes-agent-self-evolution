@@ -110,6 +110,63 @@ class ToolDescriptionEvalResult:
         }
 
 
+@dataclass(frozen=True)
+class CrossToolGateThresholds:
+    """Formal Phase 2D cross-tool gate thresholds.
+
+    The gate is intentionally candidate-only: it can reject a candidate or mark it
+    review-worthy, but it never creates an apply payload.
+    """
+
+    min_case_count: int = 30
+    min_selection_accuracy: float = 0.70
+    min_wrong_tool_avoidance: float = 0.70
+    max_per_tool_regression: float = 0.0
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CrossToolRegression:
+    """Per expected-tool pass-rate comparison against the baseline."""
+
+    expected_tool: str
+    case_count: int
+    baseline_pass_count: int
+    candidate_pass_count: int
+    baseline_pass_rate: float
+    candidate_pass_rate: float
+    delta: float
+    passed: bool
+
+
+@dataclass(frozen=True)
+class CrossToolGateResult:
+    """Formal Phase 2D pass/fail result for a candidate description set."""
+
+    phase: str
+    candidate_only: bool
+    passed: bool
+    thresholds: CrossToolGateThresholds
+    baseline_metrics: Mapping[str, object]
+    candidate_metrics: Mapping[str, object]
+    per_tool_regressions: tuple[CrossToolRegression, ...]
+    failed_checks: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict:
+        return {
+            "phase": self.phase,
+            "candidate_only": self.candidate_only,
+            "passed": self.passed,
+            "thresholds": self.thresholds.to_dict(),
+            "baseline_metrics": dict(self.baseline_metrics),
+            "candidate_metrics": dict(self.candidate_metrics),
+            "per_tool_regressions": [asdict(regression) for regression in self.per_tool_regressions],
+            "failed_checks": list(self.failed_checks),
+        }
+
+
 def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
     """Small hand-curated golden set for common Hermes tool confusions."""
 
@@ -355,7 +412,11 @@ def evaluate_candidate_descriptions(
 
     selection_accuracy = _mean(1.0 if result.passed else 0.0 for result in case_results)
     wrong_tool_avoidance = _mean(
-        1.0 if all(result.expected_score > score for score in result.confusing_scores.values()) else 0.0
+        0.0
+        if "missing all confusing tools" in result.notes
+        else 1.0
+        if all(result.expected_score > score for score in result.confusing_scores.values())
+        else 0.0
         for result in case_results
     )
     argument_cue_coverage = _mean(result.cue_coverage for result in case_results)
@@ -398,6 +459,60 @@ def build_candidate_only_report(
         "metrics": result.to_dict(),
         "candidates": [asdict(candidate) | {"description_delta": candidate.description_delta} for candidate in candidates],
     }
+
+
+def evaluate_cross_tool_gate(
+    baseline_candidates: Sequence[ToolDescriptionCandidate],
+    candidate_candidates: Sequence[ToolDescriptionCandidate],
+    cases: Sequence[ToolSelectionCase] | None = None,
+    *,
+    thresholds: CrossToolGateThresholds | None = None,
+) -> CrossToolGateResult:
+    """Evaluate the formal Phase 2D cross-tool gate.
+
+    Phase 2D turns the golden tool-selection set into an explicit pass/fail
+    barrier. It compares candidate descriptions to baseline descriptions and
+    fails closed when aggregate accuracy, wrong-tool avoidance, minimum dataset
+    size, or per-tool regression constraints are violated.
+    """
+
+    eval_cases = tuple(cases) if cases is not None else default_tool_selection_cases()
+    gate_thresholds = thresholds or CrossToolGateThresholds()
+    baseline_result = evaluate_candidate_descriptions(baseline_candidates, eval_cases)
+    candidate_result = evaluate_candidate_descriptions(candidate_candidates, eval_cases)
+
+    per_tool_regressions = _per_tool_regressions(baseline_result, candidate_result, gate_thresholds)
+    failed_checks: list[str] = []
+    if candidate_result.case_count < gate_thresholds.min_case_count:
+        failed_checks.append(f"case_count {candidate_result.case_count} < {gate_thresholds.min_case_count}")
+    if candidate_result.selection_accuracy < gate_thresholds.min_selection_accuracy:
+        failed_checks.append(
+            f"selection_accuracy {candidate_result.selection_accuracy:.4f} < {gate_thresholds.min_selection_accuracy:.4f}"
+        )
+    if candidate_result.wrong_tool_avoidance < gate_thresholds.min_wrong_tool_avoidance:
+        failed_checks.append(
+            f"wrong_tool_avoidance {candidate_result.wrong_tool_avoidance:.4f} < {gate_thresholds.min_wrong_tool_avoidance:.4f}"
+        )
+    for regression in per_tool_regressions:
+        if not regression.passed:
+            failed_checks.append(
+                "per_tool_regression "
+                f"{regression.expected_tool} {regression.delta:.4f} < -{gate_thresholds.max_per_tool_regression:.4f}"
+            )
+    for warning in candidate_result.warnings:
+        if warning.startswith("Dangerous wording constraint failed"):
+            failed_checks.append(f"candidate_safety {warning}")
+
+    return CrossToolGateResult(
+        phase="2D",
+        candidate_only=True,
+        passed=not failed_checks,
+        thresholds=gate_thresholds,
+        baseline_metrics=_metric_snapshot(baseline_result),
+        candidate_metrics=_metric_snapshot(candidate_result),
+        per_tool_regressions=per_tool_regressions,
+        failed_checks=tuple(failed_checks),
+    )
 
 
 def candidates_from_inventory(records: Sequence[ToolInventoryRecord]) -> list[ToolDescriptionCandidate]:
@@ -448,6 +563,62 @@ def write_candidate_only_report(
     return report_path
 
 
+def _per_tool_regressions(
+    baseline_result: ToolDescriptionEvalResult,
+    candidate_result: ToolDescriptionEvalResult,
+    thresholds: CrossToolGateThresholds,
+) -> tuple[CrossToolRegression, ...]:
+    baseline_stats = _pass_stats_by_expected_tool(baseline_result)
+    candidate_stats = _pass_stats_by_expected_tool(candidate_result)
+    expected_tools = sorted(set(baseline_stats) | set(candidate_stats))
+    regressions: list[CrossToolRegression] = []
+    for expected_tool in expected_tools:
+        baseline_pass_count, baseline_case_count = baseline_stats.get(expected_tool, (0, 0))
+        candidate_pass_count, candidate_case_count = candidate_stats.get(expected_tool, (0, 0))
+        case_count = max(baseline_case_count, candidate_case_count)
+        baseline_rate = _rate(baseline_pass_count, baseline_case_count)
+        candidate_rate = _rate(candidate_pass_count, candidate_case_count)
+        delta = round(candidate_rate - baseline_rate, 4)
+        regressions.append(
+            CrossToolRegression(
+                expected_tool=expected_tool,
+                case_count=case_count,
+                baseline_pass_count=baseline_pass_count,
+                candidate_pass_count=candidate_pass_count,
+                baseline_pass_rate=baseline_rate,
+                candidate_pass_rate=candidate_rate,
+                delta=delta,
+                passed=delta >= -thresholds.max_per_tool_regression,
+            )
+        )
+    return tuple(regressions)
+
+
+def _pass_stats_by_expected_tool(result: ToolDescriptionEvalResult) -> dict[str, tuple[int, int]]:
+    stats: dict[str, list[int]] = {}
+    for case_result in result.case_results:
+        passed_count, case_count = stats.setdefault(case_result.expected_tool, [0, 0])
+        stats[case_result.expected_tool] = [passed_count + int(case_result.passed), case_count + 1]
+    return {tool: (counts[0], counts[1]) for tool, counts in stats.items()}
+
+
+def _metric_snapshot(result: ToolDescriptionEvalResult) -> dict[str, object]:
+    return {
+        "case_count": result.case_count,
+        "selection_accuracy": result.selection_accuracy,
+        "wrong_tool_avoidance": result.wrong_tool_avoidance,
+        "argument_cue_coverage": result.argument_cue_coverage,
+        "constraint_pass_rate": result.constraint_pass_rate,
+        "warning_count": len(result.warnings),
+    }
+
+
+def _rate(passed_count: int, case_count: int) -> float:
+    if case_count <= 0:
+        return 0.0
+    return round(passed_count / case_count, 4)
+
+
 def _evaluate_case(
     candidate_map: Mapping[str, ToolDescriptionCandidate],
     case: ToolSelectionCase,
@@ -473,8 +644,12 @@ def _evaluate_case(
         for name in case.confusing_tools
         if name in candidate_map
     }
+    notes: list[str] = []
     for missing in sorted(set(case.confusing_tools) - set(confusing_scores)):
         warnings.append(f"Missing confusing tool candidate: {missing}")
+    if case.confusing_tools and not confusing_scores:
+        warnings.append(f"No confusing tool candidates available for: {case.expected_tool}")
+        notes.append("missing all confusing tools")
 
     selected_tool = case.expected_tool
     selected_score = expected_score
@@ -484,7 +659,11 @@ def _evaluate_case(
             selected_score = score
 
     cue_coverage = _cue_coverage(expected, case.required_cues, case.required_arguments)
-    passed = selected_tool == case.expected_tool and expected_score > max(confusing_scores.values(), default=-1.0)
+    passed = (
+        selected_tool == case.expected_tool
+        and expected_score > max(confusing_scores.values(), default=-1.0)
+        and "missing all confusing tools" not in notes
+    )
     return ToolCaseResult(
         user_request=case.user_request,
         expected_tool=case.expected_tool,
@@ -493,6 +672,7 @@ def _evaluate_case(
         confusing_scores={name: round(score, 4) for name, score in confusing_scores.items()},
         passed=passed,
         cue_coverage=round(cue_coverage, 4),
+        notes=tuple(notes),
     ), warnings
 
 
