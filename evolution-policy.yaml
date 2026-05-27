@@ -10,10 +10,10 @@ cadence:
   min_days_between_same_target: 21
 
 models:
-  eval: ollama_chat/gemma4-e4b:latest
-  optimizer: ollama_chat/gemma4-e4b:latest
-  fallback_eval: ollama_chat/gemma4-e4b:latest
-  fallback_optimizer: ollama_chat/gemma4-e4b:latest
+  eval: openai-codex/gpt-5.4-mini
+  optimizer: openai-codex/gpt-5.4-mini
+  fallback_eval: openai-codex/gpt-5.4-mini
+  fallback_optimizer: openai-codex/gpt-5.4-mini
 
 budget:
   iterations: 2

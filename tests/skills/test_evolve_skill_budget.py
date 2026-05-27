@@ -16,8 +16,8 @@ def test_gepa_budget_uses_explicit_full_evals_for_ollama_models():
 def test_gepa_budget_keeps_auto_presets_for_hosted_models():
     assert _gepa_budget_kwargs(
         5,
-        'openai/gpt-4.1-mini',
-        'openai/gpt-4.1-mini',
+        'openai-codex/gpt-5.4-mini',
+        'openai-codex/gpt-5.4-mini',
     ) == {'auto': 'light'}
     assert _gepa_budget_kwargs(
         10,

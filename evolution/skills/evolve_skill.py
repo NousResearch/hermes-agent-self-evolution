@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, cast
 
 import click
 import dspy
@@ -20,6 +20,7 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
+from evolution.core.dspy_lm import make_dspy_lm
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
@@ -50,7 +51,7 @@ def _gepa_budget_kwargs(iterations: int, eval_model: str, optimizer_model: str) 
     return {"auto": "light" if iterations <= 5 else ("medium" if iterations <= 10 else "heavy")}
 
 
-def _score_holdout_example(program, example: dspy.Example, lm: dspy.LM | None) -> float:
+def _score_holdout_example(program, example: dspy.Example, lm: dspy.BaseLM | None) -> float:
     """Score one holdout example, treating model format failures as zero."""
     try:
         with dspy.context(lm=lm):
@@ -69,8 +70,8 @@ def evolve(
     iterations: int = 10,
     eval_source: str = "synthetic",
     dataset_path: Optional[str] = None,
-    optimizer_model: str = "openai/gpt-5.4-mini",
-    eval_model: str = "openai/gpt-5.4-mini",
+    optimizer_model: str = "openai-codex/gpt-5.4-mini",
+    eval_model: str = "openai-codex/gpt-5.4-mini",
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
@@ -168,7 +169,7 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model, num_retries=8, timeout=120)
+    lm = make_dspy_lm(eval_model, num_retries=8, timeout=120)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -189,7 +190,7 @@ def evolve(
 
     try:
         # GEPA needs a reflection LM for proposing mutations
-        reflection_lm = dspy.LM(optimizer_model, num_retries=8, timeout=120)
+        reflection_lm = cast(dspy.LM, make_dspy_lm(optimizer_model, num_retries=8, timeout=120))
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
             **gepa_budget,
@@ -343,8 +344,8 @@ def evolve(
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/gpt-5.4-mini", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/gpt-5.4-mini", help="Model for evaluations")
+@click.option("--optimizer-model", default="openai-codex/gpt-5.4-mini", help="Model for GEPA reflections")
+@click.option("--eval-model", default="openai-codex/gpt-5.4-mini", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")

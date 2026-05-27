@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from scripts import nightly_evolve_cron as cron
 from scripts.nightly_evolve_cron import Target, resolve_eval_dataset_args, summarize
 
 
@@ -89,3 +90,35 @@ def test_summarize_reports_constraint_rejection(tmp_path):
     assert "gate: constraints-failed" in summary
     assert "review: rejected" in summary
     assert "applied: no" in summary
+
+
+def test_codex_models_validate_against_hermes_oauth_not_openai_key(monkeypatch):
+    monkeypatch.setattr(cron, "codex_auth_available", lambda *, refresh_if_expiring=False: True)
+
+    policy = {
+        "models": {
+            "eval": "openai-codex/gpt-5.4-mini",
+            "optimizer": "openai-codex/gpt-5.4-mini",
+            "fallback_eval": "openai-codex/gpt-5.4-mini",
+            "fallback_optimizer": "openai-codex/gpt-5.4-mini",
+        }
+    }
+
+    assert cron.required_key_for_model("openai-codex/gpt-5.4-mini") is None
+    assert cron.validate_model_env(policy, env={}) == []
+
+
+def test_codex_models_report_missing_hermes_oauth_once(monkeypatch):
+    monkeypatch.setattr(cron, "codex_auth_available", lambda *, refresh_if_expiring=False: False)
+
+    missing = cron.validate_model_env(
+        {
+            "models": {
+                "eval": "openai-codex/gpt-5.4-mini",
+                "optimizer": "openai-codex/gpt-5.4-mini",
+            }
+        },
+        env={},
+    )
+
+    assert missing == ["OpenAI-Codex OAuth credentials (run `hermes model`)"]

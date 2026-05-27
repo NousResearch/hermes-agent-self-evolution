@@ -24,6 +24,8 @@ from typing import Any
 
 import yaml
 
+from evolution.core.hermes_codex import codex_auth_available, is_openai_codex_model
+
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY = DEFAULT_REPO_ROOT / "evolution-policy.yaml"
@@ -121,6 +123,8 @@ def build_env(policy: dict[str, Any]) -> dict[str, str]:
 
 
 def required_key_for_model(model: str) -> str | None:
+    if is_openai_codex_model(model):
+        return None
     if model.startswith("openai/"):
         return "OPENAI_API_KEY"
     if model.startswith("openrouter/"):
@@ -130,11 +134,25 @@ def required_key_for_model(model: str) -> str | None:
     return None
 
 
-def validate_model_env(policy: dict[str, Any], env: dict[str, str]) -> list[str]:
+def _configured_models(policy: dict[str, Any]) -> list[str]:
     models = policy.get("models", {}) or {}
+    return [
+        str(models.get(name, "") or "")
+        for name in ("eval", "optimizer", "fallback_eval", "fallback_optimizer")
+        if str(models.get(name, "") or "").strip()
+    ]
+
+
+def validate_model_env(policy: dict[str, Any], env: dict[str, str]) -> list[str]:
     missing: list[str] = []
-    for model in [models.get("eval", ""), models.get("optimizer", "")]:
-        key = required_key_for_model(str(model))
+    checked_codex = False
+    for model in _configured_models(policy):
+        if is_openai_codex_model(model):
+            if not checked_codex and not codex_auth_available(refresh_if_expiring=False):
+                missing.append("OpenAI-Codex OAuth credentials (run `hermes model`)")
+            checked_codex = True
+            continue
+        key = required_key_for_model(model)
         if key and not env.get(key) and key not in missing:
             missing.append(key)
     return missing
@@ -362,8 +380,8 @@ def run_evolution(repo_root: Path, policy: dict[str, Any], env: dict[str, str], 
     timeout = int(budget.get("timeout_seconds", 1700) or 1700)
     iterations = str(int(budget.get("iterations", 5) or 5))
     eval_source, dataset_path = resolve_eval_dataset_args(repo_root, target, eval_cfg)
-    eval_model = str(models.get("eval", "openai/gpt-5.4-mini"))
-    optimizer_model = str(models.get("optimizer", "openai/gpt-5.4-mini"))
+    eval_model = str(models.get("eval", "openai-codex/gpt-5.4-mini"))
+    optimizer_model = str(models.get("optimizer", "openai-codex/gpt-5.4-mini"))
 
     child_env = env.copy()
     child_env["HERMES_AGENT_REPO"] = str(target.profile_root)
@@ -501,7 +519,7 @@ def main(argv: list[str] | None = None) -> int:
 
     missing = validate_model_env(policy, env)
     if missing:
-        print(f"config-error: missing required environment key(s): {', '.join(missing)}", file=sys.stderr)
+        print(f"config-error: missing required model credential(s): {', '.join(missing)}", file=sys.stderr)
         return 2
 
     if args.dry_run:

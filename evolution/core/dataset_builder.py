@@ -12,10 +12,10 @@ import random
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
-
 import dspy
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.dspy_lm import make_dspy_lm
 
 
 @dataclass
@@ -197,7 +197,7 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model, num_retries=8, timeout=120)
+        lm = make_dspy_lm(self.config.judge_model, num_retries=8, timeout=120)
 
         with dspy.context(lm=lm):
             result = self.generator(
