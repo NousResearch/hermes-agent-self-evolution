@@ -2,6 +2,7 @@
 
 import json
 import sys
+from typing import cast
 
 from click.testing import CliRunner
 
@@ -15,6 +16,7 @@ from evolution.tools.evolve_tool_descriptions import (
     main,
     run_candidate_generation,
 )
+from evolution.tools.report_contract import validate_candidate_only_report_contract
 from evolution.tools.tool_description_eval import (
     ToolInventoryRecord,
     default_tool_selection_cases,
@@ -221,7 +223,11 @@ def test_load_inventory_from_json_accepts_candidate_report_shape(tmp_path):
     records = load_inventory_from_json(inventory_path)
 
     assert [record.name for record in records] == ["read_file", "search_files", "terminal"]
-    assert records[0].schema["parameters"]["properties"]["path"]["description"] == "Path to the file"
+    schema = cast(dict[str, object], records[0].schema)
+    parameters = cast(dict[str, object], schema["parameters"])
+    properties = cast(dict[str, object], parameters["properties"])
+    path_spec = cast(dict[str, str], properties["path"])
+    assert path_spec["description"] == "Path to the file"
 
 
 def test_load_inventory_from_json_accepts_empty_inventory_container(tmp_path):
@@ -244,6 +250,8 @@ def test_run_candidate_generation_writes_candidate_only_artifacts(tmp_path):
     assert result.diff_path.exists()
 
     report = json.loads(result.report_path.read_text())
+    contract_validation = validate_candidate_only_report_contract(report)
+    assert contract_validation.passed, contract_validation.errors
     assert report["phase"] == "2D"
     assert report["mode"] == "candidate-only"
     assert report["apply_ready"] is False

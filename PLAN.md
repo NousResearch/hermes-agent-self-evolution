@@ -443,7 +443,7 @@ Phase 2 closeout standardizes `candidate_only_report.json` as the review and aut
 - It may reject or approve a candidate set for review.
 - It must not modify active Hermes Agent tool schemas, registry entries, source files, or runtime config.
 - It must keep `apply_ready: false` and must not include an apply payload.
-- If `phase2d_gate.passed` is `false`, the CLI must exit non-zero so automation cannot mistake a failed gate for success.
+- If `phase2d_gate.passed` is `false`, the candidate-generation CLI must exit non-zero so automation cannot mistake a failed gate for success.
 
 Each Phase 2 candidate-only run writes four artifacts:
 
@@ -508,6 +508,16 @@ Warning separation rule:
 - `metrics.warnings` and `phase2d_gate.candidate_metrics.warning_count` are candidate-quality warnings only.
 - Optional inventory/import warnings, such as `tools.browser_dialog_tool` missing `websockets`, are reported under `inventory_metadata.import_warnings` with `classification: "optional_dependency_import_warning"` and `candidate_quality: false`.
 - This separation is a report contract, not suppression: operational inventory issues remain visible without polluting candidate-quality gate metrics.
+
+Lightweight CI/schema smoke check:
+
+```bash
+python -m evolution.tools.report_contract output/tool-description/<run-name>/candidate_only_report.json
+# or, after package install:
+hse-validate-tool-report output/tool-description/<run-name>/candidate_only_report.json
+```
+
+The smoke check validates the documented contract with no extra runtime dependencies. It checks required top-level fields, candidate-only/no-apply invariants, Phase 2D thresholds, warning-count consistency, `inventory_metadata` shape, and import-warning separation. It exits non-zero when the report contract is invalid, making it suitable for local smoke checks or future CI wiring.
 
 ### Phase 3: System Prompt Evolution
 

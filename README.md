@@ -103,7 +103,7 @@ Each run writes:
 | `metrics` | Candidate-quality metrics only: selection accuracy, wrong-tool avoidance, cue coverage, constraint pass rate, per-case results, and candidate-quality warnings. |
 | `candidates` | Baseline/candidate description pairs, normalized parameter descriptions, and `description_delta`. |
 | `phase_index_executed` | Phase markers included in the run, currently `["2A", "2B", "2C", "2D"]`. |
-| `phase2d_gate` | Formal pass/fail gate result. CLI exits non-zero when `phase2d_gate.passed` is `false`. |
+| `phase2d_gate` | Formal pass/fail gate result. The candidate-generation CLI exits non-zero when `phase2d_gate.passed` is `false`; the schema smoke check validates structure and can accept a structurally valid failed-gate report. |
 | `inventory_metadata` | Inventory/environment metadata, including import warnings that are **not** candidate-quality warnings. |
 | `artifacts` | Paths to `inventory.json`, `candidate_descriptions.json`, and `candidate.diff`. |
 
@@ -117,6 +117,14 @@ Candidate-quality warnings and environment/import warnings must stay separate:
 - `metrics.warnings` and `phase2d_gate.candidate_metrics.warning_count` count only candidate-quality issues.
 - Optional dependency import issues, such as `tools.browser_dialog_tool` missing `websockets`, are recorded under `inventory_metadata.import_warnings` with `candidate_quality: false`.
 - `inventory_metadata.candidate_quality_warnings_are_separate` must be `true` whenever inventory metadata is present.
+
+Run the lightweight schema smoke check before wiring reports into downstream automation:
+
+```bash
+python -m evolution.tools.report_contract output/tool-description/<run-name>/candidate_only_report.json
+# or, after package install:
+hse-validate-tool-report output/tool-description/<run-name>/candidate_only_report.json
+```
 
 ## Full Plan
 
