@@ -22,8 +22,9 @@ datasets/**/*.json
 !datasets/golden/*-phase1-validation-*-corrected/README.md
 !datasets/golden/*-phase1-validation-*-corrected/*.jsonl
 
-# Evolution snapshots
+# Evolution snapshots and generated reports
 snapshots/
+output/
 *.pkl
 
 # IDE
