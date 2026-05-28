@@ -37,9 +37,12 @@ def test_phase2_tool_description_gate_workflow_wires_generator_validator_and_45_
     assert "tests/tools/test_tool_description_eval.py" in run_blocks
     assert "tests/tools/test_evolve_tool_descriptions.py" in run_blocks
     assert "tests/tools/test_report_contract.py" in run_blocks
+    assert "tests/tools/test_heldout_tool_selection_review.py" in run_blocks
     assert "tests/tools/test_phase2_automation.py" in run_blocks
     assert "python -m evolution.tools.evolve_tool_descriptions" in run_blocks
     assert "python -m evolution.tools.report_contract" in run_blocks
+    assert "python -m evolution.tools.heldout_tool_selection_review" in run_blocks
+    assert "datasets/golden/tool-description/session_misfire_holdout.jsonl" in run_blocks
     assert "default_tool_selection_cases" in run_blocks
     assert "min_case_count" in run_blocks
     assert "45" in run_blocks

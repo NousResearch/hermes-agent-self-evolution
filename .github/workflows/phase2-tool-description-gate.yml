@@ -49,6 +49,7 @@ jobs:
             tests/tools/test_tool_description_eval.py \
             tests/tools/test_evolve_tool_descriptions.py \
             tests/tools/test_report_contract.py \
+            tests/tools/test_heldout_tool_selection_review.py \
             tests/tools/test_phase2_automation.py \
             -q
 
@@ -101,6 +102,14 @@ jobs:
         run: |
           python -m evolution.tools.report_contract \
             output/tool-description/phase2-ci-gate/run/candidate_only_report.json
+
+      - name: Run SessionDB holdout review smoke
+        run: |
+          python -m evolution.tools.heldout_tool_selection_review \
+            --inventory-json output/tool-description/phase2-ci-gate/run/inventory.json \
+            --candidates-json output/tool-description/phase2-ci-gate/run/candidate_descriptions.json \
+            --cases-jsonl datasets/golden/tool-description/session_misfire_holdout.jsonl \
+            --output-json output/tool-description/phase2-ci-gate/run/heldout_review.json
 
       - name: Assert Phase 2D gate result is automation-safe
         run: |
