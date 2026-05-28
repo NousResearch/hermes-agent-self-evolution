@@ -27,6 +27,15 @@ def test_phase2_tool_description_gate_workflow_wires_generator_validator_and_45_
     assert isinstance(workflow, dict)
 
     run_blocks = _workflow_run_blocks(workflow)
+    triggers = workflow.get("on", workflow.get(True))
+    assert isinstance(triggers, dict)
+    for trigger_name in ("pull_request", "push"):
+        trigger = triggers.get(trigger_name)
+        assert isinstance(trigger, dict)
+        paths = trigger.get("paths")
+        assert isinstance(paths, list)
+        assert "reports/phase2e_*" in paths
+
     permissions = workflow.get("permissions")
     assert isinstance(permissions, dict)
     assert permissions.get("contents") == "read"
@@ -39,6 +48,7 @@ def test_phase2_tool_description_gate_workflow_wires_generator_validator_and_45_
     assert "tests/tools/test_report_contract.py" in run_blocks
     assert "tests/tools/test_heldout_tool_selection_review.py" in run_blocks
     assert "tests/tools/test_expanded_holdout_decision.py" in run_blocks
+    assert "tests/tools/test_phase2_benchmark_gate_decision.py" in run_blocks
     assert "tests/tools/test_phase2_automation.py" in run_blocks
     assert "python -m evolution.tools.evolve_tool_descriptions" in run_blocks
     assert "python -m evolution.tools.report_contract" in run_blocks

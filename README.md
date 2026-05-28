@@ -166,6 +166,8 @@ hse-decide-tool-holdout \
 
 Current Phase 2E decision: the 45-case default gate plus the 9-case SessionDB holdout is sufficient for candidate-only Phase 2 closeout. A 100+ held-out quality slice is deferred until before any default-gate promotion, active tool-schema apply, or broader Phase 3/benchmark expansion requiring more lexical diversity. The committed decision artifacts are `reports/phase2e_expanded_holdout_decision.json` and `reports/phase2e_expanded_holdout_decision.md`.
 
+Phase 2E benchmark gate decision is recorded in `reports/phase2e_benchmark_gate_decision.json` and `reports/phase2e_benchmark_gate_decision.md`. TBLite/YC-Bench are deferred until Phase 3 execution or active apply because the current candidate-only closeout is already covered by the 45-case formal gate, 9-case SessionDB holdout, heldout review, and CI smoke. Benchmark gates remain required before Phase 3 execution, active tool-schema apply, default-gate promotion, or system-prompt evolution acceptance.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.

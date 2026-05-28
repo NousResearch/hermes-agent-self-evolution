@@ -6,6 +6,7 @@ on:
       - "evolution/tools/**"
       - "tests/tools/**"
       - "datasets/golden/tool-description/**"
+      - "reports/phase2e_*"
       - "README.md"
       - "PLAN.md"
       - "pyproject.toml"
@@ -16,6 +17,7 @@ on:
       - "evolution/tools/**"
       - "tests/tools/**"
       - "datasets/golden/tool-description/**"
+      - "reports/phase2e_*"
       - "README.md"
       - "PLAN.md"
       - "pyproject.toml"
@@ -51,6 +53,7 @@ jobs:
             tests/tools/test_report_contract.py \
             tests/tools/test_heldout_tool_selection_review.py \
             tests/tools/test_expanded_holdout_decision.py \
+            tests/tools/test_phase2_benchmark_gate_decision.py \
             tests/tools/test_phase2_automation.py \
             -q
 
