@@ -1,0 +1,121 @@
+{
+  "active_system_prompt_apply_approved": false,
+  "allowed_work": [
+    "document Phase 3 system-prompt evolution scope",
+    "define section-as-DSPy-parameter design boundaries",
+    "define behavioral evaluator acceptance criteria",
+    "record benchmark gate reactivation conditions",
+    "prepare a design-only Seed for later review"
+  ],
+  "apply_ready": false,
+  "benchmark_gate_reactivation": {
+    "blocking_for_design_only_plan": false,
+    "blocking_for_phase3_execution": true,
+    "deferred_benchmarks": [
+      "TBLite",
+      "YC-Bench"
+    ],
+    "required_before": [
+      "phase3_execution",
+      "system_prompt_evolution_acceptance",
+      "active_system_prompt_apply",
+      "default_gate_promotion"
+    ],
+    "source_decision": "reports/phase2e_benchmark_gate_decision.json"
+  },
+  "evolvable_sections": [
+    "DEFAULT_AGENT_IDENTITY",
+    "MEMORY_GUIDANCE",
+    "SESSION_SEARCH_GUIDANCE",
+    "SKILLS_GUIDANCE",
+    "PLATFORM_HINTS"
+  ],
+  "execution_started": false,
+  "goal": "Design Phase 3 system prompt evolution scope, acceptance criteria, and benchmark gate reactivation before any execution or active apply.",
+  "mode": "system-prompt-evolution-design-plan",
+  "non_evolvable_sections": [
+    "durable_user_or_private_memory",
+    "auto_generated_skills_index",
+    "project_context_files",
+    "canonical_identity_or_soul_artifacts",
+    "secrets_or_credentials",
+    "active_runtime_configuration"
+  ],
+  "out_of_scope": [
+    "running GEPA or DSPy optimization for system prompt sections",
+    "editing active Hermes Agent system prompt source",
+    "applying evolved prompt variants to active runtime configuration",
+    "changing canonical identity or SOUL artifacts",
+    "committing raw private session data"
+  ],
+  "phase": "3",
+  "phase2e_closeout_dependency": "reports/phase2e_human_review_checkpoint.json",
+  "plan_only": true,
+  "safety_invariants": {
+    "active_system_prompt_apply_approved": false,
+    "active_system_prompt_mutation": false,
+    "execution_started": false,
+    "plan_only": true,
+    "raw_private_session_data_committed": false,
+    "secrets_or_credentials_required": false
+  },
+  "source_authorization": "rec action GO",
+  "status": "planned_not_executed",
+  "acceptance_criteria": [
+    {
+      "id": "AC1_phase2_closeout_checkpoint_recorded",
+      "criterion": "Phase 3 design starts only after the Phase 2E human review checkpoint records Phase 2 closeout as complete.",
+      "status": "planned",
+      "verification": "Read reports/phase2e_human_review_checkpoint.json and verify phase2e_closeout_complete is true."
+    },
+    {
+      "id": "AC2_design_only_no_runtime_mutation",
+      "criterion": "This artifact defines a design boundary only; it does not execute optimization, mutate active prompts, or apply source/runtime changes.",
+      "status": "planned",
+      "verification": "Assert plan_only is true, execution_started is false, and active_system_prompt_apply_approved is false."
+    },
+    {
+      "id": "AC3_evolvable_sections_scoped",
+      "criterion": "Only the five intended system prompt sections are in scope for later section-as-DSPy-parameter design.",
+      "status": "planned",
+      "verification": "Compare evolvable_sections to DEFAULT_AGENT_IDENTITY, MEMORY_GUIDANCE, SESSION_SEARCH_GUIDANCE, SKILLS_GUIDANCE, and PLATFORM_HINTS."
+    },
+    {
+      "id": "AC4_private_or_generated_sections_excluded",
+      "criterion": "Private memory, generated skill indexes, project context files, identity/SOUL artifacts, credentials, and runtime configuration remain non-evolvable.",
+      "status": "planned",
+      "verification": "Verify non_evolvable_sections includes durable_user_or_private_memory, auto_generated_skills_index, project_context_files, and canonical_identity_or_soul_artifacts."
+    },
+    {
+      "id": "AC5_behavioral_evaluator_defined",
+      "criterion": "The future evaluator must cover tool-use discipline, memory/session-search behavior, skill loading, platform formatting, identity/safety, and prompt-cache compatibility.",
+      "status": "planned",
+      "verification": "Check the Seed evaluation_plan lists these evaluator dimensions before any Phase 3 execution."
+    },
+    {
+      "id": "AC6_benchmark_gate_reactivation_before_execution",
+      "criterion": "TBLite/YC-Bench remain non-blocking for this design-only plan but become blocking before Phase 3 execution or prompt acceptance/apply.",
+      "status": "planned",
+      "verification": "Verify benchmark_gate_reactivation.required_before includes phase3_execution, system_prompt_evolution_acceptance, active_system_prompt_apply, and default_gate_promotion."
+    },
+    {
+      "id": "AC7_human_approval_before_apply",
+      "criterion": "Any active system prompt/source apply must be separated into a later human-approved PR or patch.",
+      "status": "planned",
+      "verification": "Confirm active_system_prompt_apply_approved remains false and apply_ready remains false."
+    },
+    {
+      "id": "AC8_prompt_cache_and_identity_safety_preserved",
+      "criterion": "Future variants must preserve prompt-cache boundaries and identity/safety constraints; personality or safety drift is a reject condition.",
+      "status": "planned",
+      "verification": "Require explicit cache-boundary and identity-safety checks in the future execution Seed before optimization starts."
+    }
+  ],
+  "deliverables": [
+    "reports/phase3_system_prompt_evolution_plan.json",
+    "reports/phase3_system_prompt_evolution_plan.md",
+    "seeds/phase3_system_prompt_evolution_seed.yaml",
+    "PLAN.md",
+    "README.md"
+  ]
+}

@@ -544,6 +544,10 @@ The smoke check validates the documented contract with no extra runtime dependen
 
 **Prerequisite:** Phase 2 closeout passed — Phase 2D candidate-only report contract is green, Phase 2E closeout decisions are recorded, benchmark gating is validated or explicitly deferred with rationale, and GEPA/tool-description text mutations remain sensible under human review.
 
+**Current Phase 3 design status:** planned, not executed. The design boundary is recorded in `reports/phase3_system_prompt_evolution_plan.json` / `.md`, with the design-only Seed at `seeds/phase3_system_prompt_evolution_seed.yaml`. This Seed fixes the scope, acceptance criteria, non-evolvable sections, and benchmark reactivation conditions only; active system-prompt/source apply remains out of scope and must be handled by a later human-approved PR or patch.
+
+Before any Phase 3 execution, benchmark gates are reactivated before Phase 3 execution, system-prompt evolution acceptance, active system-prompt apply, or default-gate promotion. The current design-only plan does not run GEPA/DSPy optimization and does not mutate active Hermes Agent prompt source or runtime configuration.
+
 **Week 1 (Build):** Build section-as-DSPy-parameter wrapper for the 5 evolvable prompt sections. Build behavioral test suite generator. This is the riskiest tier so far — system prompt changes affect everything.
 
 **Week 2 (Run):** Generate behavioral test scenarios (~60-80 total across all sections). Run GEPA on each section independently first, then jointly. Run benchmarks after each optimization round.

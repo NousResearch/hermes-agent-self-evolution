@@ -35,6 +35,8 @@ def test_phase2_tool_description_gate_workflow_wires_generator_validator_and_45_
         paths = trigger.get("paths")
         assert isinstance(paths, list)
         assert "reports/phase2e_*" in paths
+        assert "reports/phase3_*" in paths
+        assert "seeds/**" in paths
 
     permissions = workflow.get("permissions")
     assert isinstance(permissions, dict)
@@ -50,6 +52,7 @@ def test_phase2_tool_description_gate_workflow_wires_generator_validator_and_45_
     assert "tests/tools/test_expanded_holdout_decision.py" in run_blocks
     assert "tests/tools/test_phase2_benchmark_gate_decision.py" in run_blocks
     assert "tests/tools/test_phase2_human_review_checkpoint.py" in run_blocks
+    assert "tests/tools/test_phase3_system_prompt_evolution_plan.py" in run_blocks
     assert "tests/tools/test_phase2_automation.py" in run_blocks
     assert "python -m evolution.tools.evolve_tool_descriptions" in run_blocks
     assert "python -m evolution.tools.report_contract" in run_blocks

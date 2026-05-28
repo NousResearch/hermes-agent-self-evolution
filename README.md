@@ -55,7 +55,7 @@ python -m evolution.skills.evolve_skill \
 |-------|--------|--------|--------|
 | **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
 | **Phase 2** | Tool descriptions | DSPy + GEPA | 🟡 Candidate-only gate/report contract implemented |
-| **Phase 3** | System prompt sections | DSPy + GEPA | 🔲 Planned |
+| **Phase 3** | System prompt sections | DSPy + GEPA | 🟡 Design plan/Seed recorded |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
 
@@ -169,6 +169,14 @@ Current Phase 2E decision: the 45-case default gate plus the 9-case SessionDB ho
 Phase 2E benchmark gate decision is recorded in `reports/phase2e_benchmark_gate_decision.json` and `reports/phase2e_benchmark_gate_decision.md`. TBLite/YC-Bench are deferred until Phase 3 execution or active apply because the current candidate-only closeout is already covered by the 45-case formal gate, 9-case SessionDB holdout, heldout review, and CI smoke. Benchmark gates remain required before Phase 3 execution, active tool-schema apply, default-gate promotion, or system-prompt evolution acceptance.
 
 Phase 2E human review checkpoint is recorded in `reports/phase2e_human_review_checkpoint.json` and `reports/phase2e_human_review_checkpoint.md`. Sunwoo authorized the checkpoint via `rec action GO`; active schema/source apply remains separate and requires a human-approved PR or patch.
+
+## Phase 3 System Prompt Evolution Design Plan
+
+Phase 3 system prompt evolution design plan artifacts are recorded in `reports/phase3_system_prompt_evolution_plan.json` and `reports/phase3_system_prompt_evolution_plan.md`, with the design-only Seed at `seeds/phase3_system_prompt_evolution_seed.yaml`.
+
+This is not an execution/apply Seed. It only fixes the scope, acceptance criteria, benchmark gate reactivation boundaries, and non-evolvable sections before any Phase 3 GEPA/DSPy run. Active system-prompt/source apply remains separate and requires a later human-approved PR or patch.
+
+Benchmark gates are not blocking this design-only plan, but TBLite/YC-Bench must be reactivated before Phase 3 execution, system-prompt evolution acceptance, active system-prompt apply, or default-gate promotion.
 
 ## Full Plan
 
