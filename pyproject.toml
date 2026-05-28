@@ -20,6 +20,7 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.0",
     "rich>=13.0",
+    "json-repair>=0.30",
 ]
 
 [project.optional-dependencies]
