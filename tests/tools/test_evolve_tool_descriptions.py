@@ -286,6 +286,11 @@ def test_cli_returns_nonzero_when_phase2d_gate_fails(tmp_path):
 
     assert result.exit_code != 0
     assert "Phase 2D gate failed" in result.output
+    assert "selection_accuracy 0.0000 < 0.7000" in result.output
+    assert "wrong_tool_avoidance 0.0000 < 0.7000" in result.output
+    assert str(output_dir / "candidate_only_report.json") in result.output
     report = json.loads((output_dir / "candidate_only_report.json").read_text())
     assert report["phase2d_gate"]["passed"] is False
     assert report["phase2d_gate"]["failed_checks"]
+    contract_validation = validate_candidate_only_report_contract(report)
+    assert contract_validation.passed, contract_validation.errors

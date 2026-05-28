@@ -122,6 +122,19 @@ def test_validate_candidate_only_report_contract_enforces_warning_separation():
     assert "inventory_metadata.import_warnings[0].candidate_quality must be false" in result.errors
 
 
+def test_validate_report_contract_cli_accepts_structurally_valid_failed_gate_report(tmp_path):
+    report_path = tmp_path / "candidate_only_report.json"
+    report = _valid_candidate_only_report()
+    report["phase2d_gate"]["passed"] = False
+    report["phase2d_gate"]["failed_checks"] = ["selection_accuracy 0.0000 < 0.7000"]
+    report_path.write_text(json.dumps(report))
+
+    result = CliRunner().invoke(main, [str(report_path)])
+
+    assert result.exit_code == 0
+    assert "candidate_only_report contract passed" in result.output
+
+
 def test_validate_report_contract_cli_returns_nonzero_for_invalid_report(tmp_path):
     report_path = tmp_path / "candidate_only_report.json"
     report = _valid_candidate_only_report()
@@ -133,3 +146,17 @@ def test_validate_report_contract_cli_returns_nonzero_for_invalid_report(tmp_pat
     assert result.exit_code != 0
     assert "candidate_only_report contract failed" in result.output
     assert "phase2d_gate.thresholds must match the Phase 2D default contract" in result.output
+
+
+def test_validate_report_contract_cli_returns_nonzero_for_failed_gate_without_failed_checks(tmp_path):
+    report_path = tmp_path / "candidate_only_report.json"
+    report = _valid_candidate_only_report()
+    report["phase2d_gate"]["passed"] = False
+    report["phase2d_gate"]["failed_checks"] = []
+    report_path.write_text(json.dumps(report))
+
+    result = CliRunner().invoke(main, [str(report_path)])
+
+    assert result.exit_code != 0
+    assert "candidate_only_report contract failed" in result.output
+    assert "phase2d_gate.failed_checks must be non-empty when passed is false" in result.output

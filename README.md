@@ -126,6 +126,8 @@ python -m evolution.tools.report_contract output/tool-description/<run-name>/can
 hse-validate-tool-report output/tool-description/<run-name>/candidate_only_report.json
 ```
 
+Phase 2E automation readiness is covered by `.github/workflows/phase2-tool-description-gate.yml`. The workflow runs the focused Phase 2 tool-description tests, builds a deterministic synthetic inventory from the 45-case default golden set, runs the candidate-only Phase 2D generator, validates `candidate_only_report.json`, and asserts `phase2d_gate.passed == true`, `min_case_count == 45`, and `apply_ready == false`. Negative tests also prove that the generator CLI exits non-zero on failed gates while structurally valid failed-gate reports remain readable by the report-contract smoke checker.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.

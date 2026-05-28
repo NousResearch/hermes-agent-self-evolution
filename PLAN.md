@@ -504,8 +504,8 @@ Current Phase 2D closeout status:
 
 Phase 2E closeout candidates before moving to Phase 3:
 
-1. **Automation/CI wiring:** add a lightweight CI or local automation path that runs the candidate-only generator, validates `candidate_only_report.json`, and fails visibly on a failed Phase 2D gate.
-2. **Negative contract coverage:** add or keep tests proving failed gates exit non-zero in the candidate-generation CLI while structurally valid failed reports remain readable by the schema smoke checker.
+1. **Automation/CI wiring:** `.github/workflows/phase2-tool-description-gate.yml` now provides a lightweight CI path that runs the candidate-only generator against a deterministic 45-case synthetic inventory, validates `candidate_only_report.json`, and fails visibly on a failed Phase 2D gate.
+2. **Negative contract coverage:** tests prove failed gates exit non-zero in the candidate-generation CLI while structurally valid failed reports remain readable by the schema smoke checker; invalid report contracts still return non-zero from the report-contract CLI.
 3. **SessionDB mining spike:** mine real Hermes session history for tool-selection misfires and classify whether they should become new golden cases, separate holdout cases, or documentation-only lessons.
 4. **Expanded holdout decision:** decide whether the 45-case set is enough for Phase 2 closeout or whether a 100+ case held-out quality slice is needed before claiming Phase 2 complete.
 5. **Candidate improvement review:** compare baseline and candidate descriptions on held-out cases, verify no per-tool regression, and keep the ≤500 char description constraint.
