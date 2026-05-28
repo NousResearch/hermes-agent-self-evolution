@@ -38,6 +38,7 @@ Repository = "https://github.com/NousResearch/hermes-agent-self-evolution"
 [project.scripts]
 hse-validate-tool-report = "evolution.tools.report_contract:main"
 hse-review-tool-holdout = "evolution.tools.heldout_tool_selection_review:main"
+hse-decide-tool-holdout = "evolution.tools.expanded_holdout_decision:main"
 
 [tool.setuptools.packages.find]
 include = ["evolution*"]

@@ -148,6 +148,24 @@ hse-review-tool-holdout \
 
 The review remains candidate-only and fails non-zero on aggregate primary-metric regression (`selection_accuracy` / `wrong_tool_avoidance`), any per-tool pass-rate regression, missing holdout tool coverage, inventory/candidate artifact mismatch, or candidate description/parameter length violations. It reports secondary metric deltas, including cue coverage, for human review.
 
+Record the expanded holdout decision after the heldout review:
+
+```bash
+python -m evolution.tools.expanded_holdout_decision \
+    --holdout-jsonl datasets/golden/tool-description/session_misfire_holdout.jsonl \
+    --heldout-review-json output/tool-description/<run-name>/heldout_review.json \
+    --output-json reports/phase2e_expanded_holdout_decision.json \
+    --output-md reports/phase2e_expanded_holdout_decision.md
+# or, after package install:
+hse-decide-tool-holdout \
+    --holdout-jsonl datasets/golden/tool-description/session_misfire_holdout.jsonl \
+    --heldout-review-json output/tool-description/<run-name>/heldout_review.json \
+    --output-json reports/phase2e_expanded_holdout_decision.json \
+    --output-md reports/phase2e_expanded_holdout_decision.md
+```
+
+Current Phase 2E decision: the 45-case default gate plus the 9-case SessionDB holdout is sufficient for candidate-only Phase 2 closeout. A 100+ held-out quality slice is deferred until before any default-gate promotion, active tool-schema apply, or broader Phase 3/benchmark expansion requiring more lexical diversity. The committed decision artifacts are `reports/phase2e_expanded_holdout_decision.json` and `reports/phase2e_expanded_holdout_decision.md`.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.

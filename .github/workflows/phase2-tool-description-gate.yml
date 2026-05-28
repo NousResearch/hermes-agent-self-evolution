@@ -50,6 +50,7 @@ jobs:
             tests/tools/test_evolve_tool_descriptions.py \
             tests/tools/test_report_contract.py \
             tests/tools/test_heldout_tool_selection_review.py \
+            tests/tools/test_expanded_holdout_decision.py \
             tests/tools/test_phase2_automation.py \
             -q
 
@@ -111,6 +112,14 @@ jobs:
             --cases-jsonl datasets/golden/tool-description/session_misfire_holdout.jsonl \
             --output-json output/tool-description/phase2-ci-gate/run/heldout_review.json
 
+      - name: Record expanded holdout decision smoke
+        run: |
+          python -m evolution.tools.expanded_holdout_decision \
+            --holdout-jsonl datasets/golden/tool-description/session_misfire_holdout.jsonl \
+            --heldout-review-json output/tool-description/phase2-ci-gate/run/heldout_review.json \
+            --output-json output/tool-description/phase2-ci-gate/run/expanded_holdout_decision.json \
+            --output-md output/tool-description/phase2-ci-gate/run/expanded_holdout_decision.md
+
       - name: Assert Phase 2D gate result is automation-safe
         run: |
           python - <<'PY'
@@ -118,7 +127,9 @@ jobs:
           from pathlib import Path
 
           report_path = Path("output/tool-description/phase2-ci-gate/run/candidate_only_report.json")
+          decision_path = Path("output/tool-description/phase2-ci-gate/run/expanded_holdout_decision.json")
           report = json.loads(report_path.read_text())
+          decision = json.loads(decision_path.read_text())
           gate = report["phase2d_gate"]
 
           assert report["mode"] == "candidate-only"
@@ -128,5 +139,12 @@ jobs:
           assert gate["passed"] is True, gate["failed_checks"]
           assert gate["failed_checks"] == []
           assert report["inventory_metadata"]["candidate_quality_warnings_are_separate"] is True
+          assert decision["mode"] == "expanded-holdout-decision"
+          assert decision["candidate_only"] is True
+          assert decision["apply_ready"] is False
+          assert decision["combined_slice"]["case_count"] == 54
+          assert decision["requires_100_case_slice_before_phase2_closeout"] is False
+          assert decision["coverage_delta"]["new_expected_tools_from_holdout"] == []
+          assert decision["coverage_delta"]["new_confusion_pairs_from_holdout"] == []
           print(f"Phase 2D 45-case gate passed and contract is automation-safe: {report_path}")
           PY
