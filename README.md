@@ -128,6 +128,8 @@ hse-validate-tool-report output/tool-description/<run-name>/candidate_only_repor
 
 Phase 2E automation readiness is covered by `.github/workflows/phase2-tool-description-gate.yml`. The workflow runs the focused Phase 2 tool-description tests, builds a deterministic synthetic inventory from the 45-case default golden set, runs the candidate-only Phase 2D generator, validates `candidate_only_report.json`, and asserts `phase2d_gate.passed == true`, `min_case_count == 45`, and `apply_ready == false`. Negative tests also prove that the generator CLI exits non-zero on failed gates while structurally valid failed-gate reports remain readable by the report-contract smoke checker.
 
+Phase 2E SessionDB mining is treated as a privacy-safe holdout source, not an automatic golden-set mutation. A local scan of Hermes `state.db` showed recurring shell/file-operation anti-patterns (`tail`/`head`/`cat`, `grep`/`rg`/`find`, `ls`/`tree`, `sed`/`awk`, and echo/heredoc writing), but these are mostly already represented by the 45-case default gate and raw session prompts can contain private context. The committed fixture `datasets/golden/tool-description/session_misfire_holdout.jsonl` therefore contains generalized, sanitized cases derived from those patterns. Use `load_tool_selection_cases(...)` to evaluate that holdout explicitly; the default Phase 2D gate remains the stable 45-case set.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.

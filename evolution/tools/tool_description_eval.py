@@ -513,6 +513,52 @@ def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
     )
 
 
+def load_tool_selection_cases(path: str | Path) -> tuple[ToolSelectionCase, ...]:
+    """Load tool-selection cases from a JSONL fixture.
+
+    Tuple-valued dataclass fields are serialized as JSON arrays.  This loader
+    restores the in-memory representation so external holdout fixtures can be
+    evaluated without weakening the deterministic default Phase 2D gate.
+    """
+
+    fixture_path = Path(path)
+    cases: list[ToolSelectionCase] = []
+    with fixture_path.open() as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            raw = json.loads(line)
+            try:
+                user_request = raw["user_request"]
+                expected_tool = raw["expected_tool"]
+            except KeyError as exc:
+                raise ValueError(f"Missing required tool-selection case field at {fixture_path}:{line_number}") from exc
+            if not isinstance(user_request, str) or not isinstance(expected_tool, str):
+                raise ValueError(f"Invalid tool-selection case field type at {fixture_path}:{line_number}")
+            cases.append(
+                ToolSelectionCase(
+                    user_request=user_request,
+                    expected_tool=expected_tool,
+                    confusing_tools=_string_tuple(raw.get("confusing_tools", ()), fixture_path, line_number),
+                    required_cues=_string_tuple(raw.get("required_cues", ()), fixture_path, line_number),
+                    required_arguments=_string_tuple(raw.get("required_arguments", ()), fixture_path, line_number),
+                    category=str(raw.get("category", "tool-selection")),
+                )
+            )
+    return tuple(cases)
+
+
+def _string_tuple(value: object, fixture_path: Path, line_number: int) -> tuple[str, ...]:
+    if value in (None, ""):
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Sequence):
+        if all(isinstance(item, str) for item in value):
+            return tuple(value)
+    raise ValueError(f"Expected a string or string array at {fixture_path}:{line_number}")
+
+
 def evaluate_candidate_descriptions(
     candidates: Sequence[ToolDescriptionCandidate],
     cases: Sequence[ToolSelectionCase],

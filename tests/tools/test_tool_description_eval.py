@@ -14,6 +14,7 @@ from evolution.tools.tool_description_eval import (
     default_tool_selection_cases,
     evaluate_candidate_descriptions,
     evaluate_cross_tool_gate,
+    load_tool_selection_cases,
     write_default_golden_cases,
 )
 
@@ -424,3 +425,56 @@ def test_committed_default_golden_cases_match_generated_defaults():
     generated_rows = [json.loads(json.dumps(asdict(case), sort_keys=True)) for case in default_tool_selection_cases()]
 
     assert fixture_rows == generated_rows
+
+
+def test_tool_selection_case_jsonl_loader_round_trips_default_fixture(tmp_path):
+    output = tmp_path / "tool_selection.jsonl"
+    write_default_golden_cases(output)
+
+    loaded_cases = load_tool_selection_cases(output)
+
+    assert loaded_cases == default_tool_selection_cases()
+    assert isinstance(loaded_cases[0].confusing_tools, tuple)
+    assert isinstance(loaded_cases[0].required_cues, tuple)
+    assert isinstance(loaded_cases[0].required_arguments, tuple)
+
+
+def test_sessiondb_misfire_holdout_is_privacy_safe_and_separate_from_default_gate():
+    fixture_path = (
+        Path(__file__).parents[2]
+        / "datasets"
+        / "golden"
+        / "tool-description"
+        / "session_misfire_holdout.jsonl"
+    )
+    holdout_cases = load_tool_selection_cases(fixture_path)
+    default_cases = default_tool_selection_cases()
+    default_requests = {case.user_request for case in default_cases}
+
+    assert len(default_cases) == 45
+    assert len(holdout_cases) >= 8
+    assert {case.user_request for case in holdout_cases}.isdisjoint(default_requests)
+    assert len({case.category for case in holdout_cases}) == len(holdout_cases)
+    assert {case.expected_tool for case in holdout_cases} >= {
+        "patch",
+        "process",
+        "read_file",
+        "search_files",
+        "terminal",
+        "write_file",
+    }
+
+    blocked_fragments = (
+        "/Users/",
+        "~/.hermes",
+        "state.db",
+        "call_",
+        "token",
+        "password",
+        "api key",
+        "private key",
+    )
+    for case in holdout_cases:
+        serialized = json.dumps(asdict(case)).lower()
+        assert not any(fragment.lower() in serialized for fragment in blocked_fragments)
+        assert case.category.startswith("sessiondb-misfire-")
