@@ -482,16 +482,35 @@ Each Phase 2 candidate-only run writes four artifacts:
 | `per_tool_regressions` | Per expected-tool pass-rate comparison: `expected_tool`, case/pass counts, pass rates, `delta`, and `passed`. |
 | `failed_checks` | Human-readable gate failures; empty only when the gate passes. |
 
-Default Phase 2D thresholds for the current 30-case golden set:
+Default Phase 2D thresholds for the expanded 45-case golden set:
 
 ```json
 {
-  "min_case_count": 30,
+  "min_case_count": 45,
   "min_selection_accuracy": 0.7,
   "min_wrong_tool_avoidance": 0.7,
   "max_per_tool_regression": 0.0
 }
 ```
+
+Current Phase 2D closeout status:
+
+- The default tool-selection golden set has been expanded from 30 to 45 cases.
+- The committed `datasets/golden/tool-description/tool_selection.jsonl` fixture is generated from `default_tool_selection_cases()` and must remain exactly synchronized with that generation logic.
+- `CrossToolGateThresholds.min_case_count` and the lightweight `report_contract` default threshold are both 45.
+- Candidate-only semantics remain mandatory: no active Hermes Agent tool schemas, registry entries, source files, or runtime configuration may be modified by a Phase 2D run; `apply_ready` must remain `false` and reports must not contain an apply payload.
+- Candidate-quality warnings and inventory/import warnings remain separate contract surfaces.
+- A local candidate-only smoke run against the Hermes tool inventory must pass `hse-validate-tool-report` before any downstream automation consumes the report.
+
+Phase 2E closeout candidates before moving to Phase 3:
+
+1. **Automation/CI wiring:** add a lightweight CI or local automation path that runs the candidate-only generator, validates `candidate_only_report.json`, and fails visibly on a failed Phase 2D gate.
+2. **Negative contract coverage:** add or keep tests proving failed gates exit non-zero in the candidate-generation CLI while structurally valid failed reports remain readable by the schema smoke checker.
+3. **SessionDB mining spike:** mine real Hermes session history for tool-selection misfires and classify whether they should become new golden cases, separate holdout cases, or documentation-only lessons.
+4. **Expanded holdout decision:** decide whether the 45-case set is enough for Phase 2 closeout or whether a 100+ case held-out quality slice is needed before claiming Phase 2 complete.
+5. **Candidate improvement review:** compare baseline and candidate descriptions on held-out cases, verify no per-tool regression, and keep the ≤500 char description constraint.
+6. **Benchmark gate decision:** run or explicitly defer benchmark gates such as TBLite/YC-Bench; Phase 3 execution should not begin until this decision is recorded.
+7. **Human review checkpoint:** review candidate diffs and metrics as candidate-only artifacts; any actual Hermes Agent schema/source application remains a separate human-approved PR or patch.
 
 `inventory_metadata` contract:
 
@@ -523,7 +542,7 @@ The smoke check validates the documented contract with no extra runtime dependen
 
 **Goal:** Optimize the sections of the system prompt that guide agent behavior.
 
-**Prerequisite:** Phase 2 gate passed — benchmark gating validated, GEPA producing sensible text mutations.
+**Prerequisite:** Phase 2 closeout passed — Phase 2D candidate-only report contract is green, Phase 2E closeout decisions are recorded, benchmark gating is validated or explicitly deferred with rationale, and GEPA/tool-description text mutations remain sensible under human review.
 
 **Week 1 (Build):** Build section-as-DSPy-parameter wrapper for the 5 evolvable prompt sections. Build behavioral test suite generator. This is the riskiest tier so far — system prompt changes affect everything.
 
