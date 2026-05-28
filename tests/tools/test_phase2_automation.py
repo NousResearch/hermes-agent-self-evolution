@@ -49,6 +49,7 @@ def test_phase2_tool_description_gate_workflow_wires_generator_validator_and_45_
     assert "tests/tools/test_heldout_tool_selection_review.py" in run_blocks
     assert "tests/tools/test_expanded_holdout_decision.py" in run_blocks
     assert "tests/tools/test_phase2_benchmark_gate_decision.py" in run_blocks
+    assert "tests/tools/test_phase2_human_review_checkpoint.py" in run_blocks
     assert "tests/tools/test_phase2_automation.py" in run_blocks
     assert "python -m evolution.tools.evolve_tool_descriptions" in run_blocks
     assert "python -m evolution.tools.report_contract" in run_blocks
