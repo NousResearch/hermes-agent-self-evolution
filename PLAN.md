@@ -548,6 +548,10 @@ The smoke check validates the documented contract with no extra runtime dependen
 
 Before any Phase 3 execution, benchmark gates are reactivated before Phase 3 execution, system-prompt evolution acceptance, active system-prompt apply, or default-gate promotion. The current design-only plan does not run GEPA/DSPy optimization and does not mutate active Hermes Agent prompt source or runtime configuration.
 
+**Current Phase 3 execution Seed draft status:** drafted, not executed. The draft is recorded in `seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml`, with supporting artifacts at `reports/phase3_execution_seed_draft.json` / `.md`. It fixes benchmark command templates, rollback boundary, and human approval gate before execution while keeping `run_gepa_now`, `run_dspy_now`, `execution_started`, `mutate_active_system_prompt_now`, and `apply_ready` false.
+
+The execution draft is still candidate-only preparation: benchmark command templates must be backed by runnable TBLite/YC-Bench adapters and pass before execution; rollback boundary handles must be created/read back before apply; and separate human approval is required before optimizer execution, benchmark execution, prompt-source edits, active runtime apply, or default-gate promotion.
+
 **Week 1 (Build):** Build section-as-DSPy-parameter wrapper for the 5 evolvable prompt sections. Build behavioral test suite generator. This is the riskiest tier so far — system prompt changes affect everything.
 
 **Week 2 (Run):** Generate behavioral test scenarios (~60-80 total across all sections). Run GEPA on each section independently first, then jointly. Run benchmarks after each optimization round.

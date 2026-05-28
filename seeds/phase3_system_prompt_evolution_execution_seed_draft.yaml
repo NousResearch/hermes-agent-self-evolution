@@ -1,0 +1,149 @@
+phase: "3"
+task_type: analysis
+execution_mode: execution_seed_draft_only
+status: drafted_not_executed
+goal: "Draft the future Phase 3 system prompt evolution execution contract without running GEPA/DSPy or applying prompt/source changes."
+source_design_plan: "reports/phase3_system_prompt_evolution_plan.json"
+source_design_seed: "seeds/phase3_system_prompt_evolution_seed.yaml"
+phase2e_closeout_dependency: "reports/phase2e_human_review_checkpoint.json"
+source_authorization: "rec action GO"
+
+execution_started: false
+run_gepa_now: false
+run_dspy_now: false
+mutate_active_system_prompt_now: false
+active_system_prompt_apply_approved: false
+apply_ready: false
+requires_human_approval_before_execution: true
+requires_human_approval_before_apply: true
+
+future_execution_scope:
+  mode: candidate_only_system_prompt_evolution
+  output_root: "output/phase3-system-prompt/<run-id>/"
+  baseline_prompt_artifact: "output/phase3-system-prompt/<run-id>/baseline_system_prompt.json"
+  candidate_prompt_artifact: "output/phase3-system-prompt/<run-id>/candidate_system_prompt.json"
+  report_artifact: "output/phase3-system-prompt/<run-id>/candidate_only_report.json"
+  allowed_result: "candidate report and review packet only; no active prompt/source apply"
+
+evolvable_sections:
+  - DEFAULT_AGENT_IDENTITY
+  - MEMORY_GUIDANCE
+  - SESSION_SEARCH_GUIDANCE
+  - SKILLS_GUIDANCE
+  - PLATFORM_HINTS
+
+non_evolvable_sections:
+  - durable_user_or_private_memory
+  - auto_generated_skills_index
+  - project_context_files
+  - canonical_identity_or_soul_artifacts
+  - secrets_or_credentials
+  - active_runtime_configuration
+
+benchmark_gate:
+  status: required_not_run
+  required_before_execution: true
+  blocking_for_execution: true
+  source_decision: "reports/phase2e_benchmark_gate_decision.json"
+  deferred_benchmarks:
+    - TBLite
+    - YC-Bench
+  required_before:
+    - phase3_execution
+    - system_prompt_evolution_acceptance
+    - active_system_prompt_apply
+    - default_gate_promotion
+  command_policy: "Templates only; benchmark adapters/results must be verified before any Phase 3 execution."
+  command_templates:
+    - name: TBLite
+      status: draft_not_executed
+      must_pass_before: phase3_execution
+      command: "python -m evolution.benchmarks.run_tblite --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json --output-json output/phase3-system-prompt/<run-id>/benchmarks/tblite.json"
+      output_json: "output/phase3-system-prompt/<run-id>/benchmarks/tblite.json"
+      pass_condition: no_regression_against_baseline
+    - name: YC-Bench
+      status: draft_not_executed
+      must_pass_before: phase3_execution
+      command: "python -m evolution.benchmarks.run_yc_bench --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json --preset fast_test --output-json output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json"
+      output_json: "output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json"
+      pass_condition: coherence_score_holds_or_improves
+
+rollback_boundary:
+  checkpoint_required_before_candidate_generation: true
+  baseline_prompt_snapshot_required: true
+  baseline_prompt_checksum_required: true
+  candidate_output_dir: "output/phase3-system-prompt/<run-id>/"
+  rollback_handle_required_before_apply: true
+  active_runtime_rollback_required_before_apply: true
+  allowed_write_roots_before_approval:
+    - "output/phase3-system-prompt/<run-id>/"
+    - "reports/phase3_execution_seed_draft.json"
+    - "reports/phase3_execution_seed_draft.md"
+  prohibited_targets_before_separate_approval:
+    - "~/.hermes/SOUL.md"
+    - "~/.hermes/config.yaml"
+    - "~/.hermes/hermes-agent/agent/prompt_builder.py"
+    - "~/.hermes/skills/"
+    - "~/.hermes/memories/"
+    - "~/.hermes/profiles/"
+
+human_approval_gate:
+  planning_authorized: "rec action GO"
+  execution_approved: false
+  active_apply_approved: false
+  separate_approval_required_before:
+    - "running GEPA/DSPy optimization"
+    - "running TBLite/YC-Bench benchmark commands"
+    - "editing Hermes Agent prompt source"
+    - "applying evolved prompt to active runtime"
+    - "default-gate promotion"
+
+evaluation_plan:
+  behavioral_dimensions:
+    - tool_use_discipline
+    - memory_usage
+    - session_search_triggering
+    - skill_loading
+    - platform_formatting
+    - identity_and_safety
+    - prompt_cache_compatibility
+  benchmark_dimensions:
+    - TBLite_regression_check
+    - YC_Bench_coherence_check
+  required_pre_execution_contracts:
+    - benchmark_gate_commands_resolved_and_runnable
+    - rollback_handle_created_and_read_back
+    - baseline_prompt_snapshot_checksum_recorded
+    - human_approval_recorded_for_execution
+    - active_apply_still_false
+  human_review_required: true
+
+acceptance_criteria:
+  - id: AC1_execution_seed_is_draft_only
+    criterion: "The execution Seed draft records future execution shape without starting GEPA/DSPy or mutating active prompt/source files."
+    status: drafted
+    verification: "Assert execution_started, run_gepa_now, run_dspy_now, mutate_active_system_prompt_now, and apply_ready remain false."
+  - id: AC2_design_plan_dependency_preserved
+    criterion: "The draft inherits the Phase 3 design plan's evolvable and non-evolvable scope."
+    status: drafted
+    verification: "Compare scope against reports/phase3_system_prompt_evolution_plan.json and seeds/phase3_system_prompt_evolution_seed.yaml."
+  - id: AC3_benchmark_commands_fixed_before_execution
+    criterion: "TBLite and YC-Bench command templates are recorded as blocking prerequisites before execution."
+    status: drafted
+    verification: "Check benchmark_gate.command_templates and required_before boundaries."
+  - id: AC4_rollback_boundary_fixed_before_apply
+    criterion: "Baseline snapshot, checksum, output root, rollback handle, and prohibited active targets are explicit before apply."
+    status: drafted
+    verification: "Read rollback_boundary and verify active prompt/source/config/skills targets remain prohibited before separate approval."
+  - id: AC5_human_approval_gate_blocks_execution_and_apply
+    criterion: "Planning authorization does not approve optimizer execution, benchmark execution, source edits, active apply, or gate promotion."
+    status: drafted
+    verification: "Assert execution_approved and active_apply_approved are false and separate approval boundaries are listed."
+
+deliverables:
+  - seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml
+  - reports/phase3_execution_seed_draft.json
+  - reports/phase3_execution_seed_draft.md
+  - tests/tools/test_phase3_execution_seed_draft.py
+  - PLAN.md
+  - README.md

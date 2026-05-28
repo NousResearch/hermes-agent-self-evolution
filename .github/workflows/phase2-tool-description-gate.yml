@@ -60,6 +60,7 @@ jobs:
             tests/tools/test_phase2_benchmark_gate_decision.py \
             tests/tools/test_phase2_human_review_checkpoint.py \
             tests/tools/test_phase3_system_prompt_evolution_plan.py \
+            tests/tools/test_phase3_execution_seed_draft.py \
             tests/tools/test_phase2_automation.py \
             -q
 

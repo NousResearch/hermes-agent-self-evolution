@@ -55,7 +55,7 @@ python -m evolution.skills.evolve_skill \
 |-------|--------|--------|--------|
 | **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
 | **Phase 2** | Tool descriptions | DSPy + GEPA | 🟡 Candidate-only gate/report contract implemented |
-| **Phase 3** | System prompt sections | DSPy + GEPA | 🟡 Design plan/Seed recorded |
+| **Phase 3** | System prompt sections | DSPy + GEPA | 🟡 Design + execution Seed draft recorded |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
 
@@ -177,6 +177,10 @@ Phase 3 system prompt evolution design plan artifacts are recorded in `reports/p
 This is not an execution/apply Seed. It only fixes the scope, acceptance criteria, benchmark gate reactivation boundaries, and non-evolvable sections before any Phase 3 GEPA/DSPy run. Active system-prompt/source apply remains separate and requires a later human-approved PR or patch.
 
 Benchmark gates are not blocking this design-only plan, but TBLite/YC-Bench must be reactivated before Phase 3 execution, system-prompt evolution acceptance, active system-prompt apply, or default-gate promotion.
+
+Phase 3 execution Seed draft artifacts are recorded in `reports/phase3_execution_seed_draft.json` and `reports/phase3_execution_seed_draft.md`, with the draft Seed at `seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml`. The draft fixes benchmark command templates, rollback boundary, and human approval gate before execution. It still does not run GEPA/DSPy, does not run benchmark commands, and does not approve active system-prompt/source apply.
+
+The execution draft keeps benchmark command templates and human approval gate explicit so future Phase 3 execution can fail closed: TBLite/YC-Bench adapters must be runnable and passing, rollback handles must be available, and separate human approval must be recorded before optimizer execution or active apply.
 
 ## Full Plan
 
