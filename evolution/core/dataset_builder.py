@@ -7,6 +7,7 @@ C) Golden sets — hand-curated JSONL files
 """
 
 import json
+from json_repair import repair_json
 import random
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -134,13 +135,24 @@ class SyntheticDatasetBuilder:
 
         # Parse the generated test cases
         try:
-            cases_raw = json.loads(result.test_cases)
+            try:
+                cases_raw = json.loads(result.test_cases)
+            except json.JSONDecodeError:
+                # Fallback: some judge / dataset-LM models (Qwen3.6, etc.) emit
+                # JSON with malformed escapes despite the schema constraint.
+                # json_repair tolerates and corrects common Qwen-class issues
+                # (invalid \escape, unquoted keys, trailing commas).
+                cases_raw = json.loads(repair_json(result.test_cases))
         except json.JSONDecodeError:
             # Try to extract JSON from the response
             import re
             match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
             if match:
-                cases_raw = json.loads(match.group())
+                try:
+                    cases_raw = json.loads(match.group())
+                except json.JSONDecodeError:
+                    # Same fallback as the primary parse — see note above.
+                    cases_raw = json.loads(repair_json(match.group()))
             else:
                 raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
 
