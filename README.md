@@ -107,8 +107,8 @@ Each run writes:
 | `inventory_metadata` | Inventory/environment metadata, including import warnings that are **not** candidate-quality warnings. |
 | `artifacts` | Paths to `inventory.json`, `candidate_descriptions.json`, and `candidate.diff`. |
 
-The formal Phase 2D gate is fixed to the 30-case golden set unless callers explicitly supply another case set. Default thresholds are:
-- `min_case_count = 30`
+The formal Phase 2D gate now uses the expanded 45-case golden set unless callers explicitly supply another case set. Default thresholds are:
+- `min_case_count = 45`
 - `min_selection_accuracy = 0.70`
 - `min_wrong_tool_avoidance = 0.70`
 - `max_per_tool_regression = 0.0`

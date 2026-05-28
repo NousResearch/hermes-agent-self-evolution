@@ -1,5 +1,9 @@
 """Tests for Phase 2B tool-description evaluation scaffold."""
 
+import json
+from dataclasses import asdict
+from pathlib import Path
+
 from evolution.tools.tool_description_eval import (
     CrossToolGateThresholds,
     ToolDescriptionCandidate,
@@ -17,8 +21,10 @@ from evolution.tools.tool_description_eval import (
 def test_default_tool_selection_cases_cover_confusing_tool_pairs():
     cases = default_tool_selection_cases()
 
-    assert len(cases) >= 30
+    assert len(cases) >= 45
     assert all(case.expected_tool for case in cases)
+    assert len({case.category for case in cases}) == len(cases)
+    assert len({case.user_request for case in cases}) == len(cases)
     assert any("read_file" == case.expected_tool and "terminal" in case.confusing_tools for case in cases)
     assert any("search_files" == case.expected_tool and "terminal" in case.confusing_tools for case in cases)
     assert any("browser" in case.category for case in cases)
@@ -26,7 +32,7 @@ def test_default_tool_selection_cases_cover_confusing_tool_pairs():
     assert any("session_search" == case.expected_tool and "browser_navigate" in case.confusing_tools for case in cases)
 
 
-def test_default_tool_selection_cases_cover_phase2b_plus_focus_set():
+def test_default_tool_selection_cases_cover_phase2_quality_slice():
     cases = default_tool_selection_cases()
     expected_tools = {case.expected_tool for case in cases}
     confusion_pairs = {
@@ -36,27 +42,46 @@ def test_default_tool_selection_cases_cover_phase2b_plus_focus_set():
     }
 
     for expected_tool in (
-        "browser_navigate",
-        "browser_snapshot",
+        "browser_back",
         "browser_click",
         "browser_console",
+        "browser_get_images",
+        "browser_navigate",
+        "browser_press",
+        "browser_scroll",
+        "browser_snapshot",
+        "browser_type",
         "browser_vision",
+        "clarify",
         "computer_use",
         "execute_code",
-        "terminal",
+        "image_generate",
+        "process",
         "session_search",
+        "terminal",
+        "text_to_speech",
+        "video_analyze",
     ):
         assert expected_tool in expected_tools
 
     for pair in (
+        ("browser_back", "browser_navigate"),
+        ("browser_console", "execute_code"),
+        ("browser_get_images", "browser_vision"),
+        ("browser_press", "browser_click"),
+        ("browser_scroll", "computer_use"),
+        ("browser_type", "computer_use"),
+        ("computer_use", "browser_snapshot"),
         ("computer_use", "browser_click"),
         ("execute_code", "terminal"),
-        ("terminal", "execute_code"),
+        ("image_generate", "vision_analyze"),
+        ("process", "terminal"),
         ("session_search", "browser_navigate"),
         ("session_search", "web_search"),
-        ("browser_navigate", "web_search"),
-        ("browser_click", "computer_use"),
-        ("browser_snapshot", "computer_use"),
+        ("terminal", "execute_code"),
+        ("terminal", "process"),
+        ("text_to_speech", "send_message"),
+        ("video_analyze", "vision_analyze"),
     ):
         assert pair in confusion_pairs
 
@@ -391,3 +416,11 @@ def test_write_default_golden_cases_creates_jsonl(tmp_path):
     assert written == output
     assert len(lines) == len(default_tool_selection_cases())
     assert '"expected_tool": "read_file"' in lines[0]
+
+
+def test_committed_default_golden_cases_match_generated_defaults():
+    fixture_path = Path(__file__).parents[2] / "datasets" / "golden" / "tool-description" / "tool_selection.jsonl"
+    fixture_rows = [json.loads(line) for line in fixture_path.read_text().splitlines() if line.strip()]
+    generated_rows = [json.loads(json.dumps(asdict(case), sort_keys=True)) for case in default_tool_selection_cases()]
+
+    assert fixture_rows == generated_rows

@@ -20,7 +20,7 @@ def _valid_candidate_only_report() -> dict:
         "metrics": {
             "candidate_only": True,
             "apply_ready": False,
-            "case_count": 30,
+            "case_count": 45,
             "selection_accuracy": 0.8,
             "wrong_tool_avoidance": 0.8,
             "argument_cue_coverage": 1.0,
@@ -44,13 +44,13 @@ def _valid_candidate_only_report() -> dict:
             "candidate_only": True,
             "passed": True,
             "thresholds": {
-                "min_case_count": 30,
+                "min_case_count": 45,
                 "min_selection_accuracy": 0.7,
                 "min_wrong_tool_avoidance": 0.7,
                 "max_per_tool_regression": 0.0,
             },
             "baseline_metrics": {
-                "case_count": 30,
+                "case_count": 45,
                 "selection_accuracy": 0.5,
                 "wrong_tool_avoidance": 0.5,
                 "argument_cue_coverage": 0.7,
@@ -58,7 +58,7 @@ def _valid_candidate_only_report() -> dict:
                 "warning_count": 2,
             },
             "candidate_metrics": {
-                "case_count": 30,
+                "case_count": 45,
                 "selection_accuracy": 0.8,
                 "wrong_tool_avoidance": 0.8,
                 "argument_cue_coverage": 1.0,

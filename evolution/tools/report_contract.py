@@ -69,7 +69,7 @@ REQUIRED_IMPORT_WARNING_FIELDS = frozenset(
 )
 APPLY_PAYLOAD_KEYS = frozenset({"patch", "patches", "write_paths", "apply_payload", "source_updates"})
 DEFAULT_PHASE2D_THRESHOLDS = {
-    "min_case_count": 30,
+    "min_case_count": 45,
     "min_selection_accuracy": 0.7,
     "min_wrong_tool_avoidance": 0.7,
     "max_per_tool_regression": 0.0,

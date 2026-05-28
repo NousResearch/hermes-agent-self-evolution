@@ -257,11 +257,11 @@ def test_run_candidate_generation_writes_candidate_only_artifacts(tmp_path):
     assert report["apply_ready"] is False
     assert "patch" not in report
     assert "write_paths" not in report
-    assert report["metrics"]["case_count"] >= 30
+    assert report["metrics"]["case_count"] >= 45
     assert report["phase2d_gate"]["phase"] == "2D"
     assert report["phase_index_executed"] == ["2A", "2B", "2C", "2D"]
-    assert report["phase2d_gate"]["thresholds"]["min_case_count"] == 30
-    assert report["phase2d_gate"]["candidate_metrics"]["case_count"] >= 30
+    assert report["phase2d_gate"]["thresholds"]["min_case_count"] == 45
+    assert report["phase2d_gate"]["candidate_metrics"]["case_count"] >= 45
     assert report["phase2d_gate"]["candidate_only"] is True
     assert "read_file" in result.diff_path.read_text()
 

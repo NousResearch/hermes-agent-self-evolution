@@ -142,7 +142,7 @@ class CrossToolGateThresholds:
     review-worthy, but it never creates an apply payload.
     """
 
-    min_case_count: int = 30
+    min_case_count: int = 45
     min_selection_accuracy: float = 0.70
     min_wrong_tool_avoidance: float = 0.70
     max_per_tool_regression: float = 0.0
@@ -404,6 +404,111 @@ def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
             confusing_tools=("computer_use", "vision_analyze", "browser_click"),
             required_cues=("browser", "accessible", "structure", "snapshot", "click"),
             category="browser-snapshot-vs-computer-use",
+        ),
+        ToolSelectionCase(
+            user_request="Type the supplied email into the focused input field from the current browser snapshot.",
+            expected_tool="browser_type",
+            confusing_tools=("computer_use", "browser_click", "terminal"),
+            required_cues=("type", "input", "field", "browser", "text", "ref"),
+            category="browser-type-vs-desktop",
+        ),
+        ToolSelectionCase(
+            user_request="Press Enter in the browser page to submit the focused search form.",
+            expected_tool="browser_press",
+            confusing_tools=("browser_click", "computer_use", "terminal"),
+            required_cues=("press", "enter", "key", "browser", "focused"),
+            category="browser-press-vs-click",
+        ),
+        ToolSelectionCase(
+            user_request="Scroll the current browser page down to reveal more content before taking another snapshot.",
+            expected_tool="browser_scroll",
+            confusing_tools=("computer_use", "browser_snapshot", "terminal"),
+            required_cues=("scroll", "browser", "page", "down", "reveal"),
+            category="browser-scroll-vs-desktop",
+        ),
+        ToolSelectionCase(
+            user_request="Go back to the previous page in the already-open browser session.",
+            expected_tool="browser_back",
+            confusing_tools=("browser_navigate", "session_search", "terminal"),
+            required_cues=("back", "previous", "browser", "history"),
+            category="browser-back-vs-navigate",
+        ),
+        ToolSelectionCase(
+            user_request="List all image URLs and alt text from the current browser page.",
+            expected_tool="browser_get_images",
+            confusing_tools=("browser_vision", "vision_analyze", "browser_snapshot"),
+            required_cues=("images", "urls", "alt", "page", "browser"),
+            category="browser-images-vs-vision",
+        ),
+        ToolSelectionCase(
+            user_request="Evaluate document.title in the current page context using the browser console.",
+            expected_tool="browser_console",
+            confusing_tools=("execute_code", "terminal", "browser_snapshot"),
+            required_cues=("console", "javascript", "document", "page", "evaluate"),
+            category="browser-console-expression-vs-python",
+        ),
+        ToolSelectionCase(
+            user_request="Capture the native macOS Finder window in the background and identify available controls.",
+            expected_tool="computer_use",
+            confusing_tools=("browser_snapshot", "browser_vision", "terminal"),
+            required_cues=("macos", "native", "background", "capture", "window"),
+            category="computer-use-capture-vs-browser-snapshot",
+        ),
+        ToolSelectionCase(
+            user_request="Start the local development server as a tracked background process.",
+            expected_tool="terminal",
+            confusing_tools=("process", "execute_code", "cronjob"),
+            required_cues=("server", "background", "process", "start", "terminal"),
+            category="terminal-background-vs-process",
+        ),
+        ToolSelectionCase(
+            user_request="Poll the tracked background test process for new output without starting another command.",
+            expected_tool="process",
+            confusing_tools=("terminal", "execute_code", "cronjob"),
+            required_cues=("poll", "background", "process", "output", "session"),
+            category="process-poll-vs-terminal",
+        ),
+        ToolSelectionCase(
+            user_request="Process these CSV rows with Python data structures and print a compact JSON summary.",
+            expected_tool="execute_code",
+            confusing_tools=("terminal", "read_file"),
+            required_cues=("python", "process", "csv", "json", "summary"),
+            category="execute-code-data-reduction-vs-terminal",
+        ),
+        ToolSelectionCase(
+            user_request="Scroll forward inside the previously found conversation window around message 12345.",
+            expected_tool="session_search",
+            confusing_tools=("search_files", "memory", "terminal"),
+            required_cues=("session", "scroll", "conversation", "message", "window"),
+            category="session-search-scroll-vs-file-search",
+        ),
+        ToolSelectionCase(
+            user_request="Ask me to choose between two deployment targets before taking the irreversible action.",
+            expected_tool="clarify",
+            confusing_tools=("terminal", "todo", "send_message"),
+            required_cues=("ask", "choose", "clarification", "before", "decision"),
+            category="clarify-vs-guessing-action",
+        ),
+        ToolSelectionCase(
+            user_request="Generate a square illustration of the proposed architecture from this prompt.",
+            expected_tool="image_generate",
+            confusing_tools=("vision_analyze", "browser_vision", "write_file"),
+            required_cues=("generate", "image", "illustration", "prompt", "square"),
+            category="image-generation-vs-vision-analysis",
+        ),
+        ToolSelectionCase(
+            user_request="Convert this final announcement text into an audio voice memo.",
+            expected_tool="text_to_speech",
+            confusing_tools=("send_message", "write_file", "terminal"),
+            required_cues=("audio", "voice", "speech", "text", "memo"),
+            category="tts-vs-message-send",
+        ),
+        ToolSelectionCase(
+            user_request="Analyze the local MP4 clip and summarize what happens in the video.",
+            expected_tool="video_analyze",
+            confusing_tools=("vision_analyze", "browser_vision", "read_file"),
+            required_cues=("video", "mp4", "clip", "analyze", "summarize"),
+            category="video-analysis-vs-image-analysis",
         ),
     )
 
