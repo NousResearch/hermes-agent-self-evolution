@@ -139,6 +139,10 @@ def run_fixture_benchmark(
         "output_constraints": {
             "allowed_root": ALLOWED_OUTPUT_ROOT,
             "suffix": ALLOWED_OUTPUT_SUFFIX,
+            "fresh_output_required": True,
+            "symlink_output_allowed": False,
+            "hardlink_output_allowed": False,
+            "input_output_overlap_allowed": False,
         },
     }
     if preset is not None:
@@ -296,6 +300,14 @@ def _validate_output_json_path(output_path: Path) -> None:
 
 
 def _validate_distinct_output_path(output_path: Path, input_paths: Sequence[Path]) -> None:
+    if output_path.is_symlink():
+        raise ValueError(f"output-json must not be a symlink: {output_path}")
+    if output_path.exists():
+        for input_path in input_paths:
+            if output_path.samefile(input_path):
+                raise ValueError(f"output-json must not overwrite input artifact: {input_path}")
+        raise ValueError(f"output-json must not already exist: {output_path}")
+
     output_resolved = output_path.resolve()
     for input_path in input_paths:
         if output_resolved == input_path.resolve():

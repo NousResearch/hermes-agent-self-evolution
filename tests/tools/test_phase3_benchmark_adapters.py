@@ -12,8 +12,10 @@ import sys
 import urllib.request
 from pathlib import Path
 
+import pytest
 import yaml
 
+from evolution.benchmarks.contract import run_fixture_benchmark
 from evolution.benchmarks.run_tblite import main as tblite_main
 from evolution.benchmarks.run_yc_bench import main as yc_bench_main
 
@@ -139,6 +141,10 @@ def _assert_common_report_contract(
     assert isinstance(output_constraints, dict)
     assert output_constraints["allowed_root"] == "output/phase3-system-prompt/"
     assert output_constraints["suffix"] == ".json"
+    assert output_constraints["fresh_output_required"] is True
+    assert output_constraints["symlink_output_allowed"] is False
+    assert output_constraints["hardlink_output_allowed"] is False
+    assert output_constraints["input_output_overlap_allowed"] is False
     assert output_json.suffix == ".json"
     assert output_json.resolve().is_relative_to(OUTPUT_ROOT.resolve())
 
@@ -291,6 +297,88 @@ def test_adapter_rejects_resolved_output_path_traversal() -> None:
     assert not output_path.resolve().exists()
 
 
+def test_adapter_rejects_preexisting_output_json(tmp_path: Path) -> None:
+    output_json = _phase3_output_json(tmp_path, "tblite.json")
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+    output_json.write_text("existing report must stay unchanged\n")
+
+    try:
+        completed = _run_adapter("evolution.benchmarks.run_tblite", output_json, TBLITE_CASES)
+
+        assert completed.returncode != 0
+        assert "output-json must not already exist" in completed.stderr
+        assert "Traceback" not in completed.stderr
+        assert output_json.read_text() == "existing report must stay unchanged\n"
+    finally:
+        _cleanup_phase3_test_output(output_json)
+
+
+def test_adapter_rejects_symlink_output_json(tmp_path: Path) -> None:
+    output_json = _phase3_output_json(tmp_path, "tblite.json")
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+    symlink_target = output_json.parent / "target.json"
+    symlink_target.write_text("symlink target must stay unchanged\n")
+    output_json.symlink_to(symlink_target)
+
+    try:
+        completed = _run_adapter("evolution.benchmarks.run_tblite", output_json, TBLITE_CASES)
+
+        assert completed.returncode != 0
+        assert "output-json must not be a symlink" in completed.stderr
+        assert "Traceback" not in completed.stderr
+        assert symlink_target.read_text() == "symlink target must stay unchanged\n"
+    finally:
+        _cleanup_phase3_test_output(output_json)
+
+
+def test_adapter_rejects_hardlinked_output_json(tmp_path: Path) -> None:
+    output_json = _phase3_output_json(tmp_path, "tblite.json")
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+    outside_target = REPO_ROOT / "output" / "phase3-adapter-hardlink-target.json"
+    outside_target.parent.mkdir(parents=True, exist_ok=True)
+    outside_target.write_text("hardlink target must stay unchanged\n")
+
+    try:
+        os.link(outside_target, output_json)
+        completed = _run_adapter("evolution.benchmarks.run_tblite", output_json, TBLITE_CASES)
+
+        assert completed.returncode != 0
+        assert "output-json must not already exist" in completed.stderr
+        assert "Traceback" not in completed.stderr
+        assert outside_target.read_text() == "hardlink target must stay unchanged\n"
+    finally:
+        output_json.unlink(missing_ok=True)
+        outside_target.unlink(missing_ok=True)
+        _cleanup_phase3_test_output(output_json)
+
+
+def test_adapter_rejects_hardlinked_input_output_overlap(tmp_path: Path) -> None:
+    output_json = _phase3_output_json(tmp_path, "tblite.json")
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+    baseline_prompt = tmp_path / "baseline_system_prompt.json"
+    candidate_prompt = tmp_path / "candidate_system_prompt.json"
+    baseline_prompt.write_text(BASELINE_PROMPT.read_text())
+    candidate_prompt.write_text(CANDIDATE_PROMPT.read_text())
+    before = baseline_prompt.read_text()
+
+    try:
+        os.link(baseline_prompt, output_json)
+        with pytest.raises(ValueError, match="output-json must not overwrite input artifact"):
+            run_fixture_benchmark(
+                benchmark="TBLite",
+                pass_condition="no_regression_against_baseline",
+                baseline_prompt=baseline_prompt,
+                candidate_prompt=candidate_prompt,
+                fixtures_jsonl=TBLITE_CASES,
+                output_json=output_json,
+                dry_run=True,
+            )
+        assert baseline_prompt.read_text() == before
+    finally:
+        output_json.unlink(missing_ok=True)
+        _cleanup_phase3_test_output(output_json)
+
+
 def test_adapter_main_paths_do_not_perform_network_or_subprocess_calls(monkeypatch, tmp_path: Path) -> None:
     def blocked_external_call(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("external call attempted during dry-run fixture benchmark")
@@ -334,6 +422,10 @@ def test_phase3_execution_seed_docs_and_ci_wire_benchmark_adapter_contract() -> 
             "allowed_root": "output/phase3-system-prompt/",
             "suffix": ".json",
             "path_traversal": "resolved_path_must_remain_under_allowed_root",
+            "fresh_output_required": True,
+            "symlink_output_allowed": False,
+            "hardlink_output_allowed": False,
+            "input_output_overlap_allowed": False,
         }
         assert adapter_contract["external_call_guard"] == {
             "strategy": "pytest monkeypatch blocks socket, urllib.request.urlopen, subprocess.run/Popen, and os.system during in-process adapter main calls",
@@ -354,7 +446,8 @@ def test_phase3_execution_seed_docs_and_ci_wire_benchmark_adapter_contract() -> 
     assert "python -m evolution.benchmarks.run_tblite" in readme
     assert "python -m evolution.benchmarks.run_yc_bench" in readme
     assert "read-only dry-run fixture" in readme
-    assert "`--output-json` must resolve to a `.json` file under `output/phase3-system-prompt/`" in readme
+    assert "`--output-json` to resolve to a fresh `.json` file under `output/phase3-system-prompt/`" in readme
+    assert "reject pre-existing, symlinked, hardlinked, and input-overlapping output targets" in readme
     assert "monkeypatch network/external-process APIs" in readme
     assert "Phase 3 benchmark adapters" in plan
     assert "dry-run fixture contract" in plan

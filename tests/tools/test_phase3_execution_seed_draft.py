@@ -116,6 +116,10 @@ def test_phase3_execution_seed_draft_fixes_benchmark_command_contract_before_exe
         "allowed_root": "output/phase3-system-prompt/",
         "suffix": ".json",
         "path_traversal": "resolved_path_must_remain_under_allowed_root",
+        "fresh_output_required": True,
+        "symlink_output_allowed": False,
+        "hardlink_output_allowed": False,
+        "input_output_overlap_allowed": False,
     }
     assert adapter_contract["external_call_guard"] == {
         "strategy": "pytest monkeypatch blocks socket, urllib.request.urlopen, subprocess.run/Popen, and os.system during in-process adapter main calls",

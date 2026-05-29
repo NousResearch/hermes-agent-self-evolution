@@ -790,7 +790,7 @@ python -m evolution.benchmarks.run_tblite --dry-run ...
 python -m evolution.benchmarks.run_yc_bench --preset fast_test --dry-run ...
 ```
 
-Current status is a **dry-run fixture contract** only. The adapters are read-only, make no external calls, write only `.json` reports under `output/phase3-system-prompt/`, reject path traversal outside that root, and keep `apply_ready=false`. Tests monkeypatch network and external-process APIs (`socket`, `urllib.request.urlopen`, `subprocess.run`/`Popen`, and `os.system`) during in-process adapter main calls so fixture-mode external calls fail visibly. This locks the command-line/report schema before Phase 3 execution; real benchmark results are still required before optimizer acceptance, active apply, or default-gate promotion.
+Current status is a **dry-run fixture contract** only. The adapters are read-only, make no external calls, write only fresh `.json` reports under `output/phase3-system-prompt/`, reject path traversal outside that root, reject pre-existing/symlinked/hardlinked/input-overlapping output targets, and keep `apply_ready=false`. Tests monkeypatch network and external-process APIs (`socket`, `urllib.request.urlopen`, `subprocess.run`/`Popen`, and `os.system`) during in-process adapter main calls so fixture-mode external calls fail visibly. This locks the command-line/report schema before Phase 3 execution; real benchmark results are still required before optimizer acceptance, active apply, or default-gate promotion.
 
 ---
 

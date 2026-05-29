@@ -215,7 +215,7 @@ python -m evolution.benchmarks.run_yc_bench \
     --dry-run
 ```
 
-Real benchmark execution remains deferred. The current adapter contract is a fixture-backed runnable smoke boundary that future Phase 3 execution must replace or supplement with real TBLite/YC-Bench results before optimizer acceptance, active apply, or default-gate promotion. The contract is hardened by tests that reject non-`.json` output paths, reject output paths outside `output/phase3-system-prompt/`, reject resolved path traversal, and monkeypatch network/external-process APIs during in-process adapter main calls.
+Real benchmark execution remains deferred. The current adapter contract is a fixture-backed runnable smoke boundary that future Phase 3 execution must replace or supplement with real TBLite/YC-Bench results before optimizer acceptance, active apply, or default-gate promotion. The contract is hardened by tests that require `--output-json` to resolve to a fresh `.json` file under `output/phase3-system-prompt/`, reject non-`.json` output paths, reject output paths outside that root, reject resolved path traversal, reject pre-existing, symlinked, hardlinked, and input-overlapping output targets, and monkeypatch network/external-process APIs during in-process adapter main calls.
 
 The execution draft keeps benchmark command templates and human approval gate explicit so future Phase 3 execution can fail closed: TBLite/YC-Bench adapters must be runnable and passing, rollback handles must be available, and separate human approval must be recorded before optimizer execution or active apply.
 

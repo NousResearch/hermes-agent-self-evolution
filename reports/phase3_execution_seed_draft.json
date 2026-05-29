@@ -124,7 +124,11 @@
       "output_json_constraints": {
         "allowed_root": "output/phase3-system-prompt/",
         "suffix": ".json",
-        "path_traversal": "resolved_path_must_remain_under_allowed_root"
+        "path_traversal": "resolved_path_must_remain_under_allowed_root",
+        "fresh_output_required": true,
+        "symlink_output_allowed": false,
+        "hardlink_output_allowed": false,
+        "input_output_overlap_allowed": false
       },
       "external_call_guard": {
         "strategy": "pytest monkeypatch blocks socket, urllib.request.urlopen, subprocess.run/Popen, and os.system during in-process adapter main calls",
