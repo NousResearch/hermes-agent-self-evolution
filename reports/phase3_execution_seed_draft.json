@@ -39,25 +39,77 @@
       "active_system_prompt_apply",
       "default_gate_promotion"
     ],
-    "command_policy": "Templates only; benchmark adapters/results must be verified before any Phase 3 execution.",
+    "command_policy": "Templates plus verified read-only dry-run fixture adapters; real benchmark results remain required before any Phase 3 execution.",
     "command_templates": [
       {
         "name": "TBLite",
-        "status": "draft_not_executed",
+        "status": "dry_run_adapter_contract_verified",
         "must_pass_before": "phase3_execution",
-        "command": "python -m evolution.benchmarks.run_tblite --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json --output-json output/phase3-system-prompt/<run-id>/benchmarks/tblite.json",
+        "module": "evolution.benchmarks.run_tblite",
+        "command": "python -m evolution.benchmarks.run_tblite --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl --output-json output/phase3-system-prompt/<run-id>/benchmarks/tblite.json --dry-run",
         "output_json": "output/phase3-system-prompt/<run-id>/benchmarks/tblite.json",
         "pass_condition": "no_regression_against_baseline"
       },
       {
         "name": "YC-Bench",
-        "status": "draft_not_executed",
+        "status": "dry_run_adapter_contract_verified",
         "must_pass_before": "phase3_execution",
-        "command": "python -m evolution.benchmarks.run_yc_bench --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json --preset fast_test --output-json output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json",
+        "module": "evolution.benchmarks.run_yc_bench",
+        "command": "python -m evolution.benchmarks.run_yc_bench --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl --preset fast_test --output-json output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json --dry-run",
         "output_json": "output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json",
         "pass_condition": "coherence_score_holds_or_improves"
       }
-    ]
+    ],
+    "adapter_contract": {
+      "status": "dry_run_fixture_contract_verified",
+      "read_only": true,
+      "dry_run_required": true,
+      "external_calls_allowed": false,
+      "active_prompt_or_source_apply_allowed": false,
+      "verified_by": "tests/tools/test_phase3_benchmark_adapters.py",
+      "output_schema_required_fields": [
+        "benchmark",
+        "adapter_version",
+        "mode",
+        "dry_run",
+        "candidate_only",
+        "read_only",
+        "external_calls_performed",
+        "apply_ready",
+        "pass_condition",
+        "passed",
+        "failed_checks",
+        "prompt_artifacts",
+        "fixture_cases",
+        "metrics",
+        "cases",
+        "artifacts",
+        "write_targets"
+      ],
+      "adapters": [
+        {
+          "name": "TBLite",
+          "module": "evolution.benchmarks.run_tblite",
+          "pass_condition": "no_regression_against_baseline",
+          "fixture_baseline_prompt": "datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json",
+          "fixture_candidate_prompt": "datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json",
+          "fixtures_jsonl": "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+          "fixture_output_json": "output/phase3-system-prompt/dry-run/benchmarks/tblite.json",
+          "fixture_command": "python -m evolution.benchmarks.run_tblite --baseline-prompt datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json --candidate-prompt datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl --output-json output/phase3-system-prompt/dry-run/benchmarks/tblite.json --dry-run"
+        },
+        {
+          "name": "YC-Bench",
+          "module": "evolution.benchmarks.run_yc_bench",
+          "preset": "fast_test",
+          "pass_condition": "coherence_score_holds_or_improves",
+          "fixture_baseline_prompt": "datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json",
+          "fixture_candidate_prompt": "datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json",
+          "fixtures_jsonl": "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+          "fixture_output_json": "output/phase3-system-prompt/dry-run/benchmarks/yc_bench.json",
+          "fixture_command": "python -m evolution.benchmarks.run_yc_bench --baseline-prompt datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json --candidate-prompt datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl --preset fast_test --output-json output/phase3-system-prompt/dry-run/benchmarks/yc_bench.json --dry-run"
+        }
+      ]
+    }
   },
   "rollback_boundary": {
     "checkpoint_required_before_candidate_generation": true,
@@ -98,6 +150,16 @@
     "reports/phase3_execution_seed_draft.md",
     "tests/tools/test_phase3_execution_seed_draft.py",
     "PLAN.md",
-    "README.md"
+    "README.md",
+    "evolution/benchmarks/contract.py",
+    "evolution/benchmarks/run_tblite.py",
+    "evolution/benchmarks/run_yc_bench.py",
+    "tests/tools/test_phase3_benchmark_adapters.py",
+    "datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json",
+    "datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json",
+    "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+    "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+    ".gitignore",
+    ".github/workflows/phase2-tool-description-gate.yml"
   ]
 }

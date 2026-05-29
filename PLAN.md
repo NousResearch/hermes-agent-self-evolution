@@ -771,6 +771,17 @@ Best Candidate → PR with full metrics
 
 **Key principle:** Benchmarks are GATES, not fitness functions. The fitness function is task-specific (did the skill/tool/prompt do its job better?). Benchmarks ensure the improvement didn't break something else. A variant that improves skill quality by 20% but drops TBLite by 5% is REJECTED.
 
+### Phase 3 benchmark adapters
+
+The Phase 3 execution draft now has runnable TBLite/YC-Bench adapter entrypoints:
+
+```bash
+python -m evolution.benchmarks.run_tblite --dry-run ...
+python -m evolution.benchmarks.run_yc_bench --preset fast_test --dry-run ...
+```
+
+Current status is a **dry-run fixture contract** only. The adapters are read-only, make no external calls, write only the requested JSON report, and keep `apply_ready=false`. This locks the command-line/report schema before Phase 3 execution; real benchmark results are still required before optimizer acceptance, active apply, or default-gate promotion.
+
 ---
 
 ## Constraints & Guardrails

@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - "evolution/tools/**"
+      - "evolution/benchmarks/**"
       - "tests/tools/**"
       - "datasets/golden/tool-description/**"
+      - "datasets/golden/benchmarks/**"
       - "reports/phase2e_*"
       - "reports/phase3_*"
       - "seeds/**"
@@ -17,8 +19,10 @@ on:
     branches: [main]
     paths:
       - "evolution/tools/**"
+      - "evolution/benchmarks/**"
       - "tests/tools/**"
       - "datasets/golden/tool-description/**"
+      - "datasets/golden/benchmarks/**"
       - "reports/phase2e_*"
       - "reports/phase3_*"
       - "seeds/**"
@@ -61,6 +65,7 @@ jobs:
             tests/tools/test_phase2_human_review_checkpoint.py \
             tests/tools/test_phase3_system_prompt_evolution_plan.py \
             tests/tools/test_phase3_execution_seed_draft.py \
+            tests/tools/test_phase3_benchmark_adapters.py \
             tests/tools/test_phase2_automation.py \
             -q
 

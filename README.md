@@ -178,7 +178,30 @@ This is not an execution/apply Seed. It only fixes the scope, acceptance criteri
 
 Benchmark gates are not blocking this design-only plan, but TBLite/YC-Bench must be reactivated before Phase 3 execution, system-prompt evolution acceptance, active system-prompt apply, or default-gate promotion.
 
-Phase 3 execution Seed draft artifacts are recorded in `reports/phase3_execution_seed_draft.json` and `reports/phase3_execution_seed_draft.md`, with the draft Seed at `seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml`. The draft fixes benchmark command templates, rollback boundary, and human approval gate before execution. It still does not run GEPA/DSPy, does not run benchmark commands, and does not approve active system-prompt/source apply.
+Phase 3 execution Seed draft artifacts are recorded in `reports/phase3_execution_seed_draft.json` and `reports/phase3_execution_seed_draft.md`, with the draft Seed at `seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml`. The draft fixes benchmark command templates, rollback boundary, and human approval gate before execution. It still does not run GEPA/DSPy, does not run real benchmark commands, and does not approve active system-prompt/source apply.
+
+## Phase 3 Benchmark Adapter Contract
+
+The TBLite/YC-Bench command templates now resolve to runnable **read-only dry-run fixture** adapters. These commands validate prompt artifacts and committed fixtures, write only the requested JSON report, make no external calls, and keep `apply_ready=false`.
+
+```bash
+python -m evolution.benchmarks.run_tblite \
+    --baseline-prompt datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json \
+    --candidate-prompt datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json \
+    --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl \
+    --output-json output/phase3-system-prompt/dry-run/benchmarks/tblite.json \
+    --dry-run
+
+python -m evolution.benchmarks.run_yc_bench \
+    --baseline-prompt datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json \
+    --candidate-prompt datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json \
+    --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl \
+    --preset fast_test \
+    --output-json output/phase3-system-prompt/dry-run/benchmarks/yc_bench.json \
+    --dry-run
+```
+
+Real benchmark execution remains deferred. The current adapter contract is a fixture-backed runnable smoke boundary that future Phase 3 execution must replace or supplement with real TBLite/YC-Bench results before optimizer acceptance, active apply, or default-gate promotion.
 
 The execution draft keeps benchmark command templates and human approval gate explicit so future Phase 3 execution can fail closed: TBLite/YC-Bench adapters must be runnable and passing, rollback handles must be available, and separate human approval must be recorded before optimizer execution or active apply.
 

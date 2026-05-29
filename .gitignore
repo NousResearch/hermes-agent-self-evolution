@@ -18,6 +18,10 @@ datasets/**/*.json
 !datasets/golden/skill-fixtures.json
 !datasets/golden/tool-description/
 !datasets/golden/tool-description/*.jsonl
+!datasets/golden/benchmarks/
+!datasets/golden/benchmarks/**/
+!datasets/golden/benchmarks/**/*.json
+!datasets/golden/benchmarks/**/*.jsonl
 !datasets/golden/*-phase1-validation-*-corrected/
 !datasets/golden/*-phase1-validation-*-corrected/README.md
 !datasets/golden/*-phase1-validation-*-corrected/*.jsonl

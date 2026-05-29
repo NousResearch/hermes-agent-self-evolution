@@ -88,16 +88,30 @@ def test_phase3_execution_seed_draft_fixes_benchmark_command_contract_before_exe
     command_names = {command["name"] for command in benchmark_gate["command_templates"]}
     assert command_names == EXPECTED_BENCHMARKS
     for command in benchmark_gate["command_templates"]:
-        assert command["status"] == "draft_not_executed"
+        assert command["status"] == "dry_run_adapter_contract_verified"
         assert command["must_pass_before"] == "phase3_execution"
+        assert command["module"] in {
+            "evolution.benchmarks.run_tblite",
+            "evolution.benchmarks.run_yc_bench",
+        }
         assert "python -m evolution.benchmarks" in command["command"]
         assert "--baseline-prompt" in command["command"]
         assert "--candidate-prompt" in command["command"]
+        assert "--fixtures-jsonl" in command["command"]
+        assert "--dry-run" in command["command"]
         assert command["output_json"].startswith("output/phase3-system-prompt/")
         assert command["pass_condition"] in {
             "no_regression_against_baseline",
             "coherence_score_holds_or_improves",
         }
+
+    adapter_contract = benchmark_gate["adapter_contract"]
+    assert adapter_contract["status"] == "dry_run_fixture_contract_verified"
+    assert adapter_contract["read_only"] is True
+    assert adapter_contract["dry_run_required"] is True
+    assert adapter_contract["external_calls_allowed"] is False
+    assert adapter_contract["active_prompt_or_source_apply_allowed"] is False
+    assert adapter_contract["verified_by"] == "tests/tools/test_phase3_benchmark_adapters.py"
 
 
 def test_phase3_execution_seed_draft_records_rollback_and_human_approval_gates():
