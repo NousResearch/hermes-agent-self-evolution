@@ -36,11 +36,12 @@ output/phase3-system-prompt/<run-id>/
 
 Expected future artifacts include:
 
-- `baseline_system_prompt.json`
-- `candidate_system_prompt.json`
-- `candidate_only_report.json`
-- `review_packet.md`
+- `review/baseline_system_prompt.json`
+- `review/candidate_system_prompt.json`
+- `review/candidate_only_report.json`
+- `review/review_packet.md`
 - benchmark result JSON files under `benchmarks/`
+- `phase3_preflight_report.json` under `preflight/`
 
 No active prompt/source apply is included in this draft.
 
@@ -73,8 +74,8 @@ Draft command templates:
 
 ```bash
 python -m evolution.benchmarks.run_tblite \
-  --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json \
-  --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json \
+  --baseline-prompt output/phase3-system-prompt/<run-id>/review/baseline_system_prompt.json \
+  --candidate-prompt output/phase3-system-prompt/<run-id>/review/candidate_system_prompt.json \
   --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl \
   --output-json output/phase3-system-prompt/<run-id>/benchmarks/tblite.json \
   --dry-run
@@ -82,8 +83,8 @@ python -m evolution.benchmarks.run_tblite \
 
 ```bash
 python -m evolution.benchmarks.run_yc_bench \
-  --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json \
-  --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json \
+  --baseline-prompt output/phase3-system-prompt/<run-id>/review/baseline_system_prompt.json \
+  --candidate-prompt output/phase3-system-prompt/<run-id>/review/candidate_system_prompt.json \
   --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl \
   --preset fast_test \
   --output-json output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json \
@@ -91,6 +92,21 @@ python -m evolution.benchmarks.run_yc_bench \
 ```
 
 The fixed adapter contract requires `mode=dry-run-fixture`, `candidate_only=true`, `read_only=true`, `external_calls_performed=false`, and `apply_ready=false` in each output report. `--output-json` is constrained to `.json` files under `output/phase3-system-prompt/` and must be fresh; resolved paths must remain under that root; pre-existing, symlinked, hardlinked, and input-overlapping output targets are rejected; and tests monkeypatch socket, `urllib.request.urlopen`, `subprocess.run`/`Popen`, and `os.system` to fail if fixture adapters attempt network or external process calls. Real benchmark execution remains deferred until separate human approval.
+
+## Local preflight gate
+
+The local preflight gate validates the candidate scaffold report together with dry-run TBLite/YC-Bench adapter reports:
+
+```bash
+python -m evolution.prompts.phase3_preflight_gate \
+  --candidate-report output/phase3-system-prompt/<run-id>/review/candidate_only_report.json \
+  --tblite-report output/phase3-system-prompt/<run-id>/benchmarks/tblite.json \
+  --yc-bench-report output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json \
+  --output-json output/phase3-system-prompt/<run-id>/preflight/phase3_preflight_report.json \
+  --dry-run
+```
+
+A passing local preflight report means the local dry-run artifacts are coherent and prompt checksums match across reports. It still records `phase3_execution_ready=false`, `real_benchmarks_executed=false`, and `human_approval_required_before_execution=true`; real benchmark evidence and separate human approval remain blocking before optimizer execution, source edits, active apply, or default-gate promotion.
 
 ## Rollback boundary
 
@@ -130,4 +146,4 @@ Separate approval is required before:
 
 ## Next prerequisite before execution
 
-The next safe step is not to run Phase 3. The next safe step is to run the read-only benchmark adapter fixtures in CI/local smoke, then decide whether to replace or supplement those dry-run fixture checks with real TBLite/YC-Bench result adapters before any optimizer execution.
+The next safe step is not to run real Phase 3 optimization. The next safe step is to keep using the local preflight gate to validate candidate scaffold and dry-run benchmark artifacts, then decide whether to replace or supplement those dry-run fixture checks with real TBLite/YC-Bench result adapters before any optimizer execution.

@@ -59,6 +59,7 @@ def test_phase2_tool_description_gate_workflow_wires_generator_validator_and_45_
     assert "tests/tools/test_phase3_execution_seed_draft.py" in run_blocks
     assert "tests/tools/test_phase3_benchmark_adapters.py" in run_blocks
     assert "tests/tools/test_phase3_candidate_scaffold.py" in run_blocks
+    assert "tests/tools/test_phase3_preflight_gate.py" in run_blocks
     assert "tests/tools/test_phase2_automation.py" in run_blocks
     assert "python -m evolution.tools.evolve_tool_descriptions" in run_blocks
     assert "python -m evolution.tools.report_contract" in run_blocks

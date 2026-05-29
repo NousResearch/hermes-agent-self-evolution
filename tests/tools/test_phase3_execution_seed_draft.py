@@ -127,6 +127,18 @@ def test_phase3_execution_seed_draft_fixes_benchmark_command_contract_before_exe
     }
     assert "output_constraints" in adapter_contract["output_schema_required_fields"]
 
+    local_preflight_gate = benchmark_gate["local_preflight_gate"]
+    assert local_preflight_gate == {
+        "status": "dry_run_local_contract_verified",
+        "module": "evolution.prompts.phase3_preflight_gate",
+        "command": "python -m evolution.prompts.phase3_preflight_gate --candidate-report output/phase3-system-prompt/<run-id>/review/candidate_only_report.json --tblite-report output/phase3-system-prompt/<run-id>/benchmarks/tblite.json --yc-bench-report output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json --output-json output/phase3-system-prompt/<run-id>/preflight/phase3_preflight_report.json --dry-run",
+        "dry_run_required": True,
+        "phase3_execution_ready": False,
+        "real_benchmarks_executed": False,
+        "human_approval_required_before_execution": True,
+        "verified_by": "tests/tools/test_phase3_preflight_gate.py",
+    }
+
 
 def test_phase3_execution_seed_draft_records_rollback_and_human_approval_gates():
     execution_seed = yaml.safe_load(EXECUTION_SEED_YAML.read_text())
@@ -183,6 +195,7 @@ def test_phase3_execution_seed_draft_report_docs_and_ci_wiring_are_present():
     assert report["requires_human_approval_before_execution"] is True
     assert report["requires_human_approval_before_apply"] is True
     assert report["benchmark_gate"]["required_before_execution"] is True
+    assert report["benchmark_gate"]["local_preflight_gate"]["phase3_execution_ready"] is False
     assert report["human_approval_gate"]["execution_approved"] is False
     assert report["human_approval_gate"]["active_apply_approved"] is False
     assert report["rollback_boundary"]["rollback_handle_required_before_apply"] is True
@@ -192,7 +205,9 @@ def test_phase3_execution_seed_draft_report_docs_and_ci_wiring_are_present():
     assert "GEPA/DSPy execution: not started" in markdown
     assert "Benchmark commands are contract templates and have not been run" in markdown
     assert "`--output-json` is constrained to `.json` files under `output/phase3-system-prompt/`" in markdown
-    assert "monkeypatch socket" in markdown
+    assert "Local preflight gate" in markdown
+    assert "phase3_execution_ready=false" in markdown
+    assert "prompt checksums match across reports" in markdown
     assert "Rollback boundary" in markdown
     assert "Human approval gate" in markdown
 
@@ -200,11 +215,15 @@ def test_phase3_execution_seed_draft_report_docs_and_ci_wiring_are_present():
     assert "seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml" in plan_md
     assert "reports/phase3_execution_seed_draft.json" in plan_md
     assert "benchmark command templates" in plan_md
+    assert "Phase 3 local preflight gate" in plan_md
+    assert "real benchmarks and human approval remain blocking" in plan_md
     assert "rollback boundary" in plan_md
 
     assert "Phase 3 execution Seed draft" in readme
     assert "reports/phase3_execution_seed_draft.md" in readme
     assert "benchmark command templates" in readme
+    assert "Phase 3 Local Preflight Gate" in readme
+    assert "phase3_execution_ready=false" in readme
     assert "human approval gate" in readme
 
     triggers = workflow.get("on", workflow.get(True))
@@ -219,3 +238,4 @@ def test_phase3_execution_seed_draft_report_docs_and_ci_wiring_are_present():
         if isinstance(step, dict)
     )
     assert "tests/tools/test_phase3_execution_seed_draft.py" in run_blocks
+    assert "tests/tools/test_phase3_preflight_gate.py" in run_blocks

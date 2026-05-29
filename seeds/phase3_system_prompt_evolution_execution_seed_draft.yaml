@@ -20,9 +20,9 @@ requires_human_approval_before_apply: true
 future_execution_scope:
   mode: candidate_only_system_prompt_evolution
   output_root: "output/phase3-system-prompt/<run-id>/"
-  baseline_prompt_artifact: "output/phase3-system-prompt/<run-id>/baseline_system_prompt.json"
-  candidate_prompt_artifact: "output/phase3-system-prompt/<run-id>/candidate_system_prompt.json"
-  report_artifact: "output/phase3-system-prompt/<run-id>/candidate_only_report.json"
+  baseline_prompt_artifact: "output/phase3-system-prompt/<run-id>/review/baseline_system_prompt.json"
+  candidate_prompt_artifact: "output/phase3-system-prompt/<run-id>/review/candidate_system_prompt.json"
+  report_artifact: "output/phase3-system-prompt/<run-id>/review/candidate_only_report.json"
   allowed_result: "candidate report and review packet only; no active prompt/source apply"
   candidate_scaffold_contract:
     status: candidate_only_scaffold_verified
@@ -109,14 +109,14 @@ benchmark_gate:
       status: dry_run_adapter_contract_verified
       must_pass_before: phase3_execution
       module: evolution.benchmarks.run_tblite
-      command: "python -m evolution.benchmarks.run_tblite --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl --output-json output/phase3-system-prompt/<run-id>/benchmarks/tblite.json --dry-run"
+      command: "python -m evolution.benchmarks.run_tblite --baseline-prompt output/phase3-system-prompt/<run-id>/review/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/review/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl --output-json output/phase3-system-prompt/<run-id>/benchmarks/tblite.json --dry-run"
       output_json: "output/phase3-system-prompt/<run-id>/benchmarks/tblite.json"
       pass_condition: no_regression_against_baseline
     - name: YC-Bench
       status: dry_run_adapter_contract_verified
       must_pass_before: phase3_execution
       module: evolution.benchmarks.run_yc_bench
-      command: "python -m evolution.benchmarks.run_yc_bench --baseline-prompt output/phase3-system-prompt/<run-id>/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl --preset fast_test --output-json output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json --dry-run"
+      command: "python -m evolution.benchmarks.run_yc_bench --baseline-prompt output/phase3-system-prompt/<run-id>/review/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/review/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl --preset fast_test --output-json output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json --dry-run"
       output_json: "output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json"
       pass_condition: coherence_score_holds_or_improves
   adapter_contract:
@@ -174,6 +174,15 @@ benchmark_gate:
         fixtures_jsonl: datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl
         fixture_output_json: output/phase3-system-prompt/dry-run/benchmarks/yc_bench.json
         fixture_command: "python -m evolution.benchmarks.run_yc_bench --baseline-prompt datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json --candidate-prompt datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl --preset fast_test --output-json output/phase3-system-prompt/dry-run/benchmarks/yc_bench.json --dry-run"
+  local_preflight_gate:
+    status: dry_run_local_contract_verified
+    module: evolution.prompts.phase3_preflight_gate
+    command: "python -m evolution.prompts.phase3_preflight_gate --candidate-report output/phase3-system-prompt/<run-id>/review/candidate_only_report.json --tblite-report output/phase3-system-prompt/<run-id>/benchmarks/tblite.json --yc-bench-report output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json --output-json output/phase3-system-prompt/<run-id>/preflight/phase3_preflight_report.json --dry-run"
+    dry_run_required: true
+    phase3_execution_ready: false
+    real_benchmarks_executed: false
+    human_approval_required_before_execution: true
+    verified_by: "tests/tools/test_phase3_preflight_gate.py"
 
 rollback_boundary:
   checkpoint_required_before_candidate_generation: true
@@ -255,5 +264,8 @@ deliverables:
   - PLAN.md
   - README.md
   - pyproject.toml
+  - .github/workflows/phase2-tool-description-gate.yml
   - evolution/prompts/phase3_candidate_scaffold.py
   - tests/tools/test_phase3_candidate_scaffold.py
+  - evolution/prompts/phase3_preflight_gate.py
+  - tests/tools/test_phase3_preflight_gate.py

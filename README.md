@@ -219,6 +219,21 @@ Real benchmark execution remains deferred. The current adapter contract is a fix
 
 The execution draft keeps benchmark command templates and human approval gate explicit so future Phase 3 execution can fail closed: TBLite/YC-Bench adapters must be runnable and passing, rollback handles must be available, and separate human approval must be recorded before optimizer execution or active apply.
 
+## Phase 3 Local Preflight Gate
+
+The Phase 3 local preflight gate validates the candidate scaffold report plus dry-run TBLite/YC-Bench adapter reports and writes a local preflight report. It is still candidate-only: `phase3_execution_ready=false`, no real benchmarks are executed, and active prompt/source/runtime apply remains blocked.
+
+```bash
+python -m evolution.prompts.phase3_preflight_gate \
+    --candidate-report output/phase3-system-prompt/<run-id>/review/candidate_only_report.json \
+    --tblite-report output/phase3-system-prompt/<run-id>/benchmarks/tblite.json \
+    --yc-bench-report output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json \
+    --output-json output/phase3-system-prompt/<run-id>/preflight/phase3_preflight_report.json \
+    --dry-run
+```
+
+The preflight gate checks candidate-only/apply-blocked flags, dry-run benchmark reports, hardened output constraints, and prompt artifact checksum consistency across reports. It can pass the local contract while still keeping real benchmarks and human approval blocking Phase 3 execution.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.
