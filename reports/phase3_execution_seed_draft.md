@@ -39,9 +39,24 @@ Expected future artifacts include:
 - `baseline_system_prompt.json`
 - `candidate_system_prompt.json`
 - `candidate_only_report.json`
+- `review_packet.md`
 - benchmark result JSON files under `benchmarks/`
 
 No active prompt/source apply is included in this draft.
+
+## Candidate-only scaffold
+
+The candidate-only scaffold is now a runnable review-artifact contract:
+
+```bash
+python -m evolution.prompts.phase3_candidate_scaffold \
+  --baseline-prompt output/phase3-system-prompt/<run-id>/inputs/baseline_system_prompt.json \
+  --candidate-prompt output/phase3-system-prompt/<run-id>/inputs/candidate_system_prompt.json \
+  --output-dir output/phase3-system-prompt/<run-id>/review/ \
+  --dry-run
+```
+
+It writes only baseline/candidate snapshots, `candidate_only_report.json`, and `review_packet.md` under `output/phase3-system-prompt/`, and rejects pre-existing write targets, symlinked write targets, or input/output path overlap. The report keeps `candidate_only=true`, `execution_started=false`, `run_gepa_now=false`, `run_dspy_now=false`, `real_benchmarks_executed=false`, and `apply_ready=false`; it fails closed if any non-evolvable section changes.
 
 ## Benchmark gate
 

@@ -771,6 +771,16 @@ Best Candidate → PR with full metrics
 
 **Key principle:** Benchmarks are GATES, not fitness functions. The fitness function is task-specific (did the skill/tool/prompt do its job better?). Benchmarks ensure the improvement didn't break something else. A variant that improves skill quality by 20% but drops TBLite by 5% is REJECTED.
 
+### Phase 3 candidate-only scaffold
+
+Before any real optimizer run, the Phase 3 scaffold can create a candidate review packet:
+
+```bash
+python -m evolution.prompts.phase3_candidate_scaffold --dry-run ...
+```
+
+The scaffold is candidate-only and performs no GEPA/DSPy execution, no real benchmark execution, no source/runtime apply, and no writes outside `output/phase3-system-prompt/`. It snapshots baseline/candidate prompt artifacts, rejects pre-existing/symlinked write targets, rejects input/output path overlap, rejects non-evolvable section changes, and emits `candidate_only_report.json` plus `review_packet.md` for human review. Real TBLite/YC-Bench results remain required before optimizer acceptance, active apply, or default-gate promotion.
+
 ### Phase 3 benchmark adapters
 
 The Phase 3 execution draft now has runnable TBLite/YC-Bench adapter entrypoints:

@@ -180,6 +180,20 @@ Benchmark gates are not blocking this design-only plan, but TBLite/YC-Bench must
 
 Phase 3 execution Seed draft artifacts are recorded in `reports/phase3_execution_seed_draft.json` and `reports/phase3_execution_seed_draft.md`, with the draft Seed at `seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml`. The draft fixes benchmark command templates, rollback boundary, and human approval gate before execution. It still does not run GEPA/DSPy, does not run real benchmark commands, and does not approve active system-prompt/source apply.
 
+## Phase 3 Candidate-Only Scaffold
+
+The Phase 3 candidate-only scaffold prepares review artifacts under `output/phase3-system-prompt/<run-id>/` without running GEPA/DSPy, without running real benchmarks, and without editing Hermes Agent prompt source or active runtime configuration.
+
+```bash
+python -m evolution.prompts.phase3_candidate_scaffold \
+    --baseline-prompt output/phase3-system-prompt/<run-id>/inputs/baseline_system_prompt.json \
+    --candidate-prompt output/phase3-system-prompt/<run-id>/inputs/candidate_system_prompt.json \
+    --output-dir output/phase3-system-prompt/<run-id>/review/ \
+    --dry-run
+```
+
+It writes only `baseline_system_prompt.json`, `candidate_system_prompt.json`, `candidate_only_report.json`, and `review_packet.md` under the allowed Phase 3 output root, and rejects pre-existing write targets plus input/output path overlap so prompt inputs remain read-only. The report keeps `candidate_only=true`, `apply_ready=false`, `real_benchmarks_executed=false`, and rejects non-evolvable section changes. This is a candidate scaffold only; real benchmark execution remains required before optimizer acceptance, active apply, or default-gate promotion.
+
 ## Phase 3 Benchmark Adapter Contract
 
 The TBLite/YC-Bench command templates now resolve to runnable **read-only dry-run fixture** adapters. These commands validate prompt artifacts and committed fixtures, write only the requested JSON report, make no external calls, and keep `apply_ready=false`. `--output-json` must resolve to a `.json` file under `output/phase3-system-prompt/`; path traversal outside that root is rejected.

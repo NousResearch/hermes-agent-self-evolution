@@ -22,7 +22,61 @@
     "baseline_prompt_artifact": "output/phase3-system-prompt/<run-id>/baseline_system_prompt.json",
     "candidate_prompt_artifact": "output/phase3-system-prompt/<run-id>/candidate_system_prompt.json",
     "report_artifact": "output/phase3-system-prompt/<run-id>/candidate_only_report.json",
-    "allowed_result": "candidate report and review packet only; no active prompt/source apply"
+    "allowed_result": "candidate report and review packet only; no active prompt/source apply",
+    "candidate_scaffold_contract": {
+      "status": "candidate_only_scaffold_verified",
+      "module": "evolution.prompts.phase3_candidate_scaffold",
+      "command": "python -m evolution.prompts.phase3_candidate_scaffold --baseline-prompt output/phase3-system-prompt/<run-id>/inputs/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/inputs/candidate_system_prompt.json --output-dir output/phase3-system-prompt/<run-id>/review/ --dry-run",
+      "dry_run_required": true,
+      "candidate_only": true,
+      "read_only_inputs": true,
+      "external_calls_allowed": false,
+      "real_benchmarks_executed": false,
+      "active_prompt_or_source_apply_allowed": false,
+      "allowed_output_root": "output/phase3-system-prompt/",
+      "path_traversal": "resolved_path_must_remain_under_allowed_root",
+      "write_target_constraints": [
+        "resolved_write_targets_must_remain_under_allowed_root",
+        "existing_write_targets_rejected",
+        "existing_symlink_write_targets_rejected",
+        "input_output_path_overlap_rejected"
+      ],
+      "verified_by": "tests/tools/test_phase3_candidate_scaffold.py",
+      "output_artifacts": [
+        "baseline_system_prompt.json",
+        "candidate_system_prompt.json",
+        "candidate_only_report.json",
+        "review_packet.md"
+      ],
+      "output_schema_required_fields": [
+        "phase",
+        "mode",
+        "scaffold_version",
+        "dry_run",
+        "candidate_only",
+        "read_only_inputs",
+        "execution_started",
+        "run_gepa_now",
+        "run_dspy_now",
+        "mutate_active_system_prompt_now",
+        "active_system_prompt_apply_approved",
+        "apply_ready",
+        "external_calls_performed",
+        "real_benchmarks_executed",
+        "passed",
+        "failed_checks",
+        "evolvable_sections",
+        "changed_sections",
+        "unchanged_sections",
+        "non_evolvable_section_changes",
+        "prompt_artifacts",
+        "benchmark_gate",
+        "human_approval_gate",
+        "artifacts",
+        "write_targets",
+        "output_constraints"
+      ]
+    }
   },
   "benchmark_gate": {
     "status": "required_not_run",
@@ -170,6 +224,9 @@
     "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
     "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
     ".gitignore",
-    ".github/workflows/phase2-tool-description-gate.yml"
+    ".github/workflows/phase2-tool-description-gate.yml",
+    "evolution/prompts/phase3_candidate_scaffold.py",
+    "tests/tools/test_phase3_candidate_scaffold.py",
+    "pyproject.toml"
   ]
 }
