@@ -75,7 +75,7 @@ python -m evolution.benchmarks.run_yc_bench \
   --dry-run
 ```
 
-The fixed adapter contract requires `mode=dry-run-fixture`, `candidate_only=true`, `read_only=true`, `external_calls_performed=false`, and `apply_ready=false` in each output report. Real benchmark execution remains deferred until separate human approval.
+The fixed adapter contract requires `mode=dry-run-fixture`, `candidate_only=true`, `read_only=true`, `external_calls_performed=false`, and `apply_ready=false` in each output report. `--output-json` is constrained to `.json` files under `output/phase3-system-prompt/`; resolved paths must remain under that root, and tests monkeypatch socket, `urllib.request.urlopen`, `subprocess.run`/`Popen`, and `os.system` to fail if fixture adapters attempt network or external process calls. Real benchmark execution remains deferred until separate human approval.
 
 ## Rollback boundary
 

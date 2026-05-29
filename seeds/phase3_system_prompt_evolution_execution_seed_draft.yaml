@@ -76,6 +76,13 @@ benchmark_gate:
     external_calls_allowed: false
     active_prompt_or_source_apply_allowed: false
     verified_by: "tests/tools/test_phase3_benchmark_adapters.py"
+    output_json_constraints:
+      allowed_root: "output/phase3-system-prompt/"
+      suffix: ".json"
+      path_traversal: "resolved_path_must_remain_under_allowed_root"
+    external_call_guard:
+      strategy: "pytest monkeypatch blocks socket, urllib.request.urlopen, subprocess.run/Popen, and os.system during in-process adapter main calls"
+      verified_by: "tests/tools/test_phase3_benchmark_adapters.py"
     output_schema_required_fields:
       - benchmark
       - adapter_version
@@ -94,6 +101,7 @@ benchmark_gate:
       - cases
       - artifacts
       - write_targets
+      - output_constraints
     adapters:
       - name: TBLite
         module: evolution.benchmarks.run_tblite

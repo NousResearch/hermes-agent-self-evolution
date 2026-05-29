@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Mapping, Sequence, cast
 
 ADAPTER_VERSION = "phase3-benchmark-adapter-v1"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ALLOWED_OUTPUT_ROOT = "output/phase3-system-prompt/"
+ALLOWED_OUTPUT_SUFFIX = ".json"
+PHASE3_OUTPUT_ROOT = REPO_ROOT / ALLOWED_OUTPUT_ROOT
 
 
 @dataclass(frozen=True)
@@ -70,7 +74,8 @@ def run_fixture_benchmark(
     baseline_path = Path(baseline_prompt)
     candidate_path = Path(candidate_prompt)
     fixtures_path = Path(fixtures_jsonl)
-    output_path = Path(output_json)
+    output_path = _normalize_output_json_path(Path(output_json))
+    _validate_output_json_path(output_path)
     _validate_distinct_output_path(output_path, (baseline_path, candidate_path, fixtures_path))
 
     baseline_artifact = load_prompt_artifact(baseline_path)
@@ -131,6 +136,10 @@ def run_fixture_benchmark(
             "fixtures_jsonl": str(fixtures_path),
         },
         "write_targets": [str(output_path)],
+        "output_constraints": {
+            "allowed_root": ALLOWED_OUTPUT_ROOT,
+            "suffix": ALLOWED_OUTPUT_SUFFIX,
+        },
     }
     if preset is not None:
         report["preset"] = preset
@@ -269,6 +278,21 @@ def _numeric_case_value(case: Mapping[str, object], key: str) -> float:
     if not isinstance(value, int | float):
         raise TypeError(f"Case value must be numeric: {key}")
     return float(value)
+
+
+def _normalize_output_json_path(output_path: Path) -> Path:
+    if output_path.is_absolute():
+        return output_path
+    return REPO_ROOT / output_path
+
+
+def _validate_output_json_path(output_path: Path) -> None:
+    if output_path.suffix.lower() != ALLOWED_OUTPUT_SUFFIX:
+        raise ValueError(f"output-json must use a {ALLOWED_OUTPUT_SUFFIX} suffix: {output_path}")
+    output_resolved = output_path.resolve()
+    allowed_root_resolved = PHASE3_OUTPUT_ROOT.resolve()
+    if not output_resolved.is_relative_to(allowed_root_resolved):
+        raise ValueError(f"output-json must stay under {ALLOWED_OUTPUT_ROOT}: {output_path}")
 
 
 def _validate_distinct_output_path(output_path: Path, input_paths: Sequence[Path]) -> None:

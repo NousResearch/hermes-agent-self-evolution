@@ -182,7 +182,7 @@ Phase 3 execution Seed draft artifacts are recorded in `reports/phase3_execution
 
 ## Phase 3 Benchmark Adapter Contract
 
-The TBLite/YC-Bench command templates now resolve to runnable **read-only dry-run fixture** adapters. These commands validate prompt artifacts and committed fixtures, write only the requested JSON report, make no external calls, and keep `apply_ready=false`.
+The TBLite/YC-Bench command templates now resolve to runnable **read-only dry-run fixture** adapters. These commands validate prompt artifacts and committed fixtures, write only the requested JSON report, make no external calls, and keep `apply_ready=false`. `--output-json` must resolve to a `.json` file under `output/phase3-system-prompt/`; path traversal outside that root is rejected.
 
 ```bash
 python -m evolution.benchmarks.run_tblite \
@@ -201,7 +201,7 @@ python -m evolution.benchmarks.run_yc_bench \
     --dry-run
 ```
 
-Real benchmark execution remains deferred. The current adapter contract is a fixture-backed runnable smoke boundary that future Phase 3 execution must replace or supplement with real TBLite/YC-Bench results before optimizer acceptance, active apply, or default-gate promotion.
+Real benchmark execution remains deferred. The current adapter contract is a fixture-backed runnable smoke boundary that future Phase 3 execution must replace or supplement with real TBLite/YC-Bench results before optimizer acceptance, active apply, or default-gate promotion. The contract is hardened by tests that reject non-`.json` output paths, reject output paths outside `output/phase3-system-prompt/`, reject resolved path traversal, and monkeypatch network/external-process APIs during in-process adapter main calls.
 
 The execution draft keeps benchmark command templates and human approval gate explicit so future Phase 3 execution can fail closed: TBLite/YC-Bench adapters must be runnable and passing, rollback handles must be available, and separate human approval must be recorded before optimizer execution or active apply.
 

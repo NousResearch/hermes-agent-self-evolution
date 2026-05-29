@@ -112,6 +112,16 @@ def test_phase3_execution_seed_draft_fixes_benchmark_command_contract_before_exe
     assert adapter_contract["external_calls_allowed"] is False
     assert adapter_contract["active_prompt_or_source_apply_allowed"] is False
     assert adapter_contract["verified_by"] == "tests/tools/test_phase3_benchmark_adapters.py"
+    assert adapter_contract["output_json_constraints"] == {
+        "allowed_root": "output/phase3-system-prompt/",
+        "suffix": ".json",
+        "path_traversal": "resolved_path_must_remain_under_allowed_root",
+    }
+    assert adapter_contract["external_call_guard"] == {
+        "strategy": "pytest monkeypatch blocks socket, urllib.request.urlopen, subprocess.run/Popen, and os.system during in-process adapter main calls",
+        "verified_by": "tests/tools/test_phase3_benchmark_adapters.py",
+    }
+    assert "output_constraints" in adapter_contract["output_schema_required_fields"]
 
 
 def test_phase3_execution_seed_draft_records_rollback_and_human_approval_gates():
@@ -177,6 +187,8 @@ def test_phase3_execution_seed_draft_report_docs_and_ci_wiring_are_present():
     assert "Status: drafted, not executed" in markdown
     assert "GEPA/DSPy execution: not started" in markdown
     assert "Benchmark commands are contract templates and have not been run" in markdown
+    assert "`--output-json` is constrained to `.json` files under `output/phase3-system-prompt/`" in markdown
+    assert "monkeypatch socket" in markdown
     assert "Rollback boundary" in markdown
     assert "Human approval gate" in markdown
 

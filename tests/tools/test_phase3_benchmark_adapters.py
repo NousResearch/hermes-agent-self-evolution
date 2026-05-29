@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
+import socket
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 import yaml
+
+from evolution.benchmarks.run_tblite import main as tblite_main
+from evolution.benchmarks.run_yc_bench import main as yc_bench_main
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO_ROOT / "datasets" / "golden" / "benchmarks" / "phase3-system-prompt"
@@ -21,6 +28,8 @@ EXECUTION_DRAFT_JSON = REPO_ROOT / "reports" / "phase3_execution_seed_draft.json
 README_MD = REPO_ROOT / "README.md"
 PLAN_MD = REPO_ROOT / "PLAN.md"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "phase2-tool-description-gate.yml"
+OUTPUT_ROOT = REPO_ROOT / "output" / "phase3-system-prompt"
+PYTEST_OUTPUT_ROOT = OUTPUT_ROOT / "pytest"
 
 COMMON_REQUIRED_REPORT_FIELDS = {
     "benchmark",
@@ -40,6 +49,7 @@ COMMON_REQUIRED_REPORT_FIELDS = {
     "cases",
     "artifacts",
     "write_targets",
+    "output_constraints",
 }
 
 
@@ -53,6 +63,30 @@ def _jsonl(path: Path) -> list[dict[str, object]]:
         if line.strip():
             rows.append(json.loads(line))
     return rows
+
+
+def _phase3_output_json(tmp_path: Path, filename: str) -> Path:
+    return PYTEST_OUTPUT_ROOT / tmp_path.name / "benchmarks" / filename
+
+
+def _cleanup_phase3_test_output(output_json: Path) -> None:
+    run_name = output_json.relative_to(PYTEST_OUTPUT_ROOT).parts[0]
+    shutil.rmtree(PYTEST_OUTPUT_ROOT / run_name, ignore_errors=True)
+
+
+def _adapter_args(output_json: Path, fixtures: Path, *extra_args: str) -> list[str]:
+    return [
+        "--baseline-prompt",
+        str(BASELINE_PROMPT),
+        "--candidate-prompt",
+        str(CANDIDATE_PROMPT),
+        "--fixtures-jsonl",
+        str(fixtures),
+        "--output-json",
+        str(output_json),
+        "--dry-run",
+        *extra_args,
+    ]
 
 
 def _run_adapter(module: str, output_json: Path, fixtures: Path, *extra_args: str) -> subprocess.CompletedProcess[str]:
@@ -100,6 +134,13 @@ def _assert_common_report_contract(
     assert report["passed"] is True
     assert report["failed_checks"] == []
     assert report["write_targets"] == [str(output_json)]
+
+    output_constraints = report["output_constraints"]
+    assert isinstance(output_constraints, dict)
+    assert output_constraints["allowed_root"] == "output/phase3-system-prompt/"
+    assert output_constraints["suffix"] == ".json"
+    assert output_json.suffix == ".json"
+    assert output_json.resolve().is_relative_to(OUTPUT_ROOT.resolve())
 
     prompt_artifacts = report["prompt_artifacts"]
     assert isinstance(prompt_artifacts, dict)
@@ -169,43 +210,108 @@ def test_phase3_benchmark_adapter_fixtures_are_committed_and_safe() -> None:
 
 def test_tblite_adapter_runs_read_only_fixture_dry_run_and_writes_contract_report(tmp_path: Path) -> None:
     before = {_path: _sha256(_path) for _path in (BASELINE_PROMPT, CANDIDATE_PROMPT, TBLITE_CASES)}
-    output_json = tmp_path / "tblite.json"
+    output_json = _phase3_output_json(tmp_path, "tblite.json")
 
-    completed = _run_adapter("evolution.benchmarks.run_tblite", output_json, TBLITE_CASES)
+    try:
+        completed = _run_adapter("evolution.benchmarks.run_tblite", output_json, TBLITE_CASES)
 
-    assert completed.returncode == 0, completed.stderr
-    assert "TBLite dry-run fixture benchmark passed" in completed.stdout
-    assert {_path: _sha256(_path) for _path in before} == before
-    assert output_json.exists()
-    report = json.loads(output_json.read_text())
-    _assert_common_report_contract(
-        report,
-        benchmark="TBLite",
-        output_json=output_json,
-        fixtures=TBLITE_CASES,
-        pass_condition="no_regression_against_baseline",
-    )
+        assert completed.returncode == 0, completed.stderr
+        assert "TBLite dry-run fixture benchmark passed" in completed.stdout
+        assert {_path: _sha256(_path) for _path in before} == before
+        assert output_json.exists()
+        report = json.loads(output_json.read_text())
+        _assert_common_report_contract(
+            report,
+            benchmark="TBLite",
+            output_json=output_json,
+            fixtures=TBLITE_CASES,
+            pass_condition="no_regression_against_baseline",
+        )
+    finally:
+        _cleanup_phase3_test_output(output_json)
 
 
 def test_yc_bench_adapter_runs_fast_test_fixture_dry_run_and_writes_contract_report(tmp_path: Path) -> None:
     before = {_path: _sha256(_path) for _path in (BASELINE_PROMPT, CANDIDATE_PROMPT, YC_BENCH_CASES)}
-    output_json = tmp_path / "yc_bench.json"
+    output_json = _phase3_output_json(tmp_path, "yc_bench.json")
 
-    completed = _run_adapter("evolution.benchmarks.run_yc_bench", output_json, YC_BENCH_CASES, "--preset", "fast_test")
+    try:
+        completed = _run_adapter("evolution.benchmarks.run_yc_bench", output_json, YC_BENCH_CASES, "--preset", "fast_test")
 
-    assert completed.returncode == 0, completed.stderr
-    assert "YC-Bench dry-run fixture benchmark passed" in completed.stdout
-    assert {_path: _sha256(_path) for _path in before} == before
-    assert output_json.exists()
-    report = json.loads(output_json.read_text())
-    _assert_common_report_contract(
-        report,
-        benchmark="YC-Bench",
-        output_json=output_json,
-        fixtures=YC_BENCH_CASES,
-        pass_condition="coherence_score_holds_or_improves",
-    )
-    assert report["preset"] == "fast_test"
+        assert completed.returncode == 0, completed.stderr
+        assert "YC-Bench dry-run fixture benchmark passed" in completed.stdout
+        assert {_path: _sha256(_path) for _path in before} == before
+        assert output_json.exists()
+        report = json.loads(output_json.read_text())
+        _assert_common_report_contract(
+            report,
+            benchmark="YC-Bench",
+            output_json=output_json,
+            fixtures=YC_BENCH_CASES,
+            pass_condition="coherence_score_holds_or_improves",
+        )
+        assert report["preset"] == "fast_test"
+    finally:
+        _cleanup_phase3_test_output(output_json)
+
+
+def test_adapter_rejects_output_json_outside_phase3_output_root(tmp_path: Path) -> None:
+    output_json = tmp_path / "tblite.json"
+
+    completed = _run_adapter("evolution.benchmarks.run_tblite", output_json, TBLITE_CASES)
+
+    assert completed.returncode != 0
+    assert "output-json must stay under output/phase3-system-prompt/" in completed.stderr
+    assert "Traceback" not in completed.stderr
+    assert not output_json.exists()
+
+
+def test_adapter_rejects_non_json_output_path(tmp_path: Path) -> None:
+    output_path = _phase3_output_json(tmp_path, "tblite.txt")
+
+    try:
+        completed = _run_adapter("evolution.benchmarks.run_tblite", output_path, TBLITE_CASES)
+
+        assert completed.returncode != 0
+        assert "output-json must use a .json suffix" in completed.stderr
+        assert "Traceback" not in completed.stderr
+        assert not output_path.exists()
+    finally:
+        _cleanup_phase3_test_output(output_path)
+
+
+def test_adapter_rejects_resolved_output_path_traversal() -> None:
+    output_path = OUTPUT_ROOT / ".." / "phase3-escape.json"
+
+    completed = _run_adapter("evolution.benchmarks.run_tblite", output_path, TBLITE_CASES)
+
+    assert completed.returncode != 0
+    assert "output-json must stay under output/phase3-system-prompt/" in completed.stderr
+    assert "Traceback" not in completed.stderr
+    assert not output_path.resolve().exists()
+
+
+def test_adapter_main_paths_do_not_perform_network_or_subprocess_calls(monkeypatch, tmp_path: Path) -> None:
+    def blocked_external_call(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("external call attempted during dry-run fixture benchmark")
+
+    monkeypatch.setattr(socket, "socket", blocked_external_call)
+    monkeypatch.setattr(socket, "create_connection", blocked_external_call)
+    monkeypatch.setattr(urllib.request, "urlopen", blocked_external_call)
+    monkeypatch.setattr(subprocess, "run", blocked_external_call)
+    monkeypatch.setattr(subprocess, "Popen", blocked_external_call)
+    monkeypatch.setattr(os, "system", blocked_external_call)
+
+    tblite_output = _phase3_output_json(tmp_path, "tblite-main.json")
+    yc_bench_output = _phase3_output_json(tmp_path, "yc-bench-main.json")
+
+    try:
+        assert tblite_main(_adapter_args(tblite_output, TBLITE_CASES)) == 0
+        assert yc_bench_main(_adapter_args(yc_bench_output, YC_BENCH_CASES, "--preset", "fast_test")) == 0
+        assert tblite_output.exists()
+        assert yc_bench_output.exists()
+    finally:
+        _cleanup_phase3_test_output(tblite_output)
 
 
 def test_phase3_execution_seed_docs_and_ci_wire_benchmark_adapter_contract() -> None:
@@ -224,6 +330,16 @@ def test_phase3_execution_seed_docs_and_ci_wire_benchmark_adapter_contract() -> 
         assert adapter_contract["external_calls_allowed"] is False
         assert adapter_contract["active_prompt_or_source_apply_allowed"] is False
         assert adapter_contract["verified_by"] == "tests/tools/test_phase3_benchmark_adapters.py"
+        assert adapter_contract["output_json_constraints"] == {
+            "allowed_root": "output/phase3-system-prompt/",
+            "suffix": ".json",
+            "path_traversal": "resolved_path_must_remain_under_allowed_root",
+        }
+        assert adapter_contract["external_call_guard"] == {
+            "strategy": "pytest monkeypatch blocks socket, urllib.request.urlopen, subprocess.run/Popen, and os.system during in-process adapter main calls",
+            "verified_by": "tests/tools/test_phase3_benchmark_adapters.py",
+        }
+        assert "output_constraints" in adapter_contract["output_schema_required_fields"]
         adapters = {adapter["name"]: adapter for adapter in adapter_contract["adapters"]}
         assert set(adapters) == {"TBLite", "YC-Bench"}
         assert adapters["TBLite"]["module"] == "evolution.benchmarks.run_tblite"
@@ -238,6 +354,8 @@ def test_phase3_execution_seed_docs_and_ci_wire_benchmark_adapter_contract() -> 
     assert "python -m evolution.benchmarks.run_tblite" in readme
     assert "python -m evolution.benchmarks.run_yc_bench" in readme
     assert "read-only dry-run fixture" in readme
+    assert "`--output-json` must resolve to a `.json` file under `output/phase3-system-prompt/`" in readme
+    assert "monkeypatch network/external-process APIs" in readme
     assert "Phase 3 benchmark adapters" in plan
     assert "dry-run fixture contract" in plan
 

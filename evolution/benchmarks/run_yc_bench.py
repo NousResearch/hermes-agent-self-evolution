@@ -53,14 +53,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.dry_run:
         parser.error("Phase 3 YC-Bench adapter currently requires --dry-run")
-    report = run_yc_bench(
-        baseline_prompt=args.baseline_prompt,
-        candidate_prompt=args.candidate_prompt,
-        fixtures_jsonl=args.fixtures_jsonl,
-        output_json=args.output_json,
-        dry_run=args.dry_run,
-        preset=args.preset,
-    )
+    try:
+        report = run_yc_bench(
+            baseline_prompt=args.baseline_prompt,
+            candidate_prompt=args.candidate_prompt,
+            fixtures_jsonl=args.fixtures_jsonl,
+            output_json=args.output_json,
+            dry_run=args.dry_run,
+            preset=args.preset,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     if report["passed"]:
         print(f"YC-Bench dry-run fixture benchmark passed: {args.output_json}")
         return 0

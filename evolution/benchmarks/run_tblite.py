@@ -47,13 +47,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.dry_run:
         parser.error("Phase 3 TBLite adapter currently requires --dry-run")
-    report = run_tblite_benchmark(
-        baseline_prompt=args.baseline_prompt,
-        candidate_prompt=args.candidate_prompt,
-        fixtures_jsonl=args.fixtures_jsonl,
-        output_json=args.output_json,
-        dry_run=args.dry_run,
-    )
+    try:
+        report = run_tblite_benchmark(
+            baseline_prompt=args.baseline_prompt,
+            candidate_prompt=args.candidate_prompt,
+            fixtures_jsonl=args.fixtures_jsonl,
+            output_json=args.output_json,
+            dry_run=args.dry_run,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     if report["passed"]:
         print(f"TBLite dry-run fixture benchmark passed: {args.output_json}")
         return 0
