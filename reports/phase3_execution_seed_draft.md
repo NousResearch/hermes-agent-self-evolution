@@ -108,6 +108,12 @@ python -m evolution.prompts.phase3_preflight_gate \
 
 A passing local preflight report means the local dry-run artifacts are coherent and prompt checksums match across reports. It still records `phase3_execution_ready=false`, `real_benchmarks_executed=false`, and `human_approval_required_before_execution=true`; real benchmark evidence and separate human approval remain blocking before optimizer execution, source edits, active apply, or default-gate promotion.
 
+## Phase 3 real benchmark readiness manifest
+
+The Phase 3 real benchmark readiness manifest is recorded in `reports/phase3_real_benchmark_readiness_manifest.json` and `reports/phase3_real_benchmark_readiness_manifest.md`. It keeps `real_benchmark_ready_now=false` and `active_apply_ready_now=false` while machine-recording the future inputs, environment requirements, approval boundaries, cost/runtime limits, rollback requirements, and go/no-go conditions needed before replacing dry-run fixtures with real TBLite/YC-Bench evidence.
+
+The manifest is a readiness contract only. It does not run real benchmarks, does not approve GEPA/DSPy optimization, does not authorize nonzero benchmark/API spend, and does not permit prompt-source edits or active runtime apply.
+
 ## Rollback boundary
 
 Rollback boundary requirements:

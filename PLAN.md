@@ -552,6 +552,8 @@ Before any Phase 3 execution, benchmark gates are reactivated before Phase 3 exe
 
 The execution draft is still candidate-only preparation: benchmark command templates must be backed by runnable TBLite/YC-Bench adapters and pass before execution; rollback boundary handles must be created/read back before apply; and separate human approval is required before optimizer execution, benchmark execution, prompt-source edits, active runtime apply, or default-gate promotion.
 
+**Current Phase 3 real benchmark readiness manifest status:** recorded, not executed. The manifest is recorded in `reports/phase3_real_benchmark_readiness_manifest.json` / `.md` and keeps `real_benchmark_ready_now=false` plus `active_apply_ready_now=false`. It machine-records required inputs, environment prerequisites, explicit approval/cost boundaries, rollback requirements, and go/no-go conditions before any future switch from dry-run fixtures to real TBLite/YC-Bench evidence; real benchmarks remain blocked until all go/no-go conditions are satisfied.
+
 **Week 1 (Build):** Build section-as-DSPy-parameter wrapper for the 5 evolvable prompt sections. Build behavioral test suite generator. This is the riskiest tier so far — system prompt changes affect everything.
 
 **Week 2 (Run):** Generate behavioral test scenarios (~60-80 total across all sections). Run GEPA on each section independently first, then jointly. Run benchmarks after each optimization round.
@@ -795,6 +797,10 @@ Current status is a **dry-run fixture contract** only. The adapters are read-onl
 ### Phase 3 local preflight gate
 
 After the scaffold and dry-run benchmark adapters have produced local reports, `python -m evolution.prompts.phase3_preflight_gate --dry-run ...` validates them as one preflight bundle. The gate checks candidate-only/apply-blocked flags, dry-run TBLite/YC-Bench reports, hardened output constraints, and prompt artifact checksum consistency across reports. A passing preflight report means the local dry-run contract is coherent; it still records `phase3_execution_ready=false` because real benchmarks and human approval remain blocking before any optimizer execution, prompt/source edit, active apply, or default-gate promotion.
+
+### Phase 3 real benchmark readiness manifest
+
+The Phase 3 real benchmark readiness manifest records the machine-readable transition contract before moving from dry-run fixtures to real TBLite/YC-Bench evidence. It keeps `real_benchmark_ready_now=false` and `active_apply_ready_now=false`, caps current authorized spend at `$0`, records future budget/runtime limits, requires rollback handles and prompt checksums, and states that real benchmarks remain blocked until all go/no-go conditions are satisfied.
 
 ---
 

@@ -183,6 +183,13 @@ benchmark_gate:
     real_benchmarks_executed: false
     human_approval_required_before_execution: true
     verified_by: "tests/tools/test_phase3_preflight_gate.py"
+  real_benchmark_readiness_manifest:
+    status: recorded_not_executed
+    manifest_json: reports/phase3_real_benchmark_readiness_manifest.json
+    manifest_markdown: reports/phase3_real_benchmark_readiness_manifest.md
+    real_benchmark_ready_now: false
+    active_apply_ready_now: false
+    verified_by: "tests/tools/test_phase3_real_benchmark_readiness_manifest.py"
 
 rollback_boundary:
   checkpoint_required_before_candidate_generation: true
@@ -269,3 +276,5 @@ deliverables:
   - tests/tools/test_phase3_candidate_scaffold.py
   - evolution/prompts/phase3_preflight_gate.py
   - tests/tools/test_phase3_preflight_gate.py
+  - reports/phase3_real_benchmark_readiness_manifest.json
+  - reports/phase3_real_benchmark_readiness_manifest.md

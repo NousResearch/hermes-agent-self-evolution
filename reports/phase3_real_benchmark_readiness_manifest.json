@@ -1,0 +1,191 @@
+{
+  "phase": "3",
+  "mode": "phase3-real-benchmark-readiness-manifest",
+  "status": "recorded_not_executed",
+  "source_authorization": "rec action GO",
+  "source_preflight_gate": "reports/phase3_execution_seed_draft.json",
+  "manifest_version": "phase3-real-benchmark-readiness-v1",
+  "candidate_only": true,
+  "execution_started": false,
+  "run_gepa_now": false,
+  "run_dspy_now": false,
+  "real_benchmarks_executed": false,
+  "real_benchmark_execution_approved": false,
+  "mutate_active_system_prompt_now": false,
+  "active_system_prompt_apply_approved": false,
+  "apply_ready": false,
+  "phase3_execution_ready": false,
+  "approval_gate": {
+    "planning_authorized": "rec action GO",
+    "real_benchmark_execution_approved": false,
+    "optimizer_execution_approved": false,
+    "active_apply_approved": false,
+    "separate_approval_required_before": [
+      "running real TBLite benchmark commands",
+      "running real YC-Bench benchmark commands",
+      "spending nonzero benchmark/API budget",
+      "running GEPA/DSPy optimization",
+      "editing Hermes Agent prompt source",
+      "applying evolved prompt to active runtime",
+      "default-gate promotion"
+    ]
+  },
+  "required_inputs": {
+    "baseline_prompt_artifact": {
+      "path": "output/phase3-system-prompt/<run-id>/review/baseline_system_prompt.json",
+      "status": "required_before_execution",
+      "required_before": "real_benchmark_execution"
+    },
+    "candidate_prompt_artifact": {
+      "path": "output/phase3-system-prompt/<run-id>/review/candidate_system_prompt.json",
+      "status": "required_before_execution",
+      "required_before": "real_benchmark_execution"
+    },
+    "candidate_scaffold_report": {
+      "path": "output/phase3-system-prompt/<run-id>/review/candidate_only_report.json",
+      "status": "required_before_execution",
+      "required_before": "real_benchmark_execution"
+    },
+    "dry_run_preflight_report": {
+      "path": "output/phase3-system-prompt/<run-id>/preflight/phase3_preflight_report.json",
+      "status": "available_dry_run_fixture",
+      "required_before": "real_benchmark_execution"
+    },
+    "tblite_fixture_cases": {
+      "path": "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+      "status": "available_dry_run_fixture",
+      "required_before": "real_benchmark_execution"
+    },
+    "yc_bench_fixture_cases": {
+      "path": "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+      "status": "available_dry_run_fixture",
+      "required_before": "real_benchmark_execution"
+    },
+    "tblite_runner": {
+      "path": "evolution/benchmarks/run_tblite.py",
+      "status": "available_dry_run_fixture",
+      "required_before": "real_benchmark_execution"
+    },
+    "yc_bench_runner": {
+      "path": "evolution/benchmarks/run_yc_bench.py",
+      "status": "available_dry_run_fixture",
+      "required_before": "real_benchmark_execution"
+    }
+  },
+  "environment_requirements": {
+    "python": {
+      "min_version": "3.10"
+    },
+    "self_evolution_package": {
+      "install_mode": "editable_with_dev_dependencies"
+    },
+    "hermes_agent_repo": {
+      "env_var": "HERMES_AGENT_REPO",
+      "required": true
+    },
+    "credential_policy": {
+      "raw_credentials_must_not_be_recorded": true,
+      "llm_or_benchmark_credentials_required_only_after_explicit_approval": true
+    }
+  },
+  "real_benchmark_transition": {
+    "current_adapter_status": "dry_run_only_real_mode_not_implemented",
+    "external_calls_allowed_now": false,
+    "network_allowed_now": false,
+    "real_mode_templates_runnable_now": false,
+    "real_results_required_before": [
+      "phase3_execution",
+      "system_prompt_evolution_acceptance",
+      "active_system_prompt_apply",
+      "default_gate_promotion"
+    ],
+    "real_command_templates": [
+      {
+        "name": "TBLite",
+        "status": "template_only_not_run",
+        "runnable_now": false,
+        "command": "python -m evolution.benchmarks.run_tblite --baseline-prompt output/phase3-system-prompt/<run-id>/review/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/review/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl --output-json output/phase3-system-prompt/<run-id>/benchmarks/tblite.json",
+        "output_json": "output/phase3-system-prompt/<run-id>/benchmarks/tblite.json"
+      },
+      {
+        "name": "YC-Bench",
+        "status": "template_only_not_run",
+        "runnable_now": false,
+        "command": "python -m evolution.benchmarks.run_yc_bench --baseline-prompt output/phase3-system-prompt/<run-id>/review/baseline_system_prompt.json --candidate-prompt output/phase3-system-prompt/<run-id>/review/candidate_system_prompt.json --fixtures-jsonl datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl --preset fast_test --output-json output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json",
+        "output_json": "output/phase3-system-prompt/<run-id>/benchmarks/yc_bench.json"
+      }
+    ]
+  },
+  "cost_and_runtime_limits": {
+    "current_authorized_spend_usd": 0,
+    "proposed_initial_real_benchmark_budget_usd": 25,
+    "hard_stop_total_budget_usd": 50,
+    "max_wall_clock_hours": 8,
+    "abort_on_budget_exhaustion": true,
+    "requires_reapproval_above_usd": 25
+  },
+  "rollback_requirements": {
+    "checkpoint_required_before_real_benchmark": true,
+    "baseline_prompt_snapshot_required": true,
+    "baseline_prompt_checksum_required": true,
+    "git_status_snapshot_required": true,
+    "rollback_handle_required_before_apply": true,
+    "active_runtime_rollback_required_before_apply": true,
+    "allowed_write_roots_before_apply": [
+      "output/phase3-system-prompt/<run-id>/",
+      "reports/phase3_real_benchmark_readiness_manifest.json",
+      "reports/phase3_real_benchmark_readiness_manifest.md"
+    ],
+    "prohibited_targets_before_separate_apply_approval": [
+      "~/.hermes/SOUL.md",
+      "~/.hermes/config.yaml",
+      "~/.hermes/hermes-agent/agent/prompt_builder.py",
+      "~/.hermes/skills/",
+      "~/.hermes/memories/",
+      "~/.hermes/profiles/"
+    ]
+  },
+  "go_no_go_conditions": [
+    {
+      "id": "RBM-1-input-artifacts-and-checksums",
+      "required_before": "real_benchmark_execution",
+      "status": "required"
+    },
+    {
+      "id": "RBM-2-real-mode-runner-implemented-or-pinned",
+      "required_before": "real_benchmark_execution",
+      "status": "required"
+    },
+    {
+      "id": "RBM-3-explicit-approval-and-budget",
+      "required_before": "real_benchmark_execution",
+      "status": "required"
+    },
+    {
+      "id": "RBM-4-fresh-output-root",
+      "required_before": "real_benchmark_execution",
+      "status": "satisfied_by_existing_contract"
+    },
+    {
+      "id": "RBM-5-rollback-handle",
+      "required_before": "real_benchmark_execution",
+      "status": "required"
+    },
+    {
+      "id": "RBM-6-candidate-only-no-apply",
+      "required_before": "real_benchmark_execution",
+      "status": "satisfied_by_existing_contract"
+    }
+  ],
+  "ready_state": {
+    "real_benchmark_ready_now": false,
+    "blocked_until_all_go_no_go_conditions_satisfied": true,
+    "active_apply_ready_now": false
+  },
+  "artifacts": {
+    "manifest_json": "reports/phase3_real_benchmark_readiness_manifest.json",
+    "manifest_markdown": "reports/phase3_real_benchmark_readiness_manifest.md",
+    "source_execution_seed": "seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml",
+    "source_execution_report": "reports/phase3_execution_seed_draft.json"
+  }
+}

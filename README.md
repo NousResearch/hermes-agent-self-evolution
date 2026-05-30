@@ -55,7 +55,7 @@ python -m evolution.skills.evolve_skill \
 |-------|--------|--------|--------|
 | **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
 | **Phase 2** | Tool descriptions | DSPy + GEPA | 🟡 Candidate-only gate/report contract implemented |
-| **Phase 3** | System prompt sections | DSPy + GEPA | 🟡 Design + execution Seed draft recorded |
+| **Phase 3** | System prompt sections | DSPy + GEPA | 🟡 Design + execution Seed draft + readiness manifest recorded |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
 
@@ -233,6 +233,12 @@ python -m evolution.prompts.phase3_preflight_gate \
 ```
 
 The preflight gate checks candidate-only/apply-blocked flags, dry-run benchmark reports, hardened output constraints, and prompt artifact checksum consistency across reports. It can pass the local contract while still keeping real benchmarks and human approval blocking Phase 3 execution.
+
+## Phase 3 Real Benchmark Readiness Manifest
+
+The Phase 3 real benchmark readiness manifest is recorded in `reports/phase3_real_benchmark_readiness_manifest.json` and `reports/phase3_real_benchmark_readiness_manifest.md`. It is machine-readable preparation only: `real_benchmark_ready_now=false`, `active_apply_ready_now=false`, real TBLite/YC-Bench execution is not approved, and active system-prompt/source apply remains blocked.
+
+The manifest fixes required inputs, environment requirements, cost/runtime caps, rollback requirements, and go/no-go conditions before any future switch from dry-run fixtures to real benchmark evidence.
 
 ## Full Plan
 

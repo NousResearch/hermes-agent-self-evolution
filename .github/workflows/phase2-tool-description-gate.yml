@@ -70,6 +70,7 @@ jobs:
             tests/tools/test_phase3_benchmark_adapters.py \
             tests/tools/test_phase3_candidate_scaffold.py \
             tests/tools/test_phase3_preflight_gate.py \
+            tests/tools/test_phase3_real_benchmark_readiness_manifest.py \
             tests/tools/test_phase2_automation.py \
             -q
 
