@@ -19,10 +19,15 @@ session_db: /home/prashanth_bhelley/.hermes/sessions.db
 # ============================================================
 
 group_discovery:
-  method: auto                  # auto | manual | hybrid
-  platforms: [telegram]         # Which platforms to scan
-  min_messages_last_7d: 5      # Only consider groups with recent activity
-  include_dm: false             # Skip 1:1 DMs, only group chats
+  method: hybrid                  # auto + manual override
+  platforms: [telegram]           # Which platforms to scan
+  min_messages_last_7d: 5        # Only consider groups with recent activity
+  include_dm: false               # Skip 1:1 DMs, only group chats
+
+# HARD BOUNDARY: These groups are NEVER mined for evolution data
+# Baked in BLR x Pablo — bakery business only, zero system exposure
+excluded_groups:
+  - telegram:-1003806480938       # Baked in BLR x Pablo (PROTECTED)
 
 # When manual override is needed (e.g., group not yet active)
 manual_groups:
