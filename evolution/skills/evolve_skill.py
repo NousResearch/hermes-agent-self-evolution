@@ -161,6 +161,9 @@ def evolve(
     console.print(f"\n  Body rewrite completed in {elapsed:.1f}s")
     console.print(f"  Changed body: {rewrite_metadata['changed']}")
     console.print(f"  Empty candidates rejected: {rewrite_metadata['rejected_empty']}")
+    console.print(f"  Invalid candidates rejected: {rewrite_metadata.get('rejected_invalid', 0)}")
+    if not rewrite_metadata["changed"]:
+        console.print("[yellow]⚠ No changed body candidate was accepted; saved output will be marked non-evolved[/yellow]")
 
     # ── 6. Reassemble evolved skill text ────────────────────────────────
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
@@ -264,6 +267,7 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "artifact_status": "evolved" if rewrite_metadata["changed"] else "non_evolved",
         "body_rewrite": rewrite_metadata,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
