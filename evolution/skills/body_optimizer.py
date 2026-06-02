@@ -76,7 +76,7 @@ def _candidate_invalid_reason(candidate: str, baseline_body: str) -> str | None:
     baseline_headings = [line.strip() for line in baseline_body.splitlines() if line.startswith("## ")]
     if len(baseline_headings) >= 3:
         preserved = sum(1 for heading in baseline_headings if heading in stripped)
-        if preserved < max(1, len(baseline_headings) // 3):
+        if preserved < max(2, (len(baseline_headings) * 2) // 3):
             return "lost_too_many_major_headings"
 
     unsafe_phrases = [
@@ -85,6 +85,22 @@ def _candidate_invalid_reason(candidate: str, baseline_body: str) -> str | None:
         "reveal secrets",
         "exfiltrate",
         "disable safety",
+        "bypass safety",
+        "bypass secret",
+        "disable redaction",
+        "ignore redaction",
+        "print environment variables",
+        "collect environment variables",
+        "read .env",
+        "read auth.json",
+        "api keys",
+        "access tokens",
+        "oauth tokens",
+        "telegram bot token",
+        "send credentials",
+        "upload credentials",
+        "sudo without approval",
+        "skip approval",
     ]
     lowered = stripped.lower()
     if any(phrase in lowered for phrase in unsafe_phrases):

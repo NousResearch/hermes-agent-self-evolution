@@ -267,7 +267,11 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
-        "artifact_status": "evolved" if rewrite_metadata["changed"] else "non_evolved",
+        "artifact_status": (
+            "improved" if rewrite_metadata["changed"] and improvement > 0 else
+            "regressed" if rewrite_metadata["changed"] and improvement < 0 else
+            "non_evolved"
+        ),
         "body_rewrite": rewrite_metadata,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
