@@ -140,6 +140,46 @@ Evolves one tool's top-level `description` field inside an MCP-shape manifest. T
 - `sys.exit(1)` if the holdout split has fewer than `min_holdout_size` (default 10) examples.
 - Returns normally (rejection path) if static or growth-quality gate fails — `evolved_FAILED.json` + `gate_decision.json` are written.
 
+## CLI: `python -m evolution.prompts.evolve_prompt_section`
+
+Evolves one named section of an agent's system prompt — a top-level string constant in Hermes Agent's `agent/prompt_builder.py` (e.g. `MEMORY_GUIDANCE`). Unlike the skill and tool paths, evaluation is **purely behavioral**: there is no synthetic LLM-judge signal. Every candidate is spliced into the live `prompt_builder.py` and scored by running the real agent (`hermes -z`) against the task suite, so the deploy gate is a `ClosedLoopValidator` run (pass-rate + win/loss), not a paired-bootstrap CI over judge scores.
+
+The verdict is **compound**: Layer 1 is the same `expected_tools` / `forbidden_tools` membership rule as the closed-loop tool path; Layer 2 is an LLM judge that scores each `memory(action=add|replace)` call's content against the task's `expected_save_content` rubric (only tasks that declare a rubric are Layer-2 judged). The candidate is spliced in for the duration of the run and the file is restored byte-for-byte afterward, reusing the tool-path backup + flock + checksum-drift machinery.
+
+### Required flags
+| Flag | Purpose |
+|---|---|
+| `--section <name>` | The `prompt_builder.py` top-level string constant to evolve (e.g. `MEMORY_GUIDANCE`). Dict-typed constants (e.g. `PLATFORM_HINTS`) are not supported. |
+| `--hermes-repo <path>` | Path to your hermes-agent checkout. `agent/prompt_builder.py` inside it is the splice/restore target. |
+| `--tasks <path>` | JSONL eval suite (e.g. `evolution/validation/suites/memory_guidance.jsonl`). Same task shape as the closed-loop tool suite, plus an optional `expected_save_content` rubric per task for Layer 2. Must contain ≥2 tasks (so the split yields a non-empty trainset and holdout). |
+
+### Optional flags
+| Flag | Default | Notes |
+|---|---|---|
+| `--iterations <int>` | `10` | GEPA `max_full_evals`. |
+| `--holdout-ratio <float>` | `0.5` | Fraction of tasks held out for the deploy gate. Clamped to keep both the trainset and holdout non-empty. |
+| `--seed <int>` | `42` | RNG seed for the train/holdout split and GEPA. |
+| `--max-growth <float>` | `0.2` | Section length budget as a fraction over the baseline; framed to the `PromptSectionProposer` so candidates stay near the baseline length (set higher when evolving from a short baseline that needs to grow). |
+| `--optimizer-model` / `--reflection-model` / `--eval-model <name>` | config default | Per-role LiteLLM model overrides; resolved like the other CLIs. `--eval-model` is the Layer 2 content judge. |
+| `--agent-model <name>` | config default | The model the `hermes -z` agent itself runs as. A deliberately weaker agent exposes more behavioral signal (a strong agent saturates the suite regardless of the prompt). LiteLLM provider prefixes are stripped before `hermes -m`. |
+| `--layer2-threshold <float>` | `0.7` | Minimum mean content-judge score for a save task to pass Layer 2. |
+| `--task-timeout-seconds <int>` | `120` | Per-task wall-clock cap for `hermes -z`. Timeouts abstain (don't tip the decision). |
+| `--max-cost-usd <float>` | `150.0` | Abort cleanly when cumulative **in-process** LM cost (judge + reflection + the passthrough predictor) exceeds this. The agent's own LM spend happens inside the `hermes` child process and is not captured by this ceiling. |
+| `--gepa-minibatch-size <int>` | `3` | GEPA reflective minibatch size; same meaning as the other paths. |
+| `--gepa-acceptance {improvement-or-equal,strict-improvement}` | `improvement-or-equal` | Same meaning as the other paths. |
+| `--apply` | off | On a deploy decision, write the evolved section into `prompt_builder.py` in place (byte-precise AST splice, `ast.parse`-guarded, atomic). |
+| `--create-pr` | off | **Deferred for prompt sections** — accepted and recorded as a `skipped` PR block in `gate_decision.json`, but no PR is opened (copying a full evolved `prompt_builder.py` over `origin/<base>` would carry unrelated local changes into the diff). Use `--apply` + a manual PR. |
+| `--baseline-override-file <path>` | off | Start evolution from this text instead of the live section. The live section is still the splice/restore target (backed up + restored); `--apply` still writes the evolved text. Use it to create headroom on an already-tuned section (e.g. a deliberately-weakened baseline) or for regression-injection ablations. |
+| `--skip-saturation-check` | off | Skip the saturation pre-flight entirely. |
+| `--force-saturation-check` | off | Run the pre-flight, render the panel, but proceed regardless of band — required to override a non-`healthy` verdict non-interactively. |
+| `--dry-run` | off | Resolve the baseline + build the modules, then stop — exercises wiring with no LM/agent calls. Writes a `decision="dry_run"` `gate_decision.json`. |
+| `--output-dir <path>` | `output/prompts/<section>/<timestamp>/` | Where `gate_decision.json` and the baseline/evolved section text files land. |
+
+### Exit conditions
+- `0` on a `deploy` decision (or a `--dry-run`).
+- `1` on `reject` (the holdout deploy gate found a regression), `denied` (saturated baseline default-denied non-interactively), or `aborted` (cost ceiling).
+- `ValueError` at startup if the suite has fewer than 2 tasks.
+
 ## CLI: `python -m evolution.core.external_importers`
 
 Standalone session-history importer. Useful for previewing what `--eval-source sessiondb` would produce without running the full evolution.

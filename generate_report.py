@@ -45,13 +45,81 @@ REPO_ROOT = Path(__file__).resolve().parent
 DEFAULT_LOGO = REPO_ROOT / "assets" / "dna.png"
 
 
+def _extract_prompt_section_data(gate: dict, run_dir: Path) -> dict[str, Any]:
+    """Build the render context for a Phase 3 prompt-section run.
+
+    The prompt-section path is behavioral-only — its gate_decision carries a
+    ``closed_loop`` pass-rate / win-loss block instead of the skill/tool
+    bootstrap-CI + synthetic-dataset + knee-point fields, and self-sources
+    cost/timing/call-count (no metrics.json needed). The ``_experiment`` and
+    ``_results`` renderers branch on ``artifact_type`` to lay out the matching
+    tables; every other section is prose-driven via the keys returned here.
+    """
+    cl = gate.get("closed_loop", {})
+    cost = gate.get("cost", {})
+    resolved = (gate.get("run_inputs", {}) or {}).get("resolved_lms", {})
+
+    n_wins = int(cl.get("n_wins", 0))
+    n_losses = int(cl.get("n_losses", 0))
+    n_ties = int(cl.get("n_ties", 0))
+    cl_total = n_wins + n_losses + n_ties
+    baseline_rate = float(cl.get("baseline_pass_rate", 0.0))
+    evolved_rate = float(cl.get("evolved_pass_rate", 0.0))
+    cl_baseline_pass = round(baseline_rate * cl_total)
+    cl_evolved_pass = round(evolved_rate * cl_total)
+    elapsed = int(float(gate.get("elapsed_seconds", 0)))
+    lm_calls = sum(int(m.get("calls", 0)) for m in (cost.get("by_model") or {}).values())
+    decision = gate.get("decision", "")
+
+    def _model(role: str) -> str:
+        return (resolved.get(role) or {}).get("model", "—")
+
+    return {
+        "artifact_type": "prompt_section",
+        "skill_name": gate.get("target_section", run_dir.parent.name),
+        "section_name": gate.get("target_section", ""),
+        "baseline_chars": int(gate.get("baseline_chars", 0)),
+        "evolved_chars": int(gate.get("evolved_chars", 0)),
+        "growth_pct": float(gate.get("growth_pct", 0.0)),
+        "growth_abs_pct": abs(float(gate.get("growth_pct", 0.0))),
+        "decision": decision,
+        "decision_upper": "DEPLOYED" if decision == "deploy" else "REJECTED",
+        "decision_signal": gate.get("decision_signal", "closed_loop"),
+        "baseline_pass_rate": baseline_rate,
+        "evolved_pass_rate": evolved_rate,
+        "baseline_pass_pct": baseline_rate * 100,
+        "evolved_pass_pct": evolved_rate * 100,
+        "cl_baseline_pass": cl_baseline_pass,
+        "cl_evolved_pass": cl_evolved_pass,
+        "cl_total_tasks": cl_total,
+        "cl_tasks_gained": cl_evolved_pass - cl_baseline_pass,
+        "n_wins": n_wins,
+        "n_losses": n_losses,
+        "n_ties": n_ties,
+        "elapsed_seconds": elapsed,
+        "elapsed_minutes": elapsed // 60,
+        "cost_total_usd": float(cost.get("total_usd", 0.0)),
+        "lm_calls_metrics": lm_calls,
+        "optimizer_lm": _model("optimizer"),
+        "reflection_lm": _model("reflection"),
+        "eval_lm": _model("eval"),
+        "saturation_band": gate.get("saturation_band", ""),
+        "sentinel_failures": int(gate.get("sentinel_failures", 0)),
+        "decision_reasons": "; ".join(cl.get("decision_reasons", [])),
+    }
+
+
 def _extract_run_data(run_dir: Path) -> dict[str, Any]:
     """Pull all numbers the renderer needs from a run dir.
 
     Reads gate_decision.json (always present) + metrics.json (deploy only) +
-    run.log (LM call counts grep'd from timing-callback lines).
+    run.log (LM call counts grep'd from timing-callback lines). Prompt-section
+    (Phase 3) runs are behavioral-only and self-source from gate_decision.json
+    alone — see ``_extract_prompt_section_data``.
     """
     gate = json.loads((run_dir / "gate_decision.json").read_text())
+    if gate.get("artifact_type") == "prompt_section":
+        return _extract_prompt_section_data(gate, run_dir)
     metrics_path = run_dir / "metrics.json"
     metrics = json.loads(metrics_path.read_text()) if metrics_path.is_file() else {}
 
@@ -442,7 +510,7 @@ def _approach(prose: dict, ctx: dict, styles) -> list:
     ap = prose["approach"]
     engines = ap["engines"]
     flow = [
-        Paragraph("Approach: Evolutionary Skill Optimization", styles['SectionHead']),
+        Paragraph(ap.get("section_title", "Approach: Evolutionary Optimization"), styles['SectionHead']),
         Paragraph("Three Optimization Engines", styles['SubSection']),
         _highlight_table(
             header=engines["header"],
@@ -463,9 +531,57 @@ def _approach(prose: dict, ctx: dict, styles) -> list:
     return flow
 
 
+def _experiment_prompt_section(exp: dict, overrides: dict, ctx: dict, styles) -> list:
+    """Phase 3 experiment section: behavioral config (no synthetic eval set,
+    no knee-point), and the suite is described in prose rather than via a
+    train.jsonl examples table (prompt-section runs don't write one)."""
+    config_rows = [
+        ['Target Section', _fmt(overrides["target_section_label"], ctx)],
+        ['Baseline Size', f'{ctx["baseline_chars"]:,} characters'],
+        ['Optimizer LM', _fmt(overrides["optimizer_lm"], ctx)],
+        ['Reflection LM (GEPA)', _fmt(overrides["reflection_lm"], ctx)],
+        ['Content-Judge LM (Layer 2)', _fmt(overrides["eval_judge_lm"], ctx)],
+        ['Agent (hermes -z)', _fmt(overrides["agent_lm"], ctx)],
+        ['Behavioral Suite', f'{ctx["cl_total_tasks"]} holdout tasks (real hermes -z, scored end-to-end)'],
+        ['Total Optimization Time',
+         f'{ctx["elapsed_seconds"]:,} seconds (~{ctx["elapsed_minutes"]} minutes)'],
+        ['Total LM Calls (in-process)', f'{ctx["lm_calls_metrics"]:,}'],
+        ['Total Cost (USD, in-process)', f'${ctx["cost_total_usd"]:.2f}'],
+        ['Deploy Gate', _fmt(overrides["quality_gate_label"], ctx)],
+        ['Saturation Pre-flight', _fmt(overrides["saturation_label"], ctx)],
+    ]
+    config_data = [[_wrap_cell(c, styles['TableHeaderCell']) for c in ['Parameter', 'Value']]]
+    config_data += [[_wrap_cell(c, styles['TableCell']) for c in row] for row in config_rows]
+    config_table = Table(config_data, colWidths=[2.0 * inch, 4.0 * inch])
+    config_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1a1a2e')),
+        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#cccccc')),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    return [
+        Paragraph(exp.get("section_title", "Experiment"), styles['SectionHead']),
+        Paragraph("Configuration", styles['SubSection']),
+        config_table,
+        Paragraph("Evaluation Suite", styles['SubSection']),
+        Paragraph(_fmt(exp["dataset_intro"], ctx), styles['BodyJust']),
+        Paragraph("Fitness Function", styles['SubSection']),
+        Paragraph(_fmt(exp["fitness_intro"], ctx), styles['BodyJust']),
+        Paragraph(
+            f"<font face='Courier' size=9>{exp['fitness_formula']}</font>",
+            ParagraphStyle('Formula', parent=styles['Normal'], alignment=TA_CENTER,
+                           spaceBefore=8, spaceAfter=8, fontSize=10),
+        ),
+        Paragraph(_fmt(exp["fitness_closing"], ctx), styles['BodyJust']),
+    ]
+
+
 def _experiment(prose: dict, ctx: dict, styles, examples: list[tuple[str, str]]) -> list:
     exp = prose["experiment"]
     overrides = exp["config_overrides"]
+    if ctx.get("artifact_type") == "prompt_section":
+        return _experiment_prompt_section(exp, overrides, ctx, styles)
 
     # Phase 1 runs counted gpt-4.1-mini + gpt-5-mini explicitly via run.log grep;
     # Phase 2 runs use a single optimizer LM tier (e.g., gpt-5.4-mini), so fall
@@ -571,24 +687,38 @@ def _results(prose: dict, ctx: dict, styles) -> list:
         accent_bg = HexColor('#fff8e1')
         accent_fg = HexColor('#5d4037')
 
-    results_rows = [
-        ['Metric', 'Baseline', 'Evolved (knee-point pick)', 'Δ'],
-        ['Body size (chars)', f'{ctx["baseline_chars"]:,}', f'{ctx["evolved_chars"]:,}', f'{ctx["growth_pct"]:+.1%}'],
-        [f'Avg holdout score (n={ctx["n_holdout"]})',
-         f'{ctx["avg_baseline"]:.3f}', f'{ctx["avg_evolved"]:.3f}', f'{ctx["improvement"]:+.3f}'],
-        ['Bootstrap mean diff', '—', f'{ctx["bootstrap_mean"]:+.3f}', '—'],
-        ['Bootstrap 90% CI lower', '—', f'{ctx["bootstrap_lower"]:+.3f}', '—'],
-        ['Bootstrap 90% CI upper', '—', f'{ctx["bootstrap_upper"]:+.3f}', '—'],
-    ]
-    # Phase 2: surface the closed-loop behavioral signal when the v5 schema
-    # exposed it (absent on synthetic-only runs).
-    if ctx.get("cl_total_tasks"):
-        results_rows.append([
-            f'Closed-loop tasks (n={ctx["cl_total_tasks"]})',
-            f'{ctx["cl_baseline_pass"]}/{ctx["cl_total_tasks"]}',
-            f'{ctx["cl_evolved_pass"]}/{ctx["cl_total_tasks"]}',
-            f'+{ctx["cl_tasks_gained"]} (req ≥{ctx["cl_required_gain"]})',
-        ])
+    if ctx.get("artifact_type") == "prompt_section":
+        # Behavioral-only: pass-rate + win/loss, no bootstrap/synthetic rows.
+        delta_rate = ctx["evolved_pass_rate"] - ctx["baseline_pass_rate"]
+        results_rows = [
+            ['Metric', 'Baseline', 'Evolved', 'Δ'],
+            ['Section size (chars)', f'{ctx["baseline_chars"]:,}', f'{ctx["evolved_chars"]:,}', f'{ctx["growth_pct"]:+.1%}'],
+            [f'Holdout pass-rate (n={ctx["cl_total_tasks"]})',
+             f'{ctx["baseline_pass_rate"]:.0%}', f'{ctx["evolved_pass_rate"]:.0%}', f'{delta_rate:+.0%}'],
+            [f'Tasks passing (n={ctx["cl_total_tasks"]})',
+             f'{ctx["cl_baseline_pass"]}/{ctx["cl_total_tasks"]}',
+             f'{ctx["cl_evolved_pass"]}/{ctx["cl_total_tasks"]}',
+             f'+{ctx["n_wins"]}W / {ctx["n_losses"]}L'],
+        ]
+    else:
+        results_rows = [
+            ['Metric', 'Baseline', 'Evolved (knee-point pick)', 'Δ'],
+            ['Body size (chars)', f'{ctx["baseline_chars"]:,}', f'{ctx["evolved_chars"]:,}', f'{ctx["growth_pct"]:+.1%}'],
+            [f'Avg holdout score (n={ctx["n_holdout"]})',
+             f'{ctx["avg_baseline"]:.3f}', f'{ctx["avg_evolved"]:.3f}', f'{ctx["improvement"]:+.3f}'],
+            ['Bootstrap mean diff', '—', f'{ctx["bootstrap_mean"]:+.3f}', '—'],
+            ['Bootstrap 90% CI lower', '—', f'{ctx["bootstrap_lower"]:+.3f}', '—'],
+            ['Bootstrap 90% CI upper', '—', f'{ctx["bootstrap_upper"]:+.3f}', '—'],
+        ]
+        # Phase 2: surface the closed-loop behavioral signal when the v5 schema
+        # exposed it (absent on synthetic-only runs).
+        if ctx.get("cl_total_tasks"):
+            results_rows.append([
+                f'Closed-loop tasks (n={ctx["cl_total_tasks"]})',
+                f'{ctx["cl_baseline_pass"]}/{ctx["cl_total_tasks"]}',
+                f'{ctx["cl_evolved_pass"]}/{ctx["cl_total_tasks"]}',
+                f'+{ctx["cl_tasks_gained"]} (req ≥{ctx["cl_required_gain"]})',
+            ])
     results_rows.append(['Decision', '—', decision_cell, decision_note])
 
     # Per-cell style picks: header row uses bold/white; first column (metric

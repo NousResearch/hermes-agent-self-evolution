@@ -555,6 +555,79 @@ Written by `evolution/core/quality_gate.py::append_cl_decision_fields` when the 
 | `band_trigger_score` | `dict` | Pre-flight scores that decided whether CL-primary fired. Keys: `holdout` (`float \| None`), `closed_loop` (`float \| None`). |
 | `validator_agent_model` | `str` | The LiteLLM model id used for the closed-loop validator agent. Recorded so historical decisions stay analysable if the default changes. |
 
+### Prompt-section additions (`artifact_type == "prompt_section"`)
+
+Runs of `evolution.prompts.evolve_prompt_section` (Phase 3) write the same `schema_version` "5" envelope but a **deliberately different field set** from the skill/tool variant, because the deploy gate is a closed-loop pass-rate / win-loss decision, **not** a paired-bootstrap one. There is no synthetic classification signal for a system-prompt section — every candidate is scored behaviorally by a real `hermes -z` against a curated suite — so the bootstrap substrate doesn't apply.
+
+```json
+{
+  "schema_version": "5",
+  "artifact_type": "prompt_section",
+  "target_section": "MEMORY_GUIDANCE",
+  "decision": "deploy",                          // "deploy" | "reject" | "denied" | "dry_run" | "aborted"
+  "decision_signal": "closed_loop",              // always "closed_loop" on this path
+  "baseline_chars": 1840,
+  "evolved_chars": 2104,
+  "growth_pct": 0.143,                           // (evolved_chars - baseline_chars) / baseline_chars
+  "closed_loop": {
+    "decision": "pass",                          // "pass" | "regression" (ValidationReport.decision)
+    "decision_reasons": ["pass_rate 0.92 >= baseline 0.75", "n_wins 4 >= 2*n_losses 0"],
+    "baseline_pass_rate": 0.75,
+    "evolved_pass_rate": 0.92,
+    "n_wins": 4,
+    "n_losses": 0,
+    "n_ties": 8
+  },
+  "sentinel_failures": 1,                         // reflection-LM outputs the proposer rejected for breaking sentinel preservation
+  "elapsed_seconds": 412.6,
+  "cost": { /* same shape as cost_summary: total_usd + by_model */ },
+  "run_inputs": { /* seed, iterations, model versions, suite path/sha, validator_agent_model, ... */ },
+  "pr_created": { "status": "skipped", "reason": "prompt_section_pr_unsupported", "branch": null, "commit_sha": null, "url": null }
+}
+```
+
+**Fields this variant carries** (and the tool/skill variant does not, or differs on):
+
+| Field | Type | Notes |
+|---|---|---|
+| `artifact_type` | `"prompt_section"` | Disjoint from `"skill"` / `"tool_description"`. |
+| `target_section` | `str` | The `prompt_builder.py` constant whose text was evolved (e.g. `MEMORY_GUIDANCE`). |
+| `decision` | `"deploy" \| "reject" \| "denied" \| "dry_run" \| "aborted"` | `"denied"` lands on a saturation pre-flight default-deny; `"dry_run"` when the run was asked to evaluate without splicing; `"aborted"` on cost-ceiling / interrupt. |
+| `decision_signal` | `"closed_loop"` | Always `"closed_loop"` here — the synthetic value never appears on this path. |
+| `baseline_chars` / `evolved_chars` / `growth_pct` | int / int / float | Size telemetry; growth informs the closed-loop required-gain threshold but is not gated on a bootstrap. |
+| `closed_loop` | `dict` | `{decision, decision_reasons, baseline_pass_rate, evolved_pass_rate, n_wins, n_losses, n_ties}` — the deploy gate's primary evidence (sourced from `ValidationReport` over the behavioral suite). |
+| `sentinel_failures` | `int` | Count of reflection-LM proposals rejected for failing sentinel preservation (same meaning as the tool path). |
+| `elapsed_seconds` / `cost` | float / dict | Wall-clock + per-model cost ledger. |
+| `run_inputs` | `dict` | Reproduction inputs (seed, iterations, models, suite path + sha, `validator_agent_model`). |
+| `pr_created` | `dict` | Shape-stable with the skill/tool path, but the prompt-section path currently emits a `status: "skipped"` block (PR automation for in-place `prompt_builder.py` splices is not wired). |
+
+**Fields the prompt-section variant deliberately OMITS.** A reader or calibration script must not assume these are present — they exist only on the skill/tool (paired-bootstrap) path:
+
+- `bootstrap` — no per-example bootstrap CI; the gate is win-loss, not a resampled mean.
+- `avg_baseline` / `avg_evolved` — no synthetic holdout mean. The analogous numbers live inside `closed_loop` as `baseline_pass_rate` / `evolved_pass_rate`.
+- `dataset` — there is no synthetic eval dataset and no `dataset` block with per-source/per-category counts; the behavioral suite is the JSONL passed via `--tasks`. `run_inputs` records the run config (models, seed, iterations, holdout-ratio, `eval_source: "closed_loop"`), not the suite path or sha.
+- `knee_point` — Pareto knee-point selection over a synthetic valset doesn't apply; candidates are chosen on behavioral score.
+
+#### Saturation-denied variant (prompt section)
+
+When the saturation pre-flight default-denies (non-healthy band, non-interactive context, no `--force-saturation-check`), the prompt-section gate writes `decision: "denied"` and carries a `saturation_band` field naming the band that triggered the denial:
+
+```json
+{
+  "schema_version": "5",
+  "artifact_type": "prompt_section",
+  "target_section": "MEMORY_GUIDANCE",
+  "decision": "denied",
+  "decision_signal": "closed_loop",
+  "saturation_band": "no_headroom",              // "healthy" never lands here; one of no_headroom | weak_signal | uniform_failure
+  "baseline_chars": 1840,
+  "run_inputs": { /* ... */ },
+  "pr_created": { "status": "skipped", "reason": "prompt_section_pr_unsupported", "branch": null, "commit_sha": null, "url": null }
+}
+```
+
+`saturation_band` appears only on the `"denied"` decision (it records why the run never started); it is absent on `deploy` / `reject` / `dry_run`.
+
 ## metrics.json (deploy-only summary)
 
 Written to `output/<skill>/<timestamp>/metrics.json` only on deploy. Top-level summary for quick scanning:

@@ -56,10 +56,20 @@ graph TB
         hermes_source[tools.hermes_source<br/>Hermes *_SCHEMA AST adapter]
     end
 
+    subgraph prompts_tier[Prompt Tier]
+        evolve_prompt[prompts.evolve_prompt_section<br/>main + evolve]
+        prompt_module[prompts.prompt_module<br/>PromptModule + sentinels]
+        prompt_proposer[prompts.prompt_proposer<br/>PromptSectionProposer]
+        prompt_judge[prompts.prompt_judge<br/>SaveCallJudge + judge_save_calls<br/>+ prompt fitness/splice scorer]
+        prompt_source[prompts.prompt_source<br/>PromptSource protocol + SectionDescriptor]
+        hermes_prompt_source[prompts.hermes_prompt_source<br/>HermesPromptSource — prompt_builder.py AST]
+    end
+
     subgraph validation_subsystem[Closed-loop validation]
         validator[validation.validator<br/>ClosedLoopValidator]
         hermes_runner[validation.hermes_runner<br/>hermes -z subprocess]
-        installer[validation.artifact_installer<br/>HermesToolDescriptionInstaller]
+        installer[validation.artifact_installer<br/>HermesToolDescriptionInstaller +<br/>HermesPromptSectionInstaller]
+        savejudge[validation.report<br/>score_task Layer-2 judge hook]
         report[validation.report<br/>ValidationReport + decision]
         task[validation.task<br/>Task + TaskSuite]
         cl_cli[validation.closed_loop<br/>CLI]
@@ -117,10 +127,26 @@ graph TB
     tool_judge --> fitness
     tool_proposer --> budget
 
+    evolve_prompt --> prompt_module
+    evolve_prompt --> prompt_proposer
+    evolve_prompt --> prompt_judge
+    evolve_prompt --> prompt_source
+    evolve_prompt --> hermes_prompt_source
+    evolve_prompt --> config
+    evolve_prompt --> quality
+    evolve_prompt --> timing
+    evolve_prompt --> validator
+    hermes_prompt_source --> prompt_source
+    prompt_module --> dspy
+    prompt_proposer --> budget
+    prompt_judge --> fitness
+    installer --> hermes_prompt_source
+
     validator --> hermes_runner
     validator --> installer
     validator --> report
     validator --> task
+    validator --> savejudge
     cl_cli --> validator
     hermes_runner --> hermes
 
@@ -138,7 +164,9 @@ graph TB
     importers --> dataset
 ```
 
-`evolution/core/` has no dependency on `evolution/skills/`, `evolution/tools/`, or `evolution/validation/`. The reverse holds: tier packages use core helpers but core never imports from a tier package. `closed_loop_feedback.py` imports `evolution.validation.*` types because it's the integration seam, but the validation subpackage doesn't import from skills/tools. This keeps the tier-3/4/5 expansion path open.
+`evolution/core/` has no dependency on `evolution/skills/`, `evolution/tools/`, `evolution/prompts/`, or `evolution/validation/`. The reverse holds: tier packages use core helpers but core never imports from a tier package. `closed_loop_feedback.py` imports `evolution.validation.*` types because it's the integration seam, but the validation subpackage doesn't import from skills/tools/prompts. This keeps the tier-4/5 expansion path open.
+
+The `prompts` tier (Phase 3) is the prompt-section evolution path: `evolve_prompt_section` wraps a named `prompt_builder.py` constant as a `PromptModule` (a passthrough predictor carrying the candidate in sentinel-delimited instructions), mutates it with `PromptSectionProposer`, and — because there is no synthetic classification signal for a system-prompt section — scores **purely behaviorally** through the closed-loop validator running a real `hermes -z` against a curated JSONL suite. The deploy gate is therefore a closed-loop pass-rate / win-loss decision, not a paired-bootstrap one. Unlike the skill/tool tiers it reuses `ClosedLoopValidator` directly rather than going through `closed_loop_feedback.py`, and it integrates by AST-splicing the candidate into the live `agent/prompt_builder.py` (`HermesPromptSectionInstaller`) with atomic restore. The Layer-2 content judge (`SaveCallJudge` / `judge_save_calls`) runs inside `score_task` to grade memory-save *content* on top of the Layer-1 trigger-membership check.
 
 ## Design patterns in active use
 

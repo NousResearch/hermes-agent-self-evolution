@@ -15,6 +15,7 @@ The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and 
 | **What this project is** | `codebase_info.md` → `architecture.md` → repo-root `README.md` |
 | **How a skill run works end-to-end** | `workflows.md` (Workflow 1) → `architecture.md` (top-level flow) |
 | **How a tool-description run works end-to-end** | `workflows.md` (Workflow 9) → `components.md` (`evolve_tool.py`) |
+| **How a prompt-section run works end-to-end** | `workflows.md` (Workflow 12) → `components.md` (`evolve_prompt_section.py`) |
 | **What flag does X / how to run the CLI** | `interfaces.md` (CLI section) |
 | **Why the deploy gate rejected a run** | `data_models.md` (gate_decision.json) → `components.md` (`constraints.py`) |
 | **What's in `gate_decision.json` / `metrics.json`** | `data_models.md` (full schema with examples) |
@@ -53,7 +54,7 @@ The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and 
 | [`components.md`](components.md) | Per-module reference: what each owns, public surface, load-bearing implementation notes |
 | [`interfaces.md`](interfaces.md) | CLIs (skill, tool, closed-loop, sessiondb importer), Python API, SkillSource + ToolSource Protocols, output artifacts, DSPy + litellm integration, test surfaces, env vars |
 | [`data_models.md`](data_models.md) | All dataclasses, on-disk formats, full `gate_decision.json` schema with worked examples, `ValidationReport` schema |
-| [`workflows.md`](workflows.md) | Step-by-step workflows with mermaid sequence diagrams: skill deploy path, reject paths, GEPA→MIPROv2 fallback, sessiondb mining, tool evolution, closed-loop validation, closed-loop signal during evolution |
+| [`workflows.md`](workflows.md) | Step-by-step workflows with mermaid sequence diagrams: skill deploy path, reject paths, GEPA→MIPROv2 fallback, sessiondb mining, tool evolution, closed-loop validation, closed-loop signal during evolution, prompt-section evolution |
 | [`dependencies.md`](dependencies.md) | Each external package — what it's used for, why it's pinned, what we don't depend on |
 | [`framework_advantages.md`](framework_advantages.md) | User-facing explainer of how this framework's selection layer, deploy gate, proposer, and composite fitness differ from raw DSPy + GEPA — and when raw GEPA is the right choice |
 

@@ -67,14 +67,20 @@ evolution/
 │   └── tool_judge.py                    # tool-flavored LLMJudge + GEPA-shaped metric
 ├── validation/                          # closed-loop validation against a real agent
 │   ├── agent_runner.py                  # AgentRunner Protocol + AgentRunResult dataclass
-│   ├── artifact_installer.py            # ArtifactInstaller Protocol + HermesToolDescriptionInstaller
+│   ├── artifact_installer.py            # ArtifactInstaller Protocol + HermesToolDescriptionInstaller + HermesPromptSectionInstaller
 │   ├── closed_loop.py                   # CLI: drive baseline + evolved through hermes -z, compare
-│   ├── hermes_runner.py                 # HermesAgentRunner — subprocess hermes -z with sandboxed HOME
-│   ├── report.py                        # ValidationReport + TaskResult + decision rule
-│   ├── suites/                          # JSONL task suites (patch.jsonl, write_file.jsonl, search_files.jsonl)
+│   ├── hermes_runner.py                 # HermesAgentRunner — subprocess hermes -z; reads sessions from SQLite state.db (parse_session_from_db)
+│   ├── report.py                        # ValidationReport + TaskResult + decision rule + Layer-2 SaveCallJudge in score_task
+│   ├── suites/                          # JSONL task suites (patch.jsonl, write_file.jsonl, search_files.jsonl, memory_guidance.jsonl)
 │   ├── task.py                          # Task + TaskSuite.from_jsonl (with sha256 audit)
 │   └── validator.py                     # ClosedLoopValidator.validate — mutates + restores live agent file
-├── prompts/                             # Tier 3: planned, empty package
+├── prompts/                             # Tier 3: system-prompt-section evolution
+│   ├── evolve_prompt_section.py         # CLI + orchestration; purely-behavioral closed-loop gate
+│   ├── prompt_source.py                 # PromptSource Protocol (read + write) + SectionDescriptor
+│   ├── hermes_prompt_source.py          # HermesPromptSource — AST read/write of prompt_builder.py constants
+│   ├── prompt_module.py                 # PromptModule — passthrough predictor carrying candidate in sentinels
+│   ├── prompt_proposer.py               # PromptSectionProposer — sentinel-preserving GEPA proposer
+│   └── prompt_judge.py                  # SaveCallJudge + judge_save_calls Layer-2 content judge + fitness/splice scorers
 ├── code/                                # Tier 4: planned, empty package
 └── monitor/                             # planned, empty package
 ```
@@ -86,6 +92,7 @@ evolution/
 | `evolution/skills/evolve_skill.py` | ~1340 | CLI, orchestration, gate-decision payload assembly |
 | `evolution/tools/evolve_tool.py` | ~1170 | CLI + orchestration for tool-description evolution |
 | `evolution/core/external_importers.py` | ~770 | 3 importers + relevance filter + standalone CLI |
+| `evolution/prompts/evolve_prompt_section.py` | ~660 | CLI + orchestration; purely-behavioral closed-loop deploy gate |
 | `evolution/core/dataset_builder.py` | ~480 | synthetic generator + golden loader + tool-selection three-bucket gen |
 | `evolution/core/lm_timing_callback.py` | ~400 | DSPy BaseCallback + litellm.failure_callback + cost ledger |
 | `evolution/core/fitness.py` | ~380 | LLMJudge + skill/tool fitness metrics + behavioral score helper |
@@ -94,6 +101,7 @@ evolution/
 | `evolution/core/closed_loop_feedback.py` | ~320 | cache + saturation gate + deterministic feedback block + `force_run` (bypasses gate for pre-flight) |
 | `evolution/core/saturation_check.py` | ~255 | pre-flight: band classifier + `SaturationReport` + Rich panel + interactive confirm |
 | `evolution/tools/tool_judge.py` | ~230 | tool-flavored judge + GEPA-shaped metric with behavioral branch |
+| `evolution/prompts/prompt_judge.py` | ~230 | SaveCallJudge + judge_save_calls Layer-2 content judge + prompt fitness/splice scorers |
 | `evolution/validation/validator.py` | ~220 | mutate + restore live agent file with flock + checksum drift check |
 | `evolution/validation/report.py` | ~225 | ValidationReport JSON + Rich rendering + two-condition decision |
 | `evolution/core/skill_sources.py` | ~210 | Hermes / Claude Code / LocalDir |
@@ -101,15 +109,19 @@ evolution/
 | `evolution/skills/knee_point.py` | ~205 | parsimony-based candidate picker |
 | `evolution/validation/hermes_runner.py` | ~205 | hermes -z subprocess with sandboxed HOME |
 | `evolution/tools/tool_proposer.py` | ~200 | sentinel-preserving reflection prompt |
-| `evolution/validation/artifact_installer.py` | ~150 | byte-precise splice + atomic restore |
+| `evolution/prompts/prompt_proposer.py` | ~160 | sentinel-preserving GEPA proposer for prompt sections |
+| `evolution/validation/artifact_installer.py` | ~150 | byte-precise splice + atomic restore (tool + prompt-section installers) |
+| `evolution/prompts/hermes_prompt_source.py` | ~135 | AST read/write of prompt_builder.py string constants |
+| `evolution/prompts/prompt_module.py` | ~120 | PromptModule passthrough predictor + sentinel parse |
 | `evolution/validation/closed_loop.py` | ~135 | standalone closed-loop CLI |
 | `evolution/skills/skill_module.py` | ~125 | wraps SKILL.md as `dspy.Module` |
 | `evolution/validation/task.py` | ~90 | Task + TaskSuite.from_jsonl |
 | `evolution/core/config.py` | ~80 | `EvolutionConfig` dataclass |
 | `evolution/core/stats.py` | ~60 | `paired_bootstrap` helper |
+| `evolution/prompts/prompt_source.py` | ~55 | PromptSource Protocol + SectionDescriptor |
 | `evolution/validation/agent_runner.py` | ~55 | AgentRunner Protocol + dataclasses |
 | `evolution/core/behavioral_example.py` | ~35 | builder for behavioral dspy.Examples |
-| **Total** | **~9,000** | excludes empty `__init__.py` shims |
+| **Total** | **~10,400** | excludes empty `__init__.py` shims |
 
 Test suite: 61 test files under `tests/core/`, `tests/skills/`, `tests/tools/`, `tests/validation/`. **1166 tests** collected.
 
@@ -139,11 +151,11 @@ The README's table summarizes intent; reality:
 |---|---|---|---|
 | 1 | Skill files (SKILL.md) | DSPy + GEPA | ✅ implemented in `evolution/skills/` |
 | 2 | Tool descriptions | DSPy + GEPA | ✅ implemented in `evolution/tools/` — MCP-JSON and Hermes-Python-AST adapters; one target tool per run |
-| 3 | System prompt sections | DSPy + GEPA | 🔲 `evolution/prompts/` package exists, empty |
+| 3 | System prompt sections | DSPy + GEPA | ✅ implemented in `evolution/prompts/` — AST splice of `prompt_builder.py` constants; purely-behavioral closed-loop deploy gate (no synthetic signal) |
 | 4 | Tool implementation code | Darwinian Evolver | 🔲 `evolution/code/` package exists, empty; `[darwinian]` extra reserves the dep |
 | 5 | Continuous improvement loop | Automated pipeline | 🔲 `evolution/monitor/` package exists, empty |
 
-Tiers 1 and 2 are built. Tier 3-5 packages exist as empty stubs to anchor the planned architecture. See PLAN.md's per-phase "Deviations from plan" subsections for where the built tiers diverge from the original spec.
+Tiers 1-3 are built. Tier 4-5 packages exist as empty stubs to anchor the planned architecture. See PLAN.md's per-phase "Deviations from plan" subsections for where the built tiers diverge from the original spec.
 
 **Orthogonal validation surface.** `evolution/validation/` runs a real agent (`hermes -z`) through a JSONL task suite with baseline vs evolved artifacts spliced into the live install. Scores actual tool-selection behavior with `expected_tools` / `forbidden_tools` per task; compares with a two-condition decision rule. Available three ways:
 

@@ -169,6 +169,22 @@ The framework parses every `*_SCHEMA = {...}` and `*_SCHEMAS = [...]` declaratio
 
 With `--apply`, the evolved description is spliced into the source file's bytes at the original position — comments, formatting, and unrelated tools are untouched. Multi-line parenthesized concatenations collapse to a single triple-quoted string at the same indent.
 
+### Evolve a system prompt section
+
+For Hermes Agent, evolve a named section of the assembled system prompt — any top-level string constant in `agent/prompt_builder.py` (e.g. `MEMORY_GUIDANCE`, which governs when and what the agent saves to memory):
+
+```bash
+uv run python -m evolution.prompts.evolve_prompt_section \
+    --section MEMORY_GUIDANCE \
+    --hermes-repo /path/to/hermes-agent \
+    --tasks evolution/validation/suites/memory_guidance.jsonl \
+    --iterations 10
+```
+
+Unlike skill and tool evolution — where the deploy gate can lean on a synthetic LLM-judge signal — a prompt section is evaluated **purely behaviorally**: every candidate is spliced into the live `prompt_builder.py` and scored by running the real agent (`hermes -z`) against the task suite. The verdict is compound — Layer 1 checks whether the agent invoked the expected tool (e.g. `memory`), and Layer 2 runs an LLM judge over the saved content against each task's `expected_save_content` rubric. The candidate is spliced in only for the duration of the run; the file is restored byte-for-byte afterward (atomic backup + flock + checksum-drift detection, shared with the tool-description path).
+
+`--apply` writes the evolved section into `prompt_builder.py` in place; results land in `output/prompts/<section>/<timestamp>/`. PR automation (`--create-pr`) is not yet wired for prompt sections — use `--apply` plus a manual PR. To demonstrate the loop on an already-tuned section (which the saturation pre-flight will otherwise correctly default-deny as having no headroom), `--baseline-override-file` starts evolution from arbitrary text — e.g. a deliberately-weakened baseline that gives GEPA real failures to learn from.
+
 ### Mine real session history for evals
 
 For skill evolution:
@@ -331,7 +347,7 @@ Cost: each task is one `hermes -z` run (~$0.05–$0.50). The bundled `patch.json
 |-------|--------|--------|--------|
 | **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ [Validated](reports/phase1_validation_report.pdf) |
 | **Phase 2** | Tool descriptions + dual-signal deploy gate | DSPy + GEPA | ✅ [Validated](reports/phase2_validation_report.pdf) |
-| **Phase 3** | System prompt sections | DSPy + GEPA | 🔲 Planned |
+| **Phase 3** | System prompt sections | DSPy + GEPA | ✅ [Validated](reports/phase3_validation_report.pdf) |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
 

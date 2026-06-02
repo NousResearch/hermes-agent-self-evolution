@@ -1,0 +1,233 @@
+# Editorial content for the Phase 3 validation report.
+# Numbers come from the run dir's gate_decision.json (the prompt-section path is
+# behavioral-only and self-sources cost/timing/calls — no metrics.json/run.log
+# needed). Pass via `generate_report.py --run output/prompts/<run>/`. Text blocks
+# may include {placeholder} substitutions the renderer fills from that data.
+
+meta:
+  title: "Agent Self-Evolution"
+  subtitle: "Phase 3 Validation Report<br/>System-prompt section evolution via splice-and-restore"
+  organization: ""
+  repository: "github.com/jramos/agent-self-evolution"
+
+executive_summary:
+  framework_intro: >
+    Agent Self-Evolution is a standalone optimization pipeline that uses DSPy and GEPA
+    (Genetic-Pareto Prompt Evolution) to automatically improve an agent's skills, tool
+    descriptions, system prompts, and code through evolutionary search — all via API
+    calls with no GPU training required. Phase 1 shipped a synthetic-only deploy gate;
+    Phase 2 made it behavior-aware and brought tool-description parity. Phase 3 extends
+    the framework to the third instructions surface — <i>named sections of the agent's
+    system prompt</i> — evaluated end-to-end against the real agent.
+  run_summary: >
+    This report documents the Phase 3 validation of system-prompt section evolution.
+    The target is a top-level string constant in Hermes Agent's
+    <font face="Courier">prompt_builder.py</font> (here, <b>{section_name}</b>), evolved
+    via GEPA and validated <i>purely behaviorally</i>: every candidate is spliced into
+    the live prompt file and scored by running the real agent
+    (<font face="Courier">hermes -z</font>) against a curated task suite — there is no
+    synthetic LLM-as-judge signal to lean on. Production <b>{section_name}</b> is already
+    well-tuned, so the saturation pre-flight correctly default-denies it (no headroom).
+    To exercise the loop end-to-end, the headline run evolves a <i>deliberately-weakened</i>
+    baseline (supplied via <font face="Courier">--baseline-override-file</font>): the
+    agent's holdout pass-rate moved <b>{baseline_pass_rate:.0%} → {evolved_pass_rate:.0%}</b>
+    ({cl_baseline_pass}/{cl_total_tasks} → {cl_evolved_pass}/{cl_total_tasks} tasks,
+    <b>+{n_wins}W / {n_losses}L</b>) while the section shrank <b>{growth_pct:+.1%}</b>.
+    The closed-loop deploy gate decided <b>{decision_upper}</b>, and the live prompt file
+    was restored byte-for-byte after every trial.
+
+key_result_box:
+  title_template: "KEY RESULT — {section_name} (prompt-section deploy via closed-loop gate)"
+  rows:
+    - "Holdout pass-rate (n={cl_total_tasks}):   {baseline_pass_rate:.0%} → {evolved_pass_rate:.0%}   (+{n_wins}W / {n_losses}L)"
+    - "Tasks passing:   {cl_baseline_pass}/{cl_total_tasks} → {cl_evolved_pass}/{cl_total_tasks}"
+    - "Section size:   {baseline_chars:,} → {evolved_chars:,} chars   ({growth_pct:+.1%})"
+    - "Decision:   {decision_upper}   via the closed-loop behavioral gate"
+
+background:
+  intro: >
+    Agent Self-Evolution targets the instructions layer of an LLM agent — skill files,
+    tool descriptions, and system prompts — and evolves the text via API-only
+    evolutionary search. An agent's behavior is governed by three layers:
+  layers:
+    header: ["Layer", "What It Is", "How It's Currently Improved"]
+    rows:
+      - ["Model Weights", "The underlying LLM (Claude, GPT, etc.)", "RL training (Tinker-Atropos)"]
+      - ["Instructions", "Skills, system prompts, tool descriptions", "Manual authoring (static)"]
+      - ["Tool Code", "Python implementations of each tool", "Manual development"]
+    highlight_row: 1
+  closing: >
+    Phases 1 and 2 validated skill files and tool descriptions. Phase 3 completes the
+    instructions trio with <b>system-prompt sections</b> — the highest-leverage, widest
+    blast-radius surface, since one section governs the agent across every task. The
+    section is a string constant inside Hermes' own source, so unlike the skill path
+    (separate writable workdir) there is no env-var hook or plugin seam: the framework
+    edits <font face="Courier">prompt_builder.py</font> in place. The integration is an
+    AST-precise <b>splice-and-restore</b> — the candidate is byte-spliced into the live
+    file for the duration of a trial and restored from an atomic backup afterward
+    (<font face="Courier">flock</font> + checksum-drift detection + parse-guard, reused
+    from the Phase 2 closed-loop validator). Crucially, a system-prompt section has no
+    cheap synthetic proxy: the only honest measure of "did this guidance help" is
+    running the real agent, so Phase 3's deploy gate is purely behavioral.
+
+approach:
+  section_title: "Approach: Behavioral Prompt-Section Evolution"
+  engines:
+    header: ["Engine", "What It Optimizes", "License", "Role"]
+    rows:
+      - ["DSPy + GEPA", "Skills, prompts, tool descriptions", "MIT", "Primary (validated)"]
+      - ["DSPy MIPROv2", "Few-shot examples, instruction text", "MIT", "Fallback optimizer"]
+      - ["Darwinian Evolver", "Code files, algorithms", "AGPL v3", "Code evolution (Phase 4)"]
+  gepa_narrative: >
+    <b>GEPA</b> (Genetic-Pareto Prompt Evolution) is the star engine — an ICLR 2026
+    Oral paper from Stanford/UC Berkeley. Unlike traditional evolutionary search that
+    only sees pass/fail scores, GEPA reads full execution traces to understand
+    <i>why</i> things failed, then proposes targeted mutations. Phase 3 wires GEPA to a
+    sentinel-preserving proposer (mutations are confined to the section's text, never
+    the surrounding scaffolding) and routes every candidate score through a real
+    <font face="Courier">hermes -z</font> subprocess. Because the spliced
+    <font face="Courier">prompt_builder.py</font> is a single shared file and DSPy
+    evaluates with a thread pool, candidate scoring is serialized under a lock — an
+    accepted cost of the splice-and-restore model.
+  pipeline_steps:
+    - "<b>Resolve baseline</b> — Read the section's current text from <font face=\"Courier\">prompt_builder.py</font> (or accept a weakened baseline via <font face=\"Courier\">--baseline-override-file</font> to create headroom on an already-tuned section)"
+    - "<b>Split</b> — Deterministic seeded train / holdout split of the curated JSONL task suite"
+    - "<b>Saturation pre-flight</b> — Score the baseline behaviorally on the holdout; a <font face=\"Courier\">no_headroom</font> band default-denies (correctly refusing to evolve a saturated section) unless overridden"
+    - "<b>GEPA loop</b> — The section text is a sentinel-delimited region of a passthrough predictor's instructions; GEPA mutates it with the sentinel-preserving proposer. Each candidate is spliced into the live file and scored by running the agent on each task"
+    - "<b>Compound verdict</b> — Layer 1: did the agent invoke the expected tool (e.g. <font face=\"Courier\">memory</font>)? Layer 2: an LLM judge scores the saved content against each task's rubric"
+    - "<b>Closed-loop deploy gate</b> — Select the GEPA val-best candidate, then run baseline vs. evolved on the holdout suite; deploy iff holdout pass-rate doesn't regress and per-task wins offset losses ≥ 2:1"
+    - "<b>Report + restore</b> — Structured <font face=\"Courier\">gate_decision.json</font> (v5 schema, prompt-section variant); the live file is restored byte-for-byte"
+  cost_paragraph: >
+    The honest Phase 3 story is two-part. First, the framework's <b>regression-catching
+    discipline</b>: the production <font face="Courier">{section_name}</font> is already
+    well-tuned, so a capable agent satisfies the suite regardless of small wording
+    changes — the saturation pre-flight scores the baseline at ceiling and correctly
+    <i>default-denies</i>, refusing to spend GEPA budget where no improvement is
+    possible. This mirrors the Phase 2 finding that the framework is improvement-finding
+    only where headroom genuinely exists. Second, to demonstrate that the loop produces
+    a real, grounded improvement when headroom <i>does</i> exist, the headline run
+    evolves a deliberately-adversarial baseline (one that instructs the agent <i>not</i>
+    to save) — exactly the weakened-target approach Phase 2 used for its headline. That
+    run consumed <b>${cost_total_usd:.2f}</b> across {lm_calls_metrics:,} in-process LM
+    calls in ~{elapsed_minutes:.0f} minutes (the agent's own subprocess spend is
+    separate). Splicing a different section measurably changed live agent behavior, and
+    GEPA recovered a corrected section that the closed-loop gate deployed.
+
+experiment:
+  section_title: "Phase 3 Experiment"
+  config_overrides:
+    target_section_label: "{section_name} — evolved from a deliberately-weakened baseline (production {section_name} is saturated; the weak baseline, supplied via --baseline-override-file, exercises the loop end-to-end)"
+    optimizer_lm: "{optimizer_lm}"
+    reflection_lm: "{reflection_lm}"
+    eval_judge_lm: "{eval_lm}"
+    agent_lm: "openai/gpt-5.4-mini (Hermes-configured default)"
+    quality_gate_label: "closed-loop behavioral — holdout pass-rate no-regression + per-task wins ≥ 2·losses; compound verdict (Layer 1 trigger + Layer 2 content judge)"
+    saturation_label: "forced via --force-saturation-check (the weakened baseline had real headroom; production {section_name} default-denies as no_headroom)"
+  dataset_intro: >
+    The evaluation suite is a curated, hand-authored JSONL benchmark
+    (<font face="Courier">memory_guidance.jsonl</font>, 12 tasks across five categories:
+    save-preference, save-correction, dont-save-task-progress,
+    dont-save-completed-work-log, and declarative-vs-imperative). Unlike Phases 1 and 2,
+    there is <i>no</i> synthetically-generated train/val/holdout of LLM-judge examples —
+    every task is scored behaviorally by running the real agent, and the deploy gate's
+    holdout is {cl_total_tasks} of those tasks. Each save task carries an
+    <font face="Courier">expected_save_content</font> rubric consumed by the Layer 2
+    content judge.
+  fitness_intro: >
+    Fitness is behavioral, not a synthetic judge score. For each task, the candidate
+    section is spliced into the live <font face="Courier">prompt_builder.py</font>, the
+    agent runs once via <font face="Courier">hermes -z</font>, and the resulting session
+    is read back from Hermes' SQLite session store. The verdict is compound:
+  fitness_formula: "pass  =  Layer1(expected memory action fired, forbidden actions absent)  AND  Layer2(content-judge score ≥ 0.7 on save tasks)"
+  fitness_closing: >
+    GEPA's reflection LM reads the per-task failures and proposes a targeted mutation of
+    the section text; the sentinel-preserving proposer confines edits to the section and
+    re-raises rather than admit a candidate that drops the markers. The deploy gate then
+    re-runs baseline vs. evolved on the holdout and decides on the behavioral signal
+    alone — holdout pass-rate no-regression plus a per-task win/loss rule — with no
+    paired-bootstrap CI, because there is no synthetic per-example distribution to
+    resample.
+
+results:
+  narrative: >
+    Evolving the weakened <b>{section_name}</b> baseline, the agent's holdout pass-rate
+    moved <b>{baseline_pass_rate:.0%} → {evolved_pass_rate:.0%}</b>
+    ({cl_baseline_pass}/{cl_total_tasks} → {cl_evolved_pass}/{cl_total_tasks} tasks,
+    <b>+{n_wins} wins / {n_losses} losses</b>, {n_ties} ties) while the section text
+    <i>shrank</i> <b>{growth_pct:+.1%}</b> ({baseline_chars:,} → {evolved_chars:,}
+    chars). GEPA learned from the save-task failures and inverted the adversarial
+    instruction — it removed the "never proactively save" misdirection and restored
+    proactive saving while keeping the legitimate "don't store passing remarks"
+    discrimination, in fewer characters. <b>Decision: {decision_upper}</b> via the
+    closed-loop gate ({decision_reasons}). The proposer rejected
+    {sentinel_failures} sentinel-breaking candidates. Throughout, the live
+    <font face="Courier">prompt_builder.py</font> was restored byte-for-byte after every
+    trial. The production {section_name} itself is saturated and correctly
+    default-denies — the framework is regression-catching, and only finds improvements
+    where real headroom exists.
+  how_produced_intro: "GEPA evolves the section text through a reflective loop; the gate then reads the behavioral signal:"
+  how_produced_steps:
+    - "Splice a candidate section into the live <font face=\"Courier\">prompt_builder.py</font> (only when the candidate changes); run each holdout task once via <font face=\"Courier\">hermes -z</font> and read the session from Hermes' <font face=\"Courier\">state.db</font>"
+    - "Score each run with the compound verdict (Layer 1 tool-trigger membership + Layer 2 content judge on memory-save content); abstentions (agent/runner errors) score 0 in-loop and tie at the gate"
+    - "The reflection LM reads the failures and proposes a sentinel-confined mutation of the section text; GEPA accepts on improvement-or-equal"
+    - "Select the GEPA val-best candidate; run the closed-loop deploy gate (baseline vs. evolved on {cl_total_tasks} holdout tasks, its own backup/restore)"
+    - "<b>Decide</b> — Deploy iff evolved holdout pass-rate ≥ baseline AND per-task wins offset losses ≥ 2:1. On this run: {baseline_pass_rate:.0%} → {evolved_pass_rate:.0%}, {n_wins}W/{n_losses}L → DEPLOY"
+  how_produced_closing: >
+    Two design choices made this outcome trustworthy. First, the splice-and-restore
+    guard (atomic backup + exclusive <font face="Courier">flock</font> + byte-restore,
+    with stale-backup refusal) means the user's Hermes checkout is never left mutated,
+    even on crash. Second, the deploy gate is the same proven closed-loop validator used
+    for tool descriptions — the prompt path adds only a thin installer plus a per-task
+    content judge, so the decision rule, audit trail, and restore machinery are shared
+    and already battle-tested. The behavioral-only design is not a shortcut: it is the
+    only honest measure for a system-prompt section, which has no cheap synthetic proxy.
+
+safety:
+  intro: "Every evolved section must clear these constraints, and the live prompt file is protected throughout:"
+  table:
+    header: ["Constraint", "Enforcement", "Status"]
+    rows:
+      - ["Self-evolution test suite", "1,232 pytest tests pass on the optimizer itself", "Implemented"]
+      - ["Byte-clean splice/restore", "Atomic backup + byte-for-byte restore of prompt_builder.py after every run", "Implemented"]
+      - ["Parse-guarded write", "Candidate spliced via repr() + ast.parse check; refuses to write non-parseable Python", "Implemented"]
+      - ["Exclusive lock + drift check", "flock on the prompt file's dir + sha-drift detection; stale-backup refusal on startup", "Implemented"]
+      - ["Compound verdict", "Layer 1 tool-trigger membership AND Layer 2 LLM content judge (≥ threshold)", "Implemented"]
+      - ["Abstain on corrupt session", "A malformed agent session abstains (neutral), never scores as a behavioral regression", "Implemented"]
+      - ["Closed-loop deploy gate", "Holdout pass-rate no-regression + per-task wins ≥ 2·losses", "Implemented"]
+      - ["Saturation pre-flight", "Default-denies a saturated (no_headroom) section before spending GEPA budget", "Implemented"]
+      - ["Budget ceiling", "--max-cost-usd aborts on in-process LM spend overrun", "Implemented"]
+      - ["Deployment via apply + review", "--apply writes the section; PR automation deferred for prompt sections", "By design"]
+      - ["Benchmark regression", "External --benchmark-cmd hook (TBLite / harness)", "Planned"]
+  closing: >
+    The source Hermes repository is never left modified: the section is spliced in only
+    for the duration of a trial and restored from an atomic backup, and all evolution
+    output (gate decisions, section before/after text, run logs) is written under the
+    framework's local <font face="Courier">output/</font> directory. PR automation is
+    deferred for prompt sections — a section-scoped PR path is future work — so the
+    deploy step is an explicit <font face="Courier">--apply</font> plus a human-authored
+    pull request.
+
+roadmap:
+  table:
+    header: ["Phase", "Target", "Engine", "Timeline", "Status"]
+    rows:
+      - ["Phase 1", "Skill files (SKILL.md)", "DSPy + GEPA", "3-4 weeks", "Validated ✓"]
+      - ["Phase 2", "Tool descriptions", "DSPy + GEPA", "2-3 weeks", "Validated ✓"]
+      - ["Phase 3", "System prompt sections", "DSPy + GEPA", "2-3 weeks", "Validated ✓"]
+      - ["Phase 4", "Tool implementation code", "Darwinian Evolver", "3-4 weeks", "Planned"]
+      - ["Phase 5", "Continuous improvement", "Automated pipeline", "2 weeks", "Planned"]
+    highlight_row: 2
+  closing: >
+    Phase 3 completes the instructions trio — skills, tool descriptions, and now
+    system-prompt sections — all gated by the same closed-loop discipline. The
+    behavioral-only deploy gate proves the framework can evolve the highest-blast-radius
+    instructions surface safely: it default-denies a saturated section, produces a real
+    grounded improvement where headroom exists, and never leaves the agent's source
+    mutated. Phase 4 (tool implementation code) and Phase 5 (continuous improvement)
+    extend the framework beyond the instructions layer.
+
+next_steps:
+  - "<b>Harder behavioral suites</b> — Production system-prompt sections are heavily tuned and saturate the current suites; develop richer, harder task suites (and weaker agent tiers) so headroom exists on real targets, not only adversarial baselines."
+  - "<b>Additional sections</b> — The same path supports any string-constant section (SKILLS_GUIDANCE, SESSION_SEARCH_GUIDANCE, etc.); MEMORY_GUIDANCE was the first proof point, chosen for its clear tool-call anchor."
+  - "<b>Section-scoped PR automation</b> — Wire --create-pr for prompt sections by splicing into origin/&lt;base&gt;'s prompt_builder.py (not the local checkout), so the PR diff carries only the section change."
+  - "<b>Agent-side cost capture</b> — The agent's own LM spend happens inside the hermes subprocess and is invisible to the in-process budget ceiling; surface it from the session store so --max-cost-usd accounts for end-to-end spend."

@@ -545,6 +545,158 @@ When your daily-driver Hermes model is capable enough to solve every textbook bu
 
 Manual smoke harness: `tests/manual/skill_closed_loop_smoke.py` (supports `--suite {basic,advanced}`, `--agent-model MODEL`, `--task-timeout-seconds N`).
 
+## Workflow 12: Evolve a prompt section (deploy path)
+
+The prompt-section analog of Workflow 9 (tool descriptions), but **purely behavioral** end to end. There is no synthetic judge dataset and no paired-bootstrap gate: every candidate is spliced into the live `prompt_builder.py` and scored by a real `hermes -z` subprocess, and the deploy gate is a `ClosedLoopValidator` run. Three structural contrasts with the tool path:
+
+- **Integration is in-place splice-and-restore**, not an MCP manifest rewrite or a copied skill directory. The target is a single named string constant inside the user's `prompt_builder.py`; the harness backs it up byte-for-byte and restores it on exit.
+- **The deploy gate is closed-loop pass-rate / win-loss**, not a paired-bootstrap confidence interval. Decision = pass-rate no-regression + `n_wins >= 2 * n_losses` (the `ClosedLoopValidator.decide` rule), all behavioral.
+- **PR automation is deferred.** `--create-pr` is recorded as `skipped`; deploy means `--apply` writes the evolved section into `prompt_builder.py` in place, and the user opens a PR by hand.
+
+```bash
+python -m evolution.prompts.evolve_prompt_section \
+    --section MEMORY_GUIDANCE \
+    --hermes-repo ~/src/NousResearch/hermes-agent \
+    --tasks evolution/validation/suites/memory_guidance.jsonl \
+    --iterations 10 \
+    --apply
+```
+
+### Phase A — Setup: resolve baseline, split, build the behavioral harness
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_prompt_section
+    participant Src as HermesPromptSource
+    participant Suite as TaskSuite
+    participant Judge as SaveCallJudge
+    participant Inst as HermesPromptSectionInstaller
+    participant Run as HermesAgentRunner
+    participant V as ClosedLoopValidator
+
+    CLI->>Src: read(section_name) — validate it exists / is a string constant
+    alt --baseline-override-file
+        CLI->>CLI: baseline_text = override_file.read_text()
+    else
+        CLI->>Src: baseline_text = read(section_name)
+    end
+    CLI->>Suite: TaskSuite.from_jsonl(tasks) — reject < 2 tasks
+    CLI->>CLI: _split_train_holdout(seed) — ≥1 task each side
+    CLI->>Judge: SaveCallJudge(config)  → layer2_factory(task)
+    CLI->>Inst: HermesPromptSectionInstaller(repo, section)
+    CLI->>Run: HermesAgentRunner(timeout, agent_model?)
+    CLI->>V: ClosedLoopValidator(installer, runner, layer2_judge_factory, layer2_threshold)
+```
+
+The baseline is the **live section text** unless `--baseline-override-file` points evolution at arbitrary text — e.g. a deliberately-weakened baseline to manufacture headroom, or a regression-injection ablation. The override only changes where evolution *starts*; the guard still backs up and restores the real file, and `--apply` writes the evolved text back into the live section. The suite floor is 2 tasks so the seeded split yields a non-empty GEPA trainset **and** a non-empty deploy-gate holdout.
+
+### Phase B — Configure the global LM, then enter the guard
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_prompt_section
+    participant Scorer as memoizing_splice_scorer
+    participant Metric as prompt_fitness_metric
+    participant LM as eval_lm
+    participant DSPy as dspy.configure
+
+    CLI->>Scorer: make_memoizing_splice_scorer(install_fn=source.write, score_fn=run_one_task, lock)
+    CLI->>Metric: make_prompt_fitness_metric(baseline_text, max_growth, closed_loop_scorer=scorer)
+    CLI->>LM: instantiate eval_lm (role=eval, temp=0)
+    CLI->>DSPy: dspy.configure(lm=eval_lm, callbacks=[LMTimingCallback()])
+    Note over CLI,DSPy: global LM set so GEPA worker threads can run PromptModule's<br/>passthrough predictor — the pre-flight's dspy.context doesn't reach them
+```
+
+The `closed_loop_scorer` is the spine of behavioral scoring: `score(task_id, candidate_text)` splices the candidate into the live `prompt_builder.py` **only when it changes** (consecutive tasks for the same candidate reuse the live splice), runs the task via `hermes -z`, and reads the session back from the sandbox `state.db`. The splice+run is serialized under one `threading.Lock` because `dspy.Evaluate` scores with a thread pool but the spliced file is a single shared mutable resource — behavioral scoring is therefore effectively serial, an accepted v1 cost. The explicit `dspy.configure` is load-bearing: `dspy.context` inside the saturation pre-flight does **not** propagate into GEPA's worker threads, so without the global LM the passthrough predictor raises "No LM is loaded" → no trajectories → no proposal.
+
+### Phase C — Inside the guard: saturation pre-flight, then GEPA
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_prompt_section
+    participant Guard as _prompt_builder_guard
+    participant FS as live prompt_builder.py
+    participant Sat as saturation_preflight
+    participant GEPA as dspy.GEPA
+    participant PM as PromptModule
+    participant Prop as PromptSectionProposer
+    participant Scorer as splice scorer
+    participant H as hermes -z + state.db
+
+    CLI->>Guard: enter(installer.target_path)
+    Guard->>FS: refuse if stale .cl_backup; flock parent dir (LOCK_EX|NB)
+    Guard->>FS: atomic_write_bytes(.cl_backup, target.read_bytes())
+    opt not --skip-saturation-check
+        CLI->>Sat: saturation_preflight(baseline_module, holdout, metric, eval_lm, baseline_text)
+        Sat->>Scorer: behavioral score of baseline on each holdout task
+        Sat-->>CLI: SaturationReport(band, ...)
+        alt band != healthy
+            alt --force-saturation-check
+                Note over CLI: proceed regardless
+            else non-interactive
+                CLI->>FS: write gate_decision.json (decision=denied, reason=saturated_baseline)
+                Note over CLI: return — GEPA never runs (default-deny)
+            else interactive
+                CLI->>CLI: prompt "Continue anyway? [y/N]"
+            end
+        end
+    end
+    CLI->>GEPA: compile(PromptModule(baseline), trainset, valset, instruction_proposer=PromptSectionProposer)
+    loop per iteration
+        GEPA->>PM: forward(task, closed_loop_task_id) — candidate in sentinel region of predictor instructions
+        PM-->>GEPA: Prediction(_candidate_text, _closed_loop_task_id)
+        GEPA->>Scorer: metric → closed_loop_scorer(task_id, candidate_text)
+        Scorer->>FS: splice candidate into live section (only if changed)
+        Scorer->>H: run task; read session from sandbox state.db
+        H-->>Scorer: tool_calls_with_args + final text
+        Scorer->>Scorer: compound verdict = Layer 1 (memory fired?) + Layer 2 (judge on memory add/replace content)
+        Scorer-->>GEPA: score ∈ {0.0, 1.0}
+        GEPA->>Prop: reflect on failures → sentinel-preserving candidate
+    end
+    GEPA-->>CLI: optimized module with detailed_results
+    CLI->>Guard: exit → atomic_write_bytes(target, .cl_backup); unlink backup; release flock
+```
+
+Everything that mutates the file lives **inside** the guard, which holds an exclusive `flock` (the same lock name the deploy-gate `ClosedLoopValidator` uses — sequenced before it, never nested) and restores the original bytes on exit. The saturation pre-flight scores the baseline behaviorally on the holdout; a non-`healthy` band (e.g. `no_headroom` on an already-tuned section) **default-denies in non-interactive contexts** unless `--force-saturation-check`, writing a `decision="denied"` gate before GEPA spends a cent. The compound per-task verdict is two layers: **Layer 1** is trigger membership (did the `memory` tool fire, via `expected_tools` / `forbidden_tools`), **Layer 2** is the `SaveCallJudge` scoring `memory(action=add|replace)` content against the task's `expected_save_content` rubric (`remove` is not a save; a passing Layer 1 with no save action scores a vacuous 1.0 on Layer 2). GEPA mutates only the sentinel-delimited region of the passthrough predictor's instructions; the `PromptSectionProposer` rejects any reflection-LM output that fails sentinel preservation.
+
+### Phase D — Deploy gate (closed-loop on the holdout), persist, apply
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_prompt_section
+    participant Sel as candidate selection
+    participant V as ClosedLoopValidator
+    participant Inst as HermesPromptSectionInstaller
+    participant FS as live prompt_builder.py
+    participant H as hermes -z
+    participant Src as HermesPromptSource
+
+    Note over CLI: guard already exited — file restored to baseline
+    CLI->>Sel: evolved_text = section_from_candidate(best_idx)  # GEPA val-argmax
+    CLI->>FS: write baseline_section.txt + evolved_section.txt
+    CLI->>V: validate(ValidationInputs(section, holdout_suite, baseline_file, evolved_file))
+    Note over V: own backup/restore + flock — independent of the Phase C guard
+    loop baseline phase, then evolved phase
+        V->>Inst: install(section_file) — splice into live prompt_builder.py
+        loop each holdout task
+            V->>H: run task; score Layer 1 + Layer 2 via layer2_judge_factory
+        end
+    end
+    V-->>CLI: ValidationReport(baseline_pass_rate, evolved_pass_rate, n_wins/n_losses, decision)
+    CLI->>FS: write gate_decision.json (artifact_type="prompt_section", decision=deploy|reject)
+    alt decision == pass AND --apply
+        CLI->>Src: write(section_name, evolved_text) — live section updated in place
+    end
+```
+
+The selected candidate is GEPA's val-argmax (`detailed_results.best_idx`) — there's no knee-point parsimony pass on the prompt-section path. The deploy gate is a fresh `ClosedLoopValidator.validate` over the **holdout** suite, with its own backup/restore + `flock` (it runs after the Phase C guard has already exited and restored the file, so the two never nest). Its decision is closed-loop only: pass-rate no-regression plus `n_wins >= 2 * n_losses`. The gate decision is written with `artifact_type="prompt_section"`, `target_section`, `baseline_chars` / `evolved_chars` / `growth_pct`, a `closed_loop` block (both pass-rates + win/loss/tie counts), and `sentinel_failures`. `--create-pr` records a `skipped` PR block (deferred for sections); `--apply` is the only way to ship, writing the evolved text into the live section.
+
+**Empirical anchors.** The real `MEMORY_GUIDANCE` section saturates — it scored 1.0 across the holdout (`no_headroom` band) and the harness correctly default-denied a non-interactive run before GEPA started. To exercise the full deploy path, an adversarially-weakened baseline (via `--baseline-override-file`) evolved `0.67 → 1.00` pass-rate with 2 wins / 0 losses on the holdout, clearing the closed-loop gate and deploying. The saturating-real-section result is the expected, correct outcome, not a bug: there is no headroom to evolve into when the section already passes every behavioral task.
+
 ## Failure-mode summary
 
 | Trigger | Outcome | Where to look |
@@ -565,3 +717,8 @@ Manual smoke harness: `tests/manual/skill_closed_loop_smoke.py` (supports `--sui
 | Closed-loop validator concurrent run | `ConcurrentRunError` (`fcntl.flock` non-blocking acquire fails) | console only |
 | Closed-loop validator drift between tasks | `ChecksumDriftError` after the offending task; phase aborts, restore still runs | run.log + raised error |
 | Closed-loop cache validator failure during evolution | `WARNING` logged, cache returns `None`, GEPA continues without the verdict — never aborts the run | run.log |
+| Prompt-section suite < 2 tasks | `ValueError` (can't split into non-empty train + holdout) | console only |
+| Prompt-section stale `.cl_backup` on guard entry | `RuntimeError` naming the backup file; refuses to start | console only |
+| Prompt-section saturated baseline, non-interactive | `decision="denied"` `gate_decision.json`; GEPA never runs (override with `--force-saturation-check`) | `gate_decision.json` (`saturation_band`) |
+| Prompt-section closed-loop gate rejects | `decision="reject"` `reason="closed_loop_gate"`; section not applied | `gate_decision.json` (`closed_loop` block) |
+| Prompt-section `--create-pr` | recorded as `skipped` (PR automation deferred); use `--apply` + manual PR | `gate_decision.json` (`pr_created` block) |
