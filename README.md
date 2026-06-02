@@ -53,11 +53,25 @@ python -m evolution.skills.evolve_skill \
 
 | Phase | Target | Engine | Status |
 |-------|--------|--------|--------|
-| **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
+| **Phase 1** | Skill files (SKILL.md) | DSPy + direct body rewrite / GEPA-style evaluation | ✅ Implemented |
 | **Phase 2** | Tool descriptions | DSPy + GEPA | 🔲 Planned |
 | **Phase 3** | System prompt sections | DSPy + GEPA | 🔲 Planned |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
+
+### Skill body artifact optimization
+
+For `SKILL.md` targets, the optimizer now treats the markdown body itself as the artifact to improve. The run flow is:
+
+1. load the original `SKILL.md` and preserve its YAML frontmatter;
+2. build a compact train/validation rubric brief from the eval dataset;
+3. ask the optimizer model to produce a complete replacement markdown body;
+4. reassemble frontmatter + evolved body;
+5. validate the full reassembled `SKILL.md` against constraints;
+6. compare baseline and evolved behavior on holdout examples;
+7. save `baseline_skill.md`, `evolved_skill.md`, and `metrics.json` for human review.
+
+This is useful because optimizing a DSPy predictor around a fixed `skill_text` input can improve generated task outputs without ever producing a changed `SKILL.md` candidate. Direct body optimization makes the candidate diff explicit while keeping deployment review-gated.
 
 ## Engines
 
