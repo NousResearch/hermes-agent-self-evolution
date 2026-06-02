@@ -261,3 +261,69 @@ class TestSkillFileInstallerVerifyBackup:
         backup.write_bytes(b"\xff\xfe\x00\x00invalid")
         with pytest.raises(ValueError, match="not valid UTF-8"):
             installer.verify_backup(backup)
+
+
+# ---- HermesPromptSectionInstaller ----
+
+import textwrap
+
+from evolution.validation.artifact_installer import (
+    HermesPromptSectionInstaller,
+    sha256_of,
+)
+
+
+def _fake_hermes_repo(tmp_path: Path) -> Path:
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "agent" / "prompt_builder.py").write_text(textwrap.dedent('''\
+        """Stub prompt_builder."""
+
+        MEMORY_GUIDANCE = (
+            "You have persistent memory. "
+            "Save durable facts."
+        )
+
+        SKILLS_GUIDANCE = "After a complex task, save the approach."
+    '''))
+    return tmp_path
+
+
+class TestHermesPromptSectionInstaller:
+    def test_target_path_is_prompt_builder(self, tmp_path):
+        repo = _fake_hermes_repo(tmp_path)
+        installer = HermesPromptSectionInstaller(repo, "MEMORY_GUIDANCE")
+        assert installer.target_path == repo / "agent" / "prompt_builder.py"
+
+    def test_install_splices_candidate_and_returns_sha(self, tmp_path):
+        repo = _fake_hermes_repo(tmp_path)
+        installer = HermesPromptSectionInstaller(repo, "MEMORY_GUIDANCE")
+        candidate = tmp_path / "candidate.txt"
+        candidate.write_text("EVOLVED memory guidance body.")
+
+        returned_sha = installer.install(candidate)
+
+        pb = repo / "agent" / "prompt_builder.py"
+        assert returned_sha == sha256_of(pb)
+        # The new text is live; the sibling section is untouched.
+        from evolution.prompts.hermes_prompt_source import HermesPromptSource
+        src = HermesPromptSource(repo)
+        assert src.read("MEMORY_GUIDANCE") == "EVOLVED memory guidance body."
+        assert src.read("SKILLS_GUIDANCE") == "After a complex task, save the approach."
+        # File still parses.
+        import ast
+        ast.parse(pb.read_text())
+
+    def test_verify_backup_rejects_non_python(self, tmp_path):
+        repo = _fake_hermes_repo(tmp_path)
+        installer = HermesPromptSectionInstaller(repo, "MEMORY_GUIDANCE")
+        bad = tmp_path / "bad.cl_backup"
+        bad.write_text("def broken(:\n")
+        with pytest.raises(SyntaxError):
+            installer.verify_backup(bad)
+
+    def test_verify_backup_accepts_valid_python(self, tmp_path):
+        repo = _fake_hermes_repo(tmp_path)
+        installer = HermesPromptSectionInstaller(repo, "MEMORY_GUIDANCE")
+        good = tmp_path / "good.cl_backup"
+        good.write_text("X = 'ok'\n")
+        installer.verify_backup(good)  # must not raise

@@ -11,7 +11,7 @@ import shlex
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -55,6 +55,8 @@ def score_task(
     test_command: Optional[str] = None,
     fixture_dir: Optional[Path] = None,
     test_command_timeout_seconds: float = 60.0,
+    layer2_judge_fn: Optional[Callable[[list[dict]], float]] = None,
+    layer2_threshold: float = 0.7,
 ) -> tuple[bool, bool]:
     """Return (passed, abstained).
 
@@ -68,6 +70,16 @@ def score_task(
     in this mode. Command failure modes (nonzero exit, timeout,
     FileNotFoundError) all map to ``(False, False)`` — "the test did
     not pass," which is the meaningful verdict regardless of cause.
+
+    Layer 2 (compound verdict, prompt-section suites): when
+    ``layer2_judge_fn`` is provided, a task passes only if Layer 1
+    (trigger membership) passes AND the judge returns a score
+    ``>= layer2_threshold``. The judge receives the subset of
+    ``run.tool_calls_with_args`` whose name is ``memory`` (each item the
+    call's ``arguments`` dict). Layer 2 is short-circuited when Layer 1
+    fails — the judge is never called, so no LLM cost is spent on a task
+    that already failed the trigger test. ``test_command`` mode ignores
+    Layer 2.
     """
     if run.error is not None:
         return False, True
@@ -82,6 +94,14 @@ def score_task(
         return False, False
     if expected_tools and not (invoked & set(expected_tools)):
         return False, False
+    if layer2_judge_fn is not None:
+        memory_calls = [
+            c["arguments"]
+            for c in run.tool_calls_with_args
+            if c.get("name") == "memory"
+        ]
+        if layer2_judge_fn(memory_calls) < layer2_threshold:
+            return False, False
     return True, False
 
 

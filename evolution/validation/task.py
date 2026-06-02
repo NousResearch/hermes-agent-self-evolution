@@ -32,6 +32,11 @@ class Task:
       the verdict is "did the agent's edits make the planted test
       pass" rather than "did the agent invoke the right tools." When
       set, takes precedence over the tool-call rule.
+
+    ``expected_save_content`` is an optional rubric (not exact text)
+    describing what a good ``memory(action='add')`` would contain. It
+    feeds the prompt-section compound verdict's Layer 2 content judge; it
+    has no effect on the Layer 1 tool-call rule above.
     """
 
     task_id: str
@@ -40,6 +45,7 @@ class Task:
     forbidden_tools: tuple[str, ...] = ()
     fixture_setup: dict[str, str] = field(default_factory=dict)
     test_command: Optional[str] = None
+    expected_save_content: Optional[str] = None
 
     def render_message(self, fixture_dir: Path) -> str:
         """Substitute ``{fixture_dir}`` in the message with the resolved path.
@@ -98,6 +104,12 @@ def _task_from_dict(obj: dict, *, source: str) -> Task:
         raise ValueError(
             f"{source}: test_command must be a string (got {type(test_command).__name__})"
         )
+    expected_save_content = obj.get("expected_save_content")
+    if expected_save_content is not None and not isinstance(expected_save_content, str):
+        raise ValueError(
+            f"{source}: expected_save_content must be a string "
+            f"(got {type(expected_save_content).__name__})"
+        )
     return Task(
         task_id=obj["task_id"],
         user_message=obj["user_message"],
@@ -105,4 +117,5 @@ def _task_from_dict(obj: dict, *, source: str) -> Task:
         forbidden_tools=tuple(obj.get("forbidden_tools") or ()),
         fixture_setup=dict(fixture_setup),
         test_command=test_command,
+        expected_save_content=expected_save_content,
     )

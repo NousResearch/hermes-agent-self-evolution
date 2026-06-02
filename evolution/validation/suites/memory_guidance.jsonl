@@ -1,0 +1,23 @@
+# Closed-loop validation suite for the Hermes MEMORY_GUIDANCE prompt section.
+# Compound verdict: Layer 1 = memory(save) trigger membership; Layer 2 =
+# content judge against expected_save_content rubric (save categories only).
+# Curated golden set across five categories. Full synthetic expansion is
+# produced by evolution.core.dataset_builder.build_memory_guidance_dataset.
+#
+# --- save-preference: durable preference stated → SHOULD save ---
+{"task_id": "save-pref-uv", "user_message": "Heads up for going forward: I always use uv for Python dependency management, never pip or poetry.", "expected_tools": ["memory"], "expected_save_content": "A durable, declarative fact that the user prefers/uses uv for Python dependency management. Should not be phrased as a one-off task or include transient detail."}
+{"task_id": "save-pref-tabs", "user_message": "Just so you know for all my projects: I use tabs, not spaces, for indentation.", "expected_tools": ["memory"], "expected_save_content": "A durable fact that the user prefers tabs over spaces for indentation across projects. Declarative, not imperative."}
+{"task_id": "save-pref-timezone", "user_message": "For scheduling things, remember I'm based in US Pacific time.", "expected_tools": ["memory"], "expected_save_content": "A durable fact recording the user's timezone (US Pacific). Stable, reusable across sessions."}
+# --- save-correction: user corrects a recurring agent pattern → SHOULD save ---
+{"task_id": "save-corr-pkgmgr", "user_message": "No — stop suggesting npm. I use pnpm for every JS project. Please remember that.", "expected_tools": ["memory"], "expected_save_content": "A durable fact that the user uses pnpm (not npm) for JS projects, capturing the correction so the agent stops re-suggesting npm."}
+{"task_id": "save-corr-name", "user_message": "You keep calling the service 'auth-svc'. Its real name is 'identity-gateway'. Remember that for next time.", "expected_tools": ["memory"], "expected_save_content": "A durable fact mapping the service's correct name (identity-gateway), capturing the user's correction."}
+# --- dont-save-task-progress: complete a task → SHOULD NOT save ---
+{"task_id": "nosave-fix-bug", "user_message": "There's an off-by-one in {fixture_dir}/loop.py — the range should be inclusive of the last index. Fix it.", "expected_tools": [], "forbidden_tools": ["memory"], "fixture_setup": {"loop.py": "def last_items(xs):\n    return xs[0:len(xs)-1]\n"}}
+{"task_id": "nosave-write-fn", "user_message": "Add a function `is_even(n)` to {fixture_dir}/util.py that returns True for even integers.", "expected_tools": [], "forbidden_tools": ["memory"], "fixture_setup": {"util.py": "# helpers\n"}}
+# --- dont-save-completed-work-log: summary of work done → SHOULD NOT save ---
+{"task_id": "nosave-summary", "user_message": "Give me a quick summary of what you changed in the last edit.", "expected_tools": [], "forbidden_tools": ["memory"]}
+{"task_id": "nosave-standup", "user_message": "Write a one-line standup update describing the bug we just fixed.", "expected_tools": [], "forbidden_tools": ["memory"]}
+# --- declarative-vs-imperative: imperative preference → SHOULD save, declaratively ---
+{"task_id": "decl-concise", "user_message": "Always answer me concisely — no preamble, just the answer.", "expected_tools": ["memory"], "expected_save_content": "The preference saved in DECLARATIVE form (e.g. 'user prefers concise answers without preamble'), not copied verbatim as an imperative directive ('always answer concisely')."}
+{"task_id": "decl-no-emoji", "user_message": "Never use emoji in your responses to me.", "expected_tools": ["memory"], "expected_save_content": "A declarative fact that the user prefers responses without emoji (e.g. 'user prefers no emoji in responses'), not stored as a raw imperative command."}
+{"task_id": "decl-tests-first", "user_message": "From now on, write tests before implementation when you work on my code.", "expected_tools": ["memory"], "expected_save_content": "A declarative fact capturing the user's preference for test-first development (e.g. 'user prefers tests written before implementation'), phrased as a durable preference rather than an imperative."}

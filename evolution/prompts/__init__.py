@@ -1,1 +1,1 @@
-"""Phase placeholder: prompts evolution."""
+"""Phase 3: system prompt section evolution."""

@@ -22,6 +22,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Protocol
 
+from evolution.prompts.hermes_prompt_source import HermesPromptSource
 from evolution.tools.hermes_source import HermesToolSource
 from evolution.tools.tool_source import ToolManifest
 
@@ -137,6 +138,37 @@ class HermesToolDescriptionInstaller:
                     f"Could not parse {artifact_source} as a Hermes tool module"
                 )
             return manifest.find_tool(self.tool_name).description
+
+
+class HermesPromptSectionInstaller:
+    """Splice an evolved prompt section into Hermes ``agent/prompt_builder.py``.
+
+    The artifact source is a plain-text file holding the candidate
+    section body. ``install`` reads that text and asks ``HermesPromptSource``
+    to splice it into the named string constant in place; the validator's
+    backup/flock/sha-drift machinery (shared with the tool-description
+    path) guards the live checkout and restores it afterward.
+
+    Constraint: the target section must be a top-level string constant
+    (the same shape ``HermesPromptSource`` reads). Dict-typed sections
+    like ``PLATFORM_HINTS`` are not installable.
+    """
+
+    def __init__(self, hermes_repo: Path, section_name: str) -> None:
+        self.hermes_repo = Path(hermes_repo)
+        self.section_name = section_name
+        self._source = HermesPromptSource(self.hermes_repo)
+        self.target_path = self._source.prompt_builder_path
+
+    def install(self, artifact_source: Path) -> str:
+        """Splice the candidate section text from ``artifact_source`` into the
+        live ``prompt_builder.py`` and return the post-install sha256."""
+        new_text = artifact_source.read_text(encoding="utf-8")
+        self._source.write(self.section_name, new_text)
+        return sha256_of(self.target_path)
+
+    def verify_backup(self, backup_path: Path) -> None:
+        verify_python_parses(backup_path)
 
 
 class SkillFileInstaller:

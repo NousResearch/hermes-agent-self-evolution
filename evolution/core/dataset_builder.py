@@ -485,3 +485,102 @@ class GoldenDatasetLoader:
             val_ratio=0.25,
             holdout_ratio=0.25,
         )
+
+
+MEMORY_GUIDANCE_CATEGORIES = (
+    "save-preference",
+    "save-correction",
+    "dont-save-task-progress",
+    "dont-save-completed-work-log",
+    "declarative-vs-imperative",
+)
+
+_MEMORY_GUIDANCE_CATEGORY_PROMPTS = {
+    "save-preference": (
+        "Generate ONE closed-loop eval task (category: save-preference) where the "
+        "user explicitly states a durable preference the agent SHOULD save to "
+        "memory. Output a single JSON object with fields: user_message, "
+        "expected_tools=[\"memory\"], expected_save_content (a rubric describing "
+        "what a good save would look like — not exact text)."
+    ),
+    "save-correction": (
+        "Generate ONE closed-loop eval task (category: save-correction) where the "
+        "user corrects the agent on a recurring pattern (e.g. 'no, I use uv not "
+        "pip'). The agent SHOULD save the correction. Output a single JSON object "
+        "with fields: user_message, expected_tools=[\"memory\"], "
+        "expected_save_content."
+    ),
+    "dont-save-task-progress": (
+        "Generate ONE closed-loop eval task (category: dont-save-task-progress) "
+        "where the user asks the agent to complete a task (write code, fix a bug). "
+        "The agent SHOULD NOT save task progress to memory. Output a single JSON "
+        "object with fields: user_message, expected_tools=[], "
+        "forbidden_tools=[\"memory\"]."
+    ),
+    "dont-save-completed-work-log": (
+        "Generate ONE closed-loop eval task (category: dont-save-completed-work-log) "
+        "where the user asks for a summary of work done. The agent SHOULD NOT log "
+        "the work to memory. Output a single JSON object with fields: user_message, "
+        "expected_tools=[], forbidden_tools=[\"memory\"]."
+    ),
+    "declarative-vs-imperative": (
+        "Generate ONE closed-loop eval task (category: declarative-vs-imperative) "
+        "where the user states a preference in imperative form ('always respond "
+        "concisely'). The agent SHOULD save it in declarative form ('user prefers "
+        "concise responses'). Output a single JSON object with fields: "
+        "user_message, expected_tools=[\"memory\"], expected_save_content "
+        "(specifying the declarative-phrasing rubric)."
+    ),
+}
+
+
+def build_memory_guidance_dataset(
+    *,
+    lm_call,
+    n_per_category: int = 10,
+) -> list[dict]:
+    """Generate synthetic MEMORY_GUIDANCE eval tasks across the 5 categories.
+
+    ``lm_call`` is a callable taking a prompt string and returning a JSON
+    object (one task) as text. The builder issues ``n_per_category`` calls
+    per category and stamps a unique ``task_id`` on each parsed row so the
+    output is a valid closed-loop suite regardless of what the LM emits for
+    the id. Rows the LM returns that don't parse as a JSON object are
+    skipped (logged), not fatal — a single noisy generation shouldn't abort
+    the whole build.
+
+    Returns a flat list of Task-shaped dicts ready to write to a JSONL suite
+    (consumable by ``TaskSuite.from_jsonl``).
+    """
+    out: list[dict] = []
+    for category in MEMORY_GUIDANCE_CATEGORIES:
+        prompt = _MEMORY_GUIDANCE_CATEGORY_PROMPTS[category]
+        for index in range(n_per_category):
+            raw = lm_call(prompt)
+            row = _parse_memory_task_row(raw)
+            if row is None:
+                logger.warning(
+                    "build_memory_guidance_dataset: unparseable row for "
+                    "category %s index %d", category, index,
+                )
+                continue
+            row["task_id"] = f"{category}-{index:03d}"
+            row.setdefault("expected_tools", [])
+            out.append(row)
+    return out
+
+
+def _parse_memory_task_row(raw: str):
+    """Parse a single JSON object from an LM response. Returns the dict, or
+    None if the text isn't a JSON object (tolerant of fenced/extra prose)."""
+    try:
+        obj = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        match = re.search(r"\{.*\}", str(raw), re.DOTALL)
+        if not match:
+            return None
+        try:
+            obj = json.loads(match.group())
+        except json.JSONDecodeError:
+            return None
+    return obj if isinstance(obj, dict) else None

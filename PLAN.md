@@ -466,6 +466,8 @@ These descriptions are sent with every API call as part of the tool schema — e
 
 **Goal:** Optimize the sections of the system prompt that guide agent behavior.
 
+**Status:** ✅ Complete (MEMORY_GUIDANCE proof point). See "Deviations from plan" at the end of this section.
+
 **Prerequisite:** Phase 2 gate passed — benchmark gating validated, GEPA producing sensible text mutations.
 
 **Week 1 (Build):** Build section-as-DSPy-parameter wrapper for the 5 evolvable prompt sections. Build behavioral test suite generator. This is the riskiest tier so far — system prompt changes affect everything.
@@ -534,6 +536,26 @@ The system prompt is assembled in `run_agent.py` / `agent/prompt_builder.py` fro
 - Total system prompt must stay under the model's prompt caching boundary
 - Identity section must retain core traits (helpful, direct, admits uncertainty)
 - Platform hints must remain platform-accurate (don't tell Telegram to use ANSI codes)
+
+**Deviations from plan (Phase 3):**
+
+1. **Integration is in-place splice-and-restore, not an env-var hook or a plugin.** The design's primary path routed candidate overrides through an upstream `HERMES_PROMPT_OVERRIDES_JSON` env var; that hook was not accepted upstream, so depending on it would make the framework a local-only patch that silently no-ops on any hermes pull. A plugin alternative was ruled out as non-viable: consumers bind the constants at import time (`from agent.prompt_builder import MEMORY_GUIDANCE` in `run_agent.py` and `agent/system_prompt.py`), so a plugin's `register()` runs too late to reach them. Phase 3 instead splices the candidate directly into `agent/prompt_builder.py` (byte-precise AST replacement via `repr()`, parse-checked) and restores from an atomic backup, reusing Phase 2's `ClosedLoopValidator` flock + sha-drift + stale-backup machinery. No upstream dependency; runs against stock Hermes. This also **collapsed the planned parallel `PromptSectionValidator`** into a small `HermesPromptSectionInstaller` (an `ArtifactInstaller`) plus a one-method Layer-2 hook on the shared validator — less code than the design called for.
+
+2. **One target section per run; MEMORY_GUIDANCE is the only proof point.** Joint multi-section optimization and identity/persona evolution are deferred — joint runs carry Phase 2's "stealing selections" risk, and `DEFAULT_AGENT_IDENTITY` has no tool-call anchor for the verdict. The `PromptSource` abstraction supports the other string sections (`SKILLS_GUIDANCE`, `SESSION_SEARCH_GUIDANCE`, etc.) with no refactor; dict-typed sections like `PLATFORM_HINTS` are out of scope for v1 (string constants only).
+
+3. **Verdict is compound (tool-membership + LLM content judge), threaded per-task.** Layer 1 is the Phase 2 expected/forbidden rule on whether `memory` was invoked; Layer 2 is an LLM judge scoring the saved content against each task's `expected_save_content` rubric. The validator builds the judge per-task (a factory) so the content judge sees the task's rubric and message — a fixed global judge couldn't. Note the real Hermes `memory` tool actions are **`add`/`replace`** (content-bearing), not `save`; the full set is add/replace/remove/read.
+
+4. **Eval suite ships as a curated 12-task golden set, not 50 synthetic + 10 golden.** A hand-authored `memory_guidance.jsonl` spans the five categories (save-preference, save-correction, dont-save-task-progress, dont-save-completed-work-log, declarative-vs-imperative). The synthetic generator (`build_memory_guidance_dataset`) is built and unit-tested, but full synthetic expansion via a funded generation run is deferred — curation gives a higher-signal first suite and avoids upfront generation spend.
+
+5. **PR automation is deferred for prompt sections.** `create_pr` atomically copies a full evolved artifact over `origin/<base>`'s file; deriving an evolved `prompt_builder.py` from the local checkout would carry the unmerged override-hook commit into the PR diff. `--create-pr` is accepted but records a skipped block; the deploy path is `--apply` (writes the evolved section into the live file) plus a manual PR. A section-scoped PR path (splice into `origin/<base>`'s file, not the local one) is future work.
+
+6. **The shared closed-loop runner had to be rebuilt for current Hermes.** Surfaced by the Phase 3 end-to-end smoke: `hermes -z` one-shot mode is now ephemeral — it prints only the final response and no longer writes `session_*.json`; sessions persist to a SQLite `state.db` in `HERMES_HOME`. `HermesAgentRunner` globbed for the obsolete JSON files, so **every** closed-loop run had been silently abstaining ("no session JSON") across Phases 1–3. The runner now reads the most-recent session's messages from `state.db` (the `tool_calls` column carries the same OpenAI-nested shape the extractors already parse). This is a shared-infrastructure fix that unblocks all closed-loop validation, not just prompts.
+
+7. **Behavioral eval is serialized, and agent-subprocess cost is invisible to the budget cap.** Because every candidate is spliced into one shared `prompt_builder.py`, the GEPA inner-loop scorer serializes splice+run under a lock (DSPy's evaluator is multi-threaded; the shared file is not). Per-section closed-loop is therefore effectively serial — an accepted v1 cost of the splice-and-restore model. The agent's own LM spend happens inside the `hermes` child process, invisible to the in-process cost ledger, so `--max-cost-usd` bounds only judge + reflection + passthrough spend; `sessions.actual_cost_usd` in `state.db` could close that gap later.
+
+8. **Saturation default-deny confirmed on a capable agent; a demonstrated improvement required an adversarial baseline.** With `gpt-5.4-mini`, both the live `MEMORY_GUIDANCE` and a *passively*-weakened baseline scored 1.0 / 6 holdout — `no_headroom`, correctly default-denied. This matches Phase 2's "regression-catching, not improvement-finding on tuned artifacts" finding and the binary model-tier effect (a capable agent saves correctly regardless of vague guidance). A real mutation was demonstrated only by *actively misdirecting* the baseline: an adversarial "never proactively save" section scored 0.67, GEPA's reflective proposer inverted it to restore proactive saving (and made it shorter), and the deploy gate measured **0.67 → 1.00, 2 wins / 0 losses → deploy**. The `--baseline-override-file` flag enables this ablation (and regression-injection testing generally) without mutating the live section.
+
+9. **Benchmark gating again not built in (same as Phases 1–2).** The built-in deploy gate is paired-bootstrap CI plus the dual-condition rule on the holdout; `--benchmark-cmd` remains the external-benchmark hook. TBLite / YC-Bench wiring is left to the user's `--benchmark-cmd`.
 
 ### Phase 4: Code Evolution via Darwinian Evolver
 

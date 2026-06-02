@@ -68,6 +68,77 @@ class TestScoreTask:
         assert abstained
 
 
+class TestScoreTaskLayer2:
+    """Compound verdict: Layer 1 (trigger) + optional Layer 2 (content judge)."""
+
+    def _save_run(self, content: str = "good") -> AgentRunResult:
+        return AgentRunResult(
+            tool_calls_seq=["memory"], final_text_tail="", duration_seconds=0.0,
+            tool_calls_with_args=[
+                {"name": "memory", "arguments": {"action": "add", "content": content}}
+            ],
+        )
+
+    def test_no_judge_is_layer1_only(self):
+        passed, abstained = score_task(
+            expected_tools=("memory",), forbidden_tools=(), run=self._save_run(),
+        )
+        assert passed and not abstained
+
+    def test_passes_when_both_layers_ok(self):
+        passed, abstained = score_task(
+            expected_tools=("memory",), forbidden_tools=(), run=self._save_run(),
+            layer2_judge_fn=lambda calls: 0.9, layer2_threshold=0.7,
+        )
+        assert passed and not abstained
+
+    def test_fails_when_layer2_below_threshold(self):
+        passed, abstained = score_task(
+            expected_tools=("memory",), forbidden_tools=(), run=self._save_run("bad"),
+            layer2_judge_fn=lambda calls: 0.5, layer2_threshold=0.7,
+        )
+        assert not passed and not abstained
+
+    def test_layer1_failure_short_circuits_judge(self):
+        """Layer 1 fail => judge never called (no LLM cost on a failed trigger)."""
+        run = AgentRunResult(
+            tool_calls_seq=[], final_text_tail="", duration_seconds=0.0,
+            tool_calls_with_args=[],
+        )
+        calls_seen = []
+
+        def judge_fn(memory_calls):
+            calls_seen.append(memory_calls)
+            return 1.0
+
+        passed, abstained = score_task(
+            expected_tools=("memory",), forbidden_tools=(), run=run,
+            layer2_judge_fn=judge_fn, layer2_threshold=0.7,
+        )
+        assert not passed
+        assert calls_seen == []
+
+    def test_judge_receives_only_memory_call_args(self):
+        run = AgentRunResult(
+            tool_calls_seq=["read_file", "memory"], final_text_tail="", duration_seconds=0.0,
+            tool_calls_with_args=[
+                {"name": "read_file", "arguments": {"path": "x"}},
+                {"name": "memory", "arguments": {"action": "add", "content": "c"}},
+            ],
+        )
+        received = []
+
+        def judge_fn(memory_calls):
+            received.append(memory_calls)
+            return 1.0
+
+        score_task(
+            expected_tools=("memory",), forbidden_tools=(), run=run,
+            layer2_judge_fn=judge_fn, layer2_threshold=0.7,
+        )
+        assert received == [[{"action": "add", "content": "c"}]]
+
+
 class TestScoreTaskTestCommandMode:
     """When ``test_command`` is set on a task, the verdict is exit-code-driven,
     not tool-call-driven. Used by skill-side suites (e.g., planted-bug:

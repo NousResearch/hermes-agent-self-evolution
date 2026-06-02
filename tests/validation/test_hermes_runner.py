@@ -11,6 +11,7 @@ Two layers exercised:
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,8 +21,43 @@ from evolution.validation.agent_runner import TaskRunContext
 from evolution.validation.hermes_runner import (
     HermesAgentRunner,
     _strip_litellm_provider_prefix,
+    parse_session_from_db,
     parse_session_result,
 )
+
+
+def _make_state_db(path: Path, *, session_id: str, model: str, messages: list[dict],
+                   started_at: float = 1.0) -> None:
+    """Create a minimal hermes-shaped state.db with one session + messages.
+
+    Each ``messages`` entry: ``{"role", "content"?, "tool_calls"?}`` where
+    ``tool_calls`` is a Python list serialized to the ``tool_calls`` TEXT
+    column (the OpenAI-nested shape hermes stores).
+    """
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE sessions (id TEXT PRIMARY KEY, model TEXT, started_at REAL);
+        CREATE TABLE messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT, role TEXT, content TEXT, tool_calls TEXT
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO sessions (id, model, started_at) VALUES (?, ?, ?)",
+        (session_id, model, started_at),
+    )
+    for m in messages:
+        tc = m.get("tool_calls")
+        conn.execute(
+            "INSERT INTO messages (session_id, role, content, tool_calls) "
+            "VALUES (?, ?, ?, ?)",
+            (session_id, m["role"], m.get("content"),
+             json.dumps(tc) if tc is not None else None),
+        )
+    conn.commit()
+    conn.close()
 
 
 class TestStripLitellmProviderPrefix:
@@ -173,6 +209,155 @@ class TestParseSessionResult:
         assert result.tool_calls_seq == ["patch"]
 
 
+class TestParseToolCallArgs:
+    def test_captures_tool_call_args(self, tmp_path):
+        """Sessions with tool calls must surface name AND parsed args."""
+        p = tmp_path / "session.json"
+        _write_session(p, [
+            {"role": "user", "content": "save a fact"},
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"function": {
+                    "name": "memory",
+                    "arguments": json.dumps({
+                        "action": "save",
+                        "content": "user prefers terse responses",
+                    }),
+                }}
+            ]},
+            {"role": "tool", "content": "ok"},
+            {"role": "assistant", "content": "Saved."},
+        ])
+        result = parse_session_result(p, duration_seconds=1.0)
+        assert result.tool_calls_seq == ["memory"]
+        assert len(result.tool_calls_with_args) == 1
+        call = result.tool_calls_with_args[0]
+        assert call["name"] == "memory"
+        assert call["arguments"]["action"] == "save"
+        assert call["arguments"]["content"] == "user prefers terse responses"
+
+    def test_handles_malformed_args(self, tmp_path):
+        """Malformed tool-call arguments JSON must not crash — fall back to {}."""
+        p = tmp_path / "session.json"
+        _write_session(p, [
+            {"role": "assistant", "tool_calls": [
+                {"function": {"name": "memory", "arguments": "{not-json"}}
+            ]},
+        ])
+        result = parse_session_result(p, duration_seconds=1.0)
+        assert result.tool_calls_seq == ["memory"]
+        assert result.tool_calls_with_args == [{"name": "memory", "arguments": {}}]
+
+    def test_handles_flat_dict_args(self, tmp_path):
+        """Flat tool_call shape with an already-parsed dict argument."""
+        p = tmp_path / "session.json"
+        _write_session(p, [
+            {"role": "assistant", "tool_calls": [
+                {"name": "memory", "arguments": {"action": "delete", "key": "x"}}
+            ]},
+        ])
+        result = parse_session_result(p, duration_seconds=1.0)
+        assert result.tool_calls_with_args == [
+            {"name": "memory", "arguments": {"action": "delete", "key": "x"}}
+        ]
+
+
+class TestParseSessionFromDb:
+    """The state.db parse layer — modern hermes persists sessions to SQLite."""
+
+    def test_extracts_tool_calls_and_args(self, tmp_path):
+        db = tmp_path / "state.db"
+        _make_state_db(db, session_id="s1", model="gpt-5.4-mini", messages=[
+            {"role": "user", "content": "remember I use uv"},
+            {"role": "assistant", "tool_calls": [
+                {"type": "function", "function": {
+                    "name": "memory",
+                    "arguments": json.dumps({"action": "add", "content": "uses uv"}),
+                }}
+            ]},
+            {"role": "tool", "content": "ok"},
+            {"role": "assistant", "content": "Saved."},
+        ])
+        result = parse_session_from_db(db, duration_seconds=2.0)
+        assert result.error is None
+        assert result.model_name == "gpt-5.4-mini"
+        assert result.tool_calls_seq == ["memory"]
+        assert result.tool_calls_with_args == [
+            {"name": "memory", "arguments": {"action": "add", "content": "uses uv"}}
+        ]
+        assert result.final_text_tail == "Saved."
+
+    def test_no_sessions_is_error(self, tmp_path):
+        db = tmp_path / "state.db"
+        conn = sqlite3.connect(db)
+        conn.executescript(
+            "CREATE TABLE sessions (id TEXT, model TEXT, started_at REAL);"
+            "CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, "
+            "role TEXT, content TEXT, tool_calls TEXT);"
+        )
+        conn.commit()
+        conn.close()
+        result = parse_session_from_db(db, duration_seconds=1.0)
+        assert result.error is not None
+        assert "no sessions" in result.error
+
+    def test_picks_most_recent_session(self, tmp_path):
+        db = tmp_path / "state.db"
+        _make_state_db(db, session_id="old", model="m", started_at=1.0, messages=[
+            {"role": "assistant", "tool_calls": [{"function": {"name": "patch"}}]},
+        ])
+        # Add a newer session with a different tool call.
+        conn = sqlite3.connect(db)
+        conn.execute("INSERT INTO sessions (id, model, started_at) VALUES (?,?,?)",
+                     ("new", "m", 2.0))
+        conn.execute(
+            "INSERT INTO messages (session_id, role, content, tool_calls) VALUES (?,?,?,?)",
+            ("new", "assistant", None,
+             json.dumps([{"function": {"name": "write_file"}}])),
+        )
+        conn.commit()
+        conn.close()
+        result = parse_session_from_db(db, duration_seconds=1.0)
+        assert result.tool_calls_seq == ["write_file"]
+
+    def test_malformed_tool_calls_column_abstains(self, tmp_path):
+        """A corrupt tool_calls column must abstain (error set), not read as
+        'agent invoked no tools' (which would score a hard behavioral fail)."""
+        db = tmp_path / "state.db"
+        _make_state_db(db, session_id="s1", model="m",
+                       messages=[{"role": "user", "content": "hi"}])
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "INSERT INTO messages (session_id, role, content, tool_calls) VALUES (?,?,?,?)",
+            ("s1", "assistant", "", "{not-valid-json"),
+        )
+        conn.commit()
+        conn.close()
+        result = parse_session_from_db(db, duration_seconds=1.0)
+        assert result.error is not None
+        assert "malformed tool_calls" in result.error
+        assert result.tool_calls_seq == []
+
+    def test_corrupt_db_file_errors(self, tmp_path):
+        bad = tmp_path / "state.db"
+        bad.write_bytes(b"this is not a sqlite database at all")
+        result = parse_session_from_db(bad, duration_seconds=1.0)
+        assert result.error is not None
+        assert "could not" in result.error  # open or read, depending on sqlite
+
+    def test_missing_messages_table_errors(self, tmp_path):
+        db = tmp_path / "state.db"
+        conn = sqlite3.connect(db)
+        conn.executescript(
+            "CREATE TABLE sessions (id TEXT, model TEXT, started_at REAL);"
+            "INSERT INTO sessions VALUES ('s1', 'm', 1.0);"
+        )
+        conn.commit()
+        conn.close()
+        result = parse_session_from_db(db, duration_seconds=1.0)
+        assert result.error is not None
+        assert "could not read" in result.error
+
+
 class TestHermesAgentRunnerSubprocess:
     """The subprocess invocation layer: env + cwd + args plumbing."""
 
@@ -190,12 +375,13 @@ class TestHermesAgentRunnerSubprocess:
             captured["args"] = args[0] if args else kwargs.get("args")
             captured["env"] = kwargs.get("env")
             captured["cwd"] = kwargs.get("cwd")
-            # Drop a minimal session JSON so the parse layer succeeds.
+            # Drop a minimal state.db so the parse layer succeeds.
             sandbox = Path(kwargs["env"]["HERMES_HOME"])
-            (sandbox / "sessions").mkdir(exist_ok=True)
-            _write_session(
-                sandbox / "sessions" / "session_test.json",
-                [{"role": "assistant", "tool_calls": [{"function": {"name": "patch"}}]}],
+            _make_state_db(
+                sandbox / "state.db",
+                session_id="s1", model="test-model",
+                messages=[{"role": "assistant", "tool_calls": [
+                    {"function": {"name": "patch"}}]}],
             )
             return type("CP", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
@@ -250,7 +436,7 @@ class TestHermesAgentRunnerSubprocess:
         runner = HermesAgentRunner(user_config_path=tmp_path / "x")
 
         def _fake_run(*args, **kwargs):
-            # Don't drop a session JSON.
+            # Don't write a state.db.
             return type("CP", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
         with patch("evolution.validation.hermes_runner.subprocess.run", side_effect=_fake_run):
@@ -259,7 +445,7 @@ class TestHermesAgentRunnerSubprocess:
                 fixture_dir=fixture_dir,
             ))
         assert result.error is not None
-        assert "no session JSON" in result.error
+        assert "state.db absent" in result.error
 
     def test_user_config_copied_into_sandbox_when_exists(self, fixture_dir, tmp_path):
         user_config = tmp_path / "user_config.yaml"

@@ -22,7 +22,7 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional
 
 from evolution.validation.agent_runner import AgentRunner, TaskRunContext
 from evolution.validation.artifact_installer import (
@@ -80,9 +80,25 @@ class ClosedLoopValidator:
     times and aggregate.
     """
 
-    def __init__(self, installer: ArtifactInstaller, runner: AgentRunner) -> None:
+    def __init__(
+        self,
+        installer: ArtifactInstaller,
+        runner: AgentRunner,
+        *,
+        layer2_judge_factory: Optional[
+            Callable[[Task], Optional[Callable[[list[dict]], float]]]
+        ] = None,
+        layer2_threshold: float = 0.7,
+    ) -> None:
         self.installer = installer
         self.runner = runner
+        # Optional compound-verdict Layer 2 (prompt-section suites). The
+        # factory builds a per-task scorer from the task — prompt-section
+        # judging needs the task's expected_save_content rubric and message,
+        # which a single global fn couldn't carry. When unset, scoring is
+        # Layer 1 only and the tool-description path is unchanged.
+        self.layer2_judge_factory = layer2_judge_factory
+        self.layer2_threshold = layer2_threshold
 
     def validate(self, inputs: ValidationInputs) -> ValidationReport:
         target = self.installer.target_path
@@ -143,12 +159,19 @@ class ClosedLoopValidator:
                 skills_src=getattr(self.installer, "skills_src", None),
             )
             run = self.runner.run(ctx)
+            layer2_judge_fn = (
+                self.layer2_judge_factory(task)
+                if self.layer2_judge_factory is not None
+                else None
+            )
             passed, abstained = score_task(
                 expected_tools=task.expected_tools,
                 forbidden_tools=task.forbidden_tools,
                 run=run,
                 test_command=task.test_command,
                 fixture_dir=fixture_dir,
+                layer2_judge_fn=layer2_judge_fn,
+                layer2_threshold=self.layer2_threshold,
             )
             return TaskResult(
                 task_id=task.task_id,

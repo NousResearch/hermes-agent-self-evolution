@@ -155,3 +155,35 @@ class TestTaskSuiteLoader:
         }])
         with pytest.raises(ValueError, match="test_command must be a string"):
             TaskSuite.from_jsonl(p)
+
+
+class TestExpectedSaveContent:
+    def _write_jsonl(self, path: Path, rows: list[dict]) -> None:
+        path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    def test_round_trips_from_jsonl(self, tmp_path):
+        p = tmp_path / "suite.jsonl"
+        self._write_jsonl(p, [{
+            "task_id": "save-pref-001",
+            "user_message": "I prefer uv over pip for Python projects.",
+            "expected_tools": ["memory"],
+            "expected_save_content": "user prefers uv over pip",
+        }])
+        suite = TaskSuite.from_jsonl(p)
+        assert suite.tasks[0].expected_save_content == "user prefers uv over pip"
+
+    def test_defaults_to_none(self, tmp_path):
+        p = tmp_path / "suite.jsonl"
+        self._write_jsonl(p, [{
+            "task_id": "t1", "user_message": "hi", "expected_tools": ["memory"],
+        }])
+        suite = TaskSuite.from_jsonl(p)
+        assert suite.tasks[0].expected_save_content is None
+
+    def test_non_string_raises(self, tmp_path):
+        p = tmp_path / "suite.jsonl"
+        self._write_jsonl(p, [{
+            "task_id": "t", "user_message": "m", "expected_save_content": 42,
+        }])
+        with pytest.raises(ValueError, match="expected_save_content must be a string"):
+            TaskSuite.from_jsonl(p)

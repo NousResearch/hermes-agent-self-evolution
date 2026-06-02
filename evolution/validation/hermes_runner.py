@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -153,15 +154,17 @@ class HermesAgentRunner:
                 )
             duration = time.time() - start
 
-            session_path = _find_latest_session(sandbox / "sessions")
-            if session_path is None:
+            # Modern hermes persists the session to a SQLite ``state.db`` in
+            # HERMES_HOME (one-shot ``-z`` no longer writes ``session_*.json``).
+            db_path = sandbox / "state.db"
+            if not db_path.is_file():
                 return AgentRunResult(
                     tool_calls_seq=[],
                     final_text_tail="",
                     duration_seconds=duration,
-                    error="no session JSON written by hermes -z",
+                    error="no session written by hermes -z (state.db absent)",
                 )
-            return parse_session_result(session_path, duration_seconds=duration)
+            return parse_session_from_db(db_path, duration_seconds=duration)
         finally:
             shutil.rmtree(sandbox, ignore_errors=True)
 
@@ -175,17 +178,6 @@ class HermesAgentRunner:
             shutil.copytree(ctx.skills_src, sandbox / "skills")
 
 
-def _find_latest_session(sessions_dir: Path) -> Optional[Path]:
-    if not sessions_dir.exists():
-        return None
-    candidates = sorted(
-        sessions_dir.glob("session_*.json"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    return candidates[0] if candidates else None
-
-
 def parse_session_result(
     session_path: Path,
     *,
@@ -193,9 +185,9 @@ def parse_session_result(
 ) -> AgentRunResult:
     """Read a Hermes session JSON and extract the tool-call sequence + final text.
 
-    Public for tests: hand-crafted fixture JSONs in
-    ``tests/validation/test_hermes_runner.py`` exercise this directly
-    rather than going through the subprocess layer.
+    Retained for the legacy ``session_*.json`` shape and unit tests that
+    exercise the message extractors with hand-crafted fixtures. The live
+    runner reads ``state.db`` via ``parse_session_from_db``.
     """
     try:
         data = json.loads(session_path.read_text())
@@ -209,16 +201,120 @@ def parse_session_result(
         )
 
     messages = data.get("messages") or []
-    tool_calls_seq = _extract_tool_call_names(messages)
-    final_text_tail = _extract_final_text_tail(messages)
-    model_name = data.get("model")
+    return _result_from_messages(
+        messages,
+        duration_seconds=duration_seconds,
+        model_name=data.get("model"),
+        session_path=session_path,
+    )
 
+
+def parse_session_from_db(
+    db_path: Path,
+    *,
+    duration_seconds: float,
+) -> AgentRunResult:
+    """Reconstruct an ``AgentRunResult`` from a Hermes ``state.db``.
+
+    Modern hermes persists each session to SQLite. We read the most-recent
+    session's messages and normalize them into the same message-dict shape the
+    legacy JSON path produced, so the existing extractors work unchanged. The
+    ``messages.tool_calls`` column holds the tool-call list verbatim — current
+    hermes writes the flat ``{"name", "arguments"}`` shape; the extractors also
+    accept the older OpenAI-nested ``{"function": {...}}`` shape.
+
+    A row whose ``tool_calls`` column won't parse as JSON aborts with an
+    ``error`` result (the task abstains) rather than being silently read as
+    "agent invoked no tools" — that would score a DB-format regression as a
+    behavioral failure and contaminate the fitness signal.
+    """
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    except sqlite3.Error as exc:
+        return AgentRunResult(
+            tool_calls_seq=[],
+            final_text_tail="",
+            duration_seconds=duration_seconds,
+            error=f"could not open session DB at {db_path}: {exc}",
+            session_path=db_path,
+        )
+    try:
+        conn.row_factory = sqlite3.Row
+        session = conn.execute(
+            "SELECT id, model FROM sessions ORDER BY started_at DESC LIMIT 1"
+        ).fetchone()
+        if session is None:
+            return AgentRunResult(
+                tool_calls_seq=[],
+                final_text_tail="",
+                duration_seconds=duration_seconds,
+                error=f"session DB at {db_path} has no sessions",
+                session_path=db_path,
+            )
+        rows = conn.execute(
+            "SELECT role, content, tool_calls FROM messages "
+            "WHERE session_id = ? ORDER BY id",
+            (session["id"],),
+        ).fetchall()
+    except sqlite3.Error as exc:
+        return AgentRunResult(
+            tool_calls_seq=[],
+            final_text_tail="",
+            duration_seconds=duration_seconds,
+            error=f"could not read session DB at {db_path}: {exc}",
+            session_path=db_path,
+        )
+    finally:
+        conn.close()
+
+    messages: list[dict] = []
+    for row in rows:
+        raw_calls = row["tool_calls"]
+        parsed_calls: Any = None
+        if raw_calls:
+            try:
+                parsed_calls = json.loads(raw_calls)
+            except (json.JSONDecodeError, TypeError) as exc:
+                logger.warning(
+                    "malformed tool_calls JSON in session %s at %s (%s); "
+                    "abstaining rather than scoring the task as a no-op",
+                    session["id"], db_path, exc,
+                )
+                return AgentRunResult(
+                    tool_calls_seq=[],
+                    final_text_tail="",
+                    duration_seconds=duration_seconds,
+                    error=f"malformed tool_calls JSON in session DB at {db_path}: {exc}",
+                    session_path=db_path,
+                )
+        messages.append({
+            "role": row["role"],
+            "content": row["content"] or "",
+            "tool_calls": parsed_calls,
+        })
+    return _result_from_messages(
+        messages,
+        duration_seconds=duration_seconds,
+        model_name=session["model"],
+        session_path=db_path,
+    )
+
+
+def _result_from_messages(
+    messages: list[dict],
+    *,
+    duration_seconds: float,
+    model_name: Optional[str],
+    session_path: Optional[Path],
+) -> AgentRunResult:
+    """Build an ``AgentRunResult`` from a normalized message list."""
     return AgentRunResult(
-        tool_calls_seq=tool_calls_seq,
-        final_text_tail=final_text_tail,
+        tool_calls_seq=_extract_tool_call_names(messages),
+        final_text_tail=_extract_final_text_tail(messages),
         duration_seconds=duration_seconds,
         model_name=model_name,
         session_path=session_path,
+        tool_calls_with_args=_extract_tool_calls_with_args(messages),
     )
 
 
@@ -254,6 +350,57 @@ def _call_name(call: dict) -> Optional[str]:
             return str(nested)
     flat = call.get("name")
     return str(flat) if flat else None
+
+
+def _extract_tool_calls_with_args(messages: list[dict]) -> list[dict]:
+    """Return ``[{name, arguments}, ...]`` for each assistant tool call.
+
+    Arguments are parsed from the LLM-emitted JSON string. Malformed or
+    non-object arguments fall back to ``{}`` rather than dropping the
+    call — the Layer 2 judge can still treat "memory was invoked with
+    empty args" as a behavior signal. Handles both OpenAI-nested and flat
+    tool_call shapes, mirroring ``_extract_tool_call_names``.
+    """
+    out: list[dict] = []
+    for msg in messages:
+        if msg.get("role") != "assistant":
+            continue
+        for call in msg.get("tool_calls") or []:
+            if not isinstance(call, dict):
+                continue
+            name = _call_name(call)
+            if not name:
+                continue
+            args_raw = _call_arguments_raw(call)
+            try:
+                args = json.loads(args_raw) if args_raw else {}
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(
+                    "malformed arguments for tool call %r (%r); using {} — a "
+                    "content judge will see an empty-args call",
+                    name, args_raw[:120],
+                )
+                args = {}
+            if not isinstance(args, dict):
+                args = {}
+            out.append({"name": name, "arguments": args})
+    return out
+
+
+def _call_arguments_raw(call: dict) -> str:
+    fn = call.get("function")
+    if isinstance(fn, dict):
+        nested = fn.get("arguments")
+        if isinstance(nested, str):
+            return nested
+        if isinstance(nested, dict):
+            return json.dumps(nested)
+    flat = call.get("arguments")
+    if isinstance(flat, str):
+        return flat
+    if isinstance(flat, dict):
+        return json.dumps(flat)
+    return ""
 
 
 def _extract_final_text_tail(messages: list[dict]) -> str:

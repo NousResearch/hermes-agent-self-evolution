@@ -171,3 +171,45 @@ class TestSyntheticGeneratorLMConfig:
             f"max_tokens regressed from 16000 to {kwargs['max_tokens']}; "
             "JSON truncation will reappear at eval_dataset_size>=60"
         )
+
+
+class TestBuildMemoryGuidanceDataset:
+    def test_uses_all_five_categories(self):
+        from evolution.core.dataset_builder import build_memory_guidance_dataset
+
+        fake_lm = MagicMock()
+        fake_lm.return_value = (
+            '{"task_id": "raw", "user_message": "x", '
+            '"expected_tools": ["memory"], '
+            '"expected_save_content": "preference rubric"}'
+        )
+        examples = build_memory_guidance_dataset(lm_call=fake_lm, n_per_category=2)
+        # 5 categories × 2 tasks each
+        assert len(examples) == 10
+        categories = [
+            "save-preference",
+            "save-correction",
+            "dont-save-task-progress",
+            "dont-save-completed-work-log",
+            "declarative-vs-imperative",
+        ]
+        invoked_prompts = [c.args[0] for c in fake_lm.call_args_list]
+        for cat in categories:
+            assert any(cat in p for p in invoked_prompts), f"category {cat!r} not prompted"
+
+    def test_stamps_unique_task_ids(self):
+        from evolution.core.dataset_builder import build_memory_guidance_dataset
+
+        fake_lm = MagicMock(return_value=(
+            '{"user_message": "x", "expected_tools": ["memory"]}'
+        ))
+        examples = build_memory_guidance_dataset(lm_call=fake_lm, n_per_category=2)
+        ids = [e["task_id"] for e in examples]
+        assert len(ids) == len(set(ids)), "task_ids must be unique"
+
+    def test_skips_unparseable_rows(self):
+        from evolution.core.dataset_builder import build_memory_guidance_dataset
+
+        fake_lm = MagicMock(return_value="not json at all")
+        examples = build_memory_guidance_dataset(lm_call=fake_lm, n_per_category=1)
+        assert examples == []
