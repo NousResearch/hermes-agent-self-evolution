@@ -30,6 +30,11 @@ dev = [
 darwinian = [
     "darwinian-evolver",
 ]
+claude-shim = [
+    "claude-agent-sdk>=0.1.0,<1.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
 
 [project.urls]
 Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"
