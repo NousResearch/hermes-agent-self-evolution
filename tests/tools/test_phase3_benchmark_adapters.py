@@ -116,6 +116,30 @@ def _run_adapter(module: str, output_json: Path, fixtures: Path, *extra_args: st
     )
 
 
+def _run_adapter_real(module: str, output_json: Path, fixtures: Path, *extra_args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            module,
+            "--baseline-prompt",
+            str(BASELINE_PROMPT),
+            "--candidate-prompt",
+            str(CANDIDATE_PROMPT),
+            "--fixtures-jsonl",
+            str(fixtures),
+            "--output-json",
+            str(output_json),
+            *extra_args,
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
 def _assert_common_report_contract(
     report: dict[str, object],
     *,
@@ -257,6 +281,89 @@ def test_yc_bench_adapter_runs_fast_test_fixture_dry_run_and_writes_contract_rep
             pass_condition="coherence_score_holds_or_improves",
         )
         assert report["preset"] == "fast_test"
+    finally:
+        _cleanup_phase3_test_output(output_json)
+
+
+def test_tblite_adapter_real_mode_records_external_benchmark_evidence(tmp_path: Path) -> None:
+    benchmark_root = tmp_path / "terminal-bench-lite"
+    task_dir = benchmark_root / "sample-task"
+    (task_dir / "tests").mkdir(parents=True)
+    (task_dir / "solution").mkdir()
+    (task_dir / "task.toml").write_text("name = 'sample-task'\n")
+    (task_dir / "instruction.md").write_text("Do a safe local task.\n")
+    (task_dir / "tests" / "test.sh").write_text("#!/bin/sh\nexit 0\n")
+    (task_dir / "solution" / "solve.sh").write_text("#!/bin/sh\nexit 0\n")
+    output_json = _phase3_output_json(tmp_path, "tblite-real.json")
+
+    try:
+        completed = _run_adapter_real(
+            "evolution.benchmarks.run_tblite",
+            output_json,
+            TBLITE_CASES,
+            "--benchmark-root",
+            str(benchmark_root),
+            "--task-limit",
+            "1",
+        )
+
+        assert completed.returncode == 0, completed.stderr
+        assert "TBLite real benchmark smoke passed" in completed.stdout
+        report = json.loads(output_json.read_text())
+        assert report["mode"] == "real-benchmark-smoke"
+        assert report["dry_run"] is False
+        assert report["external_calls_performed"] is False
+        assert report["external_benchmark_assets_validated"] is True
+        assert report["real_benchmark_smoke_validated"] is True
+        assert report["full_benchmark_executed"] is False
+        assert report["apply_ready"] is True
+        evidence = report["real_benchmark_evidence"]
+        assert isinstance(evidence, dict)
+        assert evidence["benchmark_root"] == str(benchmark_root)
+        assert evidence["task_count"] == 1
+        assert evidence["validated_task_count"] == 1
+        assert evidence["sample_tasks"] == ["sample-task"]
+    finally:
+        _cleanup_phase3_test_output(output_json)
+
+
+def test_yc_bench_adapter_real_mode_records_external_benchmark_evidence(tmp_path: Path) -> None:
+    benchmark_root = tmp_path / "yc-bench"
+    preset_dir = benchmark_root / "src" / "yc_bench" / "config" / "presets"
+    preset_dir.mkdir(parents=True)
+    (benchmark_root / "pyproject.toml").write_text("[project]\nname = 'yc-bench'\n")
+    (benchmark_root / "README.md").write_text("# YC-Bench\n")
+    (benchmark_root / "src" / "yc_bench" / "__init__.py").write_text("")
+    (preset_dir / "default.toml").write_text("name = 'default'\n")
+    output_json = _phase3_output_json(tmp_path, "yc-bench-real.json")
+
+    try:
+        completed = _run_adapter_real(
+            "evolution.benchmarks.run_yc_bench",
+            output_json,
+            YC_BENCH_CASES,
+            "--preset",
+            "fast_test",
+            "--benchmark-root",
+            str(benchmark_root),
+        )
+
+        assert completed.returncode == 0, completed.stderr
+        assert "YC-Bench real benchmark smoke passed" in completed.stdout
+        report = json.loads(output_json.read_text())
+        assert report["mode"] == "real-benchmark-smoke"
+        assert report["dry_run"] is False
+        assert report["external_calls_performed"] is False
+        assert report["external_benchmark_assets_validated"] is True
+        assert report["real_benchmark_smoke_validated"] is True
+        assert report["full_benchmark_executed"] is False
+        assert report["apply_ready"] is True
+        assert report["preset"] == "fast_test"
+        evidence = report["real_benchmark_evidence"]
+        assert isinstance(evidence, dict)
+        assert evidence["benchmark_root"] == str(benchmark_root)
+        assert evidence["package_layout_valid"] is True
+        assert evidence["requested_preset"] == "fast_test"
     finally:
         _cleanup_phase3_test_output(output_json)
 

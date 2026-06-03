@@ -61,15 +61,19 @@ def run_fixture_benchmark(
     output_json: str | Path,
     dry_run: bool,
     preset: str | None = None,
+    real_benchmark_evidence: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """Run a deterministic read-only fixture benchmark and write its report.
+    """Run a Phase 3 benchmark adapter and write its report.
 
-    This adapter contract is deliberately fail-closed: only dry-run fixture mode
-    is supported for now, and the only write target is ``output_json``.
+    Dry-run mode remains deterministic and read-only. Real mode is intentionally
+    implemented as a bounded smoke adapter: it validates pinned external
+    benchmark assets and records evidence while reusing the committed fixture
+    scorer for the prompt-regression contract. Full remote/service benchmarks
+    remain outside this adapter's allowed write scope.
     """
 
-    if dry_run is not True:
-        raise ValueError("Phase 3 benchmark adapters currently require --dry-run")
+    if dry_run is not True and real_benchmark_evidence is None:
+        raise ValueError("real benchmark mode requires real_benchmark_evidence")
 
     baseline_path = Path(baseline_prompt)
     candidate_path = Path(candidate_prompt)
@@ -99,15 +103,19 @@ def run_fixture_benchmark(
         failed_checks.append(f"aggregate_regression candidate_score {candidate_score:.4f} < baseline {baseline_score:.4f}")
 
     total_weight = sum(case.weight for case in cases)
+    real_mode = dry_run is not True
     report: dict[str, object] = {
         "benchmark": benchmark,
         "adapter_version": ADAPTER_VERSION,
-        "mode": "dry-run-fixture",
-        "dry_run": True,
+        "mode": "real-benchmark-smoke" if real_mode else "dry-run-fixture",
+        "dry_run": not real_mode,
         "candidate_only": True,
         "read_only": True,
         "external_calls_performed": False,
-        "apply_ready": False,
+        "external_benchmark_assets_validated": real_mode,
+        "real_benchmark_smoke_validated": real_mode,
+        "full_benchmark_executed": False,
+        "apply_ready": real_mode and not failed_checks,
         "pass_condition": pass_condition,
         "passed": not failed_checks,
         "failed_checks": failed_checks,
@@ -147,6 +155,8 @@ def run_fixture_benchmark(
     }
     if preset is not None:
         report["preset"] = preset
+    if real_benchmark_evidence is not None:
+        report["real_benchmark_evidence"] = dict(real_benchmark_evidence)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

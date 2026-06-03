@@ -110,6 +110,9 @@ def _benchmark_report(
             "candidate_only": True,
             "read_only": True,
             "external_calls_performed": False,
+            "external_benchmark_assets_validated": False,
+            "real_benchmark_smoke_validated": False,
+            "full_benchmark_executed": False,
             "apply_ready": False,
             "pass_condition": "coherence_score_holds_or_improves"
             if benchmark == "YC-Bench"

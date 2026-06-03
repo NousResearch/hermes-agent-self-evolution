@@ -65,11 +65,9 @@ def run_phase3_preflight_gate(
     yc_bench_report: str | Path,
     output_json: str | Path,
     dry_run: bool,
+    execution_approved: bool = False,
 ) -> dict[str, object]:
-    """Validate local Phase 3 dry-run artifacts and write a preflight report."""
-
-    if dry_run is not True:
-        raise ValueError("Phase 3 local preflight gate currently requires --dry-run")
+    """Validate Phase 3 preflight artifacts and write a gate report."""
 
     candidate_path = Path(candidate_report)
     tblite_path = Path(tblite_report)
@@ -84,9 +82,10 @@ def run_phase3_preflight_gate(
     failed_checks: list[str] = []
 
     _validate_candidate_scaffold_report(candidate.data, failed_checks)
+    real_mode = dry_run is not True
     benchmark_summaries = {
-        "TBLite": _validate_benchmark_report(tblite.data, "TBLite", failed_checks),
-        "YC-Bench": _validate_benchmark_report(yc_bench.data, "YC-Bench", failed_checks),
+        "TBLite": _validate_benchmark_report(tblite.data, "TBLite", failed_checks, real_mode=real_mode),
+        "YC-Bench": _validate_benchmark_report(yc_bench.data, "YC-Bench", failed_checks, real_mode=real_mode),
     }
     prompt_checks = _validate_prompt_artifact_consistency(
         {
@@ -97,26 +96,30 @@ def run_phase3_preflight_gate(
         failed_checks,
     )
 
+    passed = not failed_checks
+    phase3_execution_ready = passed and real_mode and execution_approved
     report: dict[str, object] = {
         "phase": "3",
-        "mode": "local-preflight-gate",
+        "mode": "phase3-execution-preflight-gate" if real_mode else "local-preflight-gate",
         "preflight_version": PREFLIGHT_VERSION,
-        "dry_run": True,
+        "dry_run": not real_mode,
         "candidate_only": True,
-        "passed": not failed_checks,
+        "passed": passed,
         "failed_checks": failed_checks,
-        "phase3_execution_ready": False,
+        "phase3_execution_ready": phase3_execution_ready,
         "execution_started": False,
         "run_gepa_now": False,
         "run_dspy_now": False,
         "mutate_active_system_prompt_now": False,
         "active_system_prompt_apply_approved": False,
-        "real_benchmarks_executed": False,
-        "real_benchmarks_required_before_execution": True,
-        "human_approval_required_before_execution": True,
+        "real_benchmarks_executed": real_mode,
+        "real_benchmarks_required_before_execution": not real_mode,
+        "human_approval_required_before_execution": not execution_approved,
+        "execution_approved": execution_approved,
         "dry_run_benchmark_reports": benchmark_summaries,
+        "benchmark_reports": benchmark_summaries,
         "prompt_artifact_checks": prompt_checks,
-        "next_required_before_phase3_execution": NEXT_REQUIRED_BEFORE_PHASE3_EXECUTION,
+        "next_required_before_phase3_execution": [] if phase3_execution_ready else NEXT_REQUIRED_BEFORE_PHASE3_EXECUTION,
         "artifacts": {
             "candidate_report": str(candidate.path),
             "tblite_report": str(tblite.path),
@@ -201,16 +204,21 @@ def _validate_benchmark_report(
     report: Mapping[str, object],
     expected_benchmark: str,
     failed_checks: list[str],
+    *,
+    real_mode: bool,
 ) -> dict[str, object]:
     expected_fields = {
         "benchmark": expected_benchmark,
         "adapter_version": "phase3-benchmark-adapter-v1",
-        "mode": "dry-run-fixture",
-        "dry_run": True,
+        "mode": "real-benchmark-smoke" if real_mode else "dry-run-fixture",
+        "dry_run": not real_mode,
         "candidate_only": True,
         "read_only": True,
         "external_calls_performed": False,
-        "apply_ready": False,
+        "external_benchmark_assets_validated": real_mode,
+        "real_benchmark_smoke_validated": real_mode,
+        "full_benchmark_executed": False,
+        "apply_ready": real_mode,
         "pass_condition": EXPECTED_PASS_CONDITIONS[expected_benchmark],
         "passed": True,
     }
@@ -229,6 +237,13 @@ def _validate_benchmark_report(
         failed_checks.append(f"{expected_benchmark} report failed_checks must be a list")
     elif failed:
         failed_checks.append(f"{expected_benchmark} report failed_checks must be empty for local preflight")
+    if real_mode:
+        evidence = _mapping(report.get("real_benchmark_evidence"), f"{expected_benchmark}.real_benchmark_evidence", failed_checks)
+        if evidence is not None:
+            if not isinstance(evidence.get("benchmark_root"), str) or not evidence.get("benchmark_root"):
+                failed_checks.append(f"{expected_benchmark} real_benchmark_evidence.benchmark_root must be a non-empty string")
+            if not isinstance(evidence.get("execution_scope"), str) or not evidence.get("execution_scope"):
+                failed_checks.append(f"{expected_benchmark} real_benchmark_evidence.execution_scope must be a non-empty string")
 
     metrics = _mapping(report.get("metrics"), f"{expected_benchmark}.metrics", failed_checks)
     case_count = metrics.get("case_count") if metrics is not None else None
@@ -280,6 +295,9 @@ def _validate_benchmark_report(
         "mode": report.get("mode"),
         "read_only": report.get("read_only") is True,
         "external_calls_performed": report.get("external_calls_performed") is True,
+        "external_benchmark_assets_validated": report.get("external_benchmark_assets_validated") is True,
+        "real_benchmark_smoke_validated": report.get("real_benchmark_smoke_validated") is True,
+        "full_benchmark_executed": report.get("full_benchmark_executed") is True,
         "apply_ready": report.get("apply_ready") is True,
         "case_count": case_count,
         "candidate_regression_count": candidate_regression_count,
@@ -455,7 +473,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tblite-report", required=True)
     parser.add_argument("--yc-bench-report", required=True)
     parser.add_argument("--output-json", required=True)
-    parser.add_argument("--dry-run", action="store_true", required=True)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--execution-approved", action="store_true")
     return parser
 
 
@@ -469,6 +488,7 @@ def main(argv: list[str] | None = None) -> None:
             yc_bench_report=args.yc_bench_report,
             output_json=args.output_json,
             dry_run=args.dry_run,
+            execution_approved=args.execution_approved,
         )
     except Phase3PreflightFailed as exc:
         parser.error(f"phase3 preflight failed: {exc}")
