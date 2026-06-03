@@ -66,6 +66,26 @@ python -m evolution.skills.evolve_skill \
 | **[DSPy](https://github.com/stanfordnlp/dspy) + [GEPA](https://github.com/gepa-ai/gepa)** | Reflective prompt evolution — reads execution traces, proposes targeted mutations | MIT |
 | **[Darwinian Evolver](https://github.com/imbue-ai/darwinian_evolver)** | Code evolution with Git-based organisms | AGPL v3 (external CLI only) |
 
+## Branching (Git Flow)
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Production-ready releases |
+| `develop` | Integration branch for day-to-day work |
+| `feature/*` | New work (branch from `develop`) |
+| `release/*` | Release prep (merge to `main` and `develop`) |
+| `hotfix/*` | Urgent production fixes (branch from `main`) |
+
+```bash
+git checkout develop && git pull
+git flow feature start my-change
+# ... commits ...
+git flow feature publish my-change
+gh pr create --base develop
+```
+
+Open pull requests against **`develop`**. Merges to **`main`** happen via `release/*` or `hotfix/*` (or maintainer-approved exceptions).
+
 ## Guardrails
 
 Every evolved variant must pass:
