@@ -142,8 +142,11 @@ def validate_phase4_scaffold_report_contract(report: Mapping[str, Any]) -> Phase
     elif passed is False and not failed_checks:
         errors.append("failed_checks must be non-empty when passed is false")
 
-    for key in ("target_spec", "allowed_mutation", "freeze_checks", "fitness_plan", "approval_gates", "artifacts", "output_constraints"):
+    freeze_checks = _mapping(report.get("freeze_checks"), "freeze_checks", errors)
+    for key in ("target_spec", "allowed_mutation", "fitness_plan", "approval_gates", "artifacts", "output_constraints"):
         _mapping(report.get(key), key, errors)
+    if freeze_checks is not None:
+        _validate_embedded_freeze_gate(report, freeze_checks, errors)
     write_targets = report.get("write_targets")
     if not isinstance(write_targets, list) or not all(isinstance(item, str) for item in write_targets):
         errors.append("write_targets must be a list of strings")
@@ -279,6 +282,43 @@ def validate_phase4_freeze_comparison_report_contract(report: Mapping[str, Any])
     return Phase4ReportContractValidation(passed=not errors, errors=tuple(errors))
 
 
+def _validate_embedded_freeze_gate(
+    report: Mapping[str, Any],
+    freeze_checks: Mapping[str, Any],
+    errors: list[str],
+) -> None:
+    mandatory_gate = _mapping(freeze_checks.get("mandatory_gate"), "freeze_checks.mandatory_gate", errors)
+    if mandatory_gate is not None:
+        if mandatory_gate.get("required_before_apply") is not True:
+            errors.append("freeze_checks.mandatory_gate.required_before_apply must be true")
+        if freeze_checks.get("mode") == "freeze-comparator":
+            if mandatory_gate.get("executed") is not True:
+                errors.append("freeze_checks.mandatory_gate.executed must be true for freeze comparator reports")
+            if mandatory_gate.get("passed") != freeze_checks.get("passed"):
+                errors.append("freeze_checks.mandatory_gate.passed must match freeze comparator passed")
+        else:
+            if mandatory_gate.get("executed") is not False:
+                errors.append("freeze_checks.mandatory_gate.executed must be false before a candidate exists")
+            if mandatory_gate.get("passed") is not None:
+                errors.append("freeze_checks.mandatory_gate.passed must be null before a candidate exists")
+
+    if freeze_checks.get("mode") != "freeze-comparator":
+        return
+
+    freeze_validation = validate_phase4_freeze_comparison_report_contract(freeze_checks)
+    for error in freeze_validation.errors:
+        errors.append(f"freeze_checks.{error}")
+
+    if freeze_checks.get("passed") is False:
+        if report.get("passed") is not False:
+            errors.append("top-level passed must be false when freeze comparator fails")
+        failed_checks = report.get("failed_checks")
+        if not isinstance(failed_checks, list) or not any(
+            isinstance(item, str) and item.startswith("freeze_comparator:") for item in failed_checks
+        ):
+            errors.append("top-level failed_checks must include freeze_comparator entries when freeze comparator fails")
+
+
 def load_and_validate_phase4_freeze_comparison_report(path: str | Path) -> Phase4ReportContractValidation:
     """Load a Phase 4 freeze comparison report JSON file and validate it."""
 
@@ -337,16 +377,31 @@ def _is_under_phase4_output_root(path_string: str) -> bool:
     return resolved_candidate == resolved_allowed_root or resolved_candidate.is_relative_to(resolved_allowed_root)
 
 
+def load_and_validate_phase4_report(path: str | Path) -> Phase4ReportContractValidation:
+    """Load either a scaffold report or freeze-comparison report and validate it."""
+
+    report_path = Path(path)
+    try:
+        payload = json.loads(report_path.read_text())
+    except json.JSONDecodeError as exc:
+        return Phase4ReportContractValidation(passed=False, errors=(f"invalid JSON: {exc}",))
+    if not isinstance(payload, Mapping):
+        return Phase4ReportContractValidation(passed=False, errors=("report JSON root must be an object",))
+    if payload.get("mode") == "freeze-comparator":
+        return validate_phase4_freeze_comparison_report_contract(payload)
+    return validate_phase4_scaffold_report_contract(payload)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Validate a Phase 4 dry-run scaffold report contract.")
-    parser.add_argument("report_json", help="Path to scaffold_report.json")
+    parser = argparse.ArgumentParser(description="Validate a Phase 4 dry-run scaffold or freeze-comparison report contract.")
+    parser.add_argument("report_json", help="Path to scaffold_report.json or freeze_comparison_report.json")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    validation = load_and_validate_phase4_scaffold_report(args.report_json)
+    validation = load_and_validate_phase4_report(args.report_json)
     print(json.dumps({"passed": validation.passed, "errors": list(validation.errors)}, indent=2, sort_keys=True))
     return 0 if validation.passed else 1
 

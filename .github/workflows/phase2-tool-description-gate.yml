@@ -6,12 +6,16 @@ on:
       - "evolution/tools/**"
       - "evolution/benchmarks/**"
       - "evolution/prompts/**"
+      - "evolution/code/**"
       - "tests/tools/**"
+      - "tests/code/**"
       - "datasets/golden/tool-description/**"
       - "datasets/golden/benchmarks/**"
       - "reports/phase2e_*"
       - "reports/phase3_*"
+      - "reports/phase4_*"
       - "seeds/**"
+      - ".planning/spikes/**"
       - "README.md"
       - "PLAN.md"
       - "pyproject.toml"
@@ -22,12 +26,16 @@ on:
       - "evolution/tools/**"
       - "evolution/benchmarks/**"
       - "evolution/prompts/**"
+      - "evolution/code/**"
       - "tests/tools/**"
+      - "tests/code/**"
       - "datasets/golden/tool-description/**"
       - "datasets/golden/benchmarks/**"
       - "reports/phase2e_*"
       - "reports/phase3_*"
+      - "reports/phase4_*"
       - "seeds/**"
+      - ".planning/spikes/**"
       - "README.md"
       - "PLAN.md"
       - "pyproject.toml"
@@ -72,7 +80,70 @@ jobs:
             tests/tools/test_phase3_preflight_gate.py \
             tests/tools/test_phase3_real_benchmark_readiness_manifest.py \
             tests/tools/test_phase2_automation.py \
+            tests/code/test_phase4_target_contract.py \
+            tests/code/test_phase4_report_contract.py \
+            tests/code/test_phase4_code_scaffold.py \
+            tests/code/test_phase4_freeze_comparator.py \
+            tests/code/test_phase4_automation.py \
             -q
+
+      - name: Run Phase 4 code-evolution report contract smoke
+        run: |
+          rm -rf output/phase4-code-evolution/ci-gate
+          mkdir -p output/phase4-code-evolution/ci-gate/candidate
+          cp evolution/code/phase4_code_scaffold.py \
+            output/phase4-code-evolution/ci-gate/candidate/phase4_code_scaffold.py
+          cat > output/phase4-code-evolution/ci-gate/phase4_target.yaml <<'PYAML'
+          phase: "4"
+          mode: code-evolution-target
+          target_id: phase4-ci-scaffold-smoke
+          hermes_base:
+            repo: .
+            base_ref: ci-smoke
+            require_clean_worktree: false
+          allowed_mutation:
+            files:
+              - evolution/code/phase4_code_scaffold.py
+            deny_globs:
+              - '**/.env'
+              - '**/*secret*'
+              - skills/**
+              - plugins/**
+              - memory/**
+          freeze:
+            function_signatures: true
+            registry_register_calls: true
+            public_cli_args: true
+          fitness:
+            required_commands:
+              - python -m pytest tests/code/test_phase4_code_scaffold.py -q
+          reproduction:
+            failing_case_description: CI scaffold smoke fixture
+            reproducer_command: python -m pytest tests/code/test_phase4_code_scaffold.py -q
+          benchmarks:
+            run_benchmarks_now: false
+            full_benchmark_required_before_acceptance: true
+          approvals:
+            darwinian_install_approved: false
+            darwinian_execution_approved: false
+            hermes_source_mutation_approved: false
+            budget_approved_usd: 0
+          PYAML
+          python -m evolution.code.freeze_comparator \
+            --baseline-file evolution/code/phase4_code_scaffold.py \
+            --candidate-file output/phase4-code-evolution/ci-gate/candidate/phase4_code_scaffold.py \
+            --output-json output/phase4-code-evolution/ci-gate/freeze_comparison_report.json
+          python -m evolution.code.report_contract \
+            output/phase4-code-evolution/ci-gate/freeze_comparison_report.json
+          python -m evolution.code.phase4_code_scaffold \
+            --target-spec output/phase4-code-evolution/ci-gate/phase4_target.yaml \
+            --output-dir output/phase4-code-evolution/ci-gate/scaffold \
+            --candidate-file output/phase4-code-evolution/ci-gate/candidate/phase4_code_scaffold.py \
+            --dry-run
+          python -m evolution.code.report_contract \
+            output/phase4-code-evolution/ci-gate/scaffold/scaffold_report.json
+          python -m evolution.code.report_contract \
+            output/phase4-code-evolution/ci-gate/scaffold/freeze_report.json
 
       - name: Build deterministic 45-case CI inventory
         run: |

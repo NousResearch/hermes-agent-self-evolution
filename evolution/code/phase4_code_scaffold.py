@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable, Mapping, cast
 
+from evolution.code.freeze_comparator import compare_candidate_to_baseline
 from evolution.code.report_contract import validate_phase4_scaffold_report_contract
 from evolution.code.target_contract import Phase4TargetSpec, load_target_spec
 
@@ -50,6 +51,7 @@ def run_phase4_code_scaffold(
     output_dir: str | Path,
     dry_run: bool,
     hermes_repo: str | Path | None = None,
+    candidate_file: str | Path | None = None,
 ) -> dict[str, Any]:
     """Write Phase 4 dry-run scaffold artifacts under the allowed output root."""
 
@@ -59,15 +61,22 @@ def run_phase4_code_scaffold(
     spec = load_target_spec(target_spec, hermes_repo_override=hermes_repo)
     output_path = _normalize_output_dir(Path(output_dir))
     _validate_output_dir(output_path)
+    candidate_path = _normalize_candidate_file(candidate_file, baseline_file=spec.target_files[0]) if candidate_file else None
     artifact_paths = {name: output_path / name for name in OUTPUT_ARTIFACT_NAMES}
+    input_paths = (spec.source_path, *spec.target_files, *((candidate_path,) if candidate_path else ()))
     _validate_write_targets(
         list(artifact_paths.values()),
-        input_paths=(spec.source_path, *spec.target_files),
+        input_paths=input_paths,
     )
 
     target_snapshot = _build_target_snapshot(spec)
     baseline_api_surface = _collect_api_surface(spec.target_files[0])
-    freeze_report = _build_freeze_report(spec, artifact_paths["baseline_api_surface.json"])
+    freeze_report = _build_freeze_report(
+        spec,
+        artifact_paths["baseline_api_surface.json"],
+        candidate_file=candidate_path,
+        output_json=artifact_paths["freeze_report.json"],
+    )
     reproduction_contract = _build_reproduction_contract(spec)
     report = _build_scaffold_report(
         spec=spec,
@@ -120,19 +129,45 @@ def _build_target_snapshot(spec: Phase4TargetSpec) -> dict[str, Any]:
     }
 
 
-def _build_freeze_report(spec: Phase4TargetSpec, baseline_api_surface_path: Path) -> dict[str, Any]:
-    return {
-        "phase": "4",
-        "mode": "freeze-check-plan",
-        "function_signatures_required": spec.freeze.get("function_signatures") is True,
-        "registry_register_calls_required": spec.freeze.get("registry_register_calls") is True,
-        "public_cli_args_required": spec.freeze.get("public_cli_args") is True,
-        "candidate_generated": False,
-        "baseline_api_surface_path": str(baseline_api_surface_path),
-        "candidate_api_surface_path": None,
-        "checks_executed": False,
-        "status": "not_run_no_candidate",
+def _build_freeze_report(
+    spec: Phase4TargetSpec,
+    baseline_api_surface_path: Path,
+    *,
+    candidate_file: Path | None = None,
+    output_json: Path | None = None,
+) -> dict[str, Any]:
+    if candidate_file is None:
+        return {
+            "phase": "4",
+            "mode": "freeze-check-plan",
+            "function_signatures_required": spec.freeze.get("function_signatures") is True,
+            "registry_register_calls_required": spec.freeze.get("registry_register_calls") is True,
+            "public_cli_args_required": spec.freeze.get("public_cli_args") is True,
+            "candidate_generated": False,
+            "baseline_api_surface_path": str(baseline_api_surface_path),
+            "candidate_api_surface_path": None,
+            "checks_executed": False,
+            "status": "not_run_no_candidate",
+            "mandatory_gate": {
+                "required_before_apply": True,
+                "executed": False,
+                "passed": None,
+            },
+        }
+
+    freeze_report = compare_candidate_to_baseline(
+        baseline_file=spec.target_files[0],
+        candidate_file=candidate_file,
+        output_json=output_json,
+    )
+    freeze_report["candidate_generated"] = True
+    freeze_report["checks_executed"] = True
+    freeze_report["mandatory_gate"] = {
+        "required_before_apply": True,
+        "executed": True,
+        "passed": freeze_report["passed"],
     }
+    return freeze_report
 
 
 def _build_reproduction_contract(spec: Phase4TargetSpec) -> dict[str, Any]:
@@ -155,7 +190,7 @@ def _build_scaffold_report(
     freeze_report: Mapping[str, Any],
     reproduction_contract: Mapping[str, Any],
 ) -> dict[str, Any]:
-    failed_checks: list[str] = []
+    failed_checks = _scaffold_failed_checks(freeze_report)
     return {
         "phase": "4",
         "mode": "code-evolution-candidate-only-scaffold",
@@ -214,6 +249,15 @@ def _build_scaffold_report(
             "hermes_source_write_allowed": False,
         },
     }
+
+
+def _scaffold_failed_checks(freeze_report: Mapping[str, Any]) -> list[str]:
+    if freeze_report.get("mode") != "freeze-comparator":
+        return []
+    failed_checks = freeze_report.get("failed_checks")
+    if not isinstance(failed_checks, list):
+        return ["freeze_comparator:failed_checks_missing"]
+    return [f"freeze_comparator:{check}" for check in failed_checks]
 
 
 def _collect_api_surface(target_file: Path) -> dict[str, Any]:
@@ -314,6 +358,26 @@ def _normalize_output_dir(path: Path) -> Path:
     return REPO_ROOT / path
 
 
+def _normalize_candidate_file(raw_path: str | Path, *, baseline_file: Path) -> Path:
+    raw_candidate = Path(raw_path).expanduser()
+    if ".." in raw_candidate.parts:
+        raise ValueError("candidate-file must not contain traversal segments")
+    candidate = raw_candidate if raw_candidate.is_absolute() else REPO_ROOT / raw_candidate
+    if candidate.is_symlink():
+        raise ValueError(f"candidate-file must not be a symlink: {candidate}")
+    if not candidate.exists() or not candidate.is_file():
+        raise ValueError(f"candidate-file must exist and be a file: {candidate}")
+    if candidate.suffix != ".py":
+        raise ValueError(f"candidate-file must be a Python file: {candidate}")
+    resolved_candidate = candidate.resolve()
+    resolved_allowed_root = PHASE4_OUTPUT_ROOT.resolve(strict=False)
+    if resolved_candidate != resolved_allowed_root and not resolved_candidate.is_relative_to(resolved_allowed_root):
+        raise ValueError(f"candidate-file must stay under {ALLOWED_OUTPUT_ROOT}: {candidate}")
+    if resolved_candidate == baseline_file.resolve() or candidate.samefile(baseline_file):
+        raise ValueError("candidate-file must not be the baseline target file")
+    return resolved_candidate
+
+
 def _validate_output_dir(output_dir: Path) -> None:
     if PHASE4_OUTPUT_ROOT.is_symlink():
         raise ValueError(f"output root must not be a symlink: {PHASE4_OUTPUT_ROOT}")
@@ -383,6 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Prepare Phase 4 dry-run code-evolution scaffold artifacts.")
     parser.add_argument("--target-spec", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--candidate-file", default=None, help="Optional generated candidate .py file under output/phase4-code-evolution/")
     parser.add_argument("--hermes-repo", default=None, help="Optional Hermes repo override for the target spec")
     parser.add_argument("--dry-run", action="store_true", required=True)
     return parser
@@ -397,12 +462,22 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=args.output_dir,
             dry_run=args.dry_run,
             hermes_repo=args.hermes_repo,
+            candidate_file=args.candidate_file,
         )
     except (ValueError, Phase4CodeScaffoldFailed) as exc:
         print(f"phase4 code scaffold failed: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps({"passed": report["passed"], "report": report["artifacts"]["scaffold_report"]}, sort_keys=True))
-    return 0
+    print(
+        json.dumps(
+            {
+                "passed": report["passed"],
+                "failed_checks": report["failed_checks"],
+                "report": report["artifacts"]["scaffold_report"],
+            },
+            sort_keys=True,
+        )
+    )
+    return 0 if report["passed"] else 1
 
 
 if __name__ == "__main__":  # pragma: no cover

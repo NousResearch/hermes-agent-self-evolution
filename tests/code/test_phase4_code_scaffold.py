@@ -161,9 +161,188 @@ def test_phase4_code_scaffold_writes_dry_run_candidate_only_artifacts(tmp_path, 
     assert "SafeToolHelper.normalize" in api_surface["class_methods"]
     assert api_surface["registry_register_calls"][0]["name"] == "safe_tool"
 
-    assert json.loads(freeze_report.read_text())["candidate_generated"] is False
+    freeze_plan = json.loads(freeze_report.read_text())
+    assert freeze_plan["candidate_generated"] is False
+    assert freeze_plan["checks_executed"] is False
+    assert freeze_plan["mandatory_gate"]["required_before_apply"] is True
+    assert freeze_plan["mandatory_gate"]["executed"] is False
     assert json.loads(reproduction_contract.read_text())["baseline_reproduction_executed"] is False
     assert "Phase 4 code-evolution dry-run scaffold" in review_packet.read_text()
+
+
+def test_phase4_code_scaffold_runs_freeze_comparator_as_mandatory_gate_for_candidate(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    _cleanup_output()
+    hermes_repo = tmp_path / "hermes-agent"
+    baseline_file = _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    candidate_file = PYTEST_OUTPUT_ROOT / "candidate-pass" / "safe_tool.py"
+    candidate_file.parent.mkdir(parents=True, exist_ok=True)
+    candidate_file.write_text(
+        baseline_file.read_text().replace("return value if strict else value.strip()", "return value.strip() if strict else value.strip()")
+    )
+    output_dir = PYTEST_OUTPUT_ROOT / "run-freeze-pass"
+
+    report = run_phase4_code_scaffold(
+        target_spec=spec_path,
+        output_dir=output_dir,
+        dry_run=True,
+        candidate_file=candidate_file,
+    )
+
+    freeze_report = json.loads((output_dir / "freeze_report.json").read_text())
+    scaffold_report = json.loads((output_dir / "scaffold_report.json").read_text())
+    assert report == scaffold_report
+    assert report["passed"] is True
+    assert report["failed_checks"] == []
+    assert report["freeze_checks"]["mode"] == "freeze-comparator"
+    assert report["freeze_checks"]["passed"] is True
+    assert report["freeze_checks"]["checks_executed"] is True
+    assert report["freeze_checks"]["mandatory_gate"] == {
+        "required_before_apply": True,
+        "executed": True,
+        "passed": True,
+    }
+    assert freeze_report["artifacts"]["output_json"] == str(output_dir / "freeze_report.json")
+    assert freeze_report["comparisons"]["function_signatures"] == {"changed": [], "added": [], "removed": []}
+    assert freeze_report["candidate_file"] == str(candidate_file.resolve())
+
+
+def test_phase4_code_scaffold_freeze_gate_fails_visibly_for_candidate_surface_drift(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    _cleanup_output()
+    hermes_repo = tmp_path / "hermes-agent"
+    _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    candidate_file = PYTEST_OUTPUT_ROOT / "candidate-fail" / "safe_tool.py"
+    candidate_file.parent.mkdir(parents=True, exist_ok=True)
+    candidate_file.write_text(
+        """
+from tools.registry import registry
+
+
+def safe_tool(value: str, retries: int = 0, *, strict: bool = True) -> str:
+    if not value:
+        raise ValueError("value is required")
+    return value
+
+
+class SafeToolHelper:
+    def normalize(self, value: str) -> str:
+        return value.strip()
+
+
+registry.register(
+    name="safe_tool",
+    toolset="example",
+    schema={"parameters": {"value": {"type": "string"}}, "required": ["value"]},
+    handler=safe_tool,
+)
+""".lstrip()
+    )
+    output_dir = PYTEST_OUTPUT_ROOT / "run-freeze-fail"
+
+    report = run_phase4_code_scaffold(
+        target_spec=spec_path,
+        output_dir=output_dir,
+        dry_run=True,
+        candidate_file=candidate_file,
+    )
+
+    assert report["passed"] is False
+    assert any(check.startswith("freeze_comparator:function_signature_changed:safe_tool") for check in report["failed_checks"])
+    freeze_report = json.loads((output_dir / "freeze_report.json").read_text())
+    scaffold_report = json.loads((output_dir / "scaffold_report.json").read_text())
+    assert freeze_report["passed"] is False
+    assert any(check.startswith("function_signature_changed:safe_tool") for check in freeze_report["failed_checks"])
+    assert scaffold_report["passed"] is False
+    assert scaffold_report["freeze_checks"]["mandatory_gate"]["passed"] is False
+
+
+def test_phase4_code_scaffold_cli_exits_nonzero_when_freeze_gate_fails(tmp_path):
+    hermes_repo = tmp_path / "hermes-agent"
+    _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    candidate_file = PYTEST_OUTPUT_ROOT / "candidate-cli-fail" / "safe_tool.py"
+    candidate_file.parent.mkdir(parents=True, exist_ok=True)
+    candidate_file.write_text(
+        """
+from tools.registry import registry
+
+
+def safe_tool(value: str, *, strict: bool = True, normalize: bool = False) -> str:
+    if not value:
+        raise ValueError("value is required")
+    return value
+
+
+class SafeToolHelper:
+    def normalize(self, value: str) -> str:
+        return value.strip()
+
+
+registry.register(
+    name="safe_tool",
+    toolset="example",
+    schema={"parameters": {"value": {"type": "string"}}, "required": ["value"]},
+    handler=safe_tool,
+)
+""".lstrip()
+    )
+    output_dir = PYTEST_OUTPUT_ROOT / "run-cli-freeze-fail"
+    shutil.rmtree(output_dir, ignore_errors=True)
+
+    completed = subprocess.run(
+        [
+            "python",
+            "-m",
+            "evolution.code.phase4_code_scaffold",
+            "--target-spec",
+            str(spec_path),
+            "--output-dir",
+            str(output_dir),
+            "--candidate-file",
+            str(candidate_file),
+            "--dry-run",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert summary["passed"] is False
+    assert any(check.startswith("freeze_comparator:function_signature_changed:safe_tool") for check in summary["failed_checks"])
+    scaffold_report = json.loads((output_dir / "scaffold_report.json").read_text())
+    assert scaffold_report["passed"] is False
+    assert "Traceback" not in completed.stderr
+
+
+def test_phase4_code_scaffold_rejects_candidate_file_outside_phase4_output_root(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    hermes_repo = tmp_path / "hermes-agent"
+    baseline_file = _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    candidate_file = tmp_path / "candidate-outside" / "safe_tool.py"
+    candidate_file.parent.mkdir(parents=True)
+    candidate_file.write_text(baseline_file.read_text())
+
+    try:
+        run_phase4_code_scaffold(
+            target_spec=spec_path,
+            output_dir=PYTEST_OUTPUT_ROOT / "run-candidate-outside",
+            dry_run=True,
+            candidate_file=candidate_file,
+        )
+    except ValueError as exc:
+        assert "candidate-file must stay under output/phase4-code-evolution/" in str(exc)
+    else:
+        raise AssertionError("expected candidate output-root rejection")
 
 
 def test_phase4_code_scaffold_rejects_non_dry_run(tmp_path):

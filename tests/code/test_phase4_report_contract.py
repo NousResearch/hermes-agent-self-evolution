@@ -36,6 +36,12 @@ def _valid_report(output_root: Path) -> dict[str, object]:
             "function_signatures_required": True,
             "registry_register_calls_required": True,
             "candidate_generated": False,
+            "checks_executed": False,
+            "mandatory_gate": {
+                "required_before_apply": True,
+                "executed": False,
+                "passed": None,
+            },
         },
         "fitness_plan": {"required_commands": ["python -m pytest tests/tools/test_safe_tool.py -q"]},
         "approval_gates": {
@@ -224,6 +230,49 @@ def test_report_contract_rejects_multi_target_report(tmp_path):
 
     assert validation.passed is False
     assert "allowed_mutation.exactly_one_target_file must be true" in validation.errors
+
+
+def test_report_contract_rejects_scaffold_without_mandatory_freeze_gate(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    report = _valid_report(_valid_output_root())
+    freeze_checks = report["freeze_checks"]
+    assert isinstance(freeze_checks, dict)
+    freeze_checks.pop("mandatory_gate")
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "freeze_checks.mandatory_gate must be an object" in validation.errors
+
+
+def test_report_contract_requires_failed_freeze_gate_to_surface_top_level(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    report = _valid_report(_valid_output_root())
+    freeze_report = _valid_freeze_comparison_report(_valid_output_root())
+    freeze_report["passed"] = False
+    freeze_report["failed_checks"] = ["function_signature_changed:safe_tool"]
+    freeze_report["mandatory_gate"] = {
+        "required_before_apply": True,
+        "executed": True,
+        "passed": False,
+    }
+    report["freeze_checks"] = freeze_report
+    report["passed"] = True
+    report["failed_checks"] = []
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "top-level passed must be false when freeze comparator fails" in validation.errors
+    assert "top-level failed_checks must include freeze_comparator entries when freeze comparator fails" in validation.errors
+
+    report["passed"] = False
+    report["failed_checks"] = ["freeze_comparator:function_signature_changed:safe_tool"]
+    validation = validate_phase4_scaffold_report_contract(report)
+    assert validation.passed is True
+    assert validation.errors == ()
 
 
 def test_report_contract_rejects_sensitive_payload_text(tmp_path):
