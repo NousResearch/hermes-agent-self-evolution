@@ -238,3 +238,84 @@ def test_report_contract_rejects_sensitive_payload_text(tmp_path):
 
     assert validation.passed is False
     assert "report contains sensitive credential-like text" in validation.errors
+
+
+def _valid_freeze_comparison_report(output_root: Path) -> dict[str, object]:
+    output_json = output_root / "freeze-comparison" / "freeze_comparison_report.json"
+    return {
+        "phase": "4",
+        "mode": "freeze-comparator",
+        "candidate_only": True,
+        "read_only_inputs": True,
+        "apply_ready": False,
+        "hermes_source_mutation_performed": False,
+        "passed": True,
+        "failed_checks": [],
+        "baseline_file": "/tmp/baseline/tools/safe_tool.py",
+        "candidate_file": "/tmp/candidate/tools/safe_tool.py",
+        "comparisons": {
+            "function_signatures": {"changed": [], "added": [], "removed": []},
+            "class_names": {"changed": [], "added": [], "removed": []},
+            "decorators": {"changed": [], "added": [], "removed": []},
+            "registry_register_calls": {"changed": [], "added": [], "removed": []},
+            "public_cli_args": {"changed": [], "added": [], "removed": []},
+        },
+        "artifacts": {"output_json": str(output_json)},
+        "output_constraints": {
+            "allowed_root": "output/phase4-code-evolution/",
+            "fresh_output_required": True,
+            "symlink_output_allowed": False,
+            "hermes_source_write_allowed": False,
+        },
+    }
+
+
+def test_freeze_comparison_report_contract_accepts_valid_candidate_only_report(tmp_path):
+    from evolution.code.report_contract import validate_phase4_freeze_comparison_report_contract
+
+    validation = validate_phase4_freeze_comparison_report_contract(
+        _valid_freeze_comparison_report(_valid_output_root())
+    )
+
+    assert validation.passed is True
+    assert validation.errors == ()
+
+
+def test_freeze_comparison_report_contract_rejects_apply_and_source_mutation_flags(tmp_path):
+    from evolution.code.report_contract import validate_phase4_freeze_comparison_report_contract
+
+    report = _valid_freeze_comparison_report(_valid_output_root())
+    report["apply_ready"] = True
+    report["hermes_source_mutation_performed"] = True
+
+    validation = validate_phase4_freeze_comparison_report_contract(report)
+
+    assert validation.passed is False
+    assert "top-level apply_ready must be false" in validation.errors
+    assert "top-level hermes_source_mutation_performed must be false" in validation.errors
+
+
+def test_freeze_comparison_report_contract_rejects_failed_check_mismatch(tmp_path):
+    from evolution.code.report_contract import validate_phase4_freeze_comparison_report_contract
+
+    report = _valid_freeze_comparison_report(_valid_output_root())
+    report["passed"] = False
+
+    validation = validate_phase4_freeze_comparison_report_contract(report)
+
+    assert validation.passed is False
+    assert "failed_checks must be non-empty when passed is false" in validation.errors
+
+
+def test_freeze_comparison_report_contract_rejects_artifact_outside_phase4_root(tmp_path):
+    from evolution.code.report_contract import validate_phase4_freeze_comparison_report_contract
+
+    report = _valid_freeze_comparison_report(_valid_output_root())
+    artifacts = report["artifacts"]
+    assert isinstance(artifacts, dict)
+    artifacts["output_json"] = str(tmp_path / "outside.json")
+
+    validation = validate_phase4_freeze_comparison_report_contract(report)
+
+    assert validation.passed is False
+    assert "artifacts.output_json must be under output/phase4-code-evolution" in validation.errors

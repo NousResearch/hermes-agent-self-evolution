@@ -67,6 +67,32 @@ REQUIRED_OUTPUT_CONSTRAINTS = {
     "input_output_overlap_allowed": False,
     "hermes_source_write_allowed": False,
 }
+REQUIRED_FREEZE_COMPARISON_FIELDS = frozenset(
+    {
+        "phase",
+        "mode",
+        "candidate_only",
+        "read_only_inputs",
+        "apply_ready",
+        "hermes_source_mutation_performed",
+        "passed",
+        "failed_checks",
+        "baseline_file",
+        "candidate_file",
+        "comparisons",
+        "artifacts",
+        "output_constraints",
+    }
+)
+FREEZE_COMPARISON_CATEGORIES = frozenset(
+    {"function_signatures", "class_names", "decorators", "registry_register_calls", "public_cli_args"}
+)
+REQUIRED_FREEZE_OUTPUT_CONSTRAINTS = {
+    "allowed_root": ALLOWED_OUTPUT_ROOT,
+    "fresh_output_required": True,
+    "symlink_output_allowed": False,
+    "hermes_source_write_allowed": False,
+}
 
 
 @dataclass(frozen=True)
@@ -189,6 +215,81 @@ def load_and_validate_phase4_scaffold_report(path: str | Path) -> Phase4ReportCo
     if not isinstance(payload, Mapping):
         return Phase4ReportContractValidation(passed=False, errors=("report JSON root must be an object",))
     return validate_phase4_scaffold_report_contract(payload)
+
+
+def validate_phase4_freeze_comparison_report_contract(report: Mapping[str, Any]) -> Phase4ReportContractValidation:
+    """Validate a Phase 4 candidate-vs-baseline freeze comparison report."""
+
+    errors: list[str] = []
+    _require_fields(report, REQUIRED_FREEZE_COMPARISON_FIELDS, "report", errors)
+    _reject_apply_payload_keys(report, "report", errors)
+    if _contains_sensitive_text(report):
+        errors.append("report contains sensitive credential-like text")
+
+    if report.get("phase") != "4":
+        errors.append('top-level phase must be "4"')
+    if report.get("mode") != "freeze-comparator":
+        errors.append('top-level mode must be "freeze-comparator"')
+    for key in ("candidate_only", "read_only_inputs"):
+        if report.get(key) is not True:
+            errors.append(f"top-level {key} must be true")
+    for key in ("apply_ready", "hermes_source_mutation_performed"):
+        if report.get(key) is not False:
+            errors.append(f"top-level {key} must be false")
+
+    passed = report.get("passed")
+    failed_checks = report.get("failed_checks")
+    if not isinstance(passed, bool):
+        errors.append("passed must be a boolean")
+    if not isinstance(failed_checks, list):
+        errors.append("failed_checks must be a list")
+    elif passed is True and failed_checks:
+        errors.append("failed_checks must be empty when passed is true")
+    elif passed is False and not failed_checks:
+        errors.append("failed_checks must be non-empty when passed is false")
+
+    for key in ("baseline_file", "candidate_file"):
+        if not isinstance(report.get(key), str) or not str(report.get(key)).strip():
+            errors.append(f"{key} must be a non-empty string")
+
+    comparisons = _mapping(report.get("comparisons"), "comparisons", errors)
+    if comparisons is not None:
+        for category in sorted(FREEZE_COMPARISON_CATEGORIES):
+            category_value = _mapping(comparisons.get(category), f"comparisons.{category}", errors)
+            if category_value is None:
+                continue
+            for change_kind in ("changed", "added", "removed"):
+                if not isinstance(category_value.get(change_kind), list):
+                    errors.append(f"comparisons.{category}.{change_kind} must be a list")
+
+    artifacts = _mapping(report.get("artifacts"), "artifacts", errors)
+    if artifacts is not None:
+        for artifact_key, artifact_value in artifacts.items():
+            if not isinstance(artifact_value, str):
+                errors.append(f"artifacts.{artifact_key} must be a string")
+            elif not _is_under_phase4_output_root(artifact_value):
+                errors.append(f"artifacts.{artifact_key} must be under output/phase4-code-evolution")
+
+    constraints = _mapping(report.get("output_constraints"), "output_constraints", errors)
+    if constraints is not None:
+        for key, expected in REQUIRED_FREEZE_OUTPUT_CONSTRAINTS.items():
+            if constraints.get(key) != expected:
+                errors.append(f"output_constraints.{key} must be {expected!r}")
+
+    return Phase4ReportContractValidation(passed=not errors, errors=tuple(errors))
+
+
+def load_and_validate_phase4_freeze_comparison_report(path: str | Path) -> Phase4ReportContractValidation:
+    """Load a Phase 4 freeze comparison report JSON file and validate it."""
+
+    report_path = Path(path)
+    try:
+        payload = json.loads(report_path.read_text())
+    except json.JSONDecodeError as exc:
+        return Phase4ReportContractValidation(passed=False, errors=(f"invalid JSON: {exc}",))
+    if not isinstance(payload, Mapping):
+        return Phase4ReportContractValidation(passed=False, errors=("report JSON root must be an object",))
+    return validate_phase4_freeze_comparison_report_contract(payload)
 
 
 def _require_fields(mapping: Mapping[str, Any], required: frozenset[str], path: str, errors: list[str]) -> None:
