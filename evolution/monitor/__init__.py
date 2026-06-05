@@ -1,1 +1,1 @@
-"""Phase placeholder: monitor evolution."""
+"""Phase 5 monitoring helpers."""

@@ -246,6 +246,18 @@ Phase 5 continuous loop readiness manifest artifacts are recorded in `reports/ph
 
 This starts Phase 5 as local read-only preparation only. GitHub handoff is not required for local read-only Phase 5 preparation, but Phase 4 upstream review/merge or an explicit waiver remains required before formal Phase 5 completion or unattended scheduler enablement. The manifest keeps `continuous_loop_enabled=false`, `cron_jobs_created=false`, and `phase5_unattended_loop_ready_now=false`.
 
+## Phase 5 Performance Monitor
+
+The Phase 5 performance monitor report contract is documented in `reports/phase5_performance_monitor_report_contract.md`. The read-only CLI is:
+
+```bash
+python -m evolution.monitor.performance_snapshot \
+    --metrics-json <sanitized-aggregate-metrics.json> \
+    --output-dir output/phase5-continuous-loop/<run-id>
+```
+
+It writes `performance_snapshot_report.json` and `.md` under the Phase 5 output root only. It consumes sanitized aggregate metrics, rejects raw/private identifiers, and keeps cron, optimizer execution, and automated PR updates disabled.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.
