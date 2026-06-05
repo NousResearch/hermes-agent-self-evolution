@@ -270,6 +270,18 @@ python -m evolution.monitor.auto_triage \
 
 It writes `auto_triage_report.json` and `.md` under the Phase 5 output root only. It ranks sanitized performance snapshot weak areas by `severity * sample_count`, rejects raw/private identifiers, and keeps scheduler side effects, optimizer execution, and automated PR updates disabled.
 
+## Phase 5 Scheduler Dry-Run
+
+The Phase 5 scheduler dry-run report contract is documented in `reports/phase5_scheduler_dry_run_report_contract.md`. The read-only CLI is:
+
+```bash
+python -m evolution.monitor.scheduler_dry_run \
+    --auto-triage-report-json output/phase5-continuous-loop/<triage-run>/auto_triage_report.json \
+    --output-dir output/phase5-continuous-loop/<scheduler-dry-run>
+```
+
+It writes `scheduler_dry_run_report.json` and `.md` under the Phase 5 output root only. It converts ranked auto-triage targets into manual-review dry-run actions and keeps cron jobs, benchmark cron, notifications, optimizer execution, and automated PR updates disabled.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.
