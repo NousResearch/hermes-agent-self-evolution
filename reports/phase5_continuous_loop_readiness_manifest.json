@@ -1,0 +1,116 @@
+{
+  "approval_gate": {
+    "active_apply_approved": false,
+    "automated_external_handoff_approved": false,
+    "optimizer_execution_approved": false,
+    "planning_authorized": "rec action GO",
+    "scheduler_enablement_approved": false,
+    "separate_approval_required_before": [
+      "creating or enabling Hermes cron jobs",
+      "running real TBLite benchmark commands",
+      "running real YC-Bench benchmark commands",
+      "spending nonzero benchmark/API budget",
+      "running GEPA/DSPy optimization",
+      "running Darwinian Evolver optimization",
+      "creating or updating external GitHub pull requests automatically",
+      "editing active Hermes Agent source, skills, prompts, memory, config, or runtime state"
+    ]
+  },
+  "artifacts": {
+    "manifest_json": "reports/phase5_continuous_loop_readiness_manifest.json",
+    "manifest_markdown": "reports/phase5_continuous_loop_readiness_manifest.md",
+    "source_phase4_pr": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/98",
+    "source_plan": "PLAN.md"
+  },
+  "automated_pr_creation_enabled": false,
+  "benchmark_cron_enabled": false,
+  "continuous_loop_enabled": false,
+  "cron_jobs_created": false,
+  "github_gate_policy": {
+    "phase4_pr_checks_reported": false,
+    "phase4_pr_draft": true,
+    "phase4_pr_url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/98",
+    "phase4_upstream_merged": false,
+    "required_before_formal_phase5_completion": true,
+    "required_before_unattended_scheduler_enablement": true,
+    "required_for_local_readiness_planning": false,
+    "required_for_read_only_scaffold_work": false
+  },
+  "go_no_go_conditions": [
+    {
+      "id": "P5-1-phase4-formal-handoff-reviewed",
+      "required_before": "phase5_unattended_loop_enablement",
+      "status": "required_future_gate",
+      "verification": "Phase 4 PR is reviewed, checks are available or explicitly waived, and upstream merge/handoff status is recorded."
+    },
+    {
+      "id": "P5-2-readonly-performance-monitor-contract",
+      "required_before": "phase5_unattended_loop_enablement",
+      "status": "required_future_gate",
+      "verification": "A read-only monitor report schema proves no raw private session data or credentials are committed."
+    },
+    {
+      "id": "P5-3-auto-triage-dry-run-contract",
+      "required_before": "phase5_unattended_loop_enablement",
+      "status": "required_future_gate",
+      "verification": "Triage ranking is deterministic, read-only, and explainable from sanitized metrics."
+    },
+    {
+      "id": "P5-4-scheduler-dry-run-no-side-effects",
+      "required_before": "phase5_unattended_loop_enablement",
+      "status": "required_future_gate",
+      "verification": "Scheduler configuration is emitted as a dry-run artifact only; no Hermes cron job is created."
+    },
+    {
+      "id": "P5-5-explicit-budget-and-optimizer-approval",
+      "required_before": "phase5_unattended_loop_enablement",
+      "status": "required_future_gate",
+      "verification": "Optimizer and benchmark execution remain blocked until explicit budget and execution approval are recorded."
+    },
+    {
+      "id": "P5-6-human-review-and-no-auto-merge",
+      "required_before": "phase5_unattended_loop_enablement",
+      "status": "satisfied_for_local_planning",
+      "verification": "The manifest keeps automatic merge/deploy disabled and requires human review for every generated PR."
+    }
+  ],
+  "local_phase5_preparation_started": true,
+  "manifest_version": "phase5-continuous-loop-readiness-v1",
+  "mode": "phase5-continuous-loop-readiness-manifest",
+  "phase": "5",
+  "phase4_dependency_state": {
+    "ci_checks_reported": false,
+    "draft_pr_updated": true,
+    "fork_branch_pushed": true,
+    "local_phase4_engineering_complete": true,
+    "local_phase4_tests_green": true,
+    "upstream_merge_complete": false
+  },
+  "ready_state": {
+    "active_apply_ready_now": false,
+    "blocked_until_all_go_no_go_conditions_satisfied": true,
+    "phase5_local_planning_ready_now": true,
+    "phase5_unattended_loop_ready_now": false
+  },
+  "required_components": [
+    "auto_triage",
+    "feedback_loop_dataset_ingestion",
+    "human_review_handoff",
+    "performance_monitor",
+    "safety_report_contract",
+    "scheduler_dry_run"
+  ],
+  "safety_invariants": {
+    "active_runtime_mutation": false,
+    "automatic_merge_or_deploy_allowed": false,
+    "cron_or_scheduler_side_effects_performed": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "raw_credentials_recorded": false,
+    "raw_private_session_data_committed": false
+  },
+  "source_authorization": "rec action GO",
+  "status": "local_preparation_started_not_deployed",
+  "threshold_triggered_optimization_enabled": false,
+  "active_runtime_apply_ready": false
+}

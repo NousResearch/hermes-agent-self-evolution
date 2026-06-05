@@ -7,13 +7,16 @@ on:
       - "evolution/benchmarks/**"
       - "evolution/prompts/**"
       - "evolution/code/**"
+      - "evolution/monitor/**"
       - "tests/tools/**"
       - "tests/code/**"
+      - "tests/monitor/**"
       - "datasets/golden/tool-description/**"
       - "datasets/golden/benchmarks/**"
       - "reports/phase2e_*"
       - "reports/phase3_*"
       - "reports/phase4_*"
+      - "reports/phase5_*"
       - "seeds/**"
       - ".planning/spikes/**"
       - "README.md"
@@ -27,13 +30,16 @@ on:
       - "evolution/benchmarks/**"
       - "evolution/prompts/**"
       - "evolution/code/**"
+      - "evolution/monitor/**"
       - "tests/tools/**"
       - "tests/code/**"
+      - "tests/monitor/**"
       - "datasets/golden/tool-description/**"
       - "datasets/golden/benchmarks/**"
       - "reports/phase2e_*"
       - "reports/phase3_*"
       - "reports/phase4_*"
+      - "reports/phase5_*"
       - "seeds/**"
       - ".planning/spikes/**"
       - "README.md"
@@ -85,6 +91,7 @@ jobs:
             tests/code/test_phase4_code_scaffold.py \
             tests/code/test_phase4_freeze_comparator.py \
             tests/code/test_phase4_automation.py \
+            tests/monitor/test_phase5_continuous_loop_readiness_manifest.py \
             -q
 
       - name: Run Phase 4 code-evolution report contract smoke

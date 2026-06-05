@@ -56,8 +56,8 @@ python -m evolution.skills.evolve_skill \
 | **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
 | **Phase 2** | Tool descriptions | DSPy + GEPA | 🟡 Candidate-only gate/report contract implemented |
 | **Phase 3** | System prompt sections | DSPy + GEPA | 🟡 Design + execution Seed draft + readiness manifest recorded |
-| **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
-| **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
+| **Phase 4** | Tool implementation code | Darwinian Evolver | 🟡 Candidate-only scaffold, freeze gates, and lifecycle guards implemented |
+| **Phase 5** | Continuous improvement loop | Automated pipeline | 🟡 Readiness manifest recorded; unattended loop not deployed |
 
 ## Engines
 
@@ -239,6 +239,12 @@ The preflight gate checks candidate-only/apply-blocked flags, dry-run benchmark 
 The Phase 3 real benchmark readiness manifest is recorded in `reports/phase3_real_benchmark_readiness_manifest.json` and `reports/phase3_real_benchmark_readiness_manifest.md`. It is machine-readable preparation only: `real_benchmark_ready_now=false`, `active_apply_ready_now=false`, real TBLite/YC-Bench execution is not approved, and active system-prompt/source apply remains blocked.
 
 The manifest fixes required inputs, environment requirements, cost/runtime caps, rollback requirements, and go/no-go conditions before any future switch from dry-run fixtures to real benchmark evidence.
+
+## Phase 5 Continuous Loop Readiness Manifest
+
+Phase 5 continuous loop readiness manifest artifacts are recorded in `reports/phase5_continuous_loop_readiness_manifest.json` and `reports/phase5_continuous_loop_readiness_manifest.md`.
+
+This starts Phase 5 as local read-only preparation only. GitHub handoff is not required for local read-only Phase 5 preparation, but Phase 4 upstream review/merge or an explicit waiver remains required before formal Phase 5 completion or unattended scheduler enablement. The manifest keeps `continuous_loop_enabled=false`, `cron_jobs_created=false`, and `phase5_unattended_loop_ready_now=false`.
 
 ## Full Plan
 

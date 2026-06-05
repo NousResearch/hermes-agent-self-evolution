@@ -701,6 +701,8 @@ Actual Python source code in `tools/*.py` files. This is the highest-risk tier �
 
 **Prerequisite:** Phases 1-4 proven — manual optimization works reliably for skills, tools, prompts, and code. Now we automate it.
 
+**Current Phase 5 readiness status:** local preparation started, not deployed. The readiness boundary is recorded in `reports/phase5_continuous_loop_readiness_manifest.json` / `.md`. GitHub handoff is not required for local read-only Phase 5 preparation, but Phase 4 upstream review/merge or an explicit waiver remains required before formal Phase 5 completion, unattended scheduler enablement, external automated PR updates, or any production-like continuous loop. The manifest keeps `continuous_loop_enabled=false`, `cron_jobs_created=false`, and `phase5_unattended_loop_ready_now=false`; unattended scheduler enablement remains blocked until all go/no-go conditions are satisfied.
+
 **Week 1 (Build):** Build performance monitor (tracks skill success rates, tool selection accuracy, benchmark scores over time). Build auto-triage logic (ranks optimization targets by impact × frequency). Wire up to Hermes cron scheduler.
 
 **Week 2 (Deploy & Monitor):** Set up weekly benchmark runs via cron. Set up threshold-triggered optimization (when a skill's failure rate exceeds X%, auto-trigger GEPA). All automated PRs still require human merge.
