@@ -258,6 +258,18 @@ python -m evolution.monitor.performance_snapshot \
 
 It writes `performance_snapshot_report.json` and `.md` under the Phase 5 output root only. It consumes sanitized aggregate metrics, rejects raw/private identifiers, and keeps cron, optimizer execution, and automated PR updates disabled.
 
+## Phase 5 Auto-Triage
+
+The Phase 5 auto-triage report contract is documented in `reports/phase5_auto_triage_report_contract.md`. The read-only CLI is:
+
+```bash
+python -m evolution.monitor.auto_triage \
+    --performance-report-json output/phase5-continuous-loop/<monitor-run>/performance_snapshot_report.json \
+    --output-dir output/phase5-continuous-loop/<triage-run>
+```
+
+It writes `auto_triage_report.json` and `.md` under the Phase 5 output root only. It ranks sanitized performance snapshot weak areas by `severity * sample_count`, rejects raw/private identifiers, and keeps scheduler side effects, optimizer execution, and automated PR updates disabled.
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.
