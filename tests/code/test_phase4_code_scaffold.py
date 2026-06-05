@@ -207,6 +207,16 @@ def test_phase4_code_scaffold_runs_freeze_comparator_as_mandatory_gate_for_candi
     assert freeze_report["artifacts"]["output_json"] == str(output_dir / "freeze_report.json")
     assert freeze_report["comparisons"]["function_signatures"] == {"changed": [], "added": [], "removed": []}
     assert freeze_report["candidate_file"] == str(candidate_file.resolve())
+    assert report["candidate_artifact"] == {
+        "provided": True,
+        "path": str(candidate_file.resolve()),
+        "relative_path": str(candidate_file.resolve().relative_to(OUTPUT_ROOT.resolve())),
+        "sha256": __import__("hashlib").sha256(candidate_file.read_bytes()).hexdigest(),
+        "bytes": candidate_file.stat().st_size,
+        "symlink": False,
+        "parent_symlink": False,
+        "hardlink": False,
+    }
 
 
 def test_phase4_code_scaffold_freeze_gate_fails_visibly_for_candidate_surface_drift(tmp_path):
@@ -259,6 +269,41 @@ registry.register(
     assert any(check.startswith("function_signature_changed:safe_tool") for check in freeze_report["failed_checks"])
     assert scaffold_report["passed"] is False
     assert scaffold_report["freeze_checks"]["mandatory_gate"]["passed"] is False
+
+
+def test_phase4_code_scaffold_writes_visible_freeze_failure_for_empty_candidate(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    _cleanup_output()
+    hermes_repo = tmp_path / "hermes-agent"
+    _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    candidate_file = PYTEST_OUTPUT_ROOT / "candidate-empty" / "safe_tool.py"
+    candidate_file.parent.mkdir(parents=True, exist_ok=True)
+    candidate_file.write_text("")
+    output_dir = PYTEST_OUTPUT_ROOT / "run-empty-candidate-freeze-fail"
+
+    report = run_phase4_code_scaffold(
+        target_spec=spec_path,
+        output_dir=output_dir,
+        dry_run=True,
+        candidate_file=candidate_file,
+    )
+
+    scaffold_report_path = output_dir / "scaffold_report.json"
+    freeze_report_path = output_dir / "freeze_report.json"
+    assert scaffold_report_path.exists()
+    assert freeze_report_path.exists()
+    scaffold_report = json.loads(scaffold_report_path.read_text())
+    freeze_report = json.loads(freeze_report_path.read_text())
+    assert report == scaffold_report
+    assert report["candidate_artifact"]["bytes"] == 0
+    assert report["candidate_artifact"]["symlink"] is False
+    assert report["candidate_artifact"]["parent_symlink"] is False
+    assert report["candidate_artifact"]["hardlink"] is False
+    assert report["passed"] is False
+    assert freeze_report["passed"] is False
+    assert any(check.startswith("freeze_comparator:") for check in report["failed_checks"])
 
 
 def test_phase4_code_scaffold_cli_exits_nonzero_when_freeze_gate_fails(tmp_path):
@@ -453,3 +498,107 @@ def test_phase4_code_scaffold_rejects_preexisting_write_target(tmp_path):
         assert "write target must not already exist" in str(exc)
     else:
         raise AssertionError("expected pre-existing target rejection")
+
+
+def test_phase4_code_scaffold_rejects_stale_extra_files_in_output_dir(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    _cleanup_output()
+    hermes_repo = tmp_path / "hermes-agent"
+    _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    output_dir = PYTEST_OUTPUT_ROOT / "run-stale-extra"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "unrelated-stale.txt").write_text("stale\n")
+
+    try:
+        run_phase4_code_scaffold(target_spec=spec_path, output_dir=output_dir, dry_run=True)
+    except ValueError as exc:
+        assert "output-dir must be empty before scaffolding" in str(exc)
+    else:
+        raise AssertionError("expected stale extra file rejection")
+
+
+def test_phase4_code_scaffold_rejects_candidate_file_hardlink(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    _cleanup_output()
+    hermes_repo = tmp_path / "hermes-agent"
+    baseline_file = _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    original_candidate = tmp_path / "generated-source" / "safe_tool.py"
+    original_candidate.parent.mkdir(parents=True)
+    original_candidate.write_text(baseline_file.read_text())
+    candidate_file = PYTEST_OUTPUT_ROOT / "candidate-hardlink" / "safe_tool.py"
+    candidate_file.parent.mkdir(parents=True, exist_ok=True)
+    os.link(original_candidate, candidate_file)
+
+    try:
+        run_phase4_code_scaffold(
+            target_spec=spec_path,
+            output_dir=PYTEST_OUTPUT_ROOT / "run-candidate-hardlink",
+            dry_run=True,
+            candidate_file=candidate_file,
+        )
+    except ValueError as exc:
+        assert "candidate-file must not be a hardlink" in str(exc)
+    else:
+        raise AssertionError("expected candidate hardlink rejection")
+
+
+def test_phase4_code_scaffold_rejects_candidate_file_parent_symlink(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    _cleanup_output()
+    hermes_repo = tmp_path / "hermes-agent"
+    baseline_file = _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    actual_parent = PYTEST_OUTPUT_ROOT / "actual-candidate-parent"
+    actual_parent.mkdir(parents=True, exist_ok=True)
+    candidate_file = actual_parent / "safe_tool.py"
+    candidate_file.write_text(baseline_file.read_text())
+    symlink_parent = PYTEST_OUTPUT_ROOT / "candidate-parent-symlink"
+    symlink_parent.symlink_to(actual_parent, target_is_directory=True)
+
+    try:
+        run_phase4_code_scaffold(
+            target_spec=spec_path,
+            output_dir=PYTEST_OUTPUT_ROOT / "run-candidate-parent-symlink",
+            dry_run=True,
+            candidate_file=symlink_parent / "safe_tool.py",
+        )
+    except ValueError as exc:
+        assert "candidate-file parent must not be a symlink" in str(exc)
+    else:
+        raise AssertionError("expected candidate parent symlink rejection")
+
+
+def test_phase4_code_scaffold_rejects_candidate_file_parent_symlink_to_output_root(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    _cleanup_output()
+    hermes_repo = tmp_path / "hermes-agent"
+    baseline_file = _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    real_candidate_parent = PYTEST_OUTPUT_ROOT / "actual-root-alias-candidate"
+    real_candidate_parent.mkdir(parents=True, exist_ok=True)
+    (real_candidate_parent / "safe_tool.py").write_text(baseline_file.read_text())
+    root_alias = OUTPUT_ROOT.parent / "phase4-code-evolution-root-alias"
+    if root_alias.exists() or root_alias.is_symlink():
+        root_alias.unlink()
+    root_alias.symlink_to(OUTPUT_ROOT, target_is_directory=True)
+
+    try:
+        run_phase4_code_scaffold(
+            target_spec=spec_path,
+            output_dir=PYTEST_OUTPUT_ROOT / "run-candidate-root-alias-symlink",
+            dry_run=True,
+            candidate_file=root_alias / "pytest-code-scaffold" / "actual-root-alias-candidate" / "safe_tool.py",
+        )
+    except ValueError as exc:
+        assert "candidate-file parent must not be a symlink" in str(exc)
+    else:
+        raise AssertionError("expected candidate output-root alias symlink rejection")
+    finally:
+        if root_alias.exists() or root_alias.is_symlink():
+            root_alias.unlink()

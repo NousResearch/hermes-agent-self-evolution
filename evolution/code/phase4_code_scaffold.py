@@ -68,6 +68,7 @@ def run_phase4_code_scaffold(
         list(artifact_paths.values()),
         input_paths=input_paths,
     )
+    _validate_output_dir_clean(output_path)
 
     target_snapshot = _build_target_snapshot(spec)
     baseline_api_surface = _collect_api_surface(spec.target_files[0])
@@ -84,6 +85,7 @@ def run_phase4_code_scaffold(
         artifact_paths=artifact_paths,
         freeze_report=freeze_report,
         reproduction_contract=reproduction_contract,
+        candidate_artifact=_build_candidate_artifact(candidate_path),
     )
 
     validation = validate_phase4_scaffold_report_contract(report)
@@ -182,6 +184,33 @@ def _build_reproduction_contract(spec: Phase4TargetSpec) -> dict[str, Any]:
     }
 
 
+def _build_candidate_artifact(candidate_file: Path | None) -> dict[str, Any]:
+    if candidate_file is None:
+        return {
+            "provided": False,
+            "path": None,
+            "relative_path": None,
+            "sha256": None,
+            "bytes": None,
+            "symlink": False,
+            "parent_symlink": False,
+            "hardlink": False,
+        }
+
+    raw = candidate_file.read_bytes()
+    allowed_root = PHASE4_OUTPUT_ROOT.resolve(strict=False)
+    return {
+        "provided": True,
+        "path": str(candidate_file.resolve()),
+        "relative_path": str(candidate_file.resolve().relative_to(allowed_root)),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw),
+        "symlink": candidate_file.is_symlink(),
+        "parent_symlink": _has_symlink_parent(candidate_file, stop_at=allowed_root),
+        "hardlink": candidate_file.stat().st_nlink > 1,
+    }
+
+
 def _build_scaffold_report(
     *,
     spec: Phase4TargetSpec,
@@ -189,6 +218,7 @@ def _build_scaffold_report(
     artifact_paths: Mapping[str, Path],
     freeze_report: Mapping[str, Any],
     reproduction_contract: Mapping[str, Any],
+    candidate_artifact: Mapping[str, Any],
 ) -> dict[str, Any]:
     failed_checks = _scaffold_failed_checks(freeze_report)
     return {
@@ -213,6 +243,7 @@ def _build_scaffold_report(
             "deny_globs": list(spec.deny_globs),
             "exactly_one_target_file": len(spec.relative_target_files) == 1,
         },
+        "candidate_artifact": dict(candidate_artifact),
         "freeze_checks": dict(freeze_report),
         "fitness_plan": {
             "required_commands": list(spec.fitness["required_commands"]),
@@ -243,8 +274,14 @@ def _build_scaffold_report(
         "output_constraints": {
             "allowed_root": ALLOWED_OUTPUT_ROOT,
             "fresh_output_required": True,
+            "empty_output_dir_required": True,
+            "stale_extra_files_allowed": False,
             "symlink_output_allowed": False,
             "hardlink_output_allowed": False,
+            "candidate_symlink_allowed": False,
+            "candidate_parent_symlink_allowed": False,
+            "candidate_hardlink_allowed": False,
+            "candidate_provenance_required": True,
             "input_output_overlap_allowed": False,
             "hermes_source_write_allowed": False,
         },
@@ -363,10 +400,15 @@ def _normalize_candidate_file(raw_path: str | Path, *, baseline_file: Path) -> P
     if ".." in raw_candidate.parts:
         raise ValueError("candidate-file must not contain traversal segments")
     candidate = raw_candidate if raw_candidate.is_absolute() else REPO_ROOT / raw_candidate
+    allowed_root = PHASE4_OUTPUT_ROOT.resolve(strict=False)
+    if _has_symlink_parent(candidate, stop_at=allowed_root):
+        raise ValueError(f"candidate-file parent must not be a symlink: {candidate}")
     if candidate.is_symlink():
         raise ValueError(f"candidate-file must not be a symlink: {candidate}")
     if not candidate.exists() or not candidate.is_file():
         raise ValueError(f"candidate-file must exist and be a file: {candidate}")
+    if candidate.stat().st_nlink > 1:
+        raise ValueError(f"candidate-file must not be a hardlink: {candidate}")
     if candidate.suffix != ".py":
         raise ValueError(f"candidate-file must be a Python file: {candidate}")
     resolved_candidate = candidate.resolve()
@@ -401,6 +443,21 @@ def _validate_output_dir(output_dir: Path) -> None:
         return
     if not resolved_output_dir.is_relative_to(allowed_root):
         raise ValueError(f"output-dir must stay under {ALLOWED_OUTPUT_ROOT}: {output_dir}")
+
+
+def _validate_output_dir_clean(output_dir: Path) -> None:
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise ValueError(f"output-dir must be empty before scaffolding: {output_dir}")
+
+
+def _has_symlink_parent(path: Path, *, stop_at: Path) -> bool:
+    stop_resolved = stop_at.resolve(strict=False)
+    for parent in path.parents:
+        if parent.exists() and parent.is_symlink():
+            return True
+        if parent.resolve(strict=False) == stop_resolved:
+            return False
+    return False
 
 
 def _validate_write_targets(write_targets: Iterable[Path], input_paths: tuple[Path, ...]) -> None:

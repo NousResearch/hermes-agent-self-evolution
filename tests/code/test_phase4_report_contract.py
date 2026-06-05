@@ -32,6 +32,16 @@ def _valid_report(output_root: Path) -> dict[str, object]:
         "failed_checks": [],
         "target_spec": {"target_id": "safe-tool-edge-case-001", "target_files": ["tools/safe_tool.py"]},
         "allowed_mutation": {"files": ["tools/safe_tool.py"], "exactly_one_target_file": True},
+        "candidate_artifact": {
+            "provided": False,
+            "path": None,
+            "relative_path": None,
+            "sha256": None,
+            "bytes": None,
+            "symlink": False,
+            "parent_symlink": False,
+            "hardlink": False,
+        },
         "freeze_checks": {
             "function_signatures_required": True,
             "registry_register_calls_required": True,
@@ -59,8 +69,14 @@ def _valid_report(output_root: Path) -> dict[str, object]:
         "output_constraints": {
             "allowed_root": "output/phase4-code-evolution/",
             "fresh_output_required": True,
+            "empty_output_dir_required": True,
+            "stale_extra_files_allowed": False,
             "symlink_output_allowed": False,
             "hardlink_output_allowed": False,
+            "candidate_symlink_allowed": False,
+            "candidate_parent_symlink_allowed": False,
+            "candidate_hardlink_allowed": False,
+            "candidate_provenance_required": True,
             "input_output_overlap_allowed": False,
             "hermes_source_write_allowed": False,
         },
@@ -74,6 +90,269 @@ def test_report_contract_accepts_valid_candidate_only_scaffold_report(tmp_path):
 
     assert validation.passed is True
     assert validation.errors == ()
+
+
+def test_report_contract_requires_candidate_artifact_provenance(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    report = _valid_report(_valid_output_root())
+    report.pop("candidate_artifact")
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "report missing required field: candidate_artifact" in validation.errors
+
+    report = _valid_report(_valid_output_root())
+    output_root = _valid_output_root()
+    candidate_path = output_root / "candidate" / "safe_tool.py"
+    freeze_report = _valid_freeze_comparison_report(output_root)
+    freeze_report["candidate_file"] = str(candidate_path)
+    freeze_report["candidate_api_surface"] = {"target_file": str(candidate_path), "sha256": "a" * 64}
+    freeze_report["mandatory_gate"] = {
+        "required_before_apply": True,
+        "executed": True,
+        "passed": True,
+    }
+    report["freeze_checks"] = freeze_report
+    report["candidate_artifact"] = {
+        "provided": True,
+        "path": str(candidate_path),
+        "relative_path": "contract-fixtures/candidate/safe_tool.py",
+        "sha256": "a" * 64,
+        "bytes": 10,
+        "symlink": False,
+        "parent_symlink": False,
+        "hardlink": False,
+    }
+    validation = validate_phase4_scaffold_report_contract(report)
+    assert validation.passed is True
+
+
+def test_report_contract_rejects_unsafe_candidate_artifact_provenance(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    report = _valid_report(_valid_output_root())
+    report["candidate_artifact"] = {
+        "provided": True,
+        "path": str(tmp_path / "outside" / "safe_tool.py"),
+        "relative_path": "../outside/safe_tool.py",
+        "sha256": "not-a-sha",
+        "bytes": -1,
+        "symlink": True,
+        "parent_symlink": True,
+        "hardlink": True,
+    }
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "candidate_artifact.path must be under output/phase4-code-evolution" in validation.errors
+    assert "candidate_artifact.relative_path must not contain traversal segments" in validation.errors
+    assert "candidate_artifact.sha256 must be a 64-character lowercase hex digest" in validation.errors
+    assert "candidate_artifact.bytes must be a non-negative integer" in validation.errors
+    assert "candidate_artifact.symlink must be false" in validation.errors
+    assert "candidate_artifact.parent_symlink must be false" in validation.errors
+    assert "candidate_artifact.hardlink must be false" in validation.errors
+
+
+def test_report_contract_allows_zero_byte_candidate_artifact_but_rejects_invalid_byte_types(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    output_root = _valid_output_root()
+    candidate_path = output_root / "candidate" / "safe_tool.py"
+    report = _valid_report(output_root)
+    freeze_report = _valid_freeze_comparison_report(output_root)
+    freeze_report["candidate_file"] = str(candidate_path)
+    freeze_report["candidate_api_surface"] = {"target_file": str(candidate_path), "sha256": "a" * 64}
+    freeze_report["mandatory_gate"] = {
+        "required_before_apply": True,
+        "executed": True,
+        "passed": True,
+    }
+    report["freeze_checks"] = freeze_report
+    report["candidate_artifact"] = {
+        "provided": True,
+        "path": str(candidate_path),
+        "relative_path": "contract-fixtures/candidate/safe_tool.py",
+        "sha256": "a" * 64,
+        "bytes": 0,
+        "symlink": False,
+        "parent_symlink": False,
+        "hardlink": False,
+    }
+
+    validation = validate_phase4_scaffold_report_contract(report)
+    assert validation.passed is True
+    assert validation.errors == ()
+
+    for invalid_size in (True, -1, "0"):
+        report["candidate_artifact"]["bytes"] = invalid_size
+        validation = validate_phase4_scaffold_report_contract(report)
+        assert validation.passed is False
+        assert "candidate_artifact.bytes must be a non-negative integer" in validation.errors
+
+
+def test_report_contract_requires_candidate_artifact_relative_path_consistency(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    report = _valid_report(_valid_output_root())
+    output_root = _valid_output_root()
+    candidate_path = output_root / "candidate" / "safe_tool.py"
+    report["candidate_artifact"] = {
+        "provided": True,
+        "path": str(candidate_path),
+        "relative_path": "/tmp/outside.py",
+        "sha256": "a" * 64,
+        "bytes": 10,
+        "symlink": False,
+        "parent_symlink": False,
+        "hardlink": False,
+    }
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "candidate_artifact.relative_path must be relative" in validation.errors
+
+    report["candidate_artifact"]["relative_path"] = "other/safe_tool.py"
+    validation = validate_phase4_scaffold_report_contract(report)
+    assert validation.passed is False
+    assert "candidate_artifact.relative_path must match candidate_artifact.path" in validation.errors
+
+
+def test_report_contract_couples_candidate_provenance_to_freeze_execution(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    report = _valid_report(_valid_output_root())
+    freeze_report = _valid_freeze_comparison_report(_valid_output_root())
+    freeze_report["mandatory_gate"] = {
+        "required_before_apply": True,
+        "executed": True,
+        "passed": True,
+    }
+    report["freeze_checks"] = freeze_report
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "candidate_artifact.provided must be true when freeze comparator executed" in validation.errors
+
+    report = _valid_report(_valid_output_root())
+    output_root = _valid_output_root()
+    report["candidate_artifact"] = {
+        "provided": True,
+        "path": str(output_root / "candidate" / "safe_tool.py"),
+        "relative_path": "candidate/safe_tool.py",
+        "sha256": "a" * 64,
+        "bytes": 10,
+        "symlink": False,
+        "parent_symlink": False,
+        "hardlink": False,
+    }
+    validation = validate_phase4_scaffold_report_contract(report)
+    assert validation.passed is False
+    assert "freeze_checks.mode must be freeze-comparator when candidate_artifact.provided is true" in validation.errors
+
+
+def test_report_contract_requires_candidate_freeze_api_surface_provenance(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    output_root = _valid_output_root()
+    report = _valid_report(output_root)
+    candidate_path = output_root / "candidate" / "safe_tool.py"
+    freeze_report = _valid_freeze_comparison_report(output_root)
+    freeze_report["candidate_file"] = str(candidate_path)
+    freeze_report.pop("candidate_api_surface", None)
+    freeze_report["mandatory_gate"] = {
+        "required_before_apply": True,
+        "executed": True,
+        "passed": True,
+    }
+    report["freeze_checks"] = freeze_report
+    report["candidate_artifact"] = {
+        "provided": True,
+        "path": str(candidate_path),
+        "relative_path": "contract-fixtures/candidate/safe_tool.py",
+        "sha256": "a" * 64,
+        "bytes": 10,
+        "symlink": False,
+        "parent_symlink": False,
+        "hardlink": False,
+    }
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "freeze_checks.candidate_api_surface must be an object when candidate_artifact.provided is true" in validation.errors
+
+    freeze_report["candidate_api_surface"] = {"target_file": str(output_root / "other" / "safe_tool.py"), "sha256": "a" * 64}
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "freeze_checks.candidate_api_surface.target_file must match freeze_checks.candidate_file" in validation.errors
+
+
+def test_report_contract_binds_candidate_artifact_to_embedded_freeze_candidate(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    output_root = _valid_output_root()
+    report = _valid_report(output_root)
+    candidate_path = output_root / "candidate" / "safe_tool.py"
+    freeze_report = _valid_freeze_comparison_report(output_root)
+    other_candidate_path = output_root / "other" / "safe_tool.py"
+    freeze_report["candidate_file"] = str(other_candidate_path)
+    freeze_report["candidate_api_surface"] = {"target_file": str(other_candidate_path), "sha256": "a" * 64}
+    freeze_report["mandatory_gate"] = {
+        "required_before_apply": True,
+        "executed": True,
+        "passed": True,
+    }
+    report["freeze_checks"] = freeze_report
+    report["candidate_artifact"] = {
+        "provided": True,
+        "path": str(candidate_path),
+        "relative_path": "contract-fixtures/candidate/safe_tool.py",
+        "sha256": "a" * 64,
+        "bytes": 10,
+        "symlink": False,
+        "parent_symlink": False,
+        "hardlink": False,
+    }
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "candidate_artifact.path must match freeze_checks.candidate_file" in validation.errors
+
+    freeze_report["candidate_file"] = str(candidate_path)
+    freeze_report["candidate_api_surface"] = {"target_file": str(candidate_path), "sha256": "b" * 64}
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "candidate_artifact.sha256 must match freeze_checks.candidate_api_surface.sha256" in validation.errors
+
+
+def test_report_contract_requires_lifecycle_hardening_constraints(tmp_path):
+    from evolution.code.report_contract import validate_phase4_scaffold_report_contract
+
+    report = _valid_report(_valid_output_root())
+    constraints = report["output_constraints"]
+    assert isinstance(constraints, dict)
+    constraints["empty_output_dir_required"] = False
+    constraints["stale_extra_files_allowed"] = True
+    constraints["candidate_parent_symlink_allowed"] = True
+    constraints["candidate_hardlink_allowed"] = True
+    constraints.pop("candidate_provenance_required")
+
+    validation = validate_phase4_scaffold_report_contract(report)
+
+    assert validation.passed is False
+    assert "output_constraints.empty_output_dir_required must be True" in validation.errors
+    assert "output_constraints.stale_extra_files_allowed must be False" in validation.errors
+    assert "output_constraints.candidate_parent_symlink_allowed must be False" in validation.errors
+    assert "output_constraints.candidate_hardlink_allowed must be False" in validation.errors
+    assert "output_constraints.candidate_provenance_required must be True" in validation.errors
 
 
 def test_report_contract_rejects_apply_payloads_and_true_execution_flags(tmp_path):
@@ -249,8 +528,12 @@ def test_report_contract_rejects_scaffold_without_mandatory_freeze_gate(tmp_path
 def test_report_contract_requires_failed_freeze_gate_to_surface_top_level(tmp_path):
     from evolution.code.report_contract import validate_phase4_scaffold_report_contract
 
-    report = _valid_report(_valid_output_root())
-    freeze_report = _valid_freeze_comparison_report(_valid_output_root())
+    output_root = _valid_output_root()
+    report = _valid_report(output_root)
+    candidate_path = output_root / "candidate" / "safe_tool.py"
+    freeze_report = _valid_freeze_comparison_report(output_root)
+    freeze_report["candidate_file"] = str(candidate_path)
+    freeze_report["candidate_api_surface"] = {"target_file": str(candidate_path), "sha256": "a" * 64}
     freeze_report["passed"] = False
     freeze_report["failed_checks"] = ["function_signature_changed:safe_tool"]
     freeze_report["mandatory_gate"] = {
@@ -259,6 +542,16 @@ def test_report_contract_requires_failed_freeze_gate_to_surface_top_level(tmp_pa
         "passed": False,
     }
     report["freeze_checks"] = freeze_report
+    report["candidate_artifact"] = {
+        "provided": True,
+        "path": str(candidate_path),
+        "relative_path": "contract-fixtures/candidate/safe_tool.py",
+        "sha256": "a" * 64,
+        "bytes": 10,
+        "symlink": False,
+        "parent_symlink": False,
+        "hardlink": False,
+    }
     report["passed"] = True
     report["failed_checks"] = []
 
@@ -302,6 +595,7 @@ def _valid_freeze_comparison_report(output_root: Path) -> dict[str, object]:
         "failed_checks": [],
         "baseline_file": "/tmp/baseline/tools/safe_tool.py",
         "candidate_file": "/tmp/candidate/tools/safe_tool.py",
+        "candidate_api_surface": {"target_file": "/tmp/candidate/tools/safe_tool.py", "sha256": "a" * 64},
         "comparisons": {
             "function_signatures": {"changed": [], "added": [], "removed": []},
             "class_names": {"changed": [], "added": [], "removed": []},

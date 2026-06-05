@@ -28,6 +28,7 @@ REQUIRED_TOP_LEVEL_FIELDS = frozenset(
         "failed_checks",
         "target_spec",
         "allowed_mutation",
+        "candidate_artifact",
         "freeze_checks",
         "fitness_plan",
         "approval_gates",
@@ -56,14 +57,21 @@ SENSITIVE_TEXT_PATTERNS = (
         re.IGNORECASE,
     ),
 )
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 ALLOWED_OUTPUT_ROOT = "output/phase4-code-evolution/"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PHASE4_OUTPUT_ROOT = REPO_ROOT / ALLOWED_OUTPUT_ROOT
 REQUIRED_OUTPUT_CONSTRAINTS = {
     "allowed_root": ALLOWED_OUTPUT_ROOT,
     "fresh_output_required": True,
+    "empty_output_dir_required": True,
+    "stale_extra_files_allowed": False,
     "symlink_output_allowed": False,
     "hardlink_output_allowed": False,
+    "candidate_symlink_allowed": False,
+    "candidate_parent_symlink_allowed": False,
+    "candidate_hardlink_allowed": False,
+    "candidate_provenance_required": True,
     "input_output_overlap_allowed": False,
     "hermes_source_write_allowed": False,
 }
@@ -143,10 +151,15 @@ def validate_phase4_scaffold_report_contract(report: Mapping[str, Any]) -> Phase
         errors.append("failed_checks must be non-empty when passed is false")
 
     freeze_checks = _mapping(report.get("freeze_checks"), "freeze_checks", errors)
+    candidate_artifact = _mapping(report.get("candidate_artifact"), "candidate_artifact", errors)
     for key in ("target_spec", "allowed_mutation", "fitness_plan", "approval_gates", "artifacts", "output_constraints"):
         _mapping(report.get(key), key, errors)
     if freeze_checks is not None:
         _validate_embedded_freeze_gate(report, freeze_checks, errors)
+    if candidate_artifact is not None:
+        _validate_candidate_artifact(candidate_artifact, errors)
+    if freeze_checks is not None and candidate_artifact is not None:
+        _validate_candidate_freeze_consistency(candidate_artifact, freeze_checks, errors)
     write_targets = report.get("write_targets")
     if not isinstance(write_targets, list) or not all(isinstance(item, str) for item in write_targets):
         errors.append("write_targets must be a list of strings")
@@ -317,6 +330,97 @@ def _validate_embedded_freeze_gate(
             isinstance(item, str) and item.startswith("freeze_comparator:") for item in failed_checks
         ):
             errors.append("top-level failed_checks must include freeze_comparator entries when freeze comparator fails")
+
+
+def _validate_candidate_artifact(candidate_artifact: Mapping[str, Any], errors: list[str]) -> None:
+    provided = candidate_artifact.get("provided")
+    if not isinstance(provided, bool):
+        errors.append("candidate_artifact.provided must be a boolean")
+        return
+
+    for flag in ("symlink", "parent_symlink", "hardlink"):
+        if candidate_artifact.get(flag) is not False:
+            errors.append(f"candidate_artifact.{flag} must be false")
+
+    if provided is False:
+        for key in ("path", "relative_path", "sha256", "bytes"):
+            if candidate_artifact.get(key) is not None:
+                errors.append(f"candidate_artifact.{key} must be null when no candidate is provided")
+        return
+
+    path = candidate_artifact.get("path")
+    path_valid = False
+    if not isinstance(path, str) or not path.strip():
+        errors.append("candidate_artifact.path must be a non-empty string")
+    elif not _is_under_phase4_output_root(path):
+        errors.append("candidate_artifact.path must be under output/phase4-code-evolution")
+    else:
+        path_valid = True
+
+    relative_path = candidate_artifact.get("relative_path")
+    relative_path_valid = False
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        errors.append("candidate_artifact.relative_path must be a non-empty string")
+    elif Path(relative_path).is_absolute():
+        errors.append("candidate_artifact.relative_path must be relative")
+    elif ".." in Path(relative_path).parts:
+        errors.append("candidate_artifact.relative_path must not contain traversal segments")
+    else:
+        relative_path_valid = True
+
+    if path_valid and relative_path_valid:
+        expected_path = (PHASE4_OUTPUT_ROOT / str(relative_path)).resolve(strict=False)
+        if expected_path != Path(str(path)).resolve(strict=False):
+            errors.append("candidate_artifact.relative_path must match candidate_artifact.path")
+
+    sha256 = candidate_artifact.get("sha256")
+    if not isinstance(sha256, str) or not SHA256_PATTERN.fullmatch(sha256):
+        errors.append("candidate_artifact.sha256 must be a 64-character lowercase hex digest")
+
+    size = candidate_artifact.get("bytes")
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        errors.append("candidate_artifact.bytes must be a non-negative integer")
+
+
+def _validate_candidate_freeze_consistency(
+    candidate_artifact: Mapping[str, Any],
+    freeze_checks: Mapping[str, Any],
+    errors: list[str],
+) -> None:
+    candidate_provided = candidate_artifact.get("provided") is True
+    freeze_executed = freeze_checks.get("mode") == "freeze-comparator"
+    mandatory_gate = freeze_checks.get("mandatory_gate")
+    if isinstance(mandatory_gate, Mapping):
+        freeze_executed = freeze_executed or mandatory_gate.get("executed") is True
+
+    if freeze_executed and not candidate_provided:
+        errors.append("candidate_artifact.provided must be true when freeze comparator executed")
+    if candidate_provided and freeze_checks.get("mode") != "freeze-comparator":
+        errors.append("freeze_checks.mode must be freeze-comparator when candidate_artifact.provided is true")
+    if candidate_provided and freeze_checks.get("mode") == "freeze-comparator":
+        artifact_path = candidate_artifact.get("path")
+        freeze_candidate_file = freeze_checks.get("candidate_file")
+        if isinstance(artifact_path, str) and artifact_path.strip() and isinstance(freeze_candidate_file, str) and freeze_candidate_file.strip():
+            if Path(artifact_path).resolve(strict=False) != Path(freeze_candidate_file).resolve(strict=False):
+                errors.append("candidate_artifact.path must match freeze_checks.candidate_file")
+
+        candidate_api_surface = freeze_checks.get("candidate_api_surface")
+        if not isinstance(candidate_api_surface, Mapping):
+            errors.append("freeze_checks.candidate_api_surface must be an object when candidate_artifact.provided is true")
+        else:
+            surface_target_file = candidate_api_surface.get("target_file")
+            if not isinstance(surface_target_file, str) or not surface_target_file.strip():
+                errors.append("freeze_checks.candidate_api_surface.target_file must be a non-empty string")
+            elif isinstance(freeze_candidate_file, str) and freeze_candidate_file.strip():
+                if Path(surface_target_file).resolve(strict=False) != Path(freeze_candidate_file).resolve(strict=False):
+                    errors.append("freeze_checks.candidate_api_surface.target_file must match freeze_checks.candidate_file")
+
+            artifact_sha256 = candidate_artifact.get("sha256")
+            surface_sha256 = candidate_api_surface.get("sha256")
+            if not isinstance(surface_sha256, str) or not SHA256_PATTERN.fullmatch(surface_sha256):
+                errors.append("freeze_checks.candidate_api_surface.sha256 must be a 64-character lowercase hex digest")
+            elif isinstance(artifact_sha256, str) and SHA256_PATTERN.fullmatch(artifact_sha256) and artifact_sha256 != surface_sha256:
+                errors.append("candidate_artifact.sha256 must match freeze_checks.candidate_api_surface.sha256")
 
 
 def load_and_validate_phase4_freeze_comparison_report(path: str | Path) -> Phase4ReportContractValidation:
