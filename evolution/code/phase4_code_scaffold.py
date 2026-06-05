@@ -446,6 +446,8 @@ def _validate_output_dir(output_dir: Path) -> None:
 
 
 def _validate_output_dir_clean(output_dir: Path) -> None:
+    if output_dir.exists() and not output_dir.is_dir():
+        raise ValueError(f"output-dir must be a directory before scaffolding: {output_dir}")
     if output_dir.exists() and any(output_dir.iterdir()):
         raise ValueError(f"output-dir must be empty before scaffolding: {output_dir}")
 

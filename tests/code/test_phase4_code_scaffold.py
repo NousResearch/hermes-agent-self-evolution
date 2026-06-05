@@ -519,6 +519,26 @@ def test_phase4_code_scaffold_rejects_stale_extra_files_in_output_dir(tmp_path):
         raise AssertionError("expected stale extra file rejection")
 
 
+def test_phase4_code_scaffold_rejects_existing_output_dir_file_with_value_error(tmp_path):
+    from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
+
+    _cleanup_output()
+    hermes_repo = tmp_path / "hermes-agent"
+    _write_tool(hermes_repo / "tools" / "safe_tool.py")
+    spec_path = _write_spec(tmp_path / "phase4_target.yaml", hermes_repo)
+    output_dir = PYTEST_OUTPUT_ROOT / "run-output-dir-file"
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    output_dir.write_text("pre-existing file\n")
+
+    try:
+        run_phase4_code_scaffold(target_spec=spec_path, output_dir=output_dir, dry_run=True)
+    except ValueError as exc:
+        assert "output-dir must be a directory before scaffolding" in str(exc)
+        assert str(output_dir) in str(exc)
+    else:
+        raise AssertionError("expected existing output-dir file rejection")
+
+
 def test_phase4_code_scaffold_rejects_candidate_file_hardlink(tmp_path):
     from evolution.code.phase4_code_scaffold import run_phase4_code_scaffold
 
