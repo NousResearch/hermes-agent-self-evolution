@@ -157,6 +157,21 @@ def test_target_contract_rejects_symlink_target(tmp_path):
         load_target_spec(spec_path)
 
 
+def test_target_contract_requires_clean_worktree_gate(tmp_path):
+    from evolution.code.target_contract import TargetContractError, load_target_spec
+
+    hermes_repo = tmp_path / "hermes-agent"
+    _write_tool(hermes_repo / "tools" / "safe_tool.py")
+
+    for hermes_base in [
+        {"repo": str(hermes_repo), "base_ref": "test-base", "require_clean_worktree": False},
+        {"repo": str(hermes_repo), "base_ref": "test-base"},
+    ]:
+        spec_path = _write_spec(tmp_path / "target.yaml", hermes_repo, hermes_base=hermes_base)
+        with pytest.raises(TargetContractError, match="hermes_base.require_clean_worktree must be true"):
+            load_target_spec(spec_path)
+
+
 def test_target_contract_rejects_source_mutation_approvals_and_sensitive_text(tmp_path):
     from evolution.code.target_contract import TargetContractError, load_target_spec
 

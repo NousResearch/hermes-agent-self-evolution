@@ -62,6 +62,7 @@ class Phase4TargetSpec:
     target_id: str
     hermes_repo: Path
     base_ref: str
+    require_clean_worktree: bool
     target_files: tuple[Path, ...]
     relative_target_files: tuple[str, ...]
     deny_globs: tuple[str, ...]
@@ -80,6 +81,7 @@ class Phase4TargetSpec:
             "mode": self.mode,
             "hermes_repo": str(self.hermes_repo),
             "base_ref": self.base_ref,
+            "require_clean_worktree": self.require_clean_worktree,
             "target_files": list(self.relative_target_files),
             "source_spec_path": str(self.source_path),
         }
@@ -118,6 +120,9 @@ def load_target_spec(path: str | Path, *, hermes_repo_override: str | Path | Non
     base_ref = str(hermes_base.get("base_ref", ""))
     if not base_ref:
         raise TargetContractError("hermes_base.base_ref must be non-empty")
+    require_clean_worktree = hermes_base.get("require_clean_worktree")
+    if require_clean_worktree is not True:
+        raise TargetContractError("hermes_base.require_clean_worktree must be true")
 
     allowed_mutation = _expect_mapping(payload, "allowed_mutation")
     raw_files = allowed_mutation.get("files")
@@ -163,6 +168,7 @@ def load_target_spec(path: str | Path, *, hermes_repo_override: str | Path | Non
         target_id=target_id,
         hermes_repo=hermes_repo,
         base_ref=base_ref,
+        require_clean_worktree=True,
         target_files=tuple(target_files),
         relative_target_files=tuple(relative_files),
         deny_globs=tuple(dict.fromkeys(deny_globs)),

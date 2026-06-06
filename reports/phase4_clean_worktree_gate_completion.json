@@ -1,0 +1,54 @@
+{
+  "phase": "4",
+  "task_type": "code-evolution-bugfix",
+  "status": "completed_local_verified",
+  "created_at": "2026-06-06 11:52:34 CEST",
+  "authorization": "Sunwoo approved autonomous Phase3+Phase4 completion",
+  "hse_branch": "hse/phase5-continuous-loop-prep",
+  "hse_head_before": "0e7d748cd86aaba97ac4452a0c63947c0f8cfb93",
+  "known_bug": {
+    "id": "phase4-target-contract-clean-worktree-gate",
+    "summary": "Phase 4 target specs accepted hermes_base.require_clean_worktree=false or omitted, even though Phase 4 source-mutation safety requires a clean-worktree gate before code evolution can be trusted.",
+    "risk": "A code-evolution target could be scaffolded against a dirty Hermes worktree, weakening reproduction and benchmark evidence provenance."
+  },
+  "red_test": {
+    "file": "tests/code/test_phase4_target_contract.py",
+    "test": "test_target_contract_requires_clean_worktree_gate",
+    "command": "/Users/snw/.hermes/evolution/venvs/self-evolution/bin/python -m pytest tests/code/test_phase4_target_contract.py::test_target_contract_requires_clean_worktree_gate -q",
+    "observed_result_before_fix": "FAILED: DID NOT RAISE TargetContractError"
+  },
+  "fix": {
+    "changed_files": [
+      "evolution/code/target_contract.py",
+      "tests/code/test_phase4_target_contract.py"
+    ],
+    "behavior": "load_target_spec now requires hermes_base.require_clean_worktree is true and exposes require_clean_worktree in the report-safe target summary."
+  },
+  "verification": {
+    "targeted_green": "1 passed in 0.03s",
+    "phase4_code_suite": "72 passed in 0.44s",
+    "hse_full_tests": "351 passed, 11 warnings in 4.96s",
+    "compileall": "passed for evolution/code/target_contract.py and tests/code/test_phase4_target_contract.py",
+    "diff_check": "passed for changed files",
+    "dspy_version": "3.2.1"
+  },
+  "benchmark_hold_evidence": {
+    "full_hse_tests_passed": true,
+    "benchmark_related_tests_included_in_full_suite": true,
+    "benchmark_implementation_files_changed": false,
+    "note": "No Phase4 runtime benchmark harness exists in this repo; this bugfix only tightens target-spec safety metadata and did not alter optimizer, scoring, benchmark adapter, or candidate-generation code."
+  },
+  "safety_boundaries": {
+    "darwinian_cli_invoked": false,
+    "external_network_calls_performed": false,
+    "hermes_source_mutation_by_hse": false,
+    "active_runtime_apply_by_hse": false,
+    "remote_push_performed": false
+  },
+  "formal_gate_assessment": {
+    "bugs_fixed": true,
+    "tests_pass": true,
+    "benchmarks_hold": true,
+    "phase4_local_completion": true
+  }
+}
