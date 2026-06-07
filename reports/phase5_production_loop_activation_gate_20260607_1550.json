@@ -1,0 +1,238 @@
+{
+  "schema_version": "phase5-production-loop-activation-gate-v1",
+  "status": "PRODUCTION_LOOP_ACTIVATION_GATE_DEFINED_NOT_ENABLED",
+  "created_at_utc": "2026-06-07T15:50:25Z",
+  "created_at_local": "2026-06-07T17:50:25+0200",
+  "authorization": {
+    "source": "sunwoo_rec_action_go",
+    "request": "Create a separate production-loop activation gate document and split activation into one-shot canary -> bounded N supervised run -> limited cron.",
+    "approved_actions": [
+      "write activation gate design artifacts",
+      "record staged go/no-go contract",
+      "stage Obsidian/Discord Markdown copy"
+    ],
+    "not_approved_actions": [
+      "create or enable cron jobs",
+      "start production continuous loop",
+      "execute optimizer",
+      "run paid or network benchmarks",
+      "mutate active Hermes runtime/source/config/skill/memory",
+      "create/update external PRs automatically",
+      "auto-merge or deploy"
+    ]
+  },
+  "repo_state": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution",
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "8921affc22cac0978f95318b7dc4daa3bc82ef8a",
+    "status": "## hse/phase5-continuous-loop-prep"
+  },
+  "basis_evidence": {
+    "formal_completion_artifact": "reports/phase5_formal_completion_20260607_091723.json",
+    "formal_completion_status": "FORMAL_PHASE5_COMPLETE_LOCAL_WITH_EXPLICIT_WAIVER",
+    "readiness_manifest": "reports/phase5_continuous_loop_readiness_manifest.json",
+    "readiness_status": "local_preparation_started_not_deployed",
+    "l1_run_artifact": "reports/phase5_bounded_unattended_run_20260607_090920.json",
+    "l1_status": "PASS_NO_ACTION",
+    "l2_decision_artifact": "reports/phase5_l2_budgeted_decision_cycle_20260607_091723.json",
+    "l2_status": "PASS_NO_OP_DECISION",
+    "waiver_artifact": "reports/phase5_optimizer_handoff_explicit_waiver_20260607_091723.json",
+    "waiver_status": "WAIVER_APPROVED_AND_RECORDED",
+    "current_production_flags": {
+      "production_continuous_loop_enabled": false,
+      "continuous_loop_enabled": false,
+      "cron_jobs_created": false,
+      "optimizer_execution_started": false,
+      "active_runtime_mutation": false,
+      "external_calls_performed": false,
+      "network_calls_performed": false
+    }
+  },
+  "risk_classification": {
+    "overall_if_enabled_now": "HIGH_TO_VERY_HIGH",
+    "current_off_state": "LOW",
+    "why": [
+      "cron adds repeated execution and overlap risk",
+      "optimizer adds drift and Goodhart risk",
+      "continuous loop adds compounded failure amplification",
+      "external PR automation or auto-merge would turn local failures into externally visible state changes"
+    ]
+  },
+  "stage_model": [
+    {
+      "stage": "G0_GATE_DOCUMENT_ONLY",
+      "status_after_this_artifact": "DEFINED_NOT_ENABLED",
+      "purpose": "Record production activation criteria without enabling anything.",
+      "allowed": [
+        "write JSON/Markdown gate artifacts",
+        "perform read-only validation"
+      ],
+      "blocked": [
+        "cron creation",
+        "optimizer execution",
+        "runtime mutation",
+        "external PR automation"
+      ],
+      "exit_status": "G0_COMPLETE_READY_FOR_CANARY_APPROVAL_PACKET"
+    },
+    {
+      "stage": "G1_ONE_SHOT_CANARY",
+      "default_risk": "MEDIUM_HIGH",
+      "purpose": "Run exactly one production-like pipeline canary under manual invocation and strict side-effect containment.",
+      "entry_requirements": [
+        "explicit approval naming canary invocation method, timeout, budget, model/provider allowlist, and delivery target",
+        "clean worktree or declared dirty-scope waiver",
+        "concurrency lock path defined and verified absent before start",
+        "write roots limited to output/phase5-continuous-loop/production-canary-<stamp>/ and reports/phase5_production_canary_<stamp>.*",
+        "kill switch command documented before run",
+        "no auto-merge/deploy and no active runtime mutation"
+      ],
+      "bounds": {
+        "repeat_count_max": 1,
+        "wall_clock_timeout_seconds_max": 1800,
+        "concurrency": "single_run_lock_required",
+        "network_calls_allowed": "only_if_explicitly_approved_in_canary_packet_else_false",
+        "optimizer_execution_allowed": "candidate_only_and_only_if_explicit_budget_approved_else_false",
+        "external_pr_update_allowed": false,
+        "auto_merge_allowed": false,
+        "active_runtime_mutation_allowed": false
+      },
+      "required_outputs": [
+        "preflight report",
+        "canary run summary JSON/Markdown",
+        "side-effect ledger",
+        "budget ledger if network/model calls are approved",
+        "secret/static scan result",
+        "human review handoff"
+      ],
+      "pass_to_next_stage_only_if": [
+        "no side-effect flag failures",
+        "no raw credential/private-data findings",
+        "all JSON parses",
+        "scheduler decision is PASS_NO_ACTION or REVIEW_REQUIRED_WITHOUT_ACTION",
+        "optimizer output, if any, remains candidate-only and reviewed",
+        "Sunwoo explicitly approves G2 after reviewing G1 packet"
+      ],
+      "fail_closed_statuses": [
+        "G1_FAIL_BLOCKED",
+        "G1_REVIEW_REQUIRED",
+        "G1_ABORTED_BY_KILL_SWITCH"
+      ]
+    },
+    {
+      "stage": "G2_BOUNDED_N_SUPERVISED_RUN",
+      "default_risk": "HIGH",
+      "purpose": "Run a small finite series under supervision to test repeatability, overlap controls, and evidence quality before cron.",
+      "entry_requirements": [
+        "G1 packet reviewed and accepted",
+        "explicit N, schedule window, budget cap, and supervision owner approved",
+        "run ledger and idempotency key strategy defined",
+        "overlap lock tested",
+        "rollback/checkpoint procedure rehearsed or documented"
+      ],
+      "bounds": {
+        "N_max_default": 3,
+        "N_absolute_max_without_new_gate": 5,
+        "manual_or_supervised_invocation_only": true,
+        "cron_enabled": false,
+        "per_run_timeout_seconds_max": 1800,
+        "total_budget_cap_required": true,
+        "optimizer_candidate_only": true,
+        "external_pr_update_allowed": "manual_handoff_only_unless_separately_approved",
+        "auto_merge_allowed": false,
+        "active_runtime_mutation_allowed": false
+      },
+      "pass_to_next_stage_only_if": [
+        "all N runs produce parseable evidence packets",
+        "no overlap/runaway behavior",
+        "no repeated REVIEW_REQUIRED of the same class without documented fix or waiver",
+        "budget stays within cap",
+        "independent review finds no blockers",
+        "Sunwoo explicitly approves limited cron"
+      ],
+      "fail_closed_statuses": [
+        "G2_FAIL_BLOCKED",
+        "G2_REVIEW_REQUIRED",
+        "G2_STOPPED_SUPERVISOR_DECISION"
+      ]
+    },
+    {
+      "stage": "G3_LIMITED_CRON",
+      "default_risk": "VERY_HIGH",
+      "purpose": "Enable a narrowly scoped expiring cron after G1/G2 evidence proves bounded behavior.",
+      "entry_requirements": [
+        "G2 accepted",
+        "cron expression, timezone, expiry date, max fire count, and delivery target approved",
+        "cron job prompt/script is self-contained and fail-closed",
+        "kill switch tested",
+        "alert thresholds and silence-on-no-action semantics documented",
+        "state/watermark storage path allowed and bounded"
+      ],
+      "bounds": {
+        "initial_frequency_recommendation": "weekly_or_slower",
+        "max_fire_count_initial": 2,
+        "expiry_required": true,
+        "concurrency_policy": "skip_if_previous_running",
+        "optimizer_candidate_only": true,
+        "external_pr_update_allowed": "reviewer_handoff_only_if_approved",
+        "auto_merge_allowed": false,
+        "deploy_allowed": false,
+        "active_runtime_mutation_allowed": false
+      },
+      "pass_to_next_stage_only_if": [
+        "cron fires only within approved schedule",
+        "no duplicate jobs or overlapping runs",
+        "no unexpected writes or network calls",
+        "review packets remain honest and fail-closed",
+        "manual review confirms value before any broader production loop"
+      ],
+      "fail_closed_statuses": [
+        "G3_CRON_DISABLED_BY_GUARD",
+        "G3_REVIEW_REQUIRED",
+        "G3_FAIL_BLOCKED"
+      ]
+    }
+  ],
+  "global_hard_blocks": [
+    "raw credential access or entry",
+    "unbounded recurring execution",
+    "auto-merge or deployment",
+    "active Hermes runtime/config/skill/memory mutation without a dedicated apply gate",
+    "optimizer writes directly to production artifacts",
+    "reported PASS when metric/scheduler gates require triage",
+    "network or paid benchmark calls without explicit budget approval"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "P5-PAG-01",
+      "name": "stage_separation",
+      "requirement": "G1, G2, and G3 require separate approval and cannot be collapsed into one enablement."
+    },
+    {
+      "id": "P5-PAG-02",
+      "name": "bounded_execution",
+      "requirement": "Each stage defines repeat count, timeout, lock, write roots, budget, and kill-switch behavior before execution."
+    },
+    {
+      "id": "P5-PAG-03",
+      "name": "candidate_only_optimizer",
+      "requirement": "Optimizer output remains candidate-only until human-reviewed; no direct production mutation."
+    },
+    {
+      "id": "P5-PAG-04",
+      "name": "cron_expiry_and_lock",
+      "requirement": "Limited cron has an expiry/max-fire count and skip-if-running concurrency policy."
+    },
+    {
+      "id": "P5-PAG-05",
+      "name": "reviewable_evidence",
+      "requirement": "Every run produces JSON/Markdown evidence, side-effect ledger, and fail-closed status."
+    },
+    {
+      "id": "P5-PAG-06",
+      "name": "no_auto_merge_deploy",
+      "requirement": "Human review/merge remains mandatory; deployment remains out of scope."
+    }
+  ],
+  "recommended_next_action": "Prepare a G1 one-shot canary approval packet; do not enable cron or optimizer until that packet is explicitly approved."
+}
