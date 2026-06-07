@@ -156,7 +156,7 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
         )
 
         optimized_module = optimizer.compile(
