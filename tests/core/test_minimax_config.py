@@ -15,8 +15,18 @@ _DUMMY_PATH = Path("/tmp")
 
 class TestMinimaxConstants:
     def test_minimax_models_contains_expected_ids(self):
+        assert "MiniMax-M3" in MINIMAX_MODELS
         assert "MiniMax-M2.7" in MINIMAX_MODELS
         assert "MiniMax-M2.7-highspeed" in MINIMAX_MODELS
+
+    def test_minimax_m3_is_default(self):
+        # M3 must be the first entry so MINIMAX_MODELS[0] resolves to it.
+        assert MINIMAX_MODELS[0] == "MiniMax-M3"
+
+    def test_older_models_removed(self):
+        # M1/M2/M2.1/M2.5 must not appear in the supported list.
+        for old in ("MiniMax-M1", "MiniMax-M2", "MiniMax-M2.1", "MiniMax-M2.5"):
+            assert old not in MINIMAX_MODELS
 
     def test_minimax_base_url(self):
         assert MINIMAX_BASE_URL == "https://api.minimax.io/v1"
@@ -61,10 +71,10 @@ class TestMakeLm:
         """Bare model ID (no prefix) routes to MiniMax."""
         mock_lm = MagicMock()
         with patch("dspy.LM", return_value=mock_lm) as mock_dspy_lm:
-            result = config_with_key.make_lm("MiniMax-M2.7")
+            result = config_with_key.make_lm("MiniMax-M3")
 
         mock_dspy_lm.assert_called_once_with(
-            "openai/MiniMax-M2.7",
+            "openai/MiniMax-M3",
             api_key="sk-minimax-testkey",
             base_url=MINIMAX_BASE_URL,
             temperature=1.0,
@@ -75,20 +85,33 @@ class TestMakeLm:
         """minimax/ prefix is stripped before routing."""
         mock_lm = MagicMock()
         with patch("dspy.LM", return_value=mock_lm) as mock_dspy_lm:
-            config_with_key.make_lm("minimax/MiniMax-M2.7")
+            config_with_key.make_lm("minimax/MiniMax-M3")
 
         mock_dspy_lm.assert_called_once_with(
-            "openai/MiniMax-M2.7",
+            "openai/MiniMax-M3",
             api_key="sk-minimax-testkey",
             base_url=MINIMAX_BASE_URL,
             temperature=1.0,
         )
 
     def test_make_lm_minimax_openai_prefixed(self, config_with_key):
-        """openai/MiniMax-M2.7 prefix is stripped and routed to MiniMax."""
+        """openai/MiniMax-M3 prefix is stripped and routed to MiniMax."""
         mock_lm = MagicMock()
         with patch("dspy.LM", return_value=mock_lm) as mock_dspy_lm:
-            config_with_key.make_lm("openai/MiniMax-M2.7")
+            config_with_key.make_lm("openai/MiniMax-M3")
+
+        mock_dspy_lm.assert_called_once_with(
+            "openai/MiniMax-M3",
+            api_key="sk-minimax-testkey",
+            base_url=MINIMAX_BASE_URL,
+            temperature=1.0,
+        )
+
+    def test_make_lm_m27_model(self, config_with_key):
+        """MiniMax-M2.7 is still routed correctly as a previous-gen option."""
+        mock_lm = MagicMock()
+        with patch("dspy.LM", return_value=mock_lm) as mock_dspy_lm:
+            config_with_key.make_lm("MiniMax-M2.7")
 
         mock_dspy_lm.assert_called_once_with(
             "openai/MiniMax-M2.7",
@@ -113,7 +136,7 @@ class TestMakeLm:
     def test_make_lm_temperature_one(self, config_with_key):
         """MiniMax requires temperature in (0, 1] — must default to 1.0."""
         with patch("dspy.LM") as mock_dspy_lm:
-            config_with_key.make_lm("MiniMax-M2.7")
+            config_with_key.make_lm("MiniMax-M3")
 
         _, kwargs = mock_dspy_lm.call_args
         assert kwargs["temperature"] == 1.0
@@ -126,7 +149,7 @@ class TestMakeLm:
             config = EvolutionConfig(hermes_agent_path=_DUMMY_PATH)
 
         with pytest.raises(ValueError, match="MINIMAX_API_KEY"):
-            config.make_lm("MiniMax-M2.7")
+            config.make_lm("MiniMax-M3")
 
     def test_make_lm_openai_passes_through(self):
         """Non-MiniMax models are forwarded to dspy.LM as-is."""
@@ -154,7 +177,7 @@ class TestMakeLm:
             minimax_base_url="https://private.minimax.io/v1",
         )
         with patch("dspy.LM") as mock_dspy_lm:
-            config.make_lm("MiniMax-M2.7")
+            config.make_lm("MiniMax-M3")
 
         _, kwargs = mock_dspy_lm.call_args
         assert kwargs["base_url"] == "https://private.minimax.io/v1"

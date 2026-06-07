@@ -12,8 +12,9 @@ if TYPE_CHECKING:
 # MiniMax model IDs supported via the OpenAI-compatible endpoint.
 # Only Chat models — MiniMax has no Embedding model.
 MINIMAX_MODELS = (
-    "MiniMax-M2.7",            # Peak Performance. Ultimate Value.
-    "MiniMax-M2.7-highspeed",  # Same performance, faster.
+    "MiniMax-M3",              # Latest: 512K context, 128K max output, image input. Default.
+    "MiniMax-M2.7",            # Previous generation.
+    "MiniMax-M2.7-highspeed",  # Previous generation, lower latency.
 )
 
 MINIMAX_BASE_URL = "https://api.minimax.io/v1"
@@ -63,9 +64,9 @@ class EvolutionConfig:
     def make_lm(self, model: str) -> "dspy.LM":
         """Create a DSPy LM instance, with MiniMax routing handled automatically.
 
-        For MiniMax models (MiniMax-M2.7 or MiniMax-M2.7-highspeed), this sets
-        the correct base URL and API key. Pass either the bare model ID or a
-        prefixed form such as ``minimax/MiniMax-M2.7`` or ``openai/MiniMax-M2.7``.
+        For MiniMax models (MiniMax-M3, MiniMax-M2.7, MiniMax-M2.7-highspeed), this
+        sets the correct base URL and API key. Pass either the bare model ID or a
+        prefixed form such as ``minimax/MiniMax-M3`` or ``openai/MiniMax-M3``.
 
         All other models are forwarded to ``dspy.LM`` unchanged, so existing
         OpenAI / OpenRouter / LiteLLM strings continue to work.

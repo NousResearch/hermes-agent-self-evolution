@@ -56,7 +56,7 @@ Set your API key and pass `--use-minimax` (or specify the model directly):
 ```bash
 export MINIMAX_API_KEY=your_key_here
 
-# Shorthand — uses MiniMax-M2.7 for both optimizer and eval
+# Shorthand — uses MiniMax-M3 for both optimizer and eval
 python -m evolution.skills.evolve_skill \
     --skill github-code-review \
     --use-minimax
@@ -64,7 +64,7 @@ python -m evolution.skills.evolve_skill \
 # Explicit model selection
 python -m evolution.skills.evolve_skill \
     --skill github-code-review \
-    --optimizer-model minimax/MiniMax-M2.7 \
+    --optimizer-model minimax/MiniMax-M3 \
     --eval-model minimax/MiniMax-M2.7-highspeed
 ```
 
@@ -72,8 +72,9 @@ Supported MiniMax models:
 
 | Model ID | Description |
 |----------|-------------|
-| `MiniMax-M2.7` | Peak performance — default choice |
-| `MiniMax-M2.7-highspeed` | Same performance, lower latency |
+| `MiniMax-M3` | 512K context, max output 128K, image input — default choice |
+| `MiniMax-M2.7` | Previous generation |
+| `MiniMax-M2.7-highspeed` | Previous generation, lower latency |
 
 MiniMax uses the OpenAI-compatible endpoint at `https://api.minimax.io/v1`. The
 `MINIMAX_API_KEY` environment variable is read automatically; no other
