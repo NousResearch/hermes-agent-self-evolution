@@ -4,7 +4,16 @@
 
 Hermes Agent Self-Evolution uses DSPy + GEPA (Genetic-Pareto Prompt Evolution) to automatically evolve and optimize Hermes Agent's skills, tool descriptions, system prompts, and code — producing measurably better versions through reflective evolutionary search.
 
+---
+
 **No GPU training required.** Everything operates via API calls — mutating text, evaluating results, and selecting the best variants. ~$2-10 per optimization run.
+
+## ⚙️ Integrated Ecosystem (WorkFlow-SakThai)
+This project is now core to the **SakThai Ecosystem**, acting as the **Growth** stage pipeline.
+
+- **Automated Skill Evolution:** DSPy + GEPA pipeline optimizes our skills (e.g., `github-code-review`).
+- **Secret Knowledge Integration:** Access to [The Book of Secret Knowledge](https://github.com/trimstray/the-book-of-secret-knowledge) via `book-of-secret-knowledge` skill.
+- **Safety Auditing:** Integrated `guardrails.py` ensures all evolved variants pass quality and concurrency gates.
 
 ## How It Works
 
@@ -76,9 +85,7 @@ Every evolved variant must pass:
 5. **PR review** — All changes go through human review, never direct commit
 
 ## Full Plan
-
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.
 
 ## License
-
 MIT — © 2026 Nous Research
