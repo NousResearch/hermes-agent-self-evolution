@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
 import dspy
@@ -16,6 +17,13 @@ from evolution.core.config import EvolutionConfig
 from evolution.core.fitness import _clamp_to_unit
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ScoreResult:
+    score: float
+    feedback: str = ""
+
 
 MAX_JUDGED_CALLS_PER_TASK = 5
 """Cap on how many save calls per task the judge will score. Excess calls
@@ -58,7 +66,9 @@ class SaveCallJudge:
         self.config = config
         self.judge = dspy.ChainOfThought(SaveCallSignature)
 
-    def score(self, *, task: str, expected_content: str, saved_content: str) -> float:
+    def score_with_feedback(
+        self, *, task: str, expected_content: str, saved_content: str
+    ) -> ScoreResult:
         _lm = self.config.get_lm("eval")
         lm = dspy.LM(
             _lm.model,
@@ -85,7 +95,15 @@ class SaveCallJudge:
                 "SaveCallJudge: unparseable quality %r from judge LM; "
                 "falling back to neutral 0.5", result.quality,
             )
-        return _clamp_to_unit(result.quality)
+        return ScoreResult(
+            score=_clamp_to_unit(result.quality),
+            feedback=str(result.feedback) if result.feedback else "",
+        )
+
+    def score(self, *, task: str, expected_content: str, saved_content: str) -> float:
+        return self.score_with_feedback(
+            task=task, expected_content=expected_content, saved_content=saved_content
+        ).score
 
 
 def judge_save_calls(
@@ -135,11 +153,17 @@ def judge_save_calls(
     return sum(scores) / len(scores)
 
 
+def _to_score_result(value: "ScoreResult | float") -> ScoreResult:
+    if isinstance(value, ScoreResult):
+        return value
+    return ScoreResult(float(value), "")
+
+
 def make_prompt_fitness_metric(
     *,
     baseline_text: str,
     max_growth: float,
-    closed_loop_scorer: Optional[Callable[[str, str], float]] = None,
+    closed_loop_scorer: Optional[Callable] = None,
 ) -> Callable:
     """Build the GEPA-shaped 5-arg fitness metric for a prompt section.
 
@@ -173,15 +197,19 @@ def make_prompt_fitness_metric(
             )
         candidate_text = getattr(pred, "_candidate_text", "") or ""
         score = 0.0
+        behavioral_feedback = ""
         if closed_loop_scorer is not None:
-            score = closed_loop_scorer(task_id, candidate_text)
+            result = _to_score_result(closed_loop_scorer(task_id, candidate_text))
+            score = result.score
+            behavioral_feedback = result.feedback
 
-        feedback = ""
+        budget_note = ""
         if baseline_len:
-            feedback = (
+            budget_note = (
                 f"[BUDGET] candidate={len(candidate_text)} chars, "
                 f"baseline={baseline_len} chars, ceiling={target_len} chars"
             )
+        feedback = (behavioral_feedback + "\n" + budget_note).strip() if behavioral_feedback else budget_note
         return dspy.Prediction(score=score, feedback=feedback)
 
     return metric
@@ -193,9 +221,9 @@ _UNSET = object()
 def make_memoizing_splice_scorer(
     *,
     install_fn: Callable[[str], None],
-    score_fn: Callable[[str], float],
+    score_fn: Callable[[str], "ScoreResult | float"],
     lock: Optional[threading.Lock] = None,
-) -> Callable[[str, str], float]:
+) -> Callable[[str, str], ScoreResult]:
     """Build ``closed_loop_scorer(task_id, candidate_text) -> float`` that
     splices a candidate only when it changes.
 
@@ -220,11 +248,11 @@ def make_memoizing_splice_scorer(
     state: dict[str, Any] = {"installed": _UNSET}
     lock = lock if lock is not None else threading.Lock()
 
-    def scorer(task_id: str, candidate_text: str) -> float:
+    def scorer(task_id: str, candidate_text: str) -> ScoreResult:
         with lock:
             if state["installed"] != candidate_text:
                 install_fn(candidate_text)
                 state["installed"] = candidate_text
-            return score_fn(task_id)
+            return _to_score_result(score_fn(task_id))
 
     return scorer

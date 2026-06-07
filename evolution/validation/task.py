@@ -46,6 +46,10 @@ class Task:
     fixture_setup: dict[str, str] = field(default_factory=dict)
     test_command: Optional[str] = None
     expected_save_content: Optional[str] = None
+    skills_src: Optional[str] = None
+    expected_action: Optional[str] = None
+    target_skill: Optional[str] = None
+    stale_token: Optional[str] = None
 
     def render_message(self, fixture_dir: Path) -> str:
         """Substitute ``{fixture_dir}`` in the message with the resolved path.
@@ -110,6 +114,27 @@ def _task_from_dict(obj: dict, *, source: str) -> Task:
             f"{source}: expected_save_content must be a string "
             f"(got {type(expected_save_content).__name__})"
         )
+    skills_src = obj.get("skills_src")
+    if skills_src is not None and not isinstance(skills_src, str):
+        raise ValueError(
+            f"{source}: skills_src must be a string (got {type(skills_src).__name__})"
+        )
+    expected_action = obj.get("expected_action")
+    if expected_action is not None and not isinstance(expected_action, str):
+        raise ValueError(
+            f"{source}: expected_action must be a string "
+            f"(got {type(expected_action).__name__})"
+        )
+    target_skill = obj.get("target_skill")
+    if target_skill is not None and not isinstance(target_skill, str):
+        raise ValueError(
+            f"{source}: target_skill must be a string (got {type(target_skill).__name__})"
+        )
+    stale_token = obj.get("stale_token")
+    if stale_token is not None and not isinstance(stale_token, str):
+        raise ValueError(
+            f"{source}: stale_token must be a string (got {type(stale_token).__name__})"
+        )
     return Task(
         task_id=obj["task_id"],
         user_message=obj["user_message"],
@@ -118,4 +143,8 @@ def _task_from_dict(obj: dict, *, source: str) -> Task:
         fixture_setup=dict(fixture_setup),
         test_command=test_command,
         expected_save_content=expected_save_content,
+        skills_src=skills_src,
+        expected_action=expected_action,
+        target_skill=target_skill,
+        stale_token=stale_token,
     )

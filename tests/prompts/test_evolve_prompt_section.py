@@ -16,12 +16,16 @@ from evolution.prompts.evolve_prompt_section import (
     _LOCK_FILENAME,
     _make_layer2_factory,
     _prompt_builder_guard,
+    _run_one_task_score,
     _section_text_from_candidate,
     _split_train_holdout,
     evolve_prompt_section,
     main,
+    val_signal_warning,
 )
+from evolution.prompts.prompt_judge import ScoreResult
 from evolution.prompts.prompt_module import PromptModule
+from evolution.validation.agent_runner import AgentRunResult, TaskRunContext
 from evolution.validation.task import Task
 
 
@@ -30,6 +34,210 @@ def _task(task_id: str, rubric: str | None = None) -> Task:
         task_id=task_id, user_message="m", expected_tools=("memory",),
         expected_save_content=rubric,
     )
+
+
+# ---------------------------------------------------------------------------
+# Fake runner helpers for _run_one_task_score tests
+# ---------------------------------------------------------------------------
+
+def _pass_result() -> AgentRunResult:
+    return AgentRunResult(tool_calls_seq=["memory"], final_text_tail="", duration_seconds=0.0)
+
+
+def _fail_result() -> AgentRunResult:
+    return AgentRunResult(tool_calls_seq=[], final_text_tail="", duration_seconds=0.0)
+
+
+def _abstain_result() -> AgentRunResult:
+    return AgentRunResult(tool_calls_seq=[], final_text_tail="", duration_seconds=0.0, error="timeout")
+
+
+class _ScriptedRunner:
+    """Returns scripted AgentRunResults in order (cycling if exhausted)."""
+
+    def __init__(self, results: list[AgentRunResult]):
+        self._results = results
+        self._idx = 0
+
+    def run(self, ctx: TaskRunContext) -> AgentRunResult:
+        result = self._results[self._idx % len(self._results)]
+        self._idx += 1
+        return result
+
+
+def _no_layer2_factory(task):
+    return None
+
+
+class TestRunOneTaskScore:
+    def test_reps1_pass_returns_score_result_1(self, tmp_path):
+        task = _task("t1")
+        runner = _ScriptedRunner([_pass_result()])
+        result = _run_one_task_score(
+            task, runner=runner, layer2_factory=_no_layer2_factory, layer2_threshold=0.7, reps=1
+        )
+        assert isinstance(result, ScoreResult)
+        assert result.score == 1.0
+
+    def test_reps1_fail_returns_score_result_0(self):
+        task = _task("t1")
+        runner = _ScriptedRunner([_fail_result()])
+        result = _run_one_task_score(
+            task, runner=runner, layer2_factory=_no_layer2_factory, layer2_threshold=0.7, reps=1
+        )
+        assert isinstance(result, ScoreResult)
+        assert result.score == 0.0
+
+    def test_reps1_abstain_returns_score_result_0(self):
+        task = _task("t1")
+        runner = _ScriptedRunner([_abstain_result()])
+        result = _run_one_task_score(
+            task, runner=runner, layer2_factory=_no_layer2_factory, layer2_threshold=0.7, reps=1
+        )
+        assert isinstance(result, ScoreResult)
+        assert result.score == 0.0
+
+    def test_reps4_one_pass_gives_quarter(self):
+        # 1 pass, 3 fails → 1/4 = 0.25
+        runner = _ScriptedRunner([_pass_result(), _fail_result(), _fail_result(), _fail_result()])
+        result = _run_one_task_score(
+            _task("t1"), runner=runner,
+            layer2_factory=_no_layer2_factory, layer2_threshold=0.7, reps=4,
+        )
+        assert result.score == pytest.approx(0.25)
+        assert "1/4" in result.feedback
+
+    def test_abstentions_excluded_from_denominator(self):
+        # 4 reps: abstain, abstain, pass, fail → scored=2, 1 pass → 0.5
+        runner = _ScriptedRunner([
+            _abstain_result(), _abstain_result(), _pass_result(), _fail_result(),
+        ])
+        result = _run_one_task_score(
+            _task("t1"), runner=runner,
+            layer2_factory=_no_layer2_factory, layer2_threshold=0.7, reps=4,
+        )
+        assert result.score == pytest.approx(0.5)
+
+    def test_all_abstain_gives_zero(self):
+        runner = _ScriptedRunner([_abstain_result()])
+        result = _run_one_task_score(
+            _task("t1"), runner=runner,
+            layer2_factory=_no_layer2_factory, layer2_threshold=0.7, reps=3,
+        )
+        assert result.score == 0.0
+
+    def test_feedback_contains_ratio_and_is_neutral(self):
+        runner = _ScriptedRunner([_pass_result(), _fail_result(), _fail_result(), _fail_result()])
+        result = _run_one_task_score(
+            _task("t1"), runner=runner,
+            layer2_factory=_no_layer2_factory, layer2_threshold=0.7, reps=4,
+        )
+        # Ratio present; no production-prompt wording (just a neutral summary)
+        assert "1/4" in result.feedback
+        assert result.feedback  # non-empty
+
+    def test_reps_default_is_1(self):
+        runner = _ScriptedRunner([_pass_result()])
+        result = _run_one_task_score(
+            _task("t1"), runner=runner,
+            layer2_factory=_no_layer2_factory, layer2_threshold=0.7,
+        )
+        assert result.score == 1.0
+
+
+class _RecordingRunner:
+    """Records each TaskRunContext it receives; returns a fixed pass result."""
+
+    def __init__(self):
+        self.contexts = []
+
+    def run(self, ctx: TaskRunContext) -> AgentRunResult:
+        self.contexts.append(ctx)
+        return _pass_result()
+
+
+class TestRunOneTaskScoreSkillsSrc:
+    def test_skills_src_resolved_relative_to_suite_dir(self, tmp_path):
+        task = Task(task_id="t1", user_message="m", expected_tools=("memory",),
+                    skills_src="myfix")
+        runner = _RecordingRunner()
+        _run_one_task_score(
+            task, runner=runner, layer2_factory=_no_layer2_factory,
+            layer2_threshold=0.7, suite_dir=tmp_path,
+        )
+        assert runner.contexts
+        assert runner.contexts[0].skills_src == tmp_path / "myfix"
+
+    def test_skills_src_none_when_no_field(self, tmp_path):
+        task = _task("t1")
+        runner = _RecordingRunner()
+        _run_one_task_score(
+            task, runner=runner, layer2_factory=_no_layer2_factory,
+            layer2_threshold=0.7, suite_dir=tmp_path,
+        )
+        assert runner.contexts
+        assert runner.contexts[0].skills_src is None
+
+    def test_skills_src_none_when_no_suite_dir(self):
+        """skills_src set but no suite_dir threaded → ctx.skills_src is None."""
+        task = Task(task_id="t1", user_message="m", expected_tools=("memory",),
+                    skills_src="myfix")
+        runner = _RecordingRunner()
+        _run_one_task_score(
+            task, runner=runner, layer2_factory=_no_layer2_factory,
+            layer2_threshold=0.7,
+        )
+        assert runner.contexts
+        assert runner.contexts[0].skills_src is None
+
+
+class TestRunOneTaskScoreActionVerdict:
+    def test_action_params_forwarded_to_score_task(self, monkeypatch):
+        task = Task(task_id="t1", user_message="m", expected_action="patch",
+                    target_skill="s", stale_token="tok")
+        runner = _RecordingRunner()
+
+        captured = []
+        import evolution.prompts.evolve_prompt_section as mod
+        real = mod.score_task
+
+        def spy(**kwargs):
+            captured.append(kwargs)
+            return real(**kwargs)
+
+        monkeypatch.setattr(mod, "score_task", spy)
+        _run_one_task_score(
+            task, runner=runner, layer2_factory=_no_layer2_factory,
+            layer2_threshold=0.7,
+        )
+        assert captured
+        for kw in captured:
+            assert kw["expected_action"] == "patch"
+            assert kw["target_skill"] == "s"
+            assert kw["stale_token"] == "tok"
+
+    def test_no_new_fields_forwards_none(self, monkeypatch):
+        task = _task("t1")
+        runner = _RecordingRunner()
+
+        captured = []
+        import evolution.prompts.evolve_prompt_section as mod
+        real = mod.score_task
+
+        def spy(**kwargs):
+            captured.append(kwargs)
+            return real(**kwargs)
+
+        monkeypatch.setattr(mod, "score_task", spy)
+        _run_one_task_score(
+            task, runner=runner, layer2_factory=_no_layer2_factory,
+            layer2_threshold=0.7,
+        )
+        assert captured
+        for kw in captured:
+            assert kw["expected_action"] is None
+            assert kw["target_skill"] is None
+            assert kw["stale_token"] is None
 
 
 def test_split_is_deterministic_and_non_empty():
@@ -168,6 +376,89 @@ def test_rejects_single_task_suite(tmp_path):
         )
 
 
+class TestValSignalWarning:
+    def test_all_zero_rates_warns(self):
+        w = val_signal_warning({"t1": 0.0, "t2": 0.05})
+        assert w is not None
+        assert set(w["task_ids"]) == {"t1", "t2"}
+        assert w["rates"] == {"t1": 0.0, "t2": 0.05}
+
+    def test_all_one_rates_warns(self):
+        w = val_signal_warning({"t1": 1.0, "t2": 0.97})
+        assert w is not None
+        assert set(w["task_ids"]) == {"t1", "t2"}
+
+    def test_mixed_rates_no_warning(self):
+        assert val_signal_warning({"t1": 0.0, "t2": 0.5, "t3": 1.0}) is None
+
+    def test_single_midrange_rate_no_warning(self):
+        assert val_signal_warning({"t1": 0.4}) is None
+
+    def test_empty_input_no_warning(self):
+        assert val_signal_warning({}) is None
+
+    def test_warning_dict_includes_reason(self):
+        w = val_signal_warning({"t1": 0.0})
+        assert w is not None
+        assert "reason" in w
+
+
+class TestRepsFlags:
+    def _common(self, repo, suite, tmp_path):
+        return [
+            "--section", "MEMORY_GUIDANCE",
+            "--hermes-repo", str(repo),
+            "--tasks", str(suite),
+            "--dry-run",
+            "--output-dir", str(tmp_path / "out"),
+        ]
+
+    def test_default_reps_passed_through(self, tmp_path, monkeypatch):
+        repo = _fake_repo(tmp_path)
+        suite = _suite(tmp_path)
+        captured = {}
+        import evolution.prompts.evolve_prompt_section as mod
+
+        def fake(**kwargs):
+            captured.update(kwargs)
+            return {"decision": "dry_run"}
+
+        monkeypatch.setattr(mod, "evolve_prompt_section", fake)
+        res = CliRunner().invoke(mod.main, self._common(repo, suite, tmp_path))
+        assert res.exit_code == 0, res.output
+        assert captured["fitness_reps"] == 3
+        assert captured["gate_reps"] == 5
+
+    def test_explicit_reps_passed_through(self, tmp_path, monkeypatch):
+        repo = _fake_repo(tmp_path)
+        suite = _suite(tmp_path)
+        captured = {}
+        import evolution.prompts.evolve_prompt_section as mod
+
+        def fake(**kwargs):
+            captured.update(kwargs)
+            return {"decision": "dry_run"}
+
+        monkeypatch.setattr(mod, "evolve_prompt_section", fake)
+        res = CliRunner().invoke(mod.main, self._common(repo, suite, tmp_path) + [
+            "--fitness-reps", "2", "--gate-reps", "9",
+        ])
+        assert res.exit_code == 0, res.output
+        assert captured["fitness_reps"] == 2
+        assert captured["gate_reps"] == 9
+
+
+def test_evolve_accepts_gate_reps_and_wires_validator():
+    """gate_reps is a param defaulting to 1, and the deploy-gate validator is
+    constructed with reps=gate_reps (asserted statically — the construction is
+    deep inside an LM/agent path we don't pay for here)."""
+    import inspect
+    sig = inspect.signature(evolve_prompt_section)
+    assert sig.parameters["gate_reps"].default == 1
+    src = inspect.getsource(evolve_prompt_section)
+    assert "reps=gate_reps" in src
+
+
 def test_cli_dry_run_exits_zero(tmp_path):
     repo = _fake_repo(tmp_path)
     suite = _suite(tmp_path)
@@ -180,3 +471,33 @@ def test_cli_dry_run_exits_zero(tmp_path):
         "--output-dir", str(tmp_path / "out"),
     ])
     assert res.exit_code == 0, res.output
+
+
+def test_synth_feedback_action_task_states_patch_objective():
+    from evolution.prompts.evolve_prompt_section import _synth_feedback
+    from evolution.validation.task import Task
+    task = Task(
+        task_id="patch-stale-flag", user_message="use it",
+        expected_tools=("skill_manage",), expected_action="patch",
+        target_skill="line-counter", stale_token="wc --lines",
+    )
+    fb = _synth_feedback(task, "passed 0/4")
+    assert "line-counter" in fb and "wc --lines" in fb
+    assert "PROACTIVELY" in fb and "skill_manage(action='patch')" in fb
+    assert "passed 0/4" in fb
+
+
+def test_synth_feedback_control_states_do_not_patch():
+    from evolution.prompts.evolve_prompt_section import _synth_feedback
+    from evolution.validation.task import Task
+    task = Task(task_id="ctl", user_message="use it", forbidden_tools=("skill_manage",))
+    fb = _synth_feedback(task, "passed 4/4")
+    assert "CORRECT" in fb and "NOT patch" in fb
+
+
+def test_synth_feedback_generic_membership_task():
+    from evolution.prompts.evolve_prompt_section import _synth_feedback
+    from evolution.validation.task import Task
+    task = Task(task_id="mem", user_message="x", expected_tools=("memory",))
+    fb = _synth_feedback(task, "passed 3/4")
+    assert "memory" in fb and "objective" in fb

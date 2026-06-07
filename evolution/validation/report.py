@@ -28,6 +28,14 @@ class TaskResult:
     duration_seconds: float
     model_name: Optional[str] = None
     error: Optional[str] = None
+    pass_rate: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        # Single-run (reps=1) callers construct with `passed` only; derive
+        # the rate so win/loss can compare pass_rate uniformly. At reps=1
+        # the rate is exactly 0.0 or 1.0, so passed == (pass_rate >= 0.5).
+        if self.pass_rate is None:
+            object.__setattr__(self, "pass_rate", 1.0 if self.passed else 0.0)
 
 
 @dataclass(frozen=True)
@@ -57,11 +65,22 @@ def score_task(
     test_command_timeout_seconds: float = 60.0,
     layer2_judge_fn: Optional[Callable[[list[dict]], float]] = None,
     layer2_threshold: float = 0.7,
+    expected_action: Optional[str] = None,
+    target_skill: Optional[str] = None,
+    stale_token: Optional[str] = None,
 ) -> tuple[bool, bool]:
     """Return (passed, abstained).
 
     Abstention takes precedence over pass/fail: a task that errored out
     in the runner is not evidence of the artifact's quality either way.
+
+    When ``expected_action == "patch"`` (with ``target_skill`` and
+    ``stale_token`` set), the verdict is action-level: pass iff the agent
+    called ``skill_manage`` with ``action in {patch, edit}`` on
+    ``target_skill`` and the call touched the stale token (for ``patch``:
+    ``stale_token in old_string``; for ``edit``: ``stale_token not in
+    content``, meaning the replacement was applied). All other paths are
+    ignored in this mode.
 
     When ``test_command`` is set (skill-side suites), the verdict is
     "did the planted test pass after the agent's edits": the command
@@ -83,6 +102,8 @@ def score_task(
     """
     if run.error is not None:
         return False, True
+    if expected_action == "patch":
+        return _score_action_patch(run, target_skill=target_skill, stale_token=stale_token), False
     if test_command is not None:
         if fixture_dir is None:
             raise ValueError(
@@ -126,6 +147,36 @@ def _run_test_command(command: str, cwd: Path, timeout_seconds: float) -> bool:
         return False
 
 
+def _score_action_patch(
+    run: AgentRunResult,
+    *,
+    target_skill: Optional[str],
+    stale_token: Optional[str],
+) -> bool:
+    """Return True iff any skill_manage call on target_skill touched stale_token.
+
+    Accepts both ``action='patch'`` (stale_token must appear in old_string) and
+    ``action='edit'`` (stale_token must be absent from content, meaning it was
+    replaced).  Any other action, wrong skill, or missing token evidence → False.
+    """
+    for call in run.tool_calls_with_args:
+        if call.get("name") != "skill_manage":
+            continue
+        args = call.get("arguments") or {}
+        if args.get("skill_name") != target_skill:
+            continue
+        action = args.get("action")
+        if action == "patch":
+            old_string = args.get("old_string", "")
+            if stale_token is not None and stale_token in old_string:
+                return True
+        elif action == "edit":
+            content = args.get("content", "")
+            if stale_token is not None and stale_token not in content:
+                return True
+    return False
+
+
 def summarize_phase(task_results: list[TaskResult]) -> PhaseResult:
     n_passed = sum(1 for r in task_results if r.passed and not r.abstained)
     n_abstained = sum(1 for r in task_results if r.abstained)
@@ -154,9 +205,11 @@ def compute_win_loss(baseline: PhaseResult, evolved: PhaseResult) -> WinLoss:
         if b is None or e is None or b.abstained or e.abstained:
             n_ties += 1
             continue
-        if e.passed and not b.passed:
+        # Rate-based: a win/loss is any movement in pass_rate. At reps=1
+        # rates are 0.0/1.0, so this reduces to the legacy bool comparison.
+        if e.pass_rate > b.pass_rate:
             n_wins += 1
-        elif b.passed and not e.passed:
+        elif e.pass_rate < b.pass_rate:
             n_losses += 1
         else:
             n_ties += 1

@@ -139,6 +139,152 @@ class TestScoreTaskLayer2:
         assert received == [[{"action": "add", "content": "c"}]]
 
 
+class TestScoreTaskActionPatch:
+    """Action-level verdict: expected_action='patch' + target_skill + stale_token."""
+
+    @staticmethod
+    def _run_with_skill_manage(
+        skill_name: str,
+        action: str,
+        old_string: str = "",
+        content: str = "",
+    ) -> AgentRunResult:
+        args: dict = {"action": action, "skill_name": skill_name}
+        if action in ("patch", "edit"):
+            if action == "patch":
+                args["old_string"] = old_string
+                args["new_string"] = old_string.replace("stale", "fresh")
+            else:
+                args["content"] = content
+        return AgentRunResult(
+            tool_calls_seq=["skill_manage"],
+            final_text_tail="",
+            duration_seconds=1.0,
+            tool_calls_with_args=[{"name": "skill_manage", "arguments": args}],
+        )
+
+    def test_patch_touching_stale_token_passes(self):
+        run = self._run_with_skill_manage(
+            "SKILLS_GUIDANCE", "patch", old_string="stale text here"
+        )
+        passed, abstained = score_task(
+            expected_tools=(),
+            forbidden_tools=(),
+            run=run,
+            expected_action="patch",
+            target_skill="SKILLS_GUIDANCE",
+            stale_token="stale",
+        )
+        assert passed and not abstained
+
+    def test_patch_not_touching_stale_token_fails(self):
+        run = self._run_with_skill_manage(
+            "SKILLS_GUIDANCE", "patch", old_string="completely different text"
+        )
+        passed, abstained = score_task(
+            expected_tools=(),
+            forbidden_tools=(),
+            run=run,
+            expected_action="patch",
+            target_skill="SKILLS_GUIDANCE",
+            stale_token="stale",
+        )
+        assert not passed and not abstained
+
+    def test_patch_wrong_skill_fails(self):
+        run = self._run_with_skill_manage(
+            "OTHER_SKILL", "patch", old_string="stale text here"
+        )
+        passed, abstained = score_task(
+            expected_tools=(),
+            forbidden_tools=(),
+            run=run,
+            expected_action="patch",
+            target_skill="SKILLS_GUIDANCE",
+            stale_token="stale",
+        )
+        assert not passed and not abstained
+
+    def test_edit_with_stale_token_absent_from_content_passes(self):
+        # edit action: content must NOT contain stale_token (it was replaced)
+        run = self._run_with_skill_manage(
+            "SKILLS_GUIDANCE", "edit", content="fresh text here"
+        )
+        passed, abstained = score_task(
+            expected_tools=(),
+            forbidden_tools=(),
+            run=run,
+            expected_action="patch",
+            target_skill="SKILLS_GUIDANCE",
+            stale_token="stale",
+        )
+        assert passed and not abstained
+
+    def test_edit_with_stale_token_still_in_content_fails(self):
+        # edit action: if stale_token still in content, the skill wasn't updated
+        run = self._run_with_skill_manage(
+            "SKILLS_GUIDANCE", "edit", content="still stale text here"
+        )
+        passed, abstained = score_task(
+            expected_tools=(),
+            forbidden_tools=(),
+            run=run,
+            expected_action="patch",
+            target_skill="SKILLS_GUIDANCE",
+            stale_token="stale",
+        )
+        assert not passed and not abstained
+
+    def test_no_skill_manage_call_fails(self):
+        run = AgentRunResult(
+            tool_calls_seq=["read_file"],
+            final_text_tail="",
+            duration_seconds=1.0,
+            tool_calls_with_args=[{"name": "read_file", "arguments": {"path": "x"}}],
+        )
+        passed, abstained = score_task(
+            expected_tools=(),
+            forbidden_tools=(),
+            run=run,
+            expected_action="patch",
+            target_skill="SKILLS_GUIDANCE",
+            stale_token="stale",
+        )
+        assert not passed and not abstained
+
+    def test_runner_error_abstains(self):
+        run = AgentRunResult(
+            tool_calls_seq=[],
+            final_text_tail="",
+            duration_seconds=1.0,
+            error="hermes timed out",
+        )
+        passed, abstained = score_task(
+            expected_tools=(),
+            forbidden_tools=(),
+            run=run,
+            expected_action="patch",
+            target_skill="SKILLS_GUIDANCE",
+            stale_token="stale",
+        )
+        assert not passed and abstained
+
+    def test_expected_action_none_leaves_existing_membership_path_unchanged(self):
+        # Regression guard: when expected_action is None, behavior is identical
+        # to today's tool-membership scoring.
+        run = AgentRunResult(
+            tool_calls_seq=["patch"],
+            final_text_tail="",
+            duration_seconds=1.0,
+        )
+        passed, abstained = score_task(
+            expected_tools=("patch",),
+            forbidden_tools=("write_file",),
+            run=run,
+        )
+        assert passed and not abstained
+
+
 class TestScoreTaskTestCommandMode:
     """When ``test_command`` is set on a task, the verdict is exit-code-driven,
     not tool-call-driven. Used by skill-side suites (e.g., planted-bug:
@@ -305,6 +451,57 @@ class TestComputeWinLoss:
         wl = compute_win_loss(summarize_phase(b_results), summarize_phase(e_results))
         assert wl.n_wins == 0 and wl.n_losses == 0
         assert wl.n_ties == 2
+
+
+class TestComputeWinLossRateBased:
+    """Win/loss compares pass_rate, not the bool. At reps=1 (rates in
+    {0.0, 1.0}) this reduces to the legacy bool comparison."""
+
+    def _tr_rate(self, task_id, rate):
+        return TaskResult(
+            task_id=task_id, passed=(rate >= 0.5), pass_rate=rate,
+            abstained=False, tool_calls_seq=[], duration_seconds=0.0,
+        )
+
+    def test_higher_rate_is_win(self):
+        b = summarize_phase([self._tr_rate("t", 0.0)])
+        e = summarize_phase([self._tr_rate("t", 0.8)])
+        wl = compute_win_loss(b, e)
+        assert wl.n_wins == 1 and wl.n_losses == 0
+
+    def test_win_even_below_pass_threshold(self):
+        # 0.4 vs 0.0 is a win even though neither side "passes" (>=0.5).
+        b = summarize_phase([self._tr_rate("t", 0.0)])
+        e = summarize_phase([self._tr_rate("t", 0.4)])
+        wl = compute_win_loss(b, e)
+        assert wl.n_wins == 1 and wl.n_losses == 0
+
+    def test_equal_rate_is_neither(self):
+        b = summarize_phase([self._tr_rate("t", 0.0)])
+        e = summarize_phase([self._tr_rate("t", 0.0)])
+        wl = compute_win_loss(b, e)
+        assert wl.n_wins == 0 and wl.n_losses == 0 and wl.n_ties == 1
+
+    def test_lower_rate_is_loss(self):
+        b = summarize_phase([self._tr_rate("t", 0.8)])
+        e = summarize_phase([self._tr_rate("t", 0.0)])
+        wl = compute_win_loss(b, e)
+        assert wl.n_losses == 1 and wl.n_wins == 0
+
+    def test_reps1_rates_reduce_to_legacy_bool(self):
+        # At reps=1 every rate is 0.0 or 1.0. Compare rate-based win/loss
+        # against the legacy bool-based outcome for all 4 combinations.
+        for b_pass in (False, True):
+            for e_pass in (False, True):
+                b_rate = 1.0 if b_pass else 0.0
+                e_rate = 1.0 if e_pass else 0.0
+                b = summarize_phase([self._tr_rate("t", b_rate)])
+                e = summarize_phase([self._tr_rate("t", e_rate)])
+                wl = compute_win_loss(b, e)
+                legacy_win = int(e_pass and not b_pass)
+                legacy_loss = int(b_pass and not e_pass)
+                assert wl.n_wins == legacy_win
+                assert wl.n_losses == legacy_loss
 
 
 class TestDecisionRule:

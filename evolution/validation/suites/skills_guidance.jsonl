@@ -1,0 +1,17 @@
+# Closed-loop validation suite for the Hermes SKILLS_GUIDANCE prompt section.
+# Verdict: expected_action='patch' tasks pass iff skill_manage targets the right
+# skill with the stale token in old_string; control tasks pass iff skill_manage
+# is NOT invoked (healthy skill needs no edit; cosmetic request is not a fix).
+#
+# --- patch: stale path reference → SHOULD patch ---
+{"task_id": "patch-stale-path", "user_message": "Use the csv-summarizer skill to summarize the dataset in this workspace.", "expected_tools": ["skill_manage"], "expected_action": "patch", "target_skill": "csv-summarizer", "stale_token": "data/raw/input.csv", "skills_src": "skills_guidance_fixtures/patch-stale-path", "fixture_setup": {"data/input.csv": "id,name\n1,alpha\n2,beta\n3,gamma\n"}}
+# --- patch: stale API call → SHOULD patch ---
+{"task_id": "patch-stale-api", "user_message": "Use the parse-int skill to parse the number in value.txt.", "expected_tools": ["skill_manage"], "expected_action": "patch", "target_skill": "parse-int", "stale_token": "string.atoi", "skills_src": "skills_guidance_fixtures/patch-stale-api", "fixture_setup": {"value.txt": "42\n"}}
+# --- control: healthy skill → SHOULD NOT patch ---
+{"task_id": "ctl-healthy", "user_message": "Use the word-counter skill to count the words in notes.txt.", "forbidden_tools": ["skill_manage"], "skills_src": "skills_guidance_fixtures/ctl-healthy", "fixture_setup": {"notes.txt": "alpha beta gamma delta\n"}}
+# --- control: cosmetic request → SHOULD NOT patch ---
+{"task_id": "ctl-cosmetic", "user_message": "Use the greeter skill to greet me and show the current directory.", "forbidden_tools": ["skill_manage"], "skills_src": "skills_guidance_fixtures/ctl-cosmetic"}
+# --- patch: stale CLI flag (strongest signal — holdout end) → SHOULD patch ---
+{"task_id": "patch-stale-flag", "user_message": "Use the line-counter skill to count the lines in notes.txt.", "expected_tools": ["skill_manage"], "expected_action": "patch", "target_skill": "line-counter", "stale_token": "wc --lines", "skills_src": "skills_guidance_fixtures/patch-stale-flag", "fixture_setup": {"notes.txt": "one\ntwo\nthree\nfour\n"}}
+{"task_id": "patch-stale-sortflag", "kind": "patch", "user_message": "Use the record-sorter skill to sort the lines in records.txt in reverse.", "expected_tools": ["skill_manage"], "expected_action": "patch", "target_skill": "record-sorter", "stale_token": "sort --reverse-order", "skills_src": "skills_guidance_fixtures/patch-stale-sortflag", "fixture_setup": {"records.txt": "gamma\nalpha\ndelta\nbeta\n"}}
+{"task_id": "patch-stale-headcount", "kind": "patch", "user_message": "Use the top-lines skill to show the first 3 lines of log.txt.", "expected_tools": ["skill_manage"], "expected_action": "patch", "target_skill": "top-lines", "stale_token": "head --count", "skills_src": "skills_guidance_fixtures/patch-stale-headcount", "fixture_setup": {"log.txt": "line one\nline two\nline three\nline four\nline five\n"}}

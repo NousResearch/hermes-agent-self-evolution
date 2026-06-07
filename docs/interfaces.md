@@ -144,7 +144,9 @@ Evolves one tool's top-level `description` field inside an MCP-shape manifest. T
 
 Evolves one named section of an agent's system prompt — a top-level string constant in Hermes Agent's `agent/prompt_builder.py` (e.g. `MEMORY_GUIDANCE`). Unlike the skill and tool paths, evaluation is **purely behavioral**: there is no synthetic LLM-judge signal. Every candidate is spliced into the live `prompt_builder.py` and scored by running the real agent (`hermes -z`) against the task suite, so the deploy gate is a `ClosedLoopValidator` run (pass-rate + win/loss), not a paired-bootstrap CI over judge scores.
 
-The verdict is **compound**: Layer 1 is the same `expected_tools` / `forbidden_tools` membership rule as the closed-loop tool path; Layer 2 is an LLM judge that scores each `memory(action=add|replace)` call's content against the task's `expected_save_content` rubric (only tasks that declare a rubric are Layer-2 judged). The candidate is spliced in for the duration of the run and the file is restored byte-for-byte afterward, reusing the tool-path backup + flock + checksum-drift machinery.
+The verdict is **compound**: Layer 1 is the same `expected_tools` / `forbidden_tools` membership rule as the closed-loop tool path; Layer 2 is an LLM judge that scores each `memory(action=add|replace)` call's content against the task's `expected_save_content` rubric (only tasks that declare a rubric are Layer-2 judged). A task may also assert an **action-level** verdict — set `expected_action`, `target_skill`, and `stale_token` (with a `skills_src` skill seeded into the sandbox) and the task passes only when the agent calls `skill_manage(action=patch|edit)` on the target skill and the patch actually touches the stale token. This is what makes discipline sections like `SKILLS_GUIDANCE` (proactively patch a stale skill) scorable. The candidate is spliced in for the duration of the run and the file is restored byte-for-byte afterward, reusing the tool-path backup + flock + checksum-drift machinery.
+
+Behavioral triggers are often stochastic, so both the GEPA fitness and the deploy gate can run each task multiple times and score a **pass rate** rather than a single coin-flip (`--fitness-reps` / `--gate-reps`); when a candidate save/patch judge produces a rationale it is surfaced to GEPA's reflection LM as outcome-grounded feedback rather than the bare budget note. See the signal-strength note below the flag tables.
 
 ### Required flags
 | Flag | Purpose |
@@ -163,6 +165,8 @@ The verdict is **compound**: Layer 1 is the same `expected_tools` / `forbidden_t
 | `--optimizer-model` / `--reflection-model` / `--eval-model <name>` | config default | Per-role LiteLLM model overrides; resolved like the other CLIs. `--eval-model` is the Layer 2 content judge. |
 | `--agent-model <name>` | config default | The model the `hermes -z` agent itself runs as. A deliberately weaker agent exposes more behavioral signal (a strong agent saturates the suite regardless of the prompt). LiteLLM provider prefixes are stripped before `hermes -m`. |
 | `--layer2-threshold <float>` | `0.7` | Minimum mean content-judge score for a save task to pass Layer 2. |
+| `--fitness-reps <int>` | `3` | Reps per task in the GEPA fitness eval; the score is the mean pass rate (abstentions excluded from the denominator). `1` reproduces single-run scoring. Raise it when the behavior is stochastic — a single rep makes GEPA optimize a coin-flip and overfit to lucky runs. |
+| `--gate-reps <int>` | `5` | Reps per task in the deploy-gate eval; the per-task verdict becomes a pass rate and a "win" requires `evolved_rate > baseline_rate`. `1` reproduces the legacy binary gate. The gate ships the decision, so it gets the cleaner (higher-rep) signal. |
 | `--task-timeout-seconds <int>` | `120` | Per-task wall-clock cap for `hermes -z`. Timeouts abstain (don't tip the decision). |
 | `--max-cost-usd <float>` | `150.0` | Abort cleanly when cumulative **in-process** LM cost (judge + reflection + the passthrough predictor) exceeds this. The agent's own LM spend happens inside the `hermes` child process and is not captured by this ceiling. |
 | `--gepa-minibatch-size <int>` | `3` | GEPA reflective minibatch size; same meaning as the other paths. |
@@ -179,6 +183,11 @@ The verdict is **compound**: Layer 1 is the same `expected_tools` / `forbidden_t
 - `0` on a `deploy` decision (or a `--dry-run`).
 - `1` on `reject` (the holdout deploy gate found a regression), `denied` (saturated baseline default-denied non-interactively), or `aborted` (cost ceiling).
 - `ValueError` at startup if the suite has fewer than 2 tasks.
+
+### Signal strength (read before evolving a stochastic behavioral section)
+Evolving a section whose target behavior fires stochastically (e.g. proactive skill-patching) has a real precondition: **the holdout must contain at least one high-base-rate task** — a task the *intended* behavior passes reliably — so GEPA's val-argmax can tell a good candidate from the baseline. With only weak/low-base-rate holdout tasks, selection is noise and reverts to the baseline regardless of `--iterations` or budget; the run emits a `val_signal_warning` (recorded in `gate_decision.json`) when the holdout baseline rates are degenerate (all ≈0 or all ≈1). Put high-signal tasks in **both** train (so the reflection LM learns from them) and holdout (so selection has a signal).
+
+Even with that in place, there is a known boundary: GEPA tends to evolve *correct but mildly-phrased* prompts, whose achieved trigger rate is modest, so a strict `gate-reps` win/loss gate can decline to ship a real-but-marginal improvement. Raising `--fitness-reps`/`--gate-reps` stabilizes the signal but does not manufacture strength the evolved prompt lacks. Steering the proposer toward more forceful/imperative phrasing is the open lever here.
 
 ## CLI: `python -m evolution.core.external_importers`
 

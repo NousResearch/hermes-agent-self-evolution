@@ -55,6 +55,7 @@ from evolution.core.saturation_check import (
 from evolution.prompts.hermes_prompt_source import HermesPromptSource
 from evolution.prompts.prompt_judge import (
     SaveCallJudge,
+    ScoreResult,
     judge_save_calls,
     make_memoizing_splice_scorer,
     make_prompt_fitness_metric,
@@ -140,6 +141,44 @@ def _make_layer2_factory(judge: Optional[SaveCallJudge]):
     return factory
 
 
+_VAL_SIGNAL_LOW = 0.05
+_VAL_SIGNAL_HIGH = 0.95
+
+
+def val_signal_warning(
+    holdout_baseline_rates: dict[str, float],
+) -> Optional[dict]:
+    """Flag a holdout with no discriminating signal for the deploy gate.
+
+    When every holdout task's baseline pass rate sits at one extreme — all
+    ≤ 0.05 (uniform failure) or all ≥ 0.95 (uniform success) — the gate has no
+    gradient to measure improvement against, so a "pass" is uninformative.
+    Returns a warning dict (offending task ids + their rates) in that case; a
+    single mid-range task is enough signal, so any rate strictly between the
+    bounds returns ``None``. Empty input → ``None``.
+    """
+    if not holdout_baseline_rates:
+        return None
+
+    rates = holdout_baseline_rates
+    all_low = all(r <= _VAL_SIGNAL_LOW for r in rates.values())
+    all_high = all(r >= _VAL_SIGNAL_HIGH for r in rates.values())
+    if not (all_low or all_high):
+        return None
+
+    kind = "uniform_failure" if all_low else "uniform_success"
+    return {
+        "kind": kind,
+        "reason": (
+            "All holdout baseline pass rates are at one extreme "
+            f"({'≤ %.2f' % _VAL_SIGNAL_LOW if all_low else '≥ %.2f' % _VAL_SIGNAL_HIGH}); "
+            "the deploy gate has no discriminating gradient on this suite."
+        ),
+        "task_ids": sorted(rates.keys()),
+        "rates": dict(rates),
+    }
+
+
 def _section_text_from_candidate(candidate: Any, section_name: str) -> str:
     """Extract the section body from a GEPA-built candidate (module or
     component dict), reading the sentinel-delimited region."""
@@ -195,33 +234,93 @@ def _run_one_task_score(
     runner: HermesAgentRunner,
     layer2_factory,
     layer2_threshold: float,
-) -> float:
-    """Run a single task through the agent with whatever section is currently
-    spliced, returning 1.0 on pass else 0.0 (abstentions score 0.0 in-loop —
-    the deploy gate handles abstentions properly)."""
-    with tempfile.TemporaryDirectory(prefix="ps_inner_") as fixture_tmp:
-        fixture_dir = Path(fixture_tmp)
-        for relative_path, content in task.fixture_setup.items():
-            dest = fixture_dir / relative_path
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(content)
-        ctx = TaskRunContext(
-            user_message=task.render_message(fixture_dir),
-            fixture_dir=fixture_dir,
+    reps: int = 1,
+    suite_dir: Optional[Path] = None,
+) -> ScoreResult:
+    """Run a task through the agent ``reps`` times, returning mean pass rate.
+
+    Abstentions are excluded from the denominator; all-abstain scores 0.0.
+    reps=1 reproduces the legacy single-run verdict (score ∈ {0.0, 1.0}).
+    """
+    n_pass = 0
+    n_abstain = 0
+
+    # ``skills_src`` is a path relative to the suite file's directory.
+    skills_src = (
+        (suite_dir / task.skills_src)
+        if (task.skills_src and suite_dir is not None)
+        else None
+    )
+
+    for _ in range(reps):
+        with tempfile.TemporaryDirectory(prefix="ps_inner_") as fixture_tmp:
+            fixture_dir = Path(fixture_tmp)
+            for relative_path, content in task.fixture_setup.items():
+                dest = fixture_dir / relative_path
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(content)
+            ctx = TaskRunContext(
+                user_message=task.render_message(fixture_dir),
+                fixture_dir=fixture_dir,
+                skills_src=skills_src,
+            )
+            run = runner.run(ctx)
+            passed, abstained = score_task(
+                expected_tools=task.expected_tools,
+                forbidden_tools=task.forbidden_tools,
+                run=run,
+                test_command=task.test_command,
+                fixture_dir=fixture_dir,
+                layer2_judge_fn=layer2_factory(task),
+                layer2_threshold=layer2_threshold,
+                expected_action=task.expected_action,
+                target_skill=task.target_skill,
+                stale_token=task.stale_token,
+            )
+            if abstained:
+                n_abstain += 1
+            elif passed:
+                n_pass += 1
+
+    scored = reps - n_abstain
+    rate = (n_pass / scored) if scored else 0.0
+
+    observed = (
+        f"all {reps} runs abstained" if scored == 0
+        else f"passed {n_pass}/{scored}"
+        + (f" ({n_abstain} abstained)" if n_abstain else "")
+    )
+    return ScoreResult(score=rate, feedback=_synth_feedback(task, observed))
+
+
+def _synth_feedback(task: Task, observed: str) -> str:
+    """Outcome-grounded feedback for GEPA's reflection LM. For action tasks it
+    states the patch objective + the stale token the skill carries (so the LM
+    knows what behavior to instill); for controls it states the do-not-act
+    objective. Neutral — describes the eval rubric and observed behavior, never
+    any target-prompt wording."""
+    if task.expected_action and task.target_skill:
+        return (
+            f"Objective: while doing the task the agent uses the "
+            f"'{task.target_skill}' skill, whose written instructions are STALE "
+            f"(they tell it to use '{task.stale_token}', which fails). After "
+            f"working around the failure it should PROACTIVELY call "
+            f"skill_manage(action='{task.expected_action}') to fix the skill's "
+            f"instructions, unprompted. Observed over the runs: {observed}. "
+            f"Improve the prompt so the agent reliably fixes a skill it discovers "
+            f"is wrong while using it — without touching skills that are correct."
         )
-        run = runner.run(ctx)
-        passed, abstained = score_task(
-            expected_tools=task.expected_tools,
-            forbidden_tools=task.forbidden_tools,
-            run=run,
-            test_command=task.test_command,
-            fixture_dir=fixture_dir,
-            layer2_judge_fn=layer2_factory(task),
-            layer2_threshold=layer2_threshold,
+    if "skill_manage" in task.forbidden_tools:
+        return (
+            f"Objective: the skill here is CORRECT; the agent must NOT patch or "
+            f"modify it. Observed over the runs: {observed} (a pass means it "
+            f"correctly refrained). Do not induce edits to skills that are fine."
         )
-        if abstained:
-            return 0.0
-        return 1.0 if passed else 0.0
+    objective = (
+        f"expected={list(task.expected_tools) or '[]'}, "
+        f"forbidden={list(task.forbidden_tools) or '[]'}"
+    )
+    return f"{observed}; objective: {objective}"
 
 
 def evolve_prompt_section(
@@ -249,6 +348,8 @@ def evolve_prompt_section(
     dry_run: bool = False,
     output_dir: Optional[Path] = None,
     baseline_override_file: Optional[Path] = None,
+    fitness_reps: int = 1,
+    gate_reps: int = 1,
 ) -> dict[str, Any]:
     """Evolve one prompt section end-to-end. Returns a summary dict."""
     hermes_repo = Path(hermes_repo).resolve()
@@ -343,6 +444,13 @@ def evolve_prompt_section(
     COST_LEDGER.set_ceiling(max_total_cost_usd)
     if max_total_cost_usd is not None:
         console.print(f"  Cost ceiling: ${max_total_cost_usd:.2f}")
+    rep_multiplier = max(fitness_reps, gate_reps)
+    if rep_multiplier > 1:
+        console.print(
+            f"  [dim]Each task runs up to {rep_multiplier}× "
+            f"(fitness_reps={fitness_reps}, gate_reps={gate_reps}); "
+            f"scale per-task agent-run cost estimates accordingly.[/dim]"
+        )
 
     installer = HermesPromptSectionInstaller(hermes_repo, section_name)
     runner = HermesAgentRunner(
@@ -352,16 +460,19 @@ def evolve_prompt_section(
     layer2_factory = _make_layer2_factory(judge)
 
     tasks_by_id = {t.task_id: t for t in suite.tasks}
+    suite_dir = suite.path.parent if suite.path is not None else None
 
     def install_candidate(candidate_text: str) -> None:
         source.write(section_name, candidate_text)
 
-    def score_task_id(task_id: str) -> float:
+    def score_task_id(task_id: str) -> ScoreResult:
         return _run_one_task_score(
             tasks_by_id[task_id],
             runner=runner,
             layer2_factory=layer2_factory,
             layer2_threshold=layer2_threshold,
+            reps=fitness_reps,
+            suite_dir=suite_dir,
         )
 
     # One lock serializes splice+run across dspy.Evaluate's thread pool — the
@@ -404,6 +515,10 @@ def evolve_prompt_section(
     trainset = _behavioral_examples(train_tasks)
     valset = _behavioral_examples(holdout_tasks)
 
+    # Derived from the saturation pre-flight's per-example baseline scores (no
+    # extra agent runs); stays None when the pre-flight is skipped.
+    val_warning: Optional[dict] = None
+
     try:
         start_time = time.time()
         with _prompt_builder_guard(installer.target_path):
@@ -417,6 +532,23 @@ def evolve_prompt_section(
                     baseline_artifact_text=baseline_text,
                 )
                 render_saturation_panel(sat_report, console=console)
+
+                # The pre-flight already scored the baseline per holdout
+                # example; its ``holdout_per_example`` list is order-aligned
+                # with ``holdout_tasks`` (both derive from the same
+                # _behavioral_examples call). Reuse it to flag a no-signal
+                # holdout — no additional runs.
+                holdout_baseline_rates = {
+                    t.task_id: rate
+                    for t, rate in zip(
+                        holdout_tasks, sat_report.holdout_per_example
+                    )
+                }
+                val_warning = val_signal_warning(holdout_baseline_rates)
+                if val_warning is not None:
+                    console.print(
+                        f"[yellow]⚠ Weak val signal: {val_warning['reason']}[/yellow]"
+                    )
                 if sat_report.band != "healthy" and not force_saturation_check:
                     if is_non_interactive():
                         console.print(
@@ -492,6 +624,7 @@ def evolve_prompt_section(
             runner=runner,
             layer2_judge_factory=layer2_factory,
             layer2_threshold=layer2_threshold,
+            reps=gate_reps,
         )
         report = validator.validate(ValidationInputs(
             tool_name=section_name,
@@ -550,6 +683,7 @@ def evolve_prompt_section(
         "cost": COST_LEDGER.summary(),
         "run_inputs": run_inputs,
         "pr_created": pr_block,
+        **({"val_signal_warning": val_warning} if val_warning is not None else {}),
         **section_payload,
     }
     gate_path = write_gate_decision(output_dir, decision_payload)
@@ -609,6 +743,10 @@ def evolve_prompt_section(
               type=click.IntRange(min=1))
 @click.option("--max-cost-usd", "max_total_cost_usd", default=150.0, type=float,
               help="Abort if cumulative spend exceeds this (default $150).")
+@click.option("--fitness-reps", default=3, type=click.IntRange(min=1),
+              help="Per-task agent runs during GEPA fitness scoring (default 3).")
+@click.option("--gate-reps", default=5, type=click.IntRange(min=1),
+              help="Per-task agent runs in the closed-loop deploy gate (default 5).")
 @click.option("--gepa-minibatch-size", default=3, type=click.IntRange(min=1))
 @click.option("--gepa-acceptance", default="improvement-or-equal",
               type=click.Choice(["improvement-or-equal", "strict-improvement"]))
@@ -631,6 +769,7 @@ def evolve_prompt_section(
 def main(section_name, hermes_repo, tasks_path, iterations, holdout_ratio, seed,
          max_growth, optimizer_model, reflection_model, eval_model, agent_model,
          layer2_threshold, task_timeout_seconds, max_total_cost_usd,
+         fitness_reps, gate_reps,
          gepa_minibatch_size, gepa_acceptance, skip_saturation_check,
          force_saturation_check, apply, create_pr_flag, dry_run, output_dir,
          baseline_override_file):
@@ -650,6 +789,8 @@ def main(section_name, hermes_repo, tasks_path, iterations, holdout_ratio, seed,
         layer2_threshold=layer2_threshold,
         task_timeout_seconds=task_timeout_seconds,
         max_total_cost_usd=max_total_cost_usd,
+        fitness_reps=fitness_reps,
+        gate_reps=gate_reps,
         gepa_minibatch_size=gepa_minibatch_size,
         gepa_acceptance=gepa_acceptance,
         skip_saturation_check=skip_saturation_check,
