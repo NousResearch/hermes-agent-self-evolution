@@ -1,0 +1,275 @@
+{
+  "acceptance_criteria": [
+    {
+      "evidence": "Sunwoo explicit approval in Discord: \"G1 canary 실행. Sunwoo 승인.\"",
+      "id": "P5-G1-01",
+      "name": "explicit_one_shot_authorization",
+      "status": "PASS"
+    },
+    {
+      "evidence": "exactly one pipeline run; duration=0.211s; lock=output/phase5-continuous-loop/.phase5-g1-one-shot-canary.lock",
+      "id": "P5-G1-02",
+      "name": "bounded_runtime_and_concurrency",
+      "status": "PASS"
+    },
+    {
+      "evidence": "side_effect_count=0; cron/optimizer/network/runtime/external PR flags false",
+      "id": "P5-G1-03",
+      "name": "side_effect_zero_by_default",
+      "status": "PASS"
+    },
+    {
+      "evidence": "preflight, component JSON/Markdown, side-effect ledger, and run summary emitted",
+      "id": "P5-G1-04",
+      "name": "reviewable_evidence_packet",
+      "status": "PASS"
+    },
+    {
+      "evidence": "terminal_status=G1_PASS_NO_ACTION; unsafe finding would block",
+      "id": "P5-G1-05",
+      "name": "fail_closed_status_contract",
+      "status": "PASS"
+    },
+    {
+      "evidence": "G2 remains blocked pending review and explicit approval",
+      "id": "P5-G1-06",
+      "name": "next_stage_blocked_without_review",
+      "status": "PASS"
+    }
+  ],
+  "approval_packet": "reports/phase5_g1_one_shot_canary_approval_packet_20260607_1606.json",
+  "artifacts": {
+    "auto_triage_report_json": "output/phase5-continuous-loop/production-canary-20260607-161618/auto-triage/auto_triage_report.json",
+    "auto_triage_report_markdown": "output/phase5-continuous-loop/production-canary-20260607-161618/auto-triage/auto_triage_report.md",
+    "performance_report_json": "output/phase5-continuous-loop/production-canary-20260607-161618/performance/performance_snapshot_report.json",
+    "performance_report_markdown": "output/phase5-continuous-loop/production-canary-20260607-161618/performance/performance_snapshot_report.md",
+    "preflight_json": "output/phase5-continuous-loop/production-canary-20260607-161618/preflight/preflight_snapshot.json",
+    "provenance_metrics_input_json": "output/phase5-continuous-loop/production-canary-20260607-161618/provenance/provenance_metrics_input.json",
+    "provenance_report_json": "output/phase5-continuous-loop/production-canary-20260607-161618/provenance/provenance_dataset_report.json",
+    "provenance_report_markdown": "output/phase5-continuous-loop/production-canary-20260607-161618/provenance/provenance_dataset_report.md",
+    "run_root": "output/phase5-continuous-loop/production-canary-20260607-161618",
+    "scheduler_report_json": "output/phase5-continuous-loop/production-canary-20260607-161618/scheduler/scheduler_dry_run_report.json",
+    "scheduler_report_markdown": "output/phase5-continuous-loop/production-canary-20260607-161618/scheduler/scheduler_dry_run_report.md",
+    "side_effect_ledger_json": "reports/phase5_g1_one_shot_canary_side_effect_ledger_20260607_161618.json",
+    "summary_report_json": "reports/phase5_g1_one_shot_canary_run_20260607_161618.json",
+    "summary_report_markdown": "reports/phase5_g1_one_shot_canary_run_20260607_161618.md"
+  },
+  "authorization": "Sunwoo explicit approval in Discord: \"G1 canary 실행. Sunwoo 승인.\"",
+  "component_statuses": {
+    "auto_triage": "NO_ACTION",
+    "performance_snapshot": "PASS",
+    "provenance_dataset": "READY_FOR_READONLY_DRY_RUN",
+    "scheduler_dry_run": "DRY_RUN_NOOP"
+  },
+  "duration_seconds": 0.211,
+  "ended_at_utc": "2026-06-07T16:16:18Z",
+  "g2_status": "BLOCKED_PENDING_HUMAN_REVIEW_AND_EXPLICIT_APPROVAL",
+  "metrics": [
+    {
+      "baseline": 0.1111,
+      "component": "tool_descriptions",
+      "higher_is_better": true,
+      "id": "tool_selection_accuracy",
+      "regressed_vs_baseline": false,
+      "sample_count": 45,
+      "severity": 0.0,
+      "status": "PASS",
+      "threshold": 0.9,
+      "value": 1.0
+    },
+    {
+      "baseline": 0.0,
+      "component": "system_prompts",
+      "higher_is_better": false,
+      "id": "prompt_contract_warning_rate",
+      "regressed_vs_baseline": false,
+      "sample_count": 20,
+      "severity": 0.0,
+      "status": "PASS",
+      "threshold": 0.05,
+      "value": 0.0
+    }
+  ],
+  "mode": "G1 one_shot_canary_manual_local_cli",
+  "phase": "5",
+  "pipeline_steps": [
+    {
+      "duration_seconds": 0.048,
+      "exit_code": 0,
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.provenance_dataset",
+        "--tool-selection-report-json",
+        "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+        "--heldout-review-json",
+        "output/tool-description/phase2e-heldout-review/heldout_review.json",
+        "--prompt-source",
+        "prompt_builder=<hermes-agent>/agent/prompt_builder.py",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260607-161618/provenance",
+        "--window-start",
+        "2026-06-06",
+        "--window-end",
+        "2026-06-07",
+        "--generated-at",
+        "2026-06-07T16:16:18Z"
+      ],
+      "name": "provenance_dataset",
+      "stderr": "",
+      "stdout": "wrote Phase 5 provenance-backed metric input"
+    },
+    {
+      "duration_seconds": 0.038,
+      "exit_code": 0,
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.performance_snapshot",
+        "--metrics-json",
+        "output/phase5-continuous-loop/production-canary-20260607-161618/provenance/provenance_metrics_input.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260607-161618/performance"
+      ],
+      "name": "performance_snapshot",
+      "stderr": "",
+      "stdout": "wrote Phase 5 performance monitor snapshot"
+    },
+    {
+      "duration_seconds": 0.042,
+      "exit_code": 0,
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.auto_triage",
+        "--performance-report-json",
+        "output/phase5-continuous-loop/production-canary-20260607-161618/performance/performance_snapshot_report.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260607-161618/auto-triage"
+      ],
+      "name": "auto_triage",
+      "stderr": "",
+      "stdout": "wrote Phase 5 auto-triage ranking"
+    },
+    {
+      "duration_seconds": 0.033,
+      "exit_code": 0,
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.scheduler_dry_run",
+        "--auto-triage-report-json",
+        "output/phase5-continuous-loop/production-canary-20260607-161618/auto-triage/auto_triage_report.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260607-161618/scheduler"
+      ],
+      "name": "scheduler_dry_run",
+      "stderr": "",
+      "stdout": "wrote Phase 5 scheduler dry-run"
+    }
+  ],
+  "recommended_next_action": "Review the G1 evidence packet, then path-limit commit/push the approval packet and G1 run artifacts to PR #108 if accepted. Do not start G2, cron, optimizer, or production loop without separate approval.",
+  "repeat_count": 1,
+  "repo": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "dirty_scope_declared": [
+      "?? reports/phase5_g1_one_shot_canary_approval_packet_20260607_1606.json",
+      "?? reports/phase5_g1_one_shot_canary_approval_packet_20260607_1606.md"
+    ],
+    "head": "9a5e077119e7cd9cec58f141b26a8d0acecb73ab"
+  },
+  "run_root": "output/phase5-continuous-loop/production-canary-20260607-161618",
+  "safety_boundary": {
+    "active_runtime_mutation": false,
+    "auto_merge_or_deploy": false,
+    "automated_pr_created_or_updated": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "optimizer_execution_started": false,
+    "production_continuous_loop_enabled": false
+  },
+  "scheduler_summary": {
+    "dry_run_action_count": 0,
+    "ranked_target_count": 0,
+    "review_required": false,
+    "scheduler_enablement_ready": false,
+    "side_effect_count": 0,
+    "top_metric_id": null
+  },
+  "schema_version": "phase5-g1-one-shot-canary-run-v1",
+  "side_effect_ledger": {
+    "created_at_utc": "2026-06-07T16:16:18Z",
+    "false_side_effect_flags": {
+      "auto_triage.active_runtime_mutation": false,
+      "auto_triage.auto_optimizer_triggered": false,
+      "auto_triage.automated_apply_ready": false,
+      "auto_triage.automated_pr_created_or_updated": false,
+      "auto_triage.cron_jobs_created": false,
+      "auto_triage.external_calls_performed": false,
+      "auto_triage.network_calls_performed": false,
+      "auto_triage.optimizer_execution_started": false,
+      "auto_triage.raw_credentials_recorded": false,
+      "auto_triage.raw_private_session_data_committed": false,
+      "auto_triage.scheduler_or_cron_side_effects_performed": false,
+      "performance_snapshot.active_runtime_mutation": false,
+      "performance_snapshot.automated_pr_created_or_updated": false,
+      "performance_snapshot.cron_jobs_created": false,
+      "performance_snapshot.external_calls_performed": false,
+      "performance_snapshot.network_calls_performed": false,
+      "performance_snapshot.optimizer_execution_started": false,
+      "performance_snapshot.raw_credentials_recorded": false,
+      "performance_snapshot.raw_private_session_data_committed": false,
+      "provenance_dataset.active_runtime_mutation": false,
+      "provenance_dataset.automated_apply_ready": false,
+      "provenance_dataset.automated_pr_created_or_updated": false,
+      "provenance_dataset.benchmark_cron_enabled": false,
+      "provenance_dataset.cron_jobs_created": false,
+      "provenance_dataset.external_calls_performed": false,
+      "provenance_dataset.network_calls_performed": false,
+      "provenance_dataset.notifications_sent": false,
+      "provenance_dataset.optimizer_execution_started": false,
+      "provenance_dataset.raw_credentials_recorded": false,
+      "provenance_dataset.raw_private_session_data_committed": false,
+      "provenance_dataset.scheduler_or_cron_side_effects_performed": false,
+      "scheduler_dry_run.active_runtime_mutation": false,
+      "scheduler_dry_run.auto_optimizer_triggered": false,
+      "scheduler_dry_run.automated_apply_ready": false,
+      "scheduler_dry_run.automated_pr_created_or_updated": false,
+      "scheduler_dry_run.benchmark_cron_enabled": false,
+      "scheduler_dry_run.cron_jobs_created": false,
+      "scheduler_dry_run.external_calls_performed": false,
+      "scheduler_dry_run.network_calls_performed": false,
+      "scheduler_dry_run.notifications_sent": false,
+      "scheduler_dry_run.optimizer_execution_started": false,
+      "scheduler_dry_run.raw_credentials_recorded": false,
+      "scheduler_dry_run.raw_private_session_data_committed": false,
+      "scheduler_dry_run.scheduler_or_cron_side_effects_performed": false
+    },
+    "hard_blocks_preserved": {
+      "active_runtime_mutation": false,
+      "auto_merge_or_deploy": false,
+      "automated_pr_created_or_updated": false,
+      "cron_jobs_created": false,
+      "external_calls_performed": false,
+      "network_calls_performed": false,
+      "optimizer_execution_started": false,
+      "production_continuous_loop_enabled": false
+    },
+    "run_root": "output/phase5-continuous-loop/production-canary-20260607-161618",
+    "scheduler_summary": {
+      "dry_run_action_count": 0,
+      "ranked_target_count": 0,
+      "review_required": false,
+      "scheduler_enablement_ready": false,
+      "side_effect_count": 0,
+      "top_metric_id": null
+    },
+    "schema_version": "phase5-g1-one-shot-canary-side-effect-ledger-v1",
+    "side_effect_count": 0,
+    "status": "SIDE_EFFECT_ZERO",
+    "true_side_effect_flags": {}
+  },
+  "started_at_utc": "2026-06-07T16:16:18Z",
+  "status": "G1_PASS_NO_ACTION"
+}
