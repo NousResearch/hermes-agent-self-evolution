@@ -149,7 +149,7 @@ class TestScoreTaskActionPatch:
         old_string: str = "",
         content: str = "",
     ) -> AgentRunResult:
-        args: dict = {"action": action, "skill_name": skill_name}
+        args: dict = {"action": action, "name": skill_name}
         if action in ("patch", "edit"):
             if action == "patch":
                 args["old_string"] = old_string

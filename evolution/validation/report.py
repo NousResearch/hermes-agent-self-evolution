@@ -163,7 +163,7 @@ def _score_action_patch(
         if call.get("name") != "skill_manage":
             continue
         args = call.get("arguments") or {}
-        if args.get("skill_name") != target_skill:
+        if args.get("name") != target_skill:
             continue
         action = args.get("action")
         if action == "patch":
