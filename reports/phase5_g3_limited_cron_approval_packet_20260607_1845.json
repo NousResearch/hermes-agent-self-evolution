@@ -1,0 +1,154 @@
+{
+  "acceptance_criteria_for_packet": [
+    "Packet status is G3_LIMITED_CRON_APPROVAL_PACKET_READY_NOT_EXECUTED.",
+    "Packet does not create cron jobs or enable production automation.",
+    "Future G3 pilot is bounded by max_fire_count=1, timeout, lock, kill switch, and allowed write roots.",
+    "Threshold-triggered optimizer and automatic PR loop remain disabled in G3.",
+    "Human review and separate explicit approval remain required before any actual cron pilot.",
+    "JSON and Markdown reports parse/format correctly and contain no private absolute paths or sensitive material."
+  ],
+  "authorization": {
+    "explicitly_not_interpreted_as": [
+      "actual cron creation or scheduling now",
+      "production continuous loop enablement",
+      "threshold-triggered optimizer execution",
+      "automatic PR loop enablement",
+      "auto-merge or deploy",
+      "network/model/API spend",
+      "active Hermes runtime/source/config/skill/memory mutation"
+    ],
+    "interpretation": "Approve preparation and PR evidence-chain publication of a G3 limited cron approval packet only.",
+    "source": "Sunwoo rec action GO"
+  },
+  "created_at_utc": "2026-06-07T18:45:54Z",
+  "current_action": {
+    "active_runtime_mutation_now": false,
+    "automatic_pr_loop_enabled_now": false,
+    "cron_jobs_created_now": false,
+    "network_or_model_spend_now": false,
+    "optimizer_started_now": false,
+    "packet_status": "ready_not_executed",
+    "packet_written": true,
+    "production_loop_enabled_now": false
+  },
+  "future_stage_request_contract": {
+    "future_allowed_side_effects_if_separately_approved": {
+      "create_exactly_one_expiring_cron_job": true,
+      "send_one_status_delivery_to_origin": true,
+      "write_repo_local_output_and_reports": true
+    },
+    "future_disallowed_side_effects": {
+      "active_hermes_runtime_source_config_skill_memory_mutation": true,
+      "auto_merge": true,
+      "automatic_pr_creation_or_update_loop": true,
+      "credential_or_permission_changes": true,
+      "deploy": true,
+      "indefinite_cron_or_unbounded_recurring_job": true,
+      "network_or_paid_benchmark_or_model_call": true,
+      "production_continuous_loop": true,
+      "threshold_triggered_optimizer_execution": true
+    },
+    "pilot_shape": {
+      "abort_on_existing_lock": true,
+      "allowed_write_roots": [
+        "output/phase5-continuous-loop/g3-limited-cron-pilot-<stamp>/",
+        "reports/phase5_g3_limited_cron_pilot_run_<stamp>.json",
+        "reports/phase5_g3_limited_cron_pilot_run_<stamp>.md",
+        "reports/phase5_g3_limited_cron_pilot_side_effect_ledger_<stamp>.json"
+      ],
+      "cron_type": "expiring_one_shot_or_repeat_limited",
+      "delivery_target": "origin/current chat for status only; primary evidence remains repo-local reports",
+      "expires_after": "first_successful_or_failed_fire_or_2h_after_creation_whichever_comes_first",
+      "kill_switch_path": "output/phase5-continuous-loop/.phase5-g3-kill-switch",
+      "lock_path": "output/phase5-continuous-loop/.phase5-g3-limited-cron.lock",
+      "max_fire_count": 1,
+      "max_total_runtime_seconds": 1800,
+      "max_wall_clock_seconds_per_fire": 1800,
+      "skip_if_running": true
+    },
+    "pipeline": [
+      "preflight",
+      "provenance_dataset",
+      "performance_snapshot",
+      "auto_triage",
+      "scheduler_dry_run",
+      "semantic_safety_verifier",
+      "side_effect_ledger",
+      "summary_report",
+      "auto_disable_or_expire_cron"
+    ],
+    "requires_before_execution": [
+      "independent reviewer acceptance of PR #108 G2 and G3 approval packet evidence",
+      "separate explicit Sunwoo approval naming G3 limited cron pilot or equivalent bounds",
+      "verified clean worktree and current PR head sync",
+      "kill switch and lock paths absent or intentionally reset",
+      "approved script-only/no-agent cron invocation method or separately approved model budget"
+    ],
+    "stage": "G3_LIMITED_CRON_PILOT",
+    "threshold_handling": {
+      "next_optimizer_stage": "requires separate candidate-only optimizer approval packet after G3 pilot evidence review",
+      "optimizer_trigger": "dry-run signal only; no optimizer execution in G3 pilot",
+      "weak_metric_detected": "log review-required status and stop"
+    }
+  },
+  "prior_evidence": {
+    "activation_gate": {
+      "path": "reports/phase5_production_loop_activation_gate_20260607_1550.json",
+      "status": "PRODUCTION_LOOP_ACTIVATION_GATE_DEFINED_NOT_ENABLED"
+    },
+    "g1_canary_run": {
+      "path": "reports/phase5_g1_one_shot_canary_run_20260607_161618.json",
+      "repeat_count": 1,
+      "status": "G1_PASS_NO_ACTION"
+    },
+    "g2_bounded_supervised_run": {
+      "g3_status": "BLOCKED_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_APPROVAL",
+      "mode": "manual_supervised_local_zero_budget",
+      "path": "reports/phase5_g2_bounded_supervised_run_20260607_183053.json",
+      "repeat_count": 3,
+      "stage": "G2_BOUNDED_N_SUPERVISED_RUN",
+      "status": "G2_PASS_NO_ACTION"
+    },
+    "g2_side_effect_ledger": {
+      "dry_run_action_count": 0,
+      "path": "reports/phase5_g2_bounded_supervised_side_effect_ledger_20260607_183053.json",
+      "review_required_count": 0,
+      "side_effect_count": 0,
+      "status": "SIDE_EFFECT_ZERO"
+    }
+  },
+  "recommended_next_action": "Obtain independent reviewer acceptance of PR #108 G2/G3 evidence, then request separate explicit approval for one G3 limited cron pilot with max_fire_count=1 if still desired.",
+  "repo_state": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head_before_packet": "f5e89d0997739a356c4c6374ee32aba061665ff2",
+    "head_subject_before_packet": "Add Phase 5 G2 supervised evidence",
+    "local_checkout": "<hse-repo>",
+    "pr": {
+      "number": 108,
+      "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+    },
+    "repository": "NousResearch/hermes-agent-self-evolution"
+  },
+  "schema_version": "phase5-g3-limited-cron-approval-packet-v1",
+  "status": "G3_LIMITED_CRON_APPROVAL_PACKET_READY_NOT_EXECUTED",
+  "verification_plan": {
+    "future_g3_pilot_validation": [
+      "cron job exists only within approved one-shot/expiry bounds",
+      "max fire count is not exceeded",
+      "lock and kill-switch behavior verified",
+      "all pipeline JSON reports parse",
+      "side-effect ledger records only the approved expiring cron and repo-local report writes",
+      "cron is disabled/expired after fire",
+      "no optimizer execution, automatic PR loop, auto-merge, deploy, runtime mutation, or spend occurs"
+    ],
+    "local_packet_validation": [
+      "json_parse",
+      "semantic_status_check",
+      "private_absolute_path_scan",
+      "high_risk_sensitive_assignment_scan",
+      "git_diff_check",
+      "focused_phase5_monitor_tests",
+      "independent_read_only_staged_review"
+    ]
+  }
+}
