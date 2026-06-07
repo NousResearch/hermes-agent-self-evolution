@@ -12,6 +12,7 @@ from __future__ import annotations
 import difflib
 import json
 import logging
+import re
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -27,6 +28,7 @@ from evolution.tools.tool_description_eval import (
     ToolDescriptionCandidate,
     ToolInventoryRecord,
     ToolSelectionCase,
+    _normalize_token,
     build_candidate_only_report,
     candidates_from_inventory,
     default_tool_selection_cases,
@@ -35,6 +37,58 @@ from evolution.tools.tool_description_eval import (
 )
 
 console = Console()
+
+_REQUEST_SIGNAL_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "before",
+    "by",
+    "for",
+    "from",
+    "in",
+    "into",
+    "of",
+    "on",
+    "only",
+    "or",
+    "that",
+    "the",
+    "these",
+    "this",
+    "those",
+    "through",
+    "to",
+    "use",
+    "using",
+    "with",
+    "without",
+}
+_REQUEST_SIGNAL_RE = re.compile(r"[a-zA-Z0-9_]+")
+_REQUEST_SIGNAL_FORBIDDEN_FRAGMENTS = (
+    "/" + "Users" + "/",
+    "/" + "home" + "/",
+    "session" + "_id",
+    "OPENAI" + "_API_KEY",
+    "ANTHROPIC" + "_API_KEY",
+    "OPENROUTER" + "_API_KEY",
+)
+_REQUEST_SIGNAL_FORBIDDEN_TOKENS = {
+    "users",
+    "home",
+    "session_id",
+    "openai_api_key",
+    "anthropic_api_key",
+    "openrouter_api_key",
+    "api_key",
+    "apikey",
+    "password",
+    "passwd",
+    "secret",
+    "credential",
+    "credentials",
+    "private_key",
+}
 
 
 @dataclass(frozen=True)
@@ -328,8 +382,13 @@ def _candidate_description_for_tool(
         return _fit_description(baseline, max_description_chars)
 
     confusing_tools = _unique_in_order(tool for case in cases for tool in case.confusing_tools)
-    cues = _unique_in_order(cue for case in cases for cue in (*case.required_cues, *case.required_arguments))
-    cue_text = ", ".join(cues[:8])
+    cues = _unique_in_order(
+        [
+            *(cue for case in cases for cue in (*case.required_cues, *case.required_arguments)),
+            *_request_signal_cues(cases),
+        ]
+    )
+    cue_text = ", ".join(cues[:16])
     confusing_text = ", ".join(confusing_tools[:6])
 
     suffix_parts = []
@@ -368,6 +427,60 @@ def _fit_description(description: str, max_chars: int) -> str:
     if max_chars <= 1:
         return normalized[:max_chars]
     return normalized[: max_chars - 1].rstrip(" ,;.") + "…"
+
+
+def _request_signal_cues(cases: Sequence[ToolSelectionCase]) -> list[str]:
+    """Extract privacy-safe request cue variants from local golden cases.
+
+    Hand-authored required cues capture the core intent, but held-out rows can
+    still fail when requests use benign variants such as "show first lines",
+    "preserve surrounding content", or exact local tool names. Candidate-only
+    descriptions can carry these sanitized cue variants because they are review
+    artifacts, not active Hermes tool schemas.
+    """
+
+    existing_cues = {
+        _normalize_token(cue)
+        for case in cases
+        for cue in (*case.required_cues, *case.required_arguments)
+    }
+    tool_name_tokens = {
+        _normalize_token(token)
+        for case in cases
+        for tool in (case.expected_tool, *case.confusing_tools)
+        for token in (*tool.split("_"), tool)
+    }
+    signals: list[str] = []
+    for case in cases:
+        _reject_private_request_text(case.user_request)
+        for raw_token in _REQUEST_SIGNAL_RE.findall(case.user_request):
+            token = _normalize_token(raw_token)
+            if (
+                token in existing_cues
+                or token in tool_name_tokens
+                or token in _REQUEST_SIGNAL_STOPWORDS
+                or token.isdigit()
+                or len(token) <= 2
+                or not _request_signal_token_is_safe(token)
+            ):
+                continue
+            signals.append(token)
+    return _unique_in_order(signals)
+
+
+def _reject_private_request_text(user_request: str) -> None:
+    if any(fragment in user_request for fragment in _REQUEST_SIGNAL_FORBIDDEN_FRAGMENTS):
+        raise ValueError("tool-selection request contains private/raw identifier")
+
+
+def _request_signal_token_is_safe(token: str) -> bool:
+    if token in _REQUEST_SIGNAL_FORBIDDEN_TOKENS:
+        return False
+    if "api_key" in token or "secret" in token or "password" in token:
+        return False
+    if len(token) > 48:
+        return False
+    return True
 
 
 def _candidate_diff(candidates: Sequence[ToolDescriptionCandidate]) -> str:

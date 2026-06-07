@@ -1,0 +1,238 @@
+{
+  "acceptance_criteria": [
+    {
+      "evidence": "single noninteractive command completed all pipeline steps with exit code 0",
+      "id": "P5-BUA-01",
+      "name": "unattended_execution_proof",
+      "status": "PASS"
+    },
+    {
+      "evidence": "all emitted read-only invariants are true and all side-effect flags/action flags remain false",
+      "id": "P5-BUA-02",
+      "name": "side_effect_zero",
+      "status": "PASS"
+    },
+    {
+      "evidence": "duration=0.193s, repeat_count=1, run_root=output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920",
+      "id": "P5-BUA-03",
+      "name": "bounded_runtime_and_scope",
+      "status": "PASS"
+    },
+    {
+      "evidence": "pipeline JSON/Markdown artifacts plus summary JSON/Markdown exist; JSON artifacts parsed/read back successfully",
+      "id": "P5-BUA-04",
+      "name": "reviewable_artifact_packet",
+      "status": "PASS"
+    },
+    {
+      "evidence": "summary explicitly keeps formal_phase5_completion_claimed=false and blocks scheduler/optimizer/PR/runtime mutation without separate approval",
+      "id": "P5-BUA-05",
+      "name": "formal_completion_gate_not_weakened",
+      "status": "PASS"
+    }
+  ],
+  "aggregate_safety_invariants": {
+    "active_runtime_mutation": false,
+    "automated_pr_created_or_updated": false,
+    "benchmark_cron_enabled": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "notifications_sent": false,
+    "optimizer_execution_started": false,
+    "raw_credentials_recorded": false,
+    "raw_private_session_data_committed": false,
+    "read_only": true,
+    "scheduler_or_cron_side_effects_performed": false
+  },
+  "artifact_self_verification": {
+    "summary_json_parse": true,
+    "summary_markdown_exists": true
+  },
+  "artifacts": {
+    "auto_triage_report_json": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/auto-triage/auto_triage_report.json",
+    "auto_triage_report_markdown": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/auto-triage/auto_triage_report.md",
+    "performance_report_json": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/performance/performance_snapshot_report.json",
+    "performance_report_markdown": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/performance/performance_snapshot_report.md",
+    "preflight_json": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/preflight/preflight_snapshot.json",
+    "provenance_metrics_input_json": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/provenance/provenance_metrics_input.json",
+    "provenance_report_json": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/provenance/provenance_dataset_report.json",
+    "provenance_report_markdown": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/provenance/provenance_dataset_report.md",
+    "run_root": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920",
+    "scheduler_report_json": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/scheduler/scheduler_dry_run_report.json",
+    "scheduler_report_markdown": "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/scheduler/scheduler_dry_run_report.md",
+    "summary_report_json": "reports/phase5_bounded_unattended_run_20260607_090920.json",
+    "summary_report_markdown": "reports/phase5_bounded_unattended_run_20260607_090920.md"
+  },
+  "bounds": {
+    "active_runtime_mutation_allowed": false,
+    "allowed_write_roots": [
+      "output/phase5-continuous-loop/bounded-unattended-dry-run-<stamp>/",
+      "reports/phase5_bounded_unattended_run_<stamp>.json",
+      "reports/phase5_bounded_unattended_run_<stamp>.md"
+    ],
+    "external_pr_updates_allowed": false,
+    "max_total_runtime_seconds": 1800,
+    "network_calls_allowed": false,
+    "optimizer_execution_allowed": false,
+    "repeat_count": 1
+  },
+  "component_statuses": {
+    "auto_triage": "NO_ACTION",
+    "performance_snapshot": "PASS",
+    "provenance_dataset": "READY_FOR_READONLY_DRY_RUN",
+    "scheduler_dry_run": "DRY_RUN_NOOP"
+  },
+  "ended_at": "2026-06-07T09:09:20Z",
+  "formal_phase5_completion_claimed": false,
+  "git": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "74210b6c7dc8f45b7de39a2c085e9018074018b8",
+    "worktree_status_short": [
+      "## hse/phase5-continuous-loop-prep",
+      " M evolution/monitor/performance_snapshot.py",
+      " M evolution/tools/evolve_tool_descriptions.py",
+      " M evolution/tools/tool_description_eval.py",
+      " M tests/tools/test_evolve_tool_descriptions.py",
+      "?? evolution/monitor/provenance_dataset.py",
+      "?? reports/phase5_bounded_unattended_automation_design_20260607_1029.json",
+      "?? reports/phase5_bounded_unattended_automation_design_20260607_1029.md",
+      "?? reports/phase5_manual_triage_plan_20260606_1251.json",
+      "?? reports/phase5_manual_triage_plan_20260606_1251.md",
+      "?? reports/phase5_metric_provenance_classification_20260606_1318.json",
+      "?? reports/phase5_metric_provenance_classification_20260606_1318.md",
+      "?? reports/phase5_provenance_backed_dry_run_20260606_1428.json",
+      "?? reports/phase5_provenance_backed_dry_run_20260606_1428.md",
+      "?? reports/phase5_tool_selection_all_pass_completion_20260606_1656.json",
+      "?? reports/phase5_tool_selection_all_pass_completion_20260606_1656.md",
+      "?? reports/phase5_tool_selection_triage_completion_20260606_1538.json",
+      "?? reports/phase5_tool_selection_triage_completion_20260606_1538.md",
+      "?? tests/monitor/test_phase5_provenance_dataset.py"
+    ]
+  },
+  "inputs": {
+    "contract_json": "reports/phase5_bounded_unattended_automation_design_20260607_1029.json",
+    "heldout_review_json": "output/tool-description/phase2e-heldout-review/heldout_review.json",
+    "prompt_source_label": "prompt_builder",
+    "tool_selection_report_json": "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+    "window_end": "2026-06-07",
+    "window_start": "2026-06-06"
+  },
+  "metrics": [
+    {
+      "baseline": 0.1111,
+      "component": "tool_descriptions",
+      "higher_is_better": true,
+      "id": "tool_selection_accuracy",
+      "sample_count": 45,
+      "threshold": 0.9,
+      "value": 1.0
+    },
+    {
+      "baseline": 0.0,
+      "component": "system_prompts",
+      "higher_is_better": false,
+      "id": "prompt_contract_warning_rate",
+      "sample_count": 20,
+      "threshold": 0.05,
+      "value": 0.0
+    }
+  ],
+  "mode": "L1 one_shot_unattended_readonly_dry_run",
+  "not_authorized_actions_preserved": [
+    "create_or_enable_cron_jobs",
+    "enable_benchmark_cron",
+    "start_optimizer",
+    "run_network_or_paid_benchmarks",
+    "create_update_or_merge_external_pr",
+    "mutate_active_hermes_runtime_source_prompt_skill_memory_or_config"
+  ],
+  "phase": "5",
+  "pipeline_steps": [
+    {
+      "duration_seconds": 0.042,
+      "exit_code": 0,
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.provenance_dataset",
+        "--tool-selection-report-json",
+        "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+        "--heldout-review-json",
+        "output/tool-description/phase2e-heldout-review/heldout_review.json",
+        "--prompt-source",
+        "prompt_builder=<hermes-agent>/agent/prompt_builder.py",
+        "--output-dir",
+        "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/provenance"
+      ],
+      "name": "provenance_dataset",
+      "stderr": "",
+      "stdout": "wrote Phase 5 provenance-backed metric input"
+    },
+    {
+      "duration_seconds": 0.034,
+      "exit_code": 0,
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.performance_snapshot",
+        "--metrics-json",
+        "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/provenance/provenance_metrics_input.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/performance"
+      ],
+      "name": "performance_snapshot",
+      "stderr": "",
+      "stdout": "wrote Phase 5 performance monitor snapshot"
+    },
+    {
+      "duration_seconds": 0.034,
+      "exit_code": 0,
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.auto_triage",
+        "--performance-report-json",
+        "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/performance/performance_snapshot_report.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/auto-triage"
+      ],
+      "name": "auto_triage",
+      "stderr": "",
+      "stdout": "wrote Phase 5 auto-triage ranking"
+    },
+    {
+      "duration_seconds": 0.032,
+      "exit_code": 0,
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.scheduler_dry_run",
+        "--auto-triage-report-json",
+        "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/auto-triage/auto_triage_report.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/bounded-unattended-dry-run-20260607-090920/scheduler"
+      ],
+      "name": "scheduler_dry_run",
+      "stderr": "",
+      "stdout": "wrote Phase 5 scheduler dry-run"
+    }
+  ],
+  "recommended_next_action": "Review and commit/publish the Phase 5 L1 read-only evidence packet. For formal Phase 5, choose either a separately approved L2 budgeted unattended optimization/no-op decision cycle or an explicit waiver for the optimizer/handoff portion; keep cron/optimizer/PR automation off until then.",
+  "runtime": {
+    "duration_seconds": 0.193
+  },
+  "safety_verification_failures": [],
+  "scheduler_summary": {
+    "dry_run_action_count": 0,
+    "ranked_target_count": 0,
+    "review_required": false,
+    "scheduler_enablement_ready": false,
+    "side_effect_count": 0,
+    "top_metric_id": null
+  },
+  "schema_version": "phase5-bounded-unattended-run-v1",
+  "source_authorization": "Sunwoo rec action GO \u2014 approved exactly one L1 one-shot unattended read-only dry-run under the Phase 5 bounded automation contract",
+  "started_at": "2026-06-07T09:09:20Z",
+  "status": "PASS_NO_ACTION"
+}

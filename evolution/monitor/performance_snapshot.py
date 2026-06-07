@@ -119,8 +119,9 @@ def _validate_input_payload(payload: Mapping[str, Any]) -> None:
     source = payload.get("source")
     if not isinstance(source, Mapping) or not isinstance(source.get("kind"), str) or not isinstance(source.get("label"), str):
         raise ValueError("metrics payload source must contain kind and label strings")
-    if source.get("kind") != "sanitized_local_fixture":
-        raise ValueError("metrics payload source.kind must be sanitized_local_fixture")
+    allowed_source_kinds = {"sanitized_local_fixture", "provenance_backed_sanitized_dataset"}
+    if source.get("kind") not in allowed_source_kinds:
+        raise ValueError("metrics payload source.kind must be sanitized_local_fixture or provenance_backed_sanitized_dataset")
     metrics = payload.get("metrics")
     if not isinstance(metrics, list) or not metrics:
         raise ValueError("metrics payload must contain a non-empty metrics list")

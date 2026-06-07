@@ -943,8 +943,44 @@ def _extract_parameter_descriptions(
     return descriptions
 
 
+_TOKEN_NORMALIZATION_OVERRIDES = {
+    "builds": "build",
+    "commands": "command",
+    "dependencies": "dependency",
+    "directories": "directory",
+    "editing": "edit",
+    "files": "file",
+    "lines": "line",
+    "mentions": "mention",
+    "mentioning": "mention",
+    "processes": "process",
+    "reading": "read",
+    "replacing": "replace",
+    "replacements": "replacement",
+    "running": "run",
+    "searching": "search",
+    "tests": "test",
+    "using": "use",
+    "writing": "write",
+}
+
+
 def _tokens(text: str) -> set[str]:
-    return {token.lower() for token in _TOKEN_RE.findall(text)}
+    return {_normalize_token(token) for token in _TOKEN_RE.findall(text)}
+
+
+def _normalize_token(token: str) -> str:
+    normalized = token.lower()
+    override = _TOKEN_NORMALIZATION_OVERRIDES.get(normalized)
+    if override is not None:
+        return override
+    if len(normalized) > 4 and normalized.endswith("ies"):
+        return normalized[:-3] + "y"
+    if len(normalized) > 5 and normalized.endswith("ing"):
+        return normalized[:-3]
+    if len(normalized) > 4 and normalized.endswith("s") and not normalized.endswith("ss"):
+        return normalized[:-1]
+    return normalized
 
 
 def _mean(values) -> float:

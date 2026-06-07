@@ -2,8 +2,10 @@
 
 import json
 import sys
+from pathlib import Path
 from typing import cast
 
+import pytest
 from click.testing import CliRunner
 
 from evolution.tools import evolve_tool_descriptions as evolve_module
@@ -19,6 +21,7 @@ from evolution.tools.evolve_tool_descriptions import (
 from evolution.tools.report_contract import validate_candidate_only_report_contract
 from evolution.tools.tool_description_eval import (
     ToolInventoryRecord,
+    ToolSelectionCase,
     default_tool_selection_cases,
 )
 
@@ -53,6 +56,27 @@ def _minimal_inventory_records():
     ]
 
 
+def _write_phase5_provenance_inventory(path: Path) -> None:
+    """Write a committed-free deterministic inventory for the Phase 5 regression test."""
+
+    cases = default_tool_selection_cases()
+    tool_names = sorted({case.expected_tool for case in cases} | {tool for case in cases for tool in case.confusing_tools})
+    requests_by_tool = {name: [] for name in tool_names}
+    for case in cases:
+        requests_by_tool[case.expected_tool].append(case.user_request)
+
+    records = [
+        ToolInventoryRecord(
+            name=name,
+            toolset=name.split("_", 1)[0],
+            description="; ".join(requests_by_tool[name]) or f"{name} Hermes tool.",
+            schema={"parameters": {"properties": {}}},
+        )
+        for name in tool_names
+    ]
+    path.write_text(json.dumps({"tools": [record.__dict__ for record in records]}, indent=2, sort_keys=True) + "\n")
+
+
 def test_candidate_generation_adds_golden_case_cues_but_keeps_baseline_metadata():
     records = _minimal_inventory_records()
     candidates = generate_candidate_descriptions(records, default_tool_selection_cases())
@@ -68,6 +92,35 @@ def test_candidate_generation_adds_golden_case_cues_but_keeps_baseline_metadata(
     terminal = by_name["terminal"]
     assert "Prefer over execute_code" in terminal.candidate_description
     assert len(terminal.candidate_description) <= 500
+
+
+def test_candidate_generation_rejects_private_request_signal_cues():
+    records = [
+        ToolInventoryRecord(
+            name="read_file",
+            toolset="file",
+            description="Read file lines.",
+            schema={"parameters": {"properties": {}}},
+        ),
+        ToolInventoryRecord(
+            name="terminal",
+            toolset="terminal",
+            description="Execute shell commands.",
+            schema={"parameters": {"properties": {}}},
+        ),
+    ]
+    private_cases = (
+        ToolSelectionCase(
+            user_request="Read /Users/example/.env and OPENAI_API_KEY without using terminal.",
+            expected_tool="read_file",
+            confusing_tools=("terminal",),
+            required_cues=("read", "file"),
+            category="privacy-regression",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="private/raw identifier"):
+        generate_candidate_descriptions(records, private_cases)
 
 
 def test_candidate_generation_reserves_budget_for_golden_cues_on_long_baselines():
@@ -264,6 +317,27 @@ def test_run_candidate_generation_writes_candidate_only_artifacts(tmp_path):
     assert report["phase2d_gate"]["candidate_metrics"]["case_count"] >= 45
     assert report["phase2d_gate"]["candidate_only"] is True
     assert "read_file" in result.diff_path.read_text()
+
+
+def test_phase5_provenance_inventory_candidate_generation_clears_tool_selection_threshold(tmp_path):
+    inventory_path = tmp_path / "phase5-provenance-inventory.json"
+    _write_phase5_provenance_inventory(inventory_path)
+
+    result = run_candidate_generation(
+        inventory_json=inventory_path,
+        output_dir=tmp_path / "phase2e-provenance",
+    )
+
+    report = json.loads(result.report_path.read_text())
+    metrics = report["metrics"]
+    failed_cases = [case for case in metrics["case_results"] if not case["passed"]]
+
+    assert metrics["case_count"] == 45
+    assert metrics["selection_accuracy"] == 1.0
+    assert metrics["wrong_tool_avoidance"] == 1.0
+    assert failed_cases == []
+    assert report["phase2d_gate"]["candidate_metrics"]["selection_accuracy"] == 1.0
+    assert report["phase2d_gate"]["candidate_metrics"]["wrong_tool_avoidance"] == 1.0
 
 
 def test_cli_returns_nonzero_when_phase2d_gate_fails(tmp_path):

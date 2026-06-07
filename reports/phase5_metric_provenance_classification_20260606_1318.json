@@ -1,0 +1,504 @@
+{
+  "blocked_without_separate_approval": [
+    "cron or scheduler enablement",
+    "optimizer execution",
+    "network/API benchmark run",
+    "automated PR creation or update",
+    "active runtime mutation"
+  ],
+  "created_at_local": "2026-06-06T13:18:00+02:00",
+  "metrics": [
+    {
+      "auto_triage": {
+        "component": "tool_descriptions",
+        "metric_id": "tool_selection_accuracy",
+        "priority_inputs": {
+          "sample_count": 90,
+          "severity": 0.04
+        },
+        "priority_score": 3.6,
+        "rank": 1,
+        "reasons": [
+          "failing_threshold",
+          "regressed_vs_baseline"
+        ],
+        "recommendation": "manual_review_required_no_optimizer_started",
+        "regressed_vs_baseline": true,
+        "sample_count": 90,
+        "severity": 0.04,
+        "status": "FAIL"
+      },
+      "classification_summary": {
+        "failure_class_counts": {
+          "insufficient_discrimination_margin": 2,
+          "wrong_tool_selected": 3
+        },
+        "primary_failure_modes": [
+          "tool descriptions do not sufficiently outrank confusing alternatives",
+          "some prompts still select write_file/search_files/execute_code over expected patch/read_file/terminal"
+        ],
+        "subflag_counts": {
+          "confusing_tool_scores_higher": 3,
+          "cue_coverage_gap": 1,
+          "tie_with_confusing_tool": 2
+        }
+      },
+      "component": "tool_descriptions",
+      "dry_run_aggregate": {
+        "baseline": 0.88,
+        "higher_is_better": true,
+        "regressed_vs_baseline": true,
+        "sample_count": 90,
+        "severity": 0.04,
+        "status": "FAIL",
+        "threshold": 0.9,
+        "value": 0.86
+      },
+      "metric_id": "tool_selection_accuracy",
+      "provenance_assessment": {
+        "exact_per_example_evidence_found": false,
+        "exact_source_type": "sanitized_local_fixture_aggregate",
+        "heldout_review_baseline_selection_accuracy": 0.1111,
+        "heldout_review_candidate_selection_accuracy": 0.8889,
+        "interpretation": "dry-run aggregate is not backed by a 90-row per-example file in this slice; a 45-case candidate-only report gives actionable nearest concrete misses",
+        "nearest_per_example_evidence_found": true,
+        "nearest_report": "output/tool-description/phase2e-heldout-review/run/candidate_only_report.json",
+        "nearest_report_case_count": 45,
+        "nearest_report_fail_count": 5,
+        "nearest_report_pass_count": 40,
+        "nearest_report_selection_accuracy": 0.8889
+      },
+      "sanitized_failure_rows": [
+        {
+          "case_index": 2,
+          "category": "search-vs-shell",
+          "classification": "insufficient_discrimination_margin",
+          "cue_coverage": 1.0,
+          "expected_score": 0.3,
+          "expected_tool": "search_files",
+          "margin_vs_top_confusing": 0.0,
+          "sanitized_request_summary": "Find Python files mentioning browser_navigate in the tools directory.",
+          "selected_tool": "search_files",
+          "subflags": [
+            "tie_with_confusing_tool"
+          ],
+          "top_confusing_score": 0.3,
+          "top_confusing_tool": "terminal"
+        },
+        {
+          "case_index": 3,
+          "category": "shell-execution",
+          "classification": "insufficient_discrimination_margin",
+          "cue_coverage": 1.0,
+          "expected_score": 0.295,
+          "expected_tool": "terminal",
+          "margin_vs_top_confusing": 0.0,
+          "sanitized_request_summary": "Run the focused pytest target for the new tool evaluation tests.",
+          "selected_tool": "terminal",
+          "subflags": [
+            "tie_with_confusing_tool"
+          ],
+          "top_confusing_score": 0.295,
+          "top_confusing_tool": "execute_code"
+        },
+        {
+          "case_index": 4,
+          "category": "edit-vs-overwrite",
+          "classification": "wrong_tool_selected",
+          "cue_coverage": 1.0,
+          "expected_score": 0.3,
+          "expected_tool": "patch",
+          "margin_vs_top_confusing": -0.1375,
+          "sanitized_request_summary": "Make a targeted replacement in one Python file and preserve surrounding content.",
+          "selected_tool": "write_file",
+          "subflags": [
+            "confusing_tool_scores_higher"
+          ],
+          "top_confusing_score": 0.4375,
+          "top_confusing_tool": "write_file"
+        },
+        {
+          "case_index": 16,
+          "category": "file-read-range-vs-shell",
+          "classification": "wrong_tool_selected",
+          "cue_coverage": 1.0,
+          "expected_score": 0.25,
+          "expected_tool": "read_file",
+          "margin_vs_top_confusing": -0.005,
+          "sanitized_request_summary": "Read only lines 120 through 180 of gateway/run.py.",
+          "selected_tool": "search_files",
+          "subflags": [
+            "confusing_tool_scores_higher"
+          ],
+          "top_confusing_score": 0.255,
+          "top_confusing_tool": "search_files"
+        },
+        {
+          "case_index": 28,
+          "category": "terminal-package-manager-vs-python",
+          "classification": "wrong_tool_selected",
+          "cue_coverage": 0.6,
+          "expected_score": 0.2111,
+          "expected_tool": "terminal",
+          "margin_vs_top_confusing": -0.0445,
+          "sanitized_request_summary": "Install the project dependencies and run the npm build script.",
+          "selected_tool": "execute_code",
+          "subflags": [
+            "cue_coverage_gap",
+            "confusing_tool_scores_higher"
+          ],
+          "top_confusing_score": 0.2556,
+          "top_confusing_tool": "execute_code"
+        }
+      ],
+      "scheduler_dry_run_action": {
+        "action_id": "dry-run-action-001",
+        "action_type": "manual_triage_review",
+        "component": "tool_descriptions",
+        "dry_run_only": true,
+        "priority_score": 3.6,
+        "proposed_cadence": "manual_review_only",
+        "recommendation": "review_target_no_scheduler_side_effects",
+        "required_approval": "human_review_required_before_scheduler_enablement",
+        "target_metric_id": "tool_selection_accuracy",
+        "target_rank": 1,
+        "would_create_cron_job": false,
+        "would_enable_benchmark_cron": false,
+        "would_send_external_notification": false,
+        "would_start_optimizer": false,
+        "would_update_external_pr": false
+      }
+    },
+    {
+      "auto_triage": {
+        "component": "system_prompts",
+        "metric_id": "prompt_contract_warning_rate",
+        "priority_inputs": {
+          "sample_count": 20,
+          "severity": 0.02
+        },
+        "priority_score": 0.4,
+        "rank": 2,
+        "reasons": [
+          "failing_threshold",
+          "regressed_vs_baseline"
+        ],
+        "recommendation": "manual_review_required_no_optimizer_started",
+        "regressed_vs_baseline": true,
+        "sample_count": 20,
+        "severity": 0.02,
+        "status": "FAIL"
+      },
+      "classification_summary": {
+        "actionable_gap": "create sanitized prompt-contract warning rows with check_id, prompt_clause, warning_type, and pass/fail outcome",
+        "analog_warning_sample_count": 43,
+        "analog_warning_type_counts_from_tool_description_report": {
+          "Missing confusing tool candidate": 1,
+          "Parameter description length constraint failed": 42
+        },
+        "exact_prompt_warning_classification": "aggregate_only_no_per_warning_rows"
+      },
+      "component": "system_prompts",
+      "dry_run_aggregate": {
+        "baseline": 0.06,
+        "higher_is_better": false,
+        "regressed_vs_baseline": true,
+        "sample_count": 20,
+        "severity": 0.02,
+        "status": "FAIL",
+        "threshold": 0.05,
+        "value": 0.07
+      },
+      "metric_id": "prompt_contract_warning_rate",
+      "provenance_assessment": {
+        "exact_per_warning_evidence_found": false,
+        "exact_phase3_prompt_contract_warning_rows_found": false,
+        "exact_source_type": "sanitized_local_fixture_aggregate",
+        "interpretation": "the dry-run prompt warning rate is actionable only as an aggregate fixture signal; it must not be treated as a measured Phase 3 prompt-contract warning rate until per-warning rows are generated",
+        "phase3_warning_like_artifact_count": 4,
+        "phase3_warning_like_artifacts_are_manifest_or_risk_notes_not_per_warning_rows": true,
+        "tool_description_warning_analog_component_mismatch": true,
+        "tool_description_warning_analog_found": true,
+        "tool_description_warning_analog_report": "output/tool-description/phase2d_gate_final/candidate_only_report.json"
+      },
+      "sanitized_warning_rows": [],
+      "scheduler_dry_run_action": {
+        "action_id": "dry-run-action-002",
+        "action_type": "manual_triage_review",
+        "component": "system_prompts",
+        "dry_run_only": true,
+        "priority_score": 0.4,
+        "proposed_cadence": "manual_review_only",
+        "recommendation": "review_target_no_scheduler_side_effects",
+        "required_approval": "human_review_required_before_scheduler_enablement",
+        "target_metric_id": "prompt_contract_warning_rate",
+        "target_rank": 2,
+        "would_create_cron_job": false,
+        "would_enable_benchmark_cron": false,
+        "would_send_external_notification": false,
+        "would_start_optimizer": false,
+        "would_update_external_pr": false
+      }
+    }
+  ],
+  "phase": "5",
+  "recommended_next_step": "replace synthetic fixture metrics with provenance-backed sanitized per-example/per-warning input before any real scheduler enablement or optimizer run",
+  "safety_invariants": {
+    "active_runtime_mutation": false,
+    "automated_pr_created_or_updated": false,
+    "benchmark_cron_enabled": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "optimizer_execution_started": false,
+    "raw_credentials_recorded": false,
+    "raw_private_session_data_committed": false,
+    "read_only": true,
+    "scheduler_or_cron_side_effects_performed": false
+  },
+  "schema_version": "phase5-metric-provenance-classification-v1",
+  "scope": {
+    "action_performed": "read-only metric provenance tracing and sanitized miss/warning classification",
+    "formal_phase5_completion_claimed": false,
+    "requested_action": "rec action GO after Phase 5 manual triage plan",
+    "scheduler_enablement_claimed": false
+  },
+  "source_evidence": {
+    "auto_triage": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/auto-triage/auto_triage_report.json",
+    "dry_run_metrics_input": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/sanitized_metrics_input.json",
+    "heldout_review_summary": "output/tool-description/phase2e-heldout-review/heldout_review.json",
+    "manual_triage_plan": "reports/phase5_manual_triage_plan_20260606_1251.json",
+    "nearest_tool_selection_per_example_report": "output/tool-description/phase2e-heldout-review/run/candidate_only_report.json",
+    "performance_snapshot": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/performance/performance_snapshot_report.json",
+    "scheduler_dry_run": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/scheduler/scheduler_dry_run_report.json",
+    "tool_description_warning_analog_report": "output/tool-description/phase2d_gate_final/candidate_only_report.json"
+  },
+  "status": "completed_read_only",
+  "trace_summary": {
+    "dry_run_source_kind": "sanitized_local_fixture",
+    "dry_run_source_label": "phase5-readonly-unattended-dry-run-001",
+    "dry_run_window": {
+      "end": "2026-06-06T12:45:00Z",
+      "start": "2026-06-06T00:00:00Z"
+    },
+    "exact_dry_run_metric_inputs_are_aggregate_fixture_values": true,
+    "exact_per_example_rows_for_tool_selection_sample_count_90_found": false,
+    "exact_per_warning_rows_for_prompt_contract_sample_count_20_found": false,
+    "metric_id_occurrences": {
+      "prompt_contract_warning_rate": [
+        {
+          "path": "output/phase5-continuous-loop/pytest-auto-triage-cli/auto_triage_report.json",
+          "size_bytes": 3451
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-auto-triage-cli/auto_triage_report.md",
+          "size_bytes": 970
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-scheduler-dry-run-cli/scheduler_dry_run_report.json",
+          "size_bytes": 4193
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-scheduler-dry-run-cli/scheduler_dry_run_report.md",
+          "size_bytes": 1053
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/auto-triage/auto_triage_report.json",
+          "size_bytes": 2970
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/auto-triage/auto_triage_report.md",
+          "size_bytes": 872
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/performance/performance_snapshot_report.json",
+          "size_bytes": 3121
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/performance/performance_snapshot_report.md",
+          "size_bytes": 807
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/sanitized_metrics_input.json",
+          "size_bytes": 1150
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/scheduler/scheduler_dry_run_report.json",
+          "size_bytes": 3519
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/scheduler/scheduler_dry_run_report.md",
+          "size_bytes": 927
+        },
+        {
+          "path": "reports/phase5_manual_triage_plan_20260606_1251.json",
+          "size_bytes": 5551
+        },
+        {
+          "path": "reports/phase5_manual_triage_plan_20260606_1251.md",
+          "size_bytes": 5554
+        },
+        {
+          "path": "tests/monitor/test_phase5_auto_triage.py",
+          "size_bytes": 14243
+        },
+        {
+          "path": "tests/monitor/test_phase5_scheduler_dry_run.py",
+          "size_bytes": 18958
+        }
+      ],
+      "tool_selection_accuracy": [
+        {
+          "path": "PLAN.md",
+          "size_bytes": 56475
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-auto-triage-cli/auto_triage_report.json",
+          "size_bytes": 3451
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-auto-triage-cli/auto_triage_report.md",
+          "size_bytes": 970
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-performance-monitor-cli/performance_snapshot_report.json",
+          "size_bytes": 2517
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-performance-monitor-existing-empty/performance_snapshot_report.json",
+          "size_bytes": 2517
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-scheduler-dry-run-cli/scheduler_dry_run_report.json",
+          "size_bytes": 4193
+        },
+        {
+          "path": "output/phase5-continuous-loop/pytest-scheduler-dry-run-cli/scheduler_dry_run_report.md",
+          "size_bytes": 1053
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk001-performance-monitor-smoke-input.json",
+          "size_bytes": 664
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk001-performance-monitor-smoke/performance_snapshot_report.json",
+          "size_bytes": 2207
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk002-auto-triage-smoke/auto_triage_report.json",
+          "size_bytes": 2945
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk002-auto-triage-smoke/auto_triage_report.md",
+          "size_bytes": 867
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk002-monitor-smoke/performance_snapshot_report.json",
+          "size_bytes": 2759
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk002-monitor-smoke/performance_snapshot_report.md",
+          "size_bytes": 802
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk002-smoke-input.json",
+          "size_bytes": 878
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk003-scheduler-dry-run-smoke-input.json",
+          "size_bytes": 2607
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk003-scheduler-dry-run-smoke/scheduler_dry_run_report.json",
+          "size_bytes": 3514
+        },
+        {
+          "path": "output/phase5-continuous-loop/spk003-scheduler-dry-run-smoke/scheduler_dry_run_report.md",
+          "size_bytes": 925
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/auto-triage/auto_triage_report.json",
+          "size_bytes": 2970
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/auto-triage/auto_triage_report.md",
+          "size_bytes": 872
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/performance/performance_snapshot_report.json",
+          "size_bytes": 3121
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/performance/performance_snapshot_report.md",
+          "size_bytes": 807
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/sanitized_metrics_input.json",
+          "size_bytes": 1150
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/scheduler/scheduler_dry_run_report.json",
+          "size_bytes": 3519
+        },
+        {
+          "path": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310/scheduler/scheduler_dry_run_report.md",
+          "size_bytes": 927
+        },
+        {
+          "path": "reports/phase5_manual_triage_plan_20260606_1251.json",
+          "size_bytes": 5551
+        },
+        {
+          "path": "reports/phase5_manual_triage_plan_20260606_1251.md",
+          "size_bytes": 5554
+        },
+        {
+          "path": "tests/monitor/test_phase5_auto_triage.py",
+          "size_bytes": 14243
+        },
+        {
+          "path": "tests/monitor/test_phase5_performance_monitor.py",
+          "size_bytes": 10196
+        },
+        {
+          "path": "tests/monitor/test_phase5_scheduler_dry_run.py",
+          "size_bytes": 18958
+        }
+      ]
+    },
+    "phase3_warning_like_artifacts": [
+      {
+        "hits": [
+          "warning",
+          "warn"
+        ],
+        "path": "output/phase3-system-prompt/stage3-full-20260603T182925Z-r2/apply/active_apply_manifest.json",
+        "size_bytes": 6107
+      },
+      {
+        "hits": [
+          "warning",
+          "warn"
+        ],
+        "path": "output/phase3-system-prompt/stage3-full-20260603T181512Z/apply/active_apply_manifest.json",
+        "size_bytes": 5033
+      },
+      {
+        "hits": [
+          "warning",
+          "warn"
+        ],
+        "path": "output/phase3-system-prompt/stage123-20260530T062811Z/stage123_final_report.md",
+        "size_bytes": 9503
+      },
+      {
+        "hits": [
+          "warning",
+          "warn"
+        ],
+        "path": "output/phase3-system-prompt/stage123-20260530T062811Z/verification/stage123_verification_manifest.json",
+        "size_bytes": 4553
+      }
+    ]
+  }
+}
