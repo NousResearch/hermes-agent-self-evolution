@@ -1,0 +1,30 @@
+{
+  "approved_side_effects": [
+    "Hermes script-only finite cron job execution for this P1 soak",
+    "repo-local output writes under output/phase5-continuous-loop/p1-finite-cron-soak-<run_id>/",
+    "repo-local reviewer-facing reports under reports/phase5_p1_finite_cron_soak_*",
+    "origin delivery of concise cron stdout status"
+  ],
+  "artifact_scan": {
+    "high_risk_credential_assignment_hits": [],
+    "high_risk_credential_assignment_scan": "PASS",
+    "private_absolute_path_hits": [],
+    "private_absolute_path_scan": "PASS"
+  },
+  "cron_job_id": "b24aca09f168",
+  "disallowed_side_effect_count": 0,
+  "disallowed_side_effects": {
+    "active_runtime_source_config_skill_memory_mutation": false,
+    "auto_merge_or_deploy_performed": false,
+    "automatic_pr_loop_enabled": false,
+    "credential_modification": false,
+    "long_running_unbounded_cron_enabled": false,
+    "network_api_model_budget_spend": false,
+    "production_continuous_loop_enabled": false,
+    "threshold_optimizer_execution_started": false
+  },
+  "generated_at": "2026-06-08T14:49:14Z",
+  "ledger_status": "APPROVED_SIDE_EFFECTS_ONLY",
+  "run_id": "20260608-164455",
+  "schema_version": "phase5-p1-finite-cron-soak-side-effect-ledger-v1"
+}
