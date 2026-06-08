@@ -1,0 +1,52 @@
+{
+  "schema_version": "phase5-g3-limited-cron-pilot-side-effect-ledger-v1",
+  "created_at_utc": "2026-06-07T19:03:59Z",
+  "status": "APPROVED_SIDE_EFFECTS_ONLY",
+  "approved_side_effects": [
+    {
+      "name": "hermes_cron_job_created_and_fired_once",
+      "status": "APPROVED",
+      "evidence": "Hermes cron no_agent script job created with repeat=1 and triggered once by operator."
+    },
+    {
+      "name": "repo_local_output_written",
+      "status": "APPROVED",
+      "evidence": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359"
+    },
+    {
+      "name": "repo_local_reports_written",
+      "status": "APPROVED",
+      "evidence": "reports/phase5_g3_limited_cron_pilot_run_* and side-effect ledger"
+    },
+    {
+      "name": "single_origin_status_delivery",
+      "status": "APPROVED",
+      "evidence": "no_agent stdout returns compact JSON status for the current chat."
+    }
+  ],
+  "disallowed_side_effect_count": 0,
+  "disallowed_side_effect_flags": {
+    "safety_invariants.active_runtime_mutation": false,
+    "safety_invariants.automated_pr_created_or_updated": false,
+    "safety_invariants.benchmark_cron_enabled": false,
+    "safety_invariants.cron_jobs_created": false,
+    "safety_invariants.external_calls_performed": false,
+    "safety_invariants.network_calls_performed": false,
+    "safety_invariants.notifications_sent": false,
+    "safety_invariants.optimizer_execution_started": false,
+    "safety_invariants.scheduler_or_cron_side_effects_performed": false,
+    "safety_invariants.auto_optimizer_triggered": false
+  },
+  "hard_blocks_preserved": {
+    "production_continuous_loop_enabled": false,
+    "threshold_triggered_optimizer_execution_started": false,
+    "automatic_pr_loop_enabled": false,
+    "auto_merge_or_deploy": false,
+    "network_calls_performed": false,
+    "model_or_api_budget_spent": false,
+    "active_runtime_mutation": false
+  },
+  "run_root": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359",
+  "review_required": false,
+  "dry_run_action_count": 0
+}
