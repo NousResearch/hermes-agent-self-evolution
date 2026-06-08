@@ -1,0 +1,49 @@
+{
+  "acceptance_result": "The review-required state is valid. It should remain a blocking manual triage item, not a pass/no-op and not an approval to continue unattended execution.",
+  "acceptance_scope": "accept the first-fire review-required signal and manual_triage_review target as valid reviewer-facing evidence; do not authorize cron resume or production enablement",
+  "accepted_findings": {
+    "classification_counts": {
+      "insufficient_discrimination_margin": 2,
+      "wrong_tool_selected": 3
+    },
+    "dry_run_action_type": "manual_triage_review",
+    "fail_count": 5,
+    "metric_id": "tool_selection_accuracy",
+    "required_approval": "human_review_required_before_scheduler_enablement",
+    "sample_count": 45,
+    "threshold": 0.9,
+    "value": 0.8889
+  },
+  "checks": {
+    "auto_triage_review_required": true,
+    "failed_rows_sanitized_and_present": true,
+    "github_checks_missing_not_pass": true,
+    "no_resume_authorized": true,
+    "operator_pause_status_fail_closed": true,
+    "production_enablement_not_authorized": true,
+    "scheduler_dry_run_review_required": true,
+    "side_effect_ledger_approved_only": true,
+    "source_run_status_review_required": true,
+    "target_metric_is_tool_selection_accuracy": true,
+    "tool_selection_below_threshold": true
+  },
+  "created_at": "2026-06-08T23:01:39+02:00",
+  "preserved_off_boundaries": {
+    "active_runtime_source_config_mutation_enabled": false,
+    "auto_merge_or_deploy_enabled": false,
+    "automatic_pr_loop_enabled": false,
+    "credential_modification_enabled": false,
+    "cron_resumed": false,
+    "network_model_api_budget_spend_enabled": false,
+    "production_continuous_loop_enabled": false,
+    "remaining_fires_run": false,
+    "threshold_optimizer_execution_enabled": false
+  },
+  "recommended_next_step": "separate approval for read-only/manual triage or RED-test planning for tool_selection_accuracy; do not resume P1 soak automatically",
+  "reviewer": "EvAH operator review under Sunwoo rec action GO",
+  "reviewer_type": "operator_review_not_external_human_maintainer_approval",
+  "schema_version": "phase5-p1-manual-triage-review-acceptance-v1",
+  "source_packet": "reports/phase5_p1_manual_triage_review_packet_20260608_230139.json",
+  "status": "P1_MANUAL_TRIAGE_REVIEW_ACCEPTED_NO_RESUME",
+  "verdict": "PASS"
+}
