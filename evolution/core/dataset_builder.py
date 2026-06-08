@@ -138,11 +138,25 @@ class SyntheticDatasetBuilder:
         except json.JSONDecodeError:
             # Try to extract JSON from the response
             import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+            # Try json-repair for malformed JSON (DS V4 Flash sometimes outputs broken JSON)
+            try:
+                from json_repair import repair_json
+                cases_raw = json.loads(repair_json(result.test_cases))
+            except (ImportError, Exception):
+                pass
+            if 'cases_raw' not in dir():
+                match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
+                if match:
+                    try:
+                        cases_raw = json.loads(match.group())
+                    except json.JSONDecodeError:
+                        try:
+                            from json_repair import repair_json
+                            cases_raw = json.loads(repair_json(match.group()))
+                        except Exception:
+                            raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+                else:
+                    raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
 
         examples = [
             EvalExample(

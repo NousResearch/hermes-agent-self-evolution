@@ -35,6 +35,219 @@ from rich.progress import Progress
 
 from evolution.core.dataset_builder import EvalExample, EvalDataset
 
+# Hindsight API — read from Hermes environment if available
+import os as _os
+_HINDSIGHT_API_KEY = None
+_HINDSIGHT_BANK = "hermes-clean"
+
+
+def _get_hindsight_client():
+    """Lazily discover Hindsight credentials from Hermes environment."""
+    global _HINDSIGHT_API_KEY
+
+    if _HINDSIGHT_API_KEY is not None:
+        return _HINDSIGHT_API_KEY
+
+    # Try env vars first (set by run_evolution.sh wrapper)
+    env_key = _os.environ.get("HINDSIGHT_API_KEY", "")
+    if env_key:
+        _HINDSIGHT_API_KEY = env_key
+        return env_key
+
+    # Try reading from ~/.hermes/.env
+    env_file = Path.home() / ".hermes" / ".env"
+    if env_file.exists():
+        try:
+            for line in env_file.read_text().split("\n"):
+                if line.startswith("HINDSIGHT_API_KEY="):
+                    _HINDSIGHT_API_KEY = line.split("=", 1)[1].strip().strip("'\"")
+                    return _HINDSIGHT_API_KEY
+        except Exception:
+            pass
+
+    return None
+
+
+class HindsightImporter:
+    """Import relevant conversation patterns from Hindsight long-term memory.
+
+    Uses Hindsight's reflect API to find patterns relevant to a specific skill,
+    then converts them into evaluation examples. Supports both:
+    - Cloud mode (https://hindsight.vectorize.io with API key)
+    - Local external mode (e.g. http://192.168.50.225:8788)
+
+    Auto-detects from ~/.hermes/profiles/{profile}/hindsight/config.json.
+    """
+
+    @staticmethod
+    def _discover_config() -> dict:
+        """Auto-discover Hindsight connection config from Hermes profile."""
+        import os as _os
+
+        # Try profile-specific config first
+        profile = _os.environ.get("HERMES_PROFILE", "clean")
+        config_path = Path.home() / ".hermes" / "profiles" / profile / "hindsight" / "config.json"
+        if not config_path.exists():
+            config_path = Path.home() / ".hermes" / "hindsight" / "config.json"
+
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    return json.loads(f.read())
+            except Exception:
+                pass
+
+        return {}
+
+    @staticmethod
+    def extract_examples(
+        skill_name: str,
+        skill_text: str,
+        model: str = "openai/gpt-4.1-mini",
+        max_examples: int = 20,
+    ) -> list[EvalExample]:
+        """Query Hindsight for skill-relevant patterns and convert to eval examples.
+
+        Three queries:
+        1. Failure patterns: "What patterns show skill X failing?"
+        2. Success patterns: "What patterns show skill X succeeding?"
+        3. User preferences: "What preferences does the user have for how X works?"
+        """
+        import urllib.request
+        import urllib.error
+
+        config = HindsightImporter._discover_config()
+        mode = config.get("mode", "cloud")
+        api_url = config.get("api_url", "").rstrip("/")
+        api_key = config.get("api_key", _os.environ.get("HINDSIGHT_API_KEY", ""))
+        bank = config.get("bank_id_template", "hermes-{profile}").format(
+            profile=_os.environ.get("HERMES_PROFILE", "clean"))
+
+        if mode == "cloud" and api_url:
+            base_url = api_url
+        elif mode == "local_external" and api_url:
+            base_url = api_url
+        elif api_url:
+            base_url = api_url
+        else:
+            base_url = "https://api.hindsight.vectorize.io"
+
+        bank = config.get("bank_id_template", "hermes-{profile}").format(
+            profile=_os.environ.get("HERMES_PROFILE", "clean"))
+        if not bank:
+            bank = _HINDSIGHT_BANK
+
+        console.print(f"\n[bold]Querying Hindsight ({mode} @ {base_url}, bank={bank})...[/bold]")
+
+        def _call_reflect(query: str) -> str:
+            """Call Hindsight reflect endpoint."""
+            url = f"{base_url}/v1/default/banks/{bank}/reflect"
+            data = json.dumps({"query": query}).encode("utf-8")
+            req = urllib.request.Request(
+                url, data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-API-Key": api_key,
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    result = json.loads(resp.read().decode())
+                    return result.get("text", "") or result.get("answer", "") or result.get("content", "") or ""
+            except urllib.error.HTTPError as e:
+                console.print(f"[yellow]Hindsight reflect failed ({e.code}): {query[:80]}...[/yellow]")
+                return ""
+            except Exception as e:
+                console.print(f"[yellow]Hindsight reflect failed: {e}[/yellow]")
+                return ""
+
+        console.print(f"\n[bold]Querying Hindsight for '{skill_name}' patterns (parallel)...[/bold]")
+
+        queries = [
+            ("failures", f"What patterns or repeated failures involve the skill '{skill_name}'? Include specific examples of what went wrong."),
+            ("successes", f"What patterns show the skill '{skill_name}' succeeding? Include specific examples of successful usage."),
+            ("preferences", f"What user preferences or constraints relate to the skill '{skill_name}'? What does the user want this skill to do or avoid?"),
+        ]
+
+        import concurrent.futures
+        all_patterns = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(_call_reflect, q): label for label, q in queries}
+            for future in concurrent.futures.as_completed(futures):
+                label = futures[future]
+                try:
+                    answer = future.result(timeout=180)
+                except Exception as e:
+                    console.print(f"  [{label}]: failed ({e})")
+                    answer = ""
+                if answer:
+                    console.print(f"  [{label}]: {len(answer)} chars")
+                    all_patterns.append((label, answer))
+
+        if not all_patterns:
+            console.print("[yellow]No Hindsight patterns found for this skill[/yellow]")
+            return []
+
+        # Convert Hindsight patterns → eval examples via LLM
+        console.print(f"\n[bold]Converting Hindsight patterns to eval examples...[/bold]")
+
+        class ConvertPatternsToExamples(dspy.Signature):
+            """Given Hindsight memory patterns relevant to a skill, generate evaluation examples.
+
+            Each pattern describes real user behavior: failures, successes, preferences.
+            Convert each into a concrete task_input (what the user would say) +
+            expected_behavior rubric (what a good response should contain).
+
+            Return JSON array of {task_input, expected_behavior, difficulty, category}.
+            """
+            skill_name: str = dspy.InputField(desc="Name of the skill")
+            skill_text: str = dspy.InputField(desc="First 1000 chars of the skill file")
+            hindsight_patterns: str = dspy.InputField(desc="Real user patterns from Hindsight: failures, successes, preferences")
+            examples_json: str = dspy.OutputField(desc="JSON array of test cases")
+
+        patterns_text = "\n\n".join(f"### {label}\n{answer}" for label, answer in all_patterns)
+        skill_desc = skill_text[:1000]
+
+        converter = dspy.ChainOfThought(ConvertPatternsToExamples)
+        lm = dspy.LM(model)
+
+        with dspy.context(lm=lm):
+            result = converter(
+                skill_name=skill_name,
+                skill_text=skill_desc,
+                hindsight_patterns=patterns_text,
+            )
+
+        try:
+            cases = json.loads(result.examples_json)
+        except json.JSONDecodeError:
+            match = re.search(r"\[.*\]", result.examples_json or "", re.DOTALL)
+            if match:
+                cases = json.loads(match.group())
+            else:
+                console.print("[yellow]Could not parse Hindsight-derived examples[/yellow]")
+                return []
+
+        examples = []
+        for c in cases:
+            if not c.get("task_input") or not c.get("expected_behavior"):
+                continue
+            validated = _validate_eval_example(
+                task_input=c.get("task_input", ""),
+                expected_behavior=c.get("expected_behavior", ""),
+                difficulty=c.get("difficulty", "medium"),
+                category=c.get("category", "general"),
+            )
+            if validated:
+                examples.append(EvalExample(
+                    source="hindsight",
+                    **validated,
+                ))
+
+        console.print(f"  Generated {len(examples)} eval examples from Hindsight patterns")
+        return examples[:max_examples]
+
 console = Console()
 
 # ── Secret Detection ──────────────────────────────────────────────────────
