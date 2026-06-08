@@ -25,7 +25,18 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from evolution.validation.agent_runner import AgentRunResult, TaskRunContext
+import litellm
+
+from evolution.core.lm_timing_callback import (
+    COST_LEDGER,
+    CostCeilingExceeded,
+    CostLedger,
+)
+from evolution.validation.agent_runner import (
+    AgentCostSource,
+    AgentRunResult,
+    TaskRunContext,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +61,35 @@ _LITELLM_PROVIDER_PREFIXES = (
     "bedrock/",
     "mistral/",
 )
+
+
+def _price_from_tokens(model: Optional[str], agent_tokens: dict) -> Optional[float]:
+    """Price a run from captured token counts via litellm when hermes didn't report a cost.
+
+    Returns None if the model is unknown, unset, token counts are zero, or
+    litellm prices the run at $0 (recognized-but-unpriced model — a $0 here is a
+    pricing gap, not a free run, so it must flow to the uncaptured flag rather
+    than be trusted).
+
+    The computed cost is a **lower bound**: it prices ``input_tokens`` +
+    ``output_tokens`` only and omits cache/reasoning tokens, so it may UNDER-count
+    cache- or reasoning-heavy runs (a known follow-up). Adding those tokens here
+    risks double-counting against litellm's own cache accounting, so it's deferred.
+    """
+    if not model:
+        return None
+    input_t = agent_tokens.get("input_tokens") or 0
+    output_t = agent_tokens.get("output_tokens") or 0
+    if input_t + output_t == 0:
+        return None
+    try:
+        pin, pout = litellm.cost_per_token(
+            model=model, prompt_tokens=input_t, completion_tokens=output_t
+        )
+        total = pin + pout
+        return total if total > 0 else None
+    except Exception:  # noqa: BLE001 — litellm raises widely for unknown models
+        return None
 
 
 def _strip_litellm_provider_prefix(model: str) -> str:
@@ -78,9 +118,11 @@ class HermesAgentRunner:
         timeout_seconds: int = DEFAULT_TASK_TIMEOUT_SECONDS,
         user_config_path: Optional[Path] = None,
         model: Optional[str] = None,
+        cost_ledger: CostLedger = COST_LEDGER,
     ) -> None:
         self.hermes_command = hermes_command
         self.timeout_seconds = timeout_seconds
+        self.cost_ledger = cost_ledger
         # If set, copied into the sandboxed HERMES_HOME so the agent picks
         # up the user's credentials. Defaults to ``~/.hermes/config.yaml``.
         self.user_config_path = (
@@ -139,34 +181,53 @@ class HermesAgentRunner:
                     check=False,
                 )
             except subprocess.TimeoutExpired:
-                return AgentRunResult(
+                result = AgentRunResult(
                     tool_calls_seq=[],
                     final_text_tail="",
                     duration_seconds=time.time() - start,
                     error=f"hermes -z timed out after {self.timeout_seconds}s",
                 )
             except FileNotFoundError as exc:
-                return AgentRunResult(
+                result = AgentRunResult(
                     tool_calls_seq=[],
                     final_text_tail="",
                     duration_seconds=time.time() - start,
                     error=f"hermes command not found: {exc}",
                 )
-            duration = time.time() - start
+            else:
+                duration = time.time() - start
 
-            # Modern hermes persists the session to a SQLite ``state.db`` in
-            # HERMES_HOME (one-shot ``-z`` no longer writes ``session_*.json``).
-            db_path = sandbox / "state.db"
-            if not db_path.is_file():
-                return AgentRunResult(
-                    tool_calls_seq=[],
-                    final_text_tail="",
-                    duration_seconds=duration,
-                    error="no session written by hermes -z (state.db absent)",
-                )
-            return parse_session_from_db(db_path, duration_seconds=duration)
+                # Modern hermes persists the session to a SQLite ``state.db`` in
+                # HERMES_HOME (one-shot ``-z`` no longer writes ``session_*.json``).
+                db_path = sandbox / "state.db"
+                if not db_path.is_file():
+                    result = AgentRunResult(
+                        tool_calls_seq=[],
+                        final_text_tail="",
+                        duration_seconds=duration,
+                        error="no session written by hermes -z (state.db absent)",
+                    )
+                else:
+                    try:
+                        result = parse_session_from_db(db_path, duration_seconds=duration)
+                    except Exception as exc:  # noqa: BLE001 — keep result bound so the run is recorded
+                        logger.warning("failed to parse session db: %s", exc)
+                        result = AgentRunResult(
+                            tool_calls_seq=[],
+                            final_text_tail="",
+                            duration_seconds=duration,
+                            error=f"session db parse failed: {exc}",
+                        )
         finally:
             shutil.rmtree(sandbox, ignore_errors=True)
+        self.cost_ledger.record_agent_cost(result.agent_cost_usd)
+        # Enforce the ceiling eagerly: Layer-1/test_command scoring makes no
+        # in-process LM call, so the BaseLM.__call__ guard would never fire for
+        # an agent-cost overrun. Check + raise here instead.
+        state = self.cost_ledger.get_abort_state()
+        if state is not None:
+            raise CostCeilingExceeded(*state)
+        return result
 
     def _prime_sandbox(self, sandbox: Path, ctx: TaskRunContext) -> None:
         (sandbox / "sessions").mkdir(parents=True, exist_ok=True)
@@ -240,9 +301,28 @@ def parse_session_from_db(
         )
     try:
         conn.row_factory = sqlite3.Row
-        session = conn.execute(
-            "SELECT id, model FROM sessions ORDER BY started_at DESC LIMIT 1"
-        ).fetchone()
+        # Attempt the extended SELECT that includes cost/token columns added in
+        # recent hermes builds. Fall back to the minimal id/model SELECT when
+        # those columns are absent (schema-drift against an older hermes binary)
+        # so the run still contributes behavioral signal rather than crashing.
+        try:
+            session = conn.execute(
+                "SELECT id, model, actual_cost_usd, estimated_cost_usd, "
+                "cost_status, input_tokens, output_tokens, cache_read_tokens, "
+                "cache_write_tokens, reasoning_tokens "
+                "FROM sessions ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()
+            _has_cost_cols = True
+        except sqlite3.OperationalError as exc:
+            # Only treat a genuine missing-column as schema drift. A locked /
+            # corrupt / missing-table OperationalError must re-raise so the outer
+            # sqlite3.Error handler abstains rather than mislabeling it as drift.
+            if "no such column" not in str(exc).lower():
+                raise
+            session = conn.execute(
+                "SELECT id, model FROM sessions ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()
+            _has_cost_cols = False
         if session is None:
             return AgentRunResult(
                 tool_calls_seq=[],
@@ -266,6 +346,43 @@ def parse_session_from_db(
         )
     finally:
         conn.close()
+
+    # Resolve cost fields from the session row (or leave uncaptured on drift).
+    if _has_cost_cols:
+        actual = session["actual_cost_usd"]
+        estimated = session["estimated_cost_usd"]
+        _tok_keys = ("input_tokens", "output_tokens", "cache_read_tokens",
+                     "cache_write_tokens", "reasoning_tokens")
+        agent_tokens = {k: session[k] for k in _tok_keys if session[k] is not None}
+
+        # Resolution order:
+        #   actual (> 0, or == 0 with zero tokens as genuine-zero) →
+        #   computed via litellm from tokens →
+        #   estimated (> 0) →
+        #   uncaptured
+        # A $0 hermes cost alongside real token usage is an unpriced model, not a
+        # free run, so it flows into the computed or uncaptured path rather than
+        # being trusted as $0.
+        _total_tokens = sum(agent_tokens.values())
+        model_name: Optional[str] = session["model"]
+        if actual is not None and (actual > 0.0 or _total_tokens == 0):
+            agent_cost_usd: Optional[float] = actual
+            agent_cost_source = "actual"
+        else:
+            computed = _price_from_tokens(model_name, agent_tokens)
+            if computed is not None:
+                agent_cost_usd = computed
+                agent_cost_source = "computed"
+            elif estimated is not None and estimated > 0.0:
+                agent_cost_usd = estimated
+                agent_cost_source = "estimated"
+            else:
+                agent_cost_usd = None
+                agent_cost_source = "uncaptured"
+    else:
+        agent_cost_usd = None
+        agent_cost_source = "uncaptured"
+        agent_tokens: dict = {}
 
     messages: list[dict] = []
     for row in rows:
@@ -297,6 +414,9 @@ def parse_session_from_db(
         duration_seconds=duration_seconds,
         model_name=session["model"],
         session_path=db_path,
+        agent_cost_usd=agent_cost_usd,
+        agent_cost_source=agent_cost_source,
+        agent_tokens=agent_tokens,
     )
 
 
@@ -306,6 +426,9 @@ def _result_from_messages(
     duration_seconds: float,
     model_name: Optional[str],
     session_path: Optional[Path],
+    agent_cost_usd: Optional[float] = None,
+    agent_cost_source: AgentCostSource = "uncaptured",
+    agent_tokens: Optional[dict] = None,
 ) -> AgentRunResult:
     """Build an ``AgentRunResult`` from a normalized message list."""
     return AgentRunResult(
@@ -315,6 +438,9 @@ def _result_from_messages(
         model_name=model_name,
         session_path=session_path,
         tool_calls_with_args=_extract_tool_calls_with_args(messages),
+        agent_cost_usd=agent_cost_usd,
+        agent_cost_source=agent_cost_source,
+        agent_tokens=agent_tokens if agent_tokens is not None else {},
     )
 
 

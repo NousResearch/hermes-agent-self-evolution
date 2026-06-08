@@ -10,7 +10,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Literal, Optional, Protocol, TypedDict
+
+AgentCostSource = Literal["actual", "computed", "estimated", "uncaptured"]
+
+
+class AgentTokens(TypedDict, total=False):
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int
+    cache_write_tokens: int
+    reasoning_tokens: int
 
 
 @dataclass(frozen=True)
@@ -42,6 +52,12 @@ class AgentRunResult:
     error: Optional[str] = None
     session_path: Optional[Path] = None
     tool_calls_with_args: list[dict] = field(default_factory=list)
+    # ``agent_cost_usd is None`` ⟺ ``agent_cost_source == "uncaptured"`` (cost
+    # unknown, counts $0 toward the ceiling but is flagged); ``0.0`` is a
+    # genuinely free run.
+    agent_cost_usd: Optional[float] = None
+    agent_cost_source: AgentCostSource = "uncaptured"
+    agent_tokens: AgentTokens = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

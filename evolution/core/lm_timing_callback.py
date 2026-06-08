@@ -249,6 +249,9 @@ class CostLedger:
         # next worker abort propagates past dspy.Evaluate's `except
         # Exception` swallower (HermesProviderError is BaseException-derived).
         self._auth_abort_message: Optional[str] = None
+        self._agent_cost_usd: float = 0.0
+        self._n_agent_runs: int = 0
+        self._n_cost_uncaptured: int = 0
 
     def reset(self) -> None:
         # Must also clear the abort flags — the cost + failure callbacks
@@ -259,6 +262,9 @@ class CostLedger:
             self._ceiling_usd = None
             self._abort_requested = False
             self._auth_abort_message = None
+            self._agent_cost_usd = 0.0
+            self._n_agent_runs = 0
+            self._n_cost_uncaptured = 0
 
     def _set_auth_abort(self, message: str) -> None:
         """Set the auth-abort sentinel. First message wins — the original
@@ -285,6 +291,10 @@ class CostLedger:
         with self._lock:
             self._ceiling_usd = usd
 
+    def _combined_total(self) -> float:
+        """In-process LM cost + agent-side cost. Must be called under _lock."""
+        return sum(r.cost_usd for r in self._by_model.values()) + self._agent_cost_usd
+
     def record(
         self,
         *,
@@ -307,8 +317,30 @@ class CostLedger:
             row.cost_usd += cost_usd
             row.calls += 1
             if self._ceiling_usd is not None and not self._abort_requested:
-                total = sum(r.cost_usd for r in self._by_model.values())
-                if total > self._ceiling_usd:
+                if self._combined_total() > self._ceiling_usd:
+                    self._abort_requested = True
+
+    def record_agent_cost(self, usd: Optional[float]) -> None:
+        """Record cost from an agent run captured out-of-process (state.db).
+
+        ``usd is None`` means the run completed but its cost is uncaptured: the
+        run is counted and the uncaptured counter is incremented, but $0 is added
+        toward the ceiling (the recorded total becomes a lower bound). A non-None
+        ``usd`` — including a genuine ``0.0`` — is added to the agent total.
+
+        The producer guarantees ``usd is None`` ⟺ the cost is uncaptured, so the
+        sentinel never appears in control flow. After recording, the combined
+        ceiling (in-process LM cost + agent cost) is re-checked and the abort flag
+        set if exceeded.
+        """
+        with self._lock:
+            self._n_agent_runs += 1
+            if usd is None:
+                self._n_cost_uncaptured += 1
+            else:
+                self._agent_cost_usd += usd
+            if self._ceiling_usd is not None and not self._abort_requested:
+                if self._combined_total() > self._ceiling_usd:
                     self._abort_requested = True
 
     def get_abort_state(self) -> Optional[tuple[float, float]]:
@@ -320,16 +352,27 @@ class CostLedger:
         with self._lock:
             if not self._abort_requested:
                 return None
-            total = sum(r.cost_usd for r in self._by_model.values())
             # _ceiling_usd is non-None when _abort_requested is True (set
             # together inside the lock in record()), so the cast is safe.
-            return total, float(self._ceiling_usd)  # type: ignore[arg-type]
+            return self._combined_total(), float(self._ceiling_usd)  # type: ignore[arg-type]
 
     def summary(self) -> dict[str, Any]:
         with self._lock:
             by_model = {model: row.to_dict() for model, row in self._by_model.items()}
-        total_usd = round(sum(row["cost_usd"] for row in by_model.values()), 6)
-        return {"total_usd": total_usd, "by_model": by_model}
+            agent_cost_usd = self._agent_cost_usd
+            n_agent_runs = self._n_agent_runs
+            n_cost_uncaptured = self._n_cost_uncaptured
+        inprocess_total = sum(row["cost_usd"] for row in by_model.values())
+        total_usd = round(inprocess_total, 6)
+        total_cost_usd = round(inprocess_total + agent_cost_usd, 6)
+        return {
+            "total_usd": total_usd,
+            "by_model": by_model,
+            "agent_cost_usd": round(agent_cost_usd, 6),
+            "n_agent_runs": n_agent_runs,
+            "n_cost_uncaptured": n_cost_uncaptured,
+            "total_cost_usd": total_cost_usd,
+        }
 
 
 # Module-level singleton so the litellm success callback (a free function,

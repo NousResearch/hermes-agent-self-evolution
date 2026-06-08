@@ -689,6 +689,14 @@ def evolve_prompt_section(
     gate_path = write_gate_decision(output_dir, decision_payload)
     console.print(f"  [dim]Gate decision logged to {gate_path}[/dim]")
 
+    cost_summary = COST_LEDGER.summary()
+    n_uncaptured = cost_summary["n_cost_uncaptured"]
+    if n_uncaptured > 0:
+        console.print(
+            f"[yellow]{n_uncaptured} of {cost_summary['n_agent_runs']} agent runs "
+            f"had uncaptured cost; the recorded total is a lower bound.[/yellow]"
+        )
+
     if not deploy:
         console.print(
             f"[red]✗ Evolved section REJECTED by closed-loop gate "

@@ -380,3 +380,100 @@ class TestCostCeiling:
             # Other downstream errors are acceptable for this test — we
             # only care that the cost-ceiling guard didn't fire.
             pass
+
+
+class TestAgentCostCapture:
+    """Agent-side cost (from state.db) is added to the same CostLedger so
+    the ceiling reflects end-to-end spend, not just in-process LM calls."""
+
+    def test_record_agent_cost_actual_updates_summary(self):
+        ledger = CostLedger()
+        ledger.record_agent_cost(0.02)
+        summary = ledger.summary()
+        assert summary["agent_cost_usd"] == 0.02
+        assert summary["n_agent_runs"] == 1
+        assert summary["n_cost_uncaptured"] == 0
+        assert summary["total_cost_usd"] == pytest.approx(0.02)
+
+    def test_record_agent_cost_uncaptured_increments_counter_only(self):
+        ledger = CostLedger()
+        ledger.record_agent_cost(None)
+        summary = ledger.summary()
+        assert summary["n_agent_runs"] == 1
+        assert summary["n_cost_uncaptured"] == 1
+        assert summary["agent_cost_usd"] == 0.0
+        assert summary["total_cost_usd"] == 0.0
+
+    def test_agent_cost_alone_trips_ceiling(self):
+        ledger = CostLedger()
+        ledger.set_ceiling(0.05)
+        ledger.record_agent_cost(0.06)
+        state = ledger.get_abort_state()
+        assert state is not None
+        total, ceiling = state
+        assert ceiling == pytest.approx(0.05)
+        assert total == pytest.approx(0.06)
+
+    def test_agent_cost_tips_near_ceiling_over(self):
+        ledger = CostLedger()
+        ledger.set_ceiling(0.05)
+        ledger.record(
+            model="openai/gpt-4.1-mini",
+            prompt_tokens=10,
+            cached_tokens=0,
+            completion_tokens=5,
+            reasoning_tokens=0,
+            cost_usd=0.04,
+        )
+        assert ledger.get_abort_state() is None  # below ceiling
+        ledger.record_agent_cost(0.02)
+        state = ledger.get_abort_state()
+        assert state is not None
+        total, ceiling = state
+        assert ceiling == pytest.approx(0.05)
+        assert total == pytest.approx(0.06)
+
+    def test_record_in_process_tips_combined_over_ceiling(self):
+        ledger = CostLedger()
+        ledger.set_ceiling(0.05)
+        ledger.record_agent_cost(0.04)
+        assert ledger.get_abort_state() is None  # agent cost below ceiling
+        ledger.record(
+            model="openai/gpt-4.1-mini",
+            prompt_tokens=10,
+            cached_tokens=0,
+            completion_tokens=5,
+            reasoning_tokens=0,
+            cost_usd=0.02,
+        )
+        state = ledger.get_abort_state()
+        assert state is not None
+        total, ceiling = state
+        assert ceiling == pytest.approx(0.05)
+        assert total == pytest.approx(0.06)
+
+    def test_reset_zeroes_agent_fields(self):
+        ledger = CostLedger()
+        ledger.record_agent_cost(0.03)
+        ledger.record_agent_cost(None)
+        ledger.reset()
+        summary = ledger.summary()
+        assert summary["agent_cost_usd"] == 0.0
+        assert summary["n_agent_runs"] == 0
+        assert summary["n_cost_uncaptured"] == 0
+
+    def test_total_cost_usd_is_combined(self):
+        ledger = CostLedger()
+        ledger.record(
+            model="openai/gpt-4.1-mini",
+            prompt_tokens=10,
+            cached_tokens=0,
+            completion_tokens=5,
+            reasoning_tokens=0,
+            cost_usd=0.01,
+        )
+        ledger.record_agent_cost(0.02)
+        summary = ledger.summary()
+        assert summary["total_cost_usd"] == pytest.approx(0.03)
+        # Existing key must still be present for back-compat.
+        assert summary["total_usd"] == pytest.approx(0.01)
