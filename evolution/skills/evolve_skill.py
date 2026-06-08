@@ -341,8 +341,8 @@ def evolve(
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb", "hindsight"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/DeepSeek-V4-Pro", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/DeepSeek-V4-Pro", help="Model for evaluations")
+@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
+@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--deploy", is_flag=True, help="Auto-deploy evolved skill if improvement > 0")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
