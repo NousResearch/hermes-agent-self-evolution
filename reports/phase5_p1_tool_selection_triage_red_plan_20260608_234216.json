@@ -1,0 +1,215 @@
+{
+  "authorized_by": "Sunwoo rec action GO after recommendation for read-only/manual tool_selection_accuracy triage or RED-test planning slice",
+  "blocked_without_separate_approval": [
+    "write or execute RED regression tests",
+    "modify source/tool-description scoring/candidate generation",
+    "regenerate candidate descriptions or candidate-only reports",
+    "rerun provenance/performance/auto-triage/scheduler pipeline as new P1 evidence",
+    "resume cron job b24aca09f168 or run remaining fires",
+    "execute optimizer or external benchmarks",
+    "commit/push this local plan to PR #108"
+  ],
+  "comparative_context": {
+    "current_candidate_case_count": 45,
+    "current_candidate_selection_accuracy": 0.8889,
+    "historical_all_pass_selection_accuracy": 1.0,
+    "historical_triaged_selection_accuracy": 0.9111,
+    "interpretation": "A previous all-pass artifact suggests a possible remediation path exists, but a future approved slice must regenerate current evidence rather than relying on historical artifacts."
+  },
+  "created_at": "2026-06-08T23:42:16+02:00",
+  "current_metric_state": {
+    "auto_triage_status": "REVIEW_REQUIRED",
+    "baseline": 0.1111,
+    "classification_counts": {
+      "insufficient_discrimination_margin": 2,
+      "wrong_tool_selected": 3
+    },
+    "component": "tool_descriptions",
+    "fail_count": 5,
+    "metric_id": "tool_selection_accuracy",
+    "pass_count": 40,
+    "performance_snapshot_status": "NEEDS_TRIAGE",
+    "sample_count": 45,
+    "scheduler_dry_run_status": "DRY_RUN_REVIEW_REQUIRED",
+    "threshold": 0.9,
+    "value": 0.8889
+  },
+  "future_execution_sequence_after_separate_approval": [
+    "Add the minimum RED regression test file or update an existing monitor test with the current failing evidence fixture.",
+    "Run the targeted pytest node and verify expected RED failure before changing production/candidate generation code.",
+    "Implement only the minimal generalized discrimination improvement needed to pass the RED test.",
+    "Regenerate candidate-only report and provenance-backed read-only pipeline outputs from the same approved local inventory.",
+    "Run focused monitor tests, full relevant HSE tests, compileall, git diff --check, JSON semantic checks, and private/credential scans.",
+    "Do not resume P1 finite cron soak until the new evidence and a separate bounded resume approval exist."
+  ],
+  "future_red_regression_plan": [
+    {
+      "assertions": [
+        "candidate_report.metrics.case_count == 45",
+        "candidate_report.metrics.selection_accuracy >= 0.90",
+        "non_passing_rows are explicitly listed when the threshold fails",
+        "no candidate apply/runtime mutation flags are true"
+      ],
+      "expected_current_result": "FAIL until a separately approved implementation regenerates candidate evidence above threshold",
+      "initial_red_reason": "Current candidate-only report has selection_accuracy=0.8889, below threshold 0.90.",
+      "proposed_file": "tests/monitor/test_phase5_tool_selection_triage_regression.py",
+      "purpose": "RED gate for the current Phase 5 provenance inventory before any tool-description/scoring fix.",
+      "test_name": "test_phase5_tool_selection_current_candidate_report_clears_minimum_threshold"
+    },
+    {
+      "assertions": [
+        "row tool-selection-002: selected_tool == search_files and score_margin > 0.02",
+        "row tool-selection-003: selected_tool == terminal and score_margin > 0.02",
+        "row tool-selection-004: selected_tool == patch and score_margin > 0.02",
+        "row tool-selection-016: selected_tool == read_file and score_margin > 0.02",
+        "row tool-selection-028: selected_tool == terminal and cue_coverage >= 0.90 and score_margin > 0.02"
+      ],
+      "expected_current_result": "FAIL on current provenance/candidate evidence",
+      "initial_red_reason": "Rows 004, 016, and 028 select the wrong tool; rows 002 and 003 have zero score margin.",
+      "proposed_file": "tests/monitor/test_phase5_tool_selection_triage_regression.py",
+      "purpose": "Prevent threshold-only pass from hiding the exact five current weak rows.",
+      "test_name": "test_phase5_tool_selection_critical_rows_have_correct_tool_and_margin"
+    },
+    {
+      "assertions": [
+        "tool_selection_fail_count == 0 on the newly regenerated provenance dataset",
+        "performance_snapshot.status != NEEDS_TRIAGE for tool_selection_accuracy",
+        "auto_triage.status == NO_ACTION",
+        "scheduler_dry_run.status == DRY_RUN_NOOP"
+      ],
+      "expected_current_result": "FAIL until a new separately approved read-only rerun produces current all-pass evidence",
+      "initial_red_reason": "Current P1 first-fire evidence has 5 failing rows; historical all-pass artifact exists but is not the current P1 input.",
+      "proposed_file": "tests/monitor/test_phase5_tool_selection_triage_regression.py",
+      "purpose": "Optional stricter closeout before any P1 soak resume, after minimum threshold is cleared.",
+      "test_name": "test_phase5_tool_selection_closeout_candidate_reaches_all_pass_before_soak_resume"
+    }
+  ],
+  "not_performed": {
+    "automatic_pr_loop_enabled": false,
+    "candidate_report_regenerated": false,
+    "cron_resumed": false,
+    "green_fix_attempted": false,
+    "network_model_api_budget_spent": false,
+    "optimizer_executed": false,
+    "production_loop_enabled": false,
+    "provenance_pipeline_rerun": false,
+    "red_test_executed": false,
+    "remaining_p1_fires_run": false,
+    "source_code_modified": false,
+    "test_code_written": false
+  },
+  "publication_status": "LOCAL_ONLY_NOT_COMMITTED_OR_PUSHED",
+  "recommended_next_step": "path-limited publish this local triage/RED-plan artifact to PR #108, if Sunwoo approves; after that, separate approval can authorize actual RED-test authoring without source fix yet",
+  "repo": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head_at_plan_time": "35e113a7d6da0610d123d3ef1ec7671c8df1f45c",
+    "head_subject": "Add Phase 5 P1 manual triage review",
+    "pr": {
+      "headOwner": "Sunwo0u",
+      "headRefName": "hse/phase5-continuous-loop-prep",
+      "headRefOid": "35e113a7d6da0610d123d3ef1ec7671c8df1f45c",
+      "mergeable": "MERGEABLE",
+      "number": 108,
+      "state": "OPEN",
+      "statusCheckCount": 0,
+      "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+    }
+  },
+  "row_triage": [
+    {
+      "classification": "insufficient_discrimination_margin",
+      "cue_coverage": 1.0,
+      "expected_score": 0.3,
+      "expected_tool": "search_files",
+      "future_red_assertion": "For this row, selected_tool remains search_files and expected_score - top_confusing_score > 0.02.",
+      "hypothesis": "File-discovery/content-search cues such as find files, mentioning, and directory need enough search_files margin over terminal shell execution.",
+      "request_hash": "bb3988035b8b3d8a",
+      "row_id": "tool-selection-002",
+      "safe_fix_direction": "Improve reusable search_files cue weighting/description for file discovery and content search without shelling out; avoid row-specific hacks.",
+      "sanitized_request_excerpt": "Find Python files mentioning browser_navigate in the tools directory.",
+      "score_margin": 0.0,
+      "selected_tool": "search_files",
+      "top_confusing_score": 0.3,
+      "triage_finding": "Correct tool is selected, but search_files and terminal tie at the score boundary. Treat as insufficient discrimination, not a wrong-tool case."
+    },
+    {
+      "classification": "insufficient_discrimination_margin",
+      "cue_coverage": 1.0,
+      "expected_score": 0.295,
+      "expected_tool": "terminal",
+      "future_red_assertion": "For this row, selected_tool remains terminal and expected_score - top_confusing_score > 0.02.",
+      "hypothesis": "Shell command/test-run cues such as run pytest target should distinguish terminal from Python snippet execution.",
+      "request_hash": "e787c7e309c9baf2",
+      "row_id": "tool-selection-003",
+      "safe_fix_direction": "Strengthen generic terminal cues for command execution, package managers, builds, and test runners; avoid weakening execute_code for script-processing tasks.",
+      "sanitized_request_excerpt": "Run the focused pytest target for the new tool evaluation tests.",
+      "score_margin": 0.0,
+      "selected_tool": "terminal",
+      "top_confusing_score": 0.295,
+      "triage_finding": "Correct tool is selected, but terminal ties with execute_code. This is an insufficient discrimination margin for pytest execution."
+    },
+    {
+      "classification": "wrong_tool_selected",
+      "cue_coverage": 1.0,
+      "expected_score": 0.3,
+      "expected_tool": "patch",
+      "future_red_assertion": "For this row, selected_tool becomes patch and expected_score - top_confusing_score > 0.02.",
+      "hypothesis": "Targeted replacement and preserve-surrounding-content cues should select patch; complete overwrite/new-file cues should select write_file.",
+      "request_hash": "c3912ca61513bd24",
+      "row_id": "tool-selection-004",
+      "safe_fix_direction": "Add reusable patch-vs-write_file discrimination around targeted replacement, unique old_string, preserve context, and whole-file overwrite boundaries.",
+      "sanitized_request_excerpt": "Make a targeted replacement in one Python file and preserve surrounding content.",
+      "score_margin": -0.1375,
+      "selected_tool": "write_file",
+      "top_confusing_score": 0.4375,
+      "triage_finding": "Wrong tool selected: write_file outranks patch for a targeted replacement that should preserve surrounding content."
+    },
+    {
+      "classification": "wrong_tool_selected",
+      "cue_coverage": 1.0,
+      "expected_score": 0.25,
+      "expected_tool": "read_file",
+      "future_red_assertion": "For this row, selected_tool becomes read_file and expected_score - top_confusing_score > 0.02.",
+      "hypothesis": "Line-range and read-only excerpt cues should prefer read_file over search_files.",
+      "request_hash": "a261d5e74557fbf1",
+      "row_id": "tool-selection-016",
+      "safe_fix_direction": "Strengthen read_file cues for explicit line ranges, first/last lines, and file excerpt reading; keep search_files for discovery/pattern search.",
+      "sanitized_request_excerpt": "Read only lines 120 through 180 of gateway/run.py.",
+      "score_margin": -0.005,
+      "selected_tool": "search_files",
+      "top_confusing_score": 0.255,
+      "triage_finding": "Wrong tool selected: search_files narrowly outranks read_file for a line-range read request."
+    },
+    {
+      "classification": "wrong_tool_selected",
+      "cue_coverage": 0.6,
+      "expected_score": 0.2111,
+      "expected_tool": "terminal",
+      "future_red_assertion": "For this row, selected_tool becomes terminal, cue_coverage >= 0.9, and expected_score - top_confusing_score > 0.02.",
+      "hypothesis": "Package-manager install/build commands are shell/process actions and should route to terminal, while execute_code remains for multi-call Hermes-tool scripting and data reduction.",
+      "request_hash": "6384181019e3714c",
+      "row_id": "tool-selection-028",
+      "safe_fix_direction": "Strengthen terminal cues for dependency install, npm/build scripts, subprocess/system state, and package managers without broadening to arbitrary Python processing.",
+      "sanitized_request_excerpt": "Install the project dependencies and run the npm build script.",
+      "score_margin": -0.0445,
+      "selected_tool": "execute_code",
+      "top_confusing_score": 0.2556,
+      "triage_finding": "Wrong tool selected and weaker cue coverage: execute_code outranks terminal for dependency installation and npm build execution."
+    }
+  ],
+  "schema_version": "phase5-p1-tool-selection-triage-red-plan-v1",
+  "scope": "read-only/manual triage and future RED regression test planning only; no source/test code written, no fix, no cron resume, no optimizer, no production enablement",
+  "source_evidence": {
+    "auto_triage_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01/auto-triage/auto_triage_report.json",
+    "current_candidate_report": "output/tool-description/phase2e-heldout-review/run/candidate_only_report.json",
+    "historical_all_pass_candidate_report": "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+    "historical_triaged_candidate_report": "output/tool-description/phase5-tool-selection-triage-20260606-133625/run/candidate_only_report.json",
+    "manual_triage_acceptance": "reports/phase5_p1_manual_triage_review_acceptance_20260608_230139.json",
+    "manual_triage_packet": "reports/phase5_p1_manual_triage_review_packet_20260608_230139.json",
+    "note": "Historical triaged/all-pass candidate reports are comparison context only, not current P1 first-fire proof.",
+    "performance_snapshot_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01/performance/performance_snapshot_report.json",
+    "provenance_dataset_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01/provenance/provenance_dataset_report.json",
+    "scheduler_dry_run_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01/scheduler/scheduler_dry_run_report.json"
+  },
+  "status": "P1_TOOL_SELECTION_TRIAGE_RED_PLAN_READY_NOT_EXECUTED"
+}
