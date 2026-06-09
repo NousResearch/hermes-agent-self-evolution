@@ -1,0 +1,180 @@
+{
+  "actual_soak_state": {
+    "actual_completed_fire_count": 1,
+    "fire_02_present": false,
+    "fires": [
+      {
+        "fire_index": 1,
+        "fire_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01",
+        "generated_at": "2026-06-08T14:49:14Z",
+        "status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION"
+      }
+    ],
+    "max_fire_count": 3,
+    "run_report_errors": [
+      "kill switch present: output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/P1_FINITE_CRON_SOAK_KILL_SWITCH"
+    ],
+    "run_report_status": "P1_SOAK_FAIL_BLOCKED",
+    "run_report_summary": {
+      "completed_fire_count": 1,
+      "disallowed_side_effect_count": 0,
+      "dry_run_action_count": 1,
+      "max_fire_count": 3,
+      "review_required_count": 1
+    },
+    "run_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455",
+    "side_effect_ledger_disallowed_count": 0,
+    "side_effect_ledger_status": "APPROVED_SIDE_EFFECTS_ONLY",
+    "state_json": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/state.json"
+  },
+  "authorization": {
+    "approved_scope": "prepare P1 finite cron soak kill-switch/accounting repair plan only, keep job b24aca09f168 paused, do not clear kill switch, do not edit cron accounting, no cron resume, no remaining fires, no optimizer, no PR update",
+    "source": "Sunwoo Discord approval"
+  },
+  "current_action_boundaries": {
+    "active_runtime_source_config_skill_memory_mutation": false,
+    "automatic_pr_loop_enabled": false,
+    "cron_accounting_edited_now": false,
+    "cron_resumed_now": false,
+    "kill_switch_cleared_now": false,
+    "optimizer_execution_started": false,
+    "plan_only": true,
+    "pr_update_performed": false,
+    "production_continuous_loop_enabled": false,
+    "remaining_fires_run_now": false
+  },
+  "current_cron_state": {
+    "cron_accounting_caveat": "cron repeat shows 2/3 after one failed no-agent trigger; actual run state/report still show 1 completed fire",
+    "cron_accounting_mismatch": true,
+    "enabled": false,
+    "job_id": "b24aca09f168",
+    "last_run_at": "2026-06-09T17:52:46.396258+02:00",
+    "last_status": "error",
+    "name": "HSE Phase 5 P1 finite cron soak 20260608-164455",
+    "next_run_at": "2026-06-09T18:22:46.396258+02:00",
+    "paused_at": "2026-06-09T17:55:57.215649+02:00",
+    "profile": "default",
+    "repeat_completed": 2,
+    "repeat_times": 3,
+    "script": "hse_phase5_p1_finite_soak_20260608_164455.py",
+    "state": "paused",
+    "workdir": "<hse-repo>"
+  },
+  "explicitly_blocked_without_new_approval": [
+    "clear/archive/remove kill switch",
+    "edit jobs.json or cron repeat accounting",
+    "resume or run b24aca09f168 again",
+    "create replacement cron job",
+    "run remaining fires",
+    "start optimizer",
+    "enable automatic PR loop or production continuous loop",
+    "commit/push/update PR"
+  ],
+  "generated_at_local": "2026-06-09 21:01:14 +0200 CEST",
+  "kill_switch_state": {
+    "content_sanitized": "created_at=2026-06-08T16:54:53+0200\njob_id=b24aca09f168\nrun_id=20260608-164455\nreason=first_fire_returned_review_required; finite soak paused fail-closed before remaining fires\n",
+    "content_summary": "first_fire_returned_review_required; finite soak paused fail-closed before remaining fires",
+    "lock_path": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/.p1_finite_cron_soak.lock",
+    "lock_present": false,
+    "path": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/P1_FINITE_CRON_SOAK_KILL_SWITCH",
+    "present": true,
+    "sha256": "1fd81b94d97fbc0624f5da15b3a961c894c011004bee2b51af7bb5b9c867bba0"
+  },
+  "last_resume_attempt": {
+    "artifact": "reports/phase5_p1_finite_cron_soak_remaining_fire_resume_execution_attempt_20260609_175639.json",
+    "blocked_by_existing_kill_switch": true,
+    "fire_02_artifacts_created": false,
+    "status": "FAIL_CLOSED_BLOCKED_BY_EXISTING_KILL_SWITCH",
+    "successful_additional_fires": 0
+  },
+  "recommended_future_repair_plan": {
+    "future_acceptance_criteria": [
+      "Before execution: original job b24aca09f168 remains paused or is explicitly retired; no accidental scheduled resume exists.",
+      "Kill-switch mutation is explicitly approved and evidence-preserving.",
+      "No manual edit to b24aca09f168 repeat.completed is performed under R1.",
+      "At most two additional actual fires are attempted.",
+      "Actual fire count is derived from state.json/run report, not cron repeat alone.",
+      "Any non-NOOP/review-required/dry-run-action condition stops further fires and leaves cron paused/disabled.",
+      "Optimizer, automatic PR loop, production loop, network/model/API budget, auto-merge/deploy, and active runtime mutation remain off."
+    ],
+    "selected_option": "R1_RECOMMENDED_REPLACEMENT_JOB_WITH_ARCHIVED_KILL_SWITCH",
+    "steps": [
+      "Reconfirm b24aca09f168 remains paused/enabled=false and no lock is present.",
+      "Create immutable backups/hashes of jobs.json, state.json, run report, side-effect ledger, kill switch, and current attempt artifacts.",
+      "With explicit approval, archive or remove the kill switch; preserve its hash/content in a repair evidence artifact before mutation.",
+      "Create a fresh bounded no_agent replacement cron job with repeat=2, workdir=<hse-repo>, profile=default, deliver=origin, same script, optimizer off, automatic PR loop off.",
+      "Trigger one fire at a time; after each fire, inspect state/report/scheduler summary and fail closed on review_required, dry_run_action_count>0, side_effect_count>0, disallowed_side_effect_count>0, optimizer/network/runtime mutation request, or lock/kill switch recurrence.",
+      "After two successful NOOP fires or any fail-closed event, pause/remove the replacement according to the future approval and write local repair/run evidence.",
+      "Do not publish evidence to PR unless separately approved after local verification."
+    ]
+  },
+  "recommended_next_step": "If Sunwoo wants to continue, approve the recommended R1 repair execution explicitly: archive/clear the kill switch, create a replacement repeat=2 no_agent job, keep b24aca09f168 paused/retired, run at most two one-at-a-time NOOP-guarded fires, optimizer off, no automatic PR loop, no PR update.",
+  "repair_strategy_options_for_future_separate_approval": [
+    {
+      "id": "R1_RECOMMENDED_REPLACEMENT_JOB_WITH_ARCHIVED_KILL_SWITCH",
+      "recommended": true,
+      "required_future_mutations": [
+        "archive_or_remove_kill_switch",
+        "create_replacement_cron_job_repeat_2_or_trigger_twice",
+        "optionally_remove_or_keep_old_job_paused_after replacement"
+      ],
+      "risks": [
+        "new job id differs from approval packet target",
+        "requires explicit permission to clear/archive kill switch and create cron job"
+      ],
+      "summary": "Leave b24aca09f168 paused as historical evidence, archive/clear the run-root kill switch with explicit approval, and create a fresh bounded replacement no-agent job for exactly the remaining two actual fires against the existing state.json/report lineage.",
+      "why": "Avoids manual cron repeat accounting edits while preserving actual soak lineage and allowing two remaining actual fires."
+    },
+    {
+      "id": "R2_STRICT_SAME_JOB_ACCOUNTING_REPAIR",
+      "recommended": false,
+      "required_future_mutations": [
+        "backup_jobs_json",
+        "edit_cron_repeat_completed_2_to_1",
+        "archive_or_remove_kill_switch",
+        "resume_or_run_existing_job"
+      ],
+      "risks": [
+        "manual cron database mutation",
+        "must avoid corrupting jobs.json",
+        "requires separate explicit accounting-edit approval"
+      ],
+      "summary": "Back up cron jobs.json, atomically repair b24aca09f168 repeat.completed from 2 to 1, archive/clear the kill switch, then resume/trigger the same job under bounded fail-closed rules.",
+      "why": "Preserves original job id and two remaining repeat slots, but directly edits cron accounting."
+    },
+    {
+      "id": "R3_ONE_FIRE_SALVAGE_WITHOUT_ACCOUNTING_REPAIR",
+      "recommended": false,
+      "required_future_mutations": [
+        "archive_or_remove_kill_switch",
+        "run_existing_job_once"
+      ],
+      "risks": [
+        "only one actual additional fire possible",
+        "final actual state likely 2/3 not complete"
+      ],
+      "summary": "Do not repair repeat.completed; only archive/clear the kill switch and run the old job once more.",
+      "why": "Minimizes cron database mutation but cannot deliver max additional fires 2 because cron repeat is already 2/3."
+    }
+  ],
+  "repository": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "770410923217d3069baeeb812f7a908f6a02ec04",
+    "head_subject": "Add P1 remaining-fire resume approval packet",
+    "pr_update_performed": false,
+    "publication_performed": false
+  },
+  "schema_version": "phase5-p1-finite-cron-soak-kill-switch-accounting-repair-plan-v1",
+  "stage": "P1_FINITE_CRON_SOAK_KILL_SWITCH_ACCOUNTING_REPAIR_PLAN",
+  "status": "P1_FINITE_CRON_SOAK_KILL_SWITCH_ACCOUNTING_REPAIR_PLAN_READY_NOT_EXECUTED",
+  "verdict": "PLAN_ONLY_READY",
+  "verification_plan_for_current_artifact": [
+    "json_parse",
+    "semantic_plan_only_flags",
+    "private_path_and_secret_scan",
+    "focused_phase5_monitor_tests",
+    "compileall",
+    "git_diff_check",
+    "cron_paused_state_check"
+  ]
+}
