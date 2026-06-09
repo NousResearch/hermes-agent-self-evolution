@@ -26,7 +26,7 @@ class EvolutionConfig:
     max_skill_size: int = 15_000  # 15KB default
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
-    max_prompt_growth: float = 0.2  # 20% max growth over baseline
+    max_prompt_growth: float = 0.5  # 50% max growth over baseline (was 0.2)
 
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate
