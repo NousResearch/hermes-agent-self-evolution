@@ -1,0 +1,146 @@
+{
+  "authorization": {
+    "approved_scope": "publish P1 read-only monitor rerun NOOP evidence, keep cron paused, no cron resume, no optimizer, path-limited PR update only",
+    "source": "Sunwoo Discord approval"
+  },
+  "generated_at_local": "2026-06-09 15:39:45 +0200 CEST",
+  "phase": "5",
+  "publication_plan": {
+    "allowed": true,
+    "commit_push_allowed_by_current_approval": true,
+    "path_limited_files": [
+      "reports/phase5_p1_readonly_monitor_rerun_noop_evidence_20260609_153945.json",
+      "reports/phase5_p1_readonly_monitor_rerun_noop_evidence_20260609_153945.md"
+    ],
+    "pr_body_addendum_allowed_by_current_approval": true,
+    "publish_output_tree": false,
+    "publish_runner_scripts": false,
+    "publish_source_or_config_changes": false
+  },
+  "pull_request": {
+    "base_branch": "main",
+    "checks_caveat": "MISSING_NOT_CI_PASS unless GitHub reports actual status checks after publication",
+    "head_branch": "hse/phase5-continuous-loop-prep",
+    "head_owner": "Sunwo0u",
+    "number": 108,
+    "pre_publish_head": "18182eda72929377610fe76e91002a7ac43bd2d8",
+    "repo": "NousResearch/hermes-agent-self-evolution",
+    "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+  },
+  "recommended_next_step": "After publication, request independent read-only acceptance of the P1 read-only monitor NOOP evidence; do not resume cron without separate explicit approval.",
+  "repository": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "18182eda72929377610fe76e91002a7ac43bd2d8",
+    "head_subject": "Add Phase 5 P1 tool selection RED plan",
+    "name": "hermes-agent-self-evolution",
+    "owner": "NousResearch",
+    "worktree_notes": {
+      "publication_staging_policy": "stage only this evidence JSON/Markdown pair; leave unrelated untracked artifacts unstaged",
+      "unrelated_untracked_files_present": [
+        "?? reports/phase5_p1_tool_selection_green_remediation_plan_20260609_150247.json",
+        "?? reports/phase5_p1_tool_selection_green_remediation_plan_20260609_150247.md",
+        "?? tests/monitor/test_phase5_tool_selection_triage_regression.py"
+      ]
+    }
+  },
+  "safety_boundaries": {
+    "active_runtime_mutation": false,
+    "auto_merge_or_deploy": false,
+    "automatic_pr_loop_enabled": false,
+    "credential_modification": false,
+    "cron_resume_performed": false,
+    "network_or_budgeted_benchmark_calls": false,
+    "optimizer_execution_started": false,
+    "p1_cron_enabled_must_remain": false,
+    "p1_cron_job_id": "b24aca09f168",
+    "p1_cron_state_must_remain": "paused",
+    "production_continuous_loop_enabled": false,
+    "read_only_monitor_rerun": true,
+    "remaining_fires_run": false
+  },
+  "schema_version": "phase5-p1-readonly-monitor-rerun-noop-evidence-v1",
+  "semantic_results": {
+    "auto_triage_review_required": false,
+    "auto_triage_status": "NO_ACTION",
+    "dry_run_action_count": 0,
+    "failing_metric_count": 0,
+    "performance_status": "PASS",
+    "prompt_contract_warning_rate": 0.0,
+    "prompt_contract_warning_rows": 0,
+    "prompt_contract_warning_threshold": 0.05,
+    "provenance_source_kind": "provenance_backed_sanitized_dataset",
+    "provenance_status": "READY_FOR_READONLY_DRY_RUN",
+    "ranked_target_count": 0,
+    "regressing_metric_count": 0,
+    "scheduler_review_required": false,
+    "scheduler_status": "DRY_RUN_NOOP",
+    "side_effect_count": 0,
+    "tool_selection_accuracy": 1.0,
+    "tool_selection_fail_rows": 0,
+    "tool_selection_threshold": 0.9,
+    "weak_area_count": 0
+  },
+  "source_evidence": {
+    "artifacts": [
+      {
+        "bytes": 39276,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/provenance/provenance_dataset_report.json",
+        "sha256": "c35747299a54ca2826fac59d41794ae4d4af4eeda46f8cedd131ace118164f17"
+      },
+      {
+        "bytes": 883,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/provenance/provenance_metrics_input.json",
+        "sha256": "822a975c4c7dde8c452a1e4fd985cbf464a4ec6437f5df9463f8aa2097682e6a"
+      },
+      {
+        "bytes": 937,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/provenance/provenance_dataset_report.md",
+        "sha256": "4cae0dbf4841be9b62cf16fb4263046e3e23dc56ea2badf9c5599bd04c19cac2"
+      },
+      {
+        "bytes": 2164,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/performance/performance_snapshot_report.json",
+        "sha256": "478cc97701c41cdc9c8de3b84bb6f0ea864e070d06ebc4ae748f7ede7a9eeea9"
+      },
+      {
+        "bytes": 620,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/performance/performance_snapshot_report.md",
+        "sha256": "ce0922aeb9c3a068a789a17c0906528f5ee23c0bd087d47a423c50261e0e7b88"
+      },
+      {
+        "bytes": 1883,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/auto-triage/auto_triage_report.json",
+        "sha256": "7bc7c30405d0dcc3e79749f77d4595a6fb00310343632d0dcaed593fed231be3"
+      },
+      {
+        "bytes": 648,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/auto-triage/auto_triage_report.md",
+        "sha256": "e21162f273add4be6b0ce993cbfcfb98934bef349edba733b7a3f8f2a9f1899f"
+      },
+      {
+        "bytes": 2086,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/scheduler/scheduler_dry_run_report.json",
+        "sha256": "dd0bbc807101436e2539f1004331c463af5a8cd5843e7184a485273576784589"
+      },
+      {
+        "bytes": 655,
+        "path": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318/scheduler/scheduler_dry_run_report.md",
+        "sha256": "e6d23275b32c7e5c239351d65e4e17765825993495046900aa992ffd93ba1969"
+      }
+    ],
+    "ignored_output_not_committed": true,
+    "run_root": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318"
+  },
+  "stage": "P1_READONLY_MONITOR_RERUN_NOOP_EVIDENCE_PUBLICATION",
+  "status": "P1_READONLY_MONITOR_RERUN_NOOP_EVIDENCE_READY_FOR_PATH_LIMITED_PUBLICATION",
+  "verification": {
+    "compileall": "PASS for evolution/monitor and tests/monitor",
+    "focused_monitor_tests": "33 passed in 0.52s",
+    "git_diff_check": "PASS",
+    "high_risk_credential_assignment_scan": "PASS on generated output JSON/Markdown",
+    "ignored_output_status": "output artifacts are ignored by .gitignore: output/",
+    "json_parse": "PASS for provenance, metrics input, performance, auto-triage, scheduler outputs",
+    "private_absolute_path_scan": "PASS on generated output JSON/Markdown",
+    "semantic_safety_checks": "PASS"
+  }
+}
