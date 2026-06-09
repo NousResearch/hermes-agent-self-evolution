@@ -23,7 +23,7 @@
     "production_continuous_loop_enabled": false,
     "threshold_optimizer_execution_started": false
   },
-  "generated_at": "2026-06-08T14:49:14Z",
+  "generated_at": "2026-06-09T19:19:08Z",
   "ledger_status": "APPROVED_SIDE_EFFECTS_ONLY",
   "run_id": "20260608-164455",
   "schema_version": "phase5-p1-finite-cron-soak-side-effect-ledger-v1"

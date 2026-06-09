@@ -19,6 +19,9 @@
     "scope": "bounded P1 finite cron soak execution"
   },
   "cron_job_id": "b24aca09f168",
+  "errors": [
+    "kill switch present: output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/P1_FINITE_CRON_SOAK_KILL_SWITCH"
+  ],
   "fires": [
     {
       "auto_triage_status": "REVIEW_REQUIRED",
@@ -117,9 +120,205 @@
           "stdout_tail": "wrote Phase 5 scheduler dry-run\n"
         }
       ]
+    },
+    {
+      "auto_triage_status": "NO_ACTION",
+      "disallowed_side_effect_count": 0,
+      "dry_run_action_count": 0,
+      "fire_index": 2,
+      "fire_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02",
+      "generated_at": "2026-06-09T19:17:08Z",
+      "performance_status": "PASS",
+      "reports": {
+        "auto_triage_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/auto-triage/auto_triage_report.json",
+        "performance_snapshot_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/performance/performance_snapshot_report.json",
+        "provenance_dataset_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/provenance/provenance_dataset_report.json",
+        "scheduler_dry_run_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/scheduler/scheduler_dry_run_report.json"
+      },
+      "review_required": false,
+      "scheduler_status": "DRY_RUN_NOOP",
+      "side_effect_count": 0,
+      "source_kind": "provenance_backed_sanitized_dataset",
+      "status": "P1_SOAK_FIRE_PASS_NO_ACTION",
+      "steps": [
+        {
+          "duration_seconds": 0.062,
+          "logical_command": [
+            "<hse-venv>/python",
+            "-m",
+            "evolution.monitor.provenance_dataset",
+            "--tool-selection-report-json",
+            "output/tool-description/phase2e-heldout-review/run/candidate_only_report.json",
+            "--heldout-review-json",
+            "output/tool-description/phase2e-heldout-review/heldout_review.json",
+            "--prompt-source",
+            "prompt_builder=<hermes-agent>/agent/prompt_builder.py",
+            "--output-dir",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/provenance",
+            "--generated-at",
+            "2026-06-09T19:17:08Z"
+          ],
+          "name": "provenance_dataset",
+          "returncode": 0,
+          "stderr_tail": "",
+          "stdout_tail": "wrote Phase 5 provenance-backed metric input\n"
+        },
+        {
+          "duration_seconds": 0.048,
+          "logical_command": [
+            "<hse-venv>/python",
+            "-m",
+            "evolution.monitor.performance_snapshot",
+            "--metrics-json",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/provenance/provenance_metrics_input.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/performance",
+            "--generated-at",
+            "2026-06-09T19:17:08Z"
+          ],
+          "name": "performance_snapshot",
+          "returncode": 0,
+          "stderr_tail": "",
+          "stdout_tail": "wrote Phase 5 performance monitor snapshot\n"
+        },
+        {
+          "duration_seconds": 0.049,
+          "logical_command": [
+            "<hse-venv>/python",
+            "-m",
+            "evolution.monitor.auto_triage",
+            "--performance-report-json",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/performance/performance_snapshot_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/auto-triage",
+            "--generated-at",
+            "2026-06-09T19:17:08Z"
+          ],
+          "name": "auto_triage",
+          "returncode": 0,
+          "stderr_tail": "",
+          "stdout_tail": "wrote Phase 5 auto-triage ranking\n"
+        },
+        {
+          "duration_seconds": 0.053,
+          "logical_command": [
+            "<hse-venv>/python",
+            "-m",
+            "evolution.monitor.scheduler_dry_run",
+            "--auto-triage-report-json",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/auto-triage/auto_triage_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/scheduler",
+            "--generated-at",
+            "2026-06-09T19:17:08Z"
+          ],
+          "name": "scheduler_dry_run",
+          "returncode": 0,
+          "stderr_tail": "",
+          "stdout_tail": "wrote Phase 5 scheduler dry-run\n"
+        }
+      ]
+    },
+    {
+      "auto_triage_status": "NO_ACTION",
+      "disallowed_side_effect_count": 0,
+      "dry_run_action_count": 0,
+      "fire_index": 3,
+      "fire_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03",
+      "generated_at": "2026-06-09T19:19:08Z",
+      "performance_status": "PASS",
+      "reports": {
+        "auto_triage_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/auto-triage/auto_triage_report.json",
+        "performance_snapshot_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/performance/performance_snapshot_report.json",
+        "provenance_dataset_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/provenance/provenance_dataset_report.json",
+        "scheduler_dry_run_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/scheduler/scheduler_dry_run_report.json"
+      },
+      "review_required": false,
+      "scheduler_status": "DRY_RUN_NOOP",
+      "side_effect_count": 0,
+      "source_kind": "provenance_backed_sanitized_dataset",
+      "status": "P1_SOAK_FIRE_PASS_NO_ACTION",
+      "steps": [
+        {
+          "duration_seconds": 0.049,
+          "logical_command": [
+            "<hse-venv>/python",
+            "-m",
+            "evolution.monitor.provenance_dataset",
+            "--tool-selection-report-json",
+            "output/tool-description/phase2e-heldout-review/run/candidate_only_report.json",
+            "--heldout-review-json",
+            "output/tool-description/phase2e-heldout-review/heldout_review.json",
+            "--prompt-source",
+            "prompt_builder=<hermes-agent>/agent/prompt_builder.py",
+            "--output-dir",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/provenance",
+            "--generated-at",
+            "2026-06-09T19:19:08Z"
+          ],
+          "name": "provenance_dataset",
+          "returncode": 0,
+          "stderr_tail": "",
+          "stdout_tail": "wrote Phase 5 provenance-backed metric input\n"
+        },
+        {
+          "duration_seconds": 0.049,
+          "logical_command": [
+            "<hse-venv>/python",
+            "-m",
+            "evolution.monitor.performance_snapshot",
+            "--metrics-json",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/provenance/provenance_metrics_input.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/performance",
+            "--generated-at",
+            "2026-06-09T19:19:08Z"
+          ],
+          "name": "performance_snapshot",
+          "returncode": 0,
+          "stderr_tail": "",
+          "stdout_tail": "wrote Phase 5 performance monitor snapshot\n"
+        },
+        {
+          "duration_seconds": 0.043,
+          "logical_command": [
+            "<hse-venv>/python",
+            "-m",
+            "evolution.monitor.auto_triage",
+            "--performance-report-json",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/performance/performance_snapshot_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/auto-triage",
+            "--generated-at",
+            "2026-06-09T19:19:08Z"
+          ],
+          "name": "auto_triage",
+          "returncode": 0,
+          "stderr_tail": "",
+          "stdout_tail": "wrote Phase 5 auto-triage ranking\n"
+        },
+        {
+          "duration_seconds": 0.04,
+          "logical_command": [
+            "<hse-venv>/python",
+            "-m",
+            "evolution.monitor.scheduler_dry_run",
+            "--auto-triage-report-json",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/auto-triage/auto_triage_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/scheduler",
+            "--generated-at",
+            "2026-06-09T19:19:08Z"
+          ],
+          "name": "scheduler_dry_run",
+          "returncode": 0,
+          "stderr_tail": "",
+          "stdout_tail": "wrote Phase 5 scheduler dry-run\n"
+        }
+      ]
     }
   ],
-  "generated_at": "2026-06-08T14:49:14Z",
+  "generated_at": "2026-06-09T19:19:08Z",
   "parameters": {
     "delivery": "origin",
     "interval_minutes": 30,
@@ -151,7 +350,7 @@
   "schema_version": "phase5-p1-finite-cron-soak-run-v1",
   "status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
   "summary": {
-    "completed_fire_count": 1,
+    "completed_fire_count": 3,
     "disallowed_side_effect_count": 0,
     "dry_run_action_count": 1,
     "max_fire_count": 3,
