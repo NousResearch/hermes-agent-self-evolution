@@ -1,0 +1,20 @@
+{
+  "spurious_strict_win_rate": 0.125,
+  "spurious_regression_rate": 0.125,
+  "mean_per_task_flip": 0.09375,
+  "per_task_flip": {
+    "conv-test-wrapper": 0.375,
+    "conv-run-wrapper": 0.0,
+    "conv-fmt-wrapper": 0.0,
+    "conv-lint-wrapper": 0.0
+  },
+  "runs": 8,
+  "reps": 1,
+  "suite_sha256": "3a4f5602f84c98eaf9bc7283eb917a6b5fcf21400343897862bd3838822a1372",
+  "agent_model": "haiku",
+  "aborted": false,
+  "n_scored": 64,
+  "n_abstained": 0,
+  "scored_fraction": 1.0,
+  "is_degenerate": false
+}
