@@ -504,6 +504,69 @@ class TestComputeWinLossRateBased:
                 assert wl.n_losses == legacy_loss
 
 
+class TestNoiseAwareTolerance:
+    """Per-task / aggregate tolerance neutralizes within-noise movement."""
+
+    def _tr_rate(self, task_id, rate):
+        return TaskResult(
+            task_id=task_id, passed=(rate >= 0.5), pass_rate=rate,
+            abstained=False, tool_calls_seq=[], duration_seconds=0.0,
+        )
+
+    def test_within_tolerance_movement_is_a_tie(self):
+        b = summarize_phase([self._tr_rate("t", 0.5)])
+        e = summarize_phase([self._tr_rate("t", 0.6)])  # +0.10 < tol 0.2
+        wl = compute_win_loss(b, e, default_tolerance=0.2)
+        assert wl.n_wins == 0 and wl.n_losses == 0 and wl.n_ties == 1
+
+    def test_movement_exceeding_tolerance_is_a_win(self):
+        b = summarize_phase([self._tr_rate("t", 0.0)])
+        e = summarize_phase([self._tr_rate("t", 0.5)])  # +0.50 > tol 0.2
+        wl = compute_win_loss(b, e, default_tolerance=0.2)
+        assert wl.n_wins == 1 and wl.n_losses == 0
+
+    def test_within_tolerance_drop_is_not_a_loss(self):
+        b = summarize_phase([self._tr_rate("t", 0.7)])
+        e = summarize_phase([self._tr_rate("t", 0.6)])  # -0.10 < tol 0.2
+        wl = compute_win_loss(b, e, default_tolerance=0.2)
+        assert wl.n_losses == 0 and wl.n_ties == 1
+
+    def test_per_task_tolerance_overrides_default(self):
+        # flaky task "a" has a 0.4 floor; stable task "b" uses default 0.
+        b = summarize_phase([self._tr_rate("a", 0.5), self._tr_rate("b", 0.5)])
+        e = summarize_phase([self._tr_rate("a", 0.8), self._tr_rate("b", 0.6)])
+        wl = compute_win_loss(b, e, per_task_tolerance={"a": 0.4})
+        # a: +0.3 < 0.4 → tie; b: +0.1 > default 0.0 → win
+        assert wl.n_wins == 1 and wl.n_ties == 1
+
+    def test_aggregate_tolerance_allows_small_dip(self):
+        # t9's rate dips 1.0 → 0.4: crosses the 0.5 pass boundary (so the
+        # aggregate count drops 10/10 → 9/10) but the 0.6 drop is within its 0.7
+        # per-task floor, so it's a tie, not a loss. Aggregate tol 0.15 then
+        # absorbs the 0.1 aggregate dip → pass; strict (tol 0) → regression.
+        b = summarize_phase([self._tr_rate(f"t{i}", 1.0) for i in range(10)])
+        e = summarize_phase(
+            [self._tr_rate(f"t{i}", 1.0) for i in range(9)] + [self._tr_rate("t9", 0.4)]
+        )
+        wl = compute_win_loss(b, e, per_task_tolerance={"t9": 0.7})
+        assert wl.n_losses == 0 and wl.n_wins == 0
+        assert b.pass_rate == 1.0 and e.pass_rate == pytest.approx(0.9)
+        assert decide(b, e, wl, aggregate_tolerance=0.15)[0] == "pass"
+        assert decide(b, e, wl, aggregate_tolerance=0.0)[0] == "regression"
+
+    def test_aggregate_dip_beyond_tolerance_regresses(self):
+        b = summarize_phase([self._tr_rate(f"t{i}", 1.0) for i in range(10)])
+        e = summarize_phase([self._tr_rate(f"t{i}", 1.0 if i < 7 else 0.0) for i in range(10)])
+        wl = compute_win_loss(b, e)  # 3 strict losses
+        decision, _ = decide(b, e, wl, aggregate_tolerance=0.15)  # 0.3 dip > 0.15
+        assert decision == "regression"
+
+    def test_zero_tolerance_matches_legacy(self):
+        b = summarize_phase([self._tr_rate("t", 0.5)])
+        e = summarize_phase([self._tr_rate("t", 0.6)])
+        assert compute_win_loss(b, e, default_tolerance=0.0) == compute_win_loss(b, e)
+
+
 class TestDecisionRule:
     """Two-condition rule: pass-rate no-regression AND no per-task regression
     unless wins are 2x losses."""

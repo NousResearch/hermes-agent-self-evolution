@@ -489,3 +489,58 @@ class TestClosedLoopValidatorActionVerdict:
             assert kw["expected_action"] is None
             assert kw["target_skill"] is None
             assert kw["stale_token"] is None
+
+
+class TestNoiseAwareTolerances:
+    """_resolve_noise_tolerances: opt-in load of the A/A floor + safety rails."""
+
+    class _Runner:
+        model = "haiku"
+
+        def run(self, ctx):  # pragma: no cover - not exercised here
+            raise AssertionError("runner.run should not be called")
+
+    def _suite(self, tmp_path):
+        p = tmp_path / "suite.jsonl"
+        p.write_text("")
+        return TaskSuite(path=p, sha256="x", tasks=())
+
+    def _write_sidecar(self, tmp_path, payload):
+        (tmp_path / "suite.jsonl.noise.json").write_text(json.dumps(payload))
+
+    def _validator(self, tmp_path, **kw):
+        return ClosedLoopValidator(_StubInstaller(tmp_path / "t.txt"), self._Runner(), **kw)
+
+    def test_disabled_is_noop(self, tmp_path):
+        self._write_sidecar(tmp_path, {"per_task_flip": {"a": 0.4}, "mean_per_task_flip": 0.4})
+        v = self._validator(tmp_path, noise_aware=False)
+        assert v._resolve_noise_tolerances(self._suite(tmp_path)) == ({}, 0.0)
+
+    def test_loads_sidecar_when_enabled(self, tmp_path):
+        self._write_sidecar(tmp_path, {
+            "per_task_flip": {"a": 0.375}, "mean_per_task_flip": 0.1875,
+            "is_degenerate": False, "agent_model": "haiku",
+        })
+        v = self._validator(tmp_path, noise_aware=True)
+        per_task, aggregate = v._resolve_noise_tolerances(self._suite(tmp_path))
+        assert per_task == {"a": 0.375}
+        assert aggregate == 0.1875
+
+    def test_missing_sidecar_is_noop(self, tmp_path):
+        v = self._validator(tmp_path, noise_aware=True)
+        assert v._resolve_noise_tolerances(self._suite(tmp_path)) == ({}, 0.0)
+
+    def test_degenerate_sidecar_ignored(self, tmp_path):
+        self._write_sidecar(tmp_path, {
+            "per_task_flip": {"a": 0.5}, "mean_per_task_flip": 0.5, "is_degenerate": True,
+        })
+        v = self._validator(tmp_path, noise_aware=True)
+        assert v._resolve_noise_tolerances(self._suite(tmp_path)) == ({}, 0.0)
+
+    def test_multiplier_applied(self, tmp_path):
+        self._write_sidecar(tmp_path, {
+            "per_task_flip": {"a": 0.2}, "mean_per_task_flip": 0.2, "is_degenerate": False,
+        })
+        v = self._validator(tmp_path, noise_aware=True, noise_tolerance_multiplier=2.0)
+        per_task, aggregate = v._resolve_noise_tolerances(self._suite(tmp_path))
+        assert per_task == {"a": pytest.approx(0.4)} and aggregate == pytest.approx(0.4)

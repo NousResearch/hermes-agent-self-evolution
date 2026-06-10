@@ -178,6 +178,27 @@ def load_noise_sidecar(suite_path: Path) -> Optional[dict[str, Any]]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def noise_tolerances(
+    sidecar: dict[str, Any], *, multiplier: float = 1.0
+) -> tuple[dict[str, float], float]:
+    """Derive (per_task_tolerance, aggregate_tolerance) from a noise sidecar.
+
+    Per-task tolerances are the measured A/A per-task flip rates; the aggregate
+    tolerance is the mean flip. Both scaled by ``multiplier``. A degenerate
+    sidecar (a probe that mostly abstained — see ``NoiseReport.is_degenerate``)
+    measured nothing usable, so it yields zero tolerances: a non-floor must
+    never silently soften the deploy gate.
+    """
+    if sidecar.get("is_degenerate"):
+        return {}, 0.0
+    per_task = {
+        tid: float(flip) * multiplier
+        for tid, flip in (sidecar.get("per_task_flip") or {}).items()
+    }
+    aggregate = float(sidecar.get("mean_per_task_flip", 0.0)) * multiplier
+    return per_task, aggregate
+
+
 def _summary_text(report: NoiseReport) -> str:
     lines = [
         f"A/A noise floor over {report.runs} run(s), reps={report.reps}"

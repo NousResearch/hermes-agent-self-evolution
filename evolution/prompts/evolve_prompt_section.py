@@ -347,6 +347,7 @@ def evolve_prompt_section(
     skip_saturation_check: bool = False,
     force_saturation_check: bool = False,
     compile_floor: bool = False,
+    noise_aware_gate: bool = False,
     apply: bool = False,
     create_pr_flag: bool = False,
     dry_run: bool = False,
@@ -688,6 +689,7 @@ def evolve_prompt_section(
             layer2_judge_factory=layer2_factory,
             layer2_threshold=layer2_threshold,
             reps=gate_reps,
+            noise_aware=noise_aware_gate,
         )
         report = validator.validate(ValidationInputs(
             tool_name=section_name,
@@ -740,6 +742,9 @@ def evolve_prompt_section(
             "n_wins": report.delta.n_wins,
             "n_losses": report.delta.n_losses,
             "n_ties": report.delta.n_ties,
+            # Whether the noise-aware tolerance was requested; the applied
+            # tolerance + within-noise neutralization land in decision_reasons.
+            "noise_aware": noise_aware_gate,
         },
         "sentinel_failures": proposer.sentinel_failures,
         "elapsed_seconds": elapsed,
@@ -853,6 +858,10 @@ def evolve_prompt_section(
               help="Before GEPA, behaviorally score baseline + a zero-LM compiled "
                    "constraint floor on the holdout (one extra CL pass). If the floor "
                    "nears the ceiling, search spend is likely unjustified.")
+@click.option("--noise-aware-gate", is_flag=True, default=False,
+              help="Apply A/A noise tolerances from <suite>.noise.json at the deploy "
+                   "gate: per-task movements smaller than the measured flip are scored "
+                   "as ties, and aggregate dips within the mean flip don't regress.")
 @click.option("--apply", is_flag=True, default=False,
               help="On a passing gate, write the evolved section into prompt_builder.py.")
 @click.option("--create-pr", "create_pr_flag", is_flag=True, default=False,
@@ -872,8 +881,8 @@ def main(section_name, target, hermes_repo, claude_md, tasks_path, iterations,
          layer2_threshold, task_timeout_seconds, max_total_cost_usd,
          fitness_reps, gate_reps,
          gepa_minibatch_size, gepa_acceptance, skip_saturation_check,
-         force_saturation_check, compile_floor, apply, create_pr_flag, dry_run, output_dir,
-         baseline_override_file):
+         force_saturation_check, compile_floor, noise_aware_gate, apply, create_pr_flag,
+         dry_run, output_dir, baseline_override_file):
     """Evolve a system-prompt section via GEPA + closed-loop validation (Hermes or Claude Code)."""
     result = evolve_prompt_section(
         section_name=section_name,
@@ -899,6 +908,7 @@ def main(section_name, target, hermes_repo, claude_md, tasks_path, iterations,
         skip_saturation_check=skip_saturation_check,
         force_saturation_check=force_saturation_check,
         compile_floor=compile_floor,
+        noise_aware_gate=noise_aware_gate,
         apply=apply,
         create_pr_flag=create_pr_flag,
         dry_run=dry_run,

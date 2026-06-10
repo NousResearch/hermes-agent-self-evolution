@@ -10,8 +10,31 @@ from evolution.validation.noise_calibration import (
     calibrate_noise,
     load_noise_sidecar,
     noise_sidecar_path,
+    noise_tolerances,
     write_noise_sidecar,
 )
+
+
+def test_noise_tolerances_from_sidecar():
+    sidecar = {
+        "per_task_flip": {"a": 0.375, "b": 0.0}, "mean_per_task_flip": 0.1875,
+        "is_degenerate": False,
+    }
+    per_task, aggregate = noise_tolerances(sidecar)
+    assert per_task == {"a": 0.375, "b": 0.0}
+    assert aggregate == pytest.approx(0.1875)
+
+
+def test_noise_tolerances_multiplier_scales():
+    sidecar = {"per_task_flip": {"a": 0.2}, "mean_per_task_flip": 0.2, "is_degenerate": False}
+    per_task, aggregate = noise_tolerances(sidecar, multiplier=2.0)
+    assert per_task == {"a": pytest.approx(0.4)}
+    assert aggregate == pytest.approx(0.4)
+
+
+def test_degenerate_sidecar_yields_zero_tolerance():
+    sidecar = {"per_task_flip": {"a": 0.5}, "mean_per_task_flip": 0.5, "is_degenerate": True}
+    assert noise_tolerances(sidecar) == ({}, 0.0)
 from evolution.validation.report import (
     PhaseResult,
     TaskResult,

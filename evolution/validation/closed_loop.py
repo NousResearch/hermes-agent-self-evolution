@@ -78,6 +78,13 @@ console = Console()
     help=f"Per-task wall-clock cap for hermes -z (default {DEFAULT_TASK_TIMEOUT_SECONDS}s). "
     "Timeouts count as abstentions, not failures.",
 )
+@click.option(
+    "--noise-aware-gate",
+    is_flag=True,
+    default=False,
+    help="Apply A/A noise tolerances from <suite>.noise.json: per-task movements "
+    "smaller than the measured flip are scored as ties, not wins/losses.",
+)
 def main(
     tool_name: str,
     hermes_repo: Path,
@@ -86,6 +93,7 @@ def main(
     evolved_artifact: Path,
     output_dir: Path | None,
     task_timeout_seconds: int,
+    noise_aware_gate: bool,
 ) -> None:
     """Closed-loop validation: run baseline + evolved through real hermes
     sessions on a task suite, report whether evolved measurably shifted
@@ -101,7 +109,9 @@ def main(
         tool_name=tool_name,
     )
     runner = HermesAgentRunner(timeout_seconds=task_timeout_seconds)
-    validator = ClosedLoopValidator(installer=installer, runner=runner)
+    validator = ClosedLoopValidator(
+        installer=installer, runner=runner, noise_aware=noise_aware_gate,
+    )
 
     console.print(
         f"\n[bold cyan]Closed-loop validation[/bold cyan] — tool: [bold]{tool_name}[/bold]"

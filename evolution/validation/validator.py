@@ -90,9 +90,17 @@ class ClosedLoopValidator:
         ] = None,
         layer2_threshold: float = 0.7,
         reps: int = 1,
+        noise_aware: bool = False,
+        noise_tolerance_multiplier: float = 1.0,
     ) -> None:
         self.installer = installer
         self.runner = runner
+        # Noise-aware gating (opt-in): when True and the suite has a
+        # <suite>.noise.json A/A floor, per-task movements smaller than the
+        # measured flip are scored as ties, not wins/losses. Off → tolerance 0,
+        # byte-identical to the legacy gate.
+        self.noise_aware = noise_aware
+        self.noise_tolerance_multiplier = noise_tolerance_multiplier
         # Per-task repetitions. reps=1 (the default, shared with the
         # tool/skill paths) is byte-for-byte the legacy single-run gate:
         # pass_rate collapses to 0.0/1.0 and passed == (pass_rate >= 0.5).
@@ -137,8 +145,22 @@ class ClosedLoopValidator:
 
         baseline = summarize_phase(baseline_results)
         evolved = summarize_phase(evolved_results)
-        delta = compute_win_loss(baseline, evolved)
-        decision, reasons = decide(baseline, evolved, delta)
+        per_task_tol, aggregate_tol = self._resolve_noise_tolerances(inputs.suite)
+        delta = compute_win_loss(
+            baseline, evolved, per_task_tolerance=per_task_tol,
+        )
+        decision, reasons = decide(
+            baseline, evolved, delta, aggregate_tolerance=aggregate_tol,
+        )
+        if per_task_tol or aggregate_tol:
+            # How many movements the noise floor neutralized vs the strict gate
+            # (pure arithmetic — no extra agent runs), for the audit trail.
+            strict = compute_win_loss(baseline, evolved)
+            neutralized = (strict.n_wins + strict.n_losses) - (delta.n_wins + delta.n_losses)
+            reasons.append(
+                f"noise-aware: per-task + aggregate tolerance from A/A floor "
+                f"neutralized {neutralized} within-noise movement(s)"
+            )
         return ValidationReport(
             schema_version=_SCHEMA_VERSION,
             tool=inputs.tool_name,
@@ -150,6 +172,46 @@ class ClosedLoopValidator:
             decision=decision,
             decision_reasons=reasons,
         )
+
+    def _resolve_noise_tolerances(
+        self, suite: TaskSuite
+    ) -> tuple[dict[str, float], float]:
+        """Load A/A noise tolerances for ``suite`` when noise-aware gating is on.
+
+        Returns ({}, 0.0) — a no-op equal to the legacy gate — when disabled,
+        when no sidecar exists, or when the sidecar is degenerate. Lazy import
+        breaks the validator↔noise_calibration cycle.
+        """
+        if not self.noise_aware or suite.path is None:
+            return {}, 0.0
+        from evolution.validation.noise_calibration import (
+            load_noise_sidecar,
+            noise_tolerances,
+        )
+
+        sidecar = load_noise_sidecar(suite.path)
+        if sidecar is None:
+            logger.warning(
+                "noise-aware gate requested but no %s.noise.json sidecar found; "
+                "running with zero tolerance (no-op). Calibrate with "
+                "python -m evolution.validation.noise_calibration.",
+                suite.path.name,
+            )
+            return {}, 0.0
+        if sidecar.get("is_degenerate"):
+            logger.warning(
+                "noise sidecar for %s is degenerate (probe mostly abstained); "
+                "ignoring it — gate runs with zero tolerance.", suite.path.name,
+            )
+            return {}, 0.0
+        sidecar_model = sidecar.get("agent_model")
+        runner_model = getattr(self.runner, "model", None)
+        if sidecar_model and runner_model and sidecar_model != runner_model:
+            logger.warning(
+                "noise floor was measured on agent model %r but the gate runs on "
+                "%r; the tolerance may not transfer.", sidecar_model, runner_model,
+            )
+        return noise_tolerances(sidecar, multiplier=self.noise_tolerance_multiplier)
 
     def _run_phase(
         self, suite: TaskSuite, *, artifact: Path, suite_dir: Optional[Path]

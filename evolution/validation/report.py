@@ -340,9 +340,23 @@ def summarize_phase(task_results: list[TaskResult]) -> PhaseResult:
     )
 
 
-def compute_win_loss(baseline: PhaseResult, evolved: PhaseResult) -> WinLoss:
+def compute_win_loss(
+    baseline: PhaseResult,
+    evolved: PhaseResult,
+    *,
+    per_task_tolerance: Optional[dict[str, float]] = None,
+    default_tolerance: float = 0.0,
+) -> WinLoss:
     """Per-task win/loss: how the evolved phase moved vs baseline on
     each task_id. Abstentions on either side are ties.
+
+    A per-task movement counts only if it exceeds the task's noise tolerance:
+    win iff ``e - b > tol``, loss iff ``b - e > tol``, else tie. ``tol`` is
+    ``per_task_tolerance.get(task_id, default_tolerance)``. The default
+    tolerance of 0.0 reduces ``>`` to the legacy ``e.pass_rate > b.pass_rate``,
+    so the no-tolerance gate is byte-for-byte unchanged. Tolerances come from
+    the A/A noise floor (a task's measured spurious flip rate) so stochastic
+    movement smaller than the floor isn't scored as signal.
     """
     by_id_baseline = {r.task_id: r for r in baseline.tasks}
     by_id_evolved = {r.task_id: r for r in evolved.tasks}
@@ -353,11 +367,14 @@ def compute_win_loss(baseline: PhaseResult, evolved: PhaseResult) -> WinLoss:
         if b is None or e is None or b.abstained or e.abstained:
             n_ties += 1
             continue
-        # Rate-based: a win/loss is any movement in pass_rate. At reps=1
-        # rates are 0.0/1.0, so this reduces to the legacy bool comparison.
-        if e.pass_rate > b.pass_rate:
+        tol = (
+            per_task_tolerance.get(task_id, default_tolerance)
+            if per_task_tolerance is not None
+            else default_tolerance
+        )
+        if e.pass_rate - b.pass_rate > tol:
             n_wins += 1
-        elif e.pass_rate < b.pass_rate:
+        elif b.pass_rate - e.pass_rate > tol:
             n_losses += 1
         else:
             n_ties += 1
@@ -369,25 +386,40 @@ def compute_win_loss(baseline: PhaseResult, evolved: PhaseResult) -> WinLoss:
     )
 
 
-def decide(baseline: PhaseResult, evolved: PhaseResult, wl: WinLoss) -> tuple[str, list[str]]:
+def decide(
+    baseline: PhaseResult,
+    evolved: PhaseResult,
+    wl: WinLoss,
+    *,
+    aggregate_tolerance: float = 0.0,
+) -> tuple[str, list[str]]:
     """Two-condition decision rule.
 
-    1) ``evolved.pass_rate >= baseline.pass_rate`` (aggregate no-regression).
+    1) ``evolved.pass_rate >= baseline.pass_rate - aggregate_tolerance``
+       (aggregate no-regression, within a noise tolerance).
     2) ``n_losses == 0`` OR ``n_wins >= 2 * n_losses`` (no per-task
        regression unless offset 2:1 by wins).
 
     Ties (equal pass-rate, no per-task losses) decide as ``pass`` —
     same semantics as the ``--benchmark-cmd`` no-regression rule.
+    ``aggregate_tolerance`` defaults to 0.0 (strict, legacy behavior); when set
+    from the A/A noise floor, an aggregate dip smaller than the floor isn't
+    scored as a regression.
     """
     reasons: list[str] = []
-    aggregate_ok = evolved.pass_rate >= baseline.pass_rate
+    aggregate_ok = evolved.pass_rate >= baseline.pass_rate - aggregate_tolerance
+    tol_note = (
+        f" (tolerance {aggregate_tolerance:.2f})" if aggregate_tolerance else ""
+    )
     if aggregate_ok:
         reasons.append(
-            f"evolved pass_rate {evolved.pass_rate:.2f} >= baseline {baseline.pass_rate:.2f}"
+            f"evolved pass_rate {evolved.pass_rate:.2f} >= baseline "
+            f"{baseline.pass_rate:.2f}{tol_note}"
         )
     else:
         reasons.append(
-            f"evolved pass_rate {evolved.pass_rate:.2f} < baseline {baseline.pass_rate:.2f}"
+            f"evolved pass_rate {evolved.pass_rate:.2f} < baseline "
+            f"{baseline.pass_rate:.2f}{tol_note}"
         )
     per_task_ok = (wl.n_losses == 0) or (wl.n_wins >= 2 * wl.n_losses)
     if per_task_ok:
