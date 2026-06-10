@@ -164,6 +164,88 @@ def _run_test_command(command: str, cwd: Path, timeout_seconds: float) -> bool:
         return False
 
 
+# Execution-aware convention matching. The convention verdict is judge-free and
+# treated as ground truth, so it must distinguish a wrapper being *invoked* from one
+# merely *mentioned* (`cat bin/check`, `echo 'bin/check'`, `./bin/check --help`).
+_CONV_PREFIX_WRAPPERS = frozenset({"sudo", "env", "time", "nohup", "exec", "command", "nice"})
+_CONV_INTERPRETERS = frozenset({"bash", "sh", "zsh", "dash"})
+# Read-only / echo commands: a substring appearing as their ARGUMENT is a mention,
+# not an execution of that tool.
+_CONV_INSPECTORS = frozenset({
+    "cat", "echo", "printf", "grep", "egrep", "fgrep", "less", "more",
+    "head", "tail", "ls", "find", "stat", "file", "wc", "true", ":",
+})
+_CONV_HELP_FLAGS = frozenset({"--help", "-h", "--version", "-V"})
+_CONV_OPERATORS = frozenset({"&&", "||", ";", "|", "&"})
+_CONV_ENV_ASSIGN = re.compile(r"^\w+=")
+_CONV_TAIL = r"(?![A-Za-z0-9_.\-])"
+
+
+def _conv_tokenize(text: str) -> list[str]:
+    try:
+        return shlex.split(text, posix=True)
+    except ValueError:  # unbalanced quotes etc. — degrade to whitespace split
+        return text.split()
+
+
+def _conv_segments(command: str) -> list[list[str]]:
+    """Split a command into segments (token lists) on shell operators, quote-aware
+    (operators inside quotes stay part of their token)."""
+    segments: list[list[str]] = []
+    current: list[str] = []
+    for tok in _conv_tokenize(command):
+        if tok in _CONV_OPERATORS:
+            if current:
+                segments.append(current)
+                current = []
+        else:
+            current.append(tok)
+    if current:
+        segments.append(current)
+    return segments
+
+
+def _conv_base(prog: str) -> str:
+    return prog.rsplit("/", 1)[-1]
+
+
+def _conv_invoked_programs(tokens: list[str]) -> set[str]:
+    """Best-effort set of programs actually executed in one segment.
+
+    Strips env-assignments and command wrappers (sudo/env/...); for an interpreter
+    (`bash X`, `sh -c "..."`) and `python -m <mod>` it also includes the script /
+    module being run. An argument to e.g. ``cat`` is NOT an invoked program.
+    """
+    i = 0
+    while i < len(tokens) and (tokens[i] in _CONV_PREFIX_WRAPPERS or _CONV_ENV_ASSIGN.match(tokens[i])):
+        i += 1
+    rest = tokens[i:]
+    if not rest:
+        return set()
+    progs = {rest[0]}
+    base = _conv_base(rest[0])
+    if base in _CONV_INTERPRETERS:
+        if "-c" in rest:  # bash -c "<script>": recurse one level into the body
+            ci = rest.index("-c")
+            if ci + 1 < len(rest):
+                for seg in _conv_segments(rest[ci + 1]):
+                    progs |= _conv_invoked_programs(seg)
+        else:  # bash <script>: the first non-flag token is the invoked script
+            for t in rest[1:]:
+                if not t.startswith("-"):
+                    progs.add(t)
+                    break
+    if base in {"python", "python3"} and "-m" in rest:
+        mi = rest.index("-m")
+        if mi + 1 < len(rest):
+            progs.add(rest[mi + 1])
+    return progs
+
+
+def _conv_matches(substr: str, text: str) -> bool:
+    return re.search(re.escape(substr) + _CONV_TAIL, text) is not None
+
+
 def _score_convention(
     run: AgentRunResult,
     *,
@@ -171,37 +253,46 @@ def _score_convention(
     forbidden_cmd_substr: tuple[str, ...],
     command_tool: str = "Bash",
 ) -> bool:
-    """Return True iff a Bash call used a required wrapper substring and none
-    bypassed it with a forbidden default-tool substring.
+    """Return True iff the agent INVOKED a required wrapper and never ran a forbidden
+    default tool.
 
     Used to score adherence to a repo-specific convention (e.g. "run tests with
-    ./bin/check, never pytest"). Agent-agnostic: reads only the ``command_tool``
-    calls (default ``Bash``) in ``tool_calls_with_args`` — set it per task for a
-    backend whose shell tool is named differently.
+    ./bin/check, never pytest"). Agent-agnostic: reads only the ``command_tool`` calls
+    (default ``Bash``) in ``tool_calls_with_args``.
 
-    Matching is trailing-boundary aware: a substring matches only when it is not
-    immediately followed by a word-continuation char ([A-Za-z0-9_.-]), so forbidden
-    ``pytest`` matches ``python -m pytest`` but not ``pytest.ini`` / ``pytest_cache``,
-    while required ``bin/check`` still matches ``./bin/check`` (a leading path/flag is
-    fine). Note: a forbidden default used *anywhere* in the run fails the task — the
-    convention is "never use the default", so explore-then-comply also fails by design.
+    Execution-aware (not raw substring): each command is split into shell segments and
+    each segment's *invoked programs* identified. A required substring counts as **used**
+    only when it matches an invoked program (so ``./bin/check`` / ``bash bin/check`` count
+    but ``cat bin/check`` / ``echo 'bin/check'`` / ``./bin/check --help`` do not). A
+    forbidden substring counts as a **bypass** only when it appears in a segment whose
+    program is not a read-only inspector and which isn't a help/version call (so
+    ``python -m pytest`` / ``python app.py`` count but ``cat pytest.ini`` /
+    ``echo 'pytest'`` do not). Substring matching is trailing-boundary aware (``pytest``
+    does not match ``pytest.ini``). A forbidden default run *anywhere* fails the task —
+    the convention is "never use the default", so explore-then-comply fails by design.
     """
     commands = [
         (call.get("arguments") or {}).get("command", "")
         for call in run.tool_calls_with_args
         if call.get("name") == command_tool
     ]
-    used = _any_command_uses(commands, required_cmd_substr)
-    bypassed = _any_command_uses(commands, forbidden_cmd_substr)
+    used = False
+    bypassed = False
+    for command in commands:
+        for seg in _conv_segments(command):
+            if any(t in _CONV_HELP_FLAGS for t in seg):
+                continue  # --help/--version: program named but didn't do its job
+            progs = _conv_invoked_programs(seg)
+            if not progs:
+                continue
+            if any(_conv_matches(req, p) for req in required_cmd_substr for p in progs):
+                used = True
+            bases = {_conv_base(p) for p in progs}
+            if not (bases <= _CONV_INSPECTORS):  # not a pure mention/inspection segment
+                seg_text = " ".join(seg)
+                if any(_conv_matches(forb, seg_text) for forb in forbidden_cmd_substr):
+                    bypassed = True
     return used and not bypassed
-
-
-def _any_command_uses(commands: list[str], substrs: tuple[str, ...]) -> bool:
-    return any(
-        re.search(re.escape(s) + r"(?![A-Za-z0-9_.\-])", cmd)
-        for cmd in commands
-        for s in substrs
-    )
 
 
 def _score_action_patch(
