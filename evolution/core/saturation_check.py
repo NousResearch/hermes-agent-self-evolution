@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal, Optional, TypeAlias
 
 import dspy
@@ -41,6 +42,9 @@ class SaturationReport:
     closed_loop_per_example: Optional[list[float]] = None
     suggestions: list[str] = field(default_factory=list)
     thresholds: dict[str, float] = field(default_factory=dict)
+    # A/A noise floor (loaded from <suite>.noise.json if a calibration was run),
+    # so the gate's measured intrinsic noise surfaces in every pre-flight.
+    noise: Optional[dict] = None
 
 
 def _classify_band(
@@ -143,6 +147,7 @@ def saturation_preflight(
     closed_loop_cache=None,
     baseline_artifact_text: Optional[str] = None,
     thresholds: Optional[dict[str, float]] = None,
+    suite_path: Optional[Path] = None,
 ) -> SaturationReport:
     """Score baseline on holdout (and closed-loop suite if cache provided),
     classify into a band, return a report.
@@ -183,6 +188,14 @@ def saturation_preflight(
         thresholds=thresholds,
     )
 
+    noise: Optional[dict] = None
+    if suite_path is not None:
+        # Lazy import: keeps the validation package out of core's import graph
+        # except when a noise sidecar is actually consulted.
+        from evolution.validation.noise_calibration import load_noise_sidecar
+
+        noise = load_noise_sidecar(suite_path)
+
     return SaturationReport(
         band=band,
         holdout_score=holdout_mean,
@@ -193,6 +206,7 @@ def saturation_preflight(
         closed_loop_per_example=closed_loop_per_example,
         suggestions=suggestions,
         thresholds=dict(thresholds),
+        noise=noise,
     )
 
 
@@ -209,6 +223,17 @@ _BAND_STYLES: dict[SaturationBand, str] = {
     "weak_signal": "yellow",
     "uniform_failure": "yellow",
 }
+
+
+def _noise_line(noise: Optional[dict]) -> Optional[str]:
+    """One-line A/A noise-floor summary, or None when no sidecar was loaded."""
+    if not noise:
+        return None
+    return (
+        f"Noise floor: spurious strict-win {noise['spurious_strict_win_rate']:.0%}, "
+        f"mean per-task flip {noise['mean_per_task_flip']:.0%} "
+        f"({noise['runs']} A/A run(s), reps={noise['reps']})"
+    )
 
 
 def render_saturation_panel(
@@ -232,6 +257,9 @@ def render_saturation_panel(
             )
             + ").[/dim]"
         )
+        noise_line = _noise_line(report.noise)
+        if noise_line is not None:
+            console.print(f"[dim]{noise_line}[/dim]")
         return
 
     body = Text()
@@ -241,6 +269,9 @@ def render_saturation_panel(
         body.append(
             f"Closed-loop (behavioral): {report.closed_loop_score:.3f} over {report.closed_loop_n} tasks\n"
         )
+    noise_line = _noise_line(report.noise)
+    if noise_line is not None:
+        body.append(f"{noise_line}\n")
     body.append("\nSuggestions:\n", style="bold")
     for s in report.suggestions:
         body.append(f"  • {s}\n")

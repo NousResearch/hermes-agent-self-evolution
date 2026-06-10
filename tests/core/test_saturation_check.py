@@ -150,6 +150,40 @@ class TestSaturationPreflightNoClosedLoop:
                 lm=MagicMock(),
             )
 
+    def test_attaches_noise_sidecar_when_suite_path_given(self, tmp_path):
+        import json
+        suite_path = tmp_path / "conv.jsonl"
+        (tmp_path / "conv.jsonl.noise.json").write_text(json.dumps({
+            "spurious_strict_win_rate": 0.1, "spurious_regression_rate": 0.0,
+            "mean_per_task_flip": 0.0, "per_task_flip": {}, "runs": 10, "reps": 1,
+            "suite_sha256": "x",
+        }))
+        with patch(
+            "evolution.core.saturation_check._score_baseline_on_holdout",
+            return_value=(0.6, [0.6] * 5),
+        ):
+            report = saturation_preflight(
+                baseline_module=MagicMock(),
+                holdout_examples=[MagicMock() for _ in range(5)],
+                metric=MagicMock(), lm=MagicMock(),
+                suite_path=suite_path,
+            )
+        assert report.noise is not None
+        assert report.noise["runs"] == 10
+
+    def test_noise_is_none_when_no_sidecar(self, tmp_path):
+        with patch(
+            "evolution.core.saturation_check._score_baseline_on_holdout",
+            return_value=(0.6, [0.6] * 5),
+        ):
+            report = saturation_preflight(
+                baseline_module=MagicMock(),
+                holdout_examples=[MagicMock() for _ in range(5)],
+                metric=MagicMock(), lm=MagicMock(),
+                suite_path=tmp_path / "no_sidecar.jsonl",
+            )
+        assert report.noise is None
+
 
 class TestSaturationPreflightWithClosedLoop:
     def _make_validation_report(self, *, n_pass: int, n_fail: int):
@@ -312,6 +346,39 @@ class TestRenderPanel:
         )
         out = self._render_to_string(report)
         assert "healthy" in out.lower() or "passed" in out.lower()
+
+    _NOISE = {
+        "spurious_strict_win_rate": 0.125, "spurious_regression_rate": 0.0,
+        "mean_per_task_flip": 0.05, "per_task_flip": {}, "runs": 8, "reps": 1,
+        "suite_sha256": "x", "agent_model": "haiku",
+    }
+
+    def test_noise_row_renders_on_healthy_band_when_sidecar_present(self):
+        report = SaturationReport(
+            band="healthy", holdout_score=0.60, holdout_n=50,
+            holdout_per_example=[0.6] * 50,
+            suggestions=[], thresholds=DEFAULT_THRESHOLDS, noise=self._NOISE,
+        )
+        out = self._render_to_string(report)
+        assert "Noise floor" in out
+        assert "13%" in out or "12%" in out  # spurious strict-win 12.5%
+
+    def test_noise_row_absent_when_no_sidecar(self):
+        report = SaturationReport(
+            band="healthy", holdout_score=0.60, holdout_n=50,
+            holdout_per_example=[0.6] * 50,
+            suggestions=[], thresholds=DEFAULT_THRESHOLDS, noise=None,
+        )
+        assert "Noise floor" not in self._render_to_string(report)
+
+    def test_noise_row_renders_in_warn_panel(self):
+        report = SaturationReport(
+            band="no_headroom", holdout_score=0.99, holdout_n=50,
+            holdout_per_example=[1.0] * 50,
+            suggestions=["Try a harder closed-loop suite"],
+            thresholds=DEFAULT_THRESHOLDS, noise=self._NOISE,
+        )
+        assert "Noise floor" in self._render_to_string(report)
 
 
 class TestIsNonInteractive:

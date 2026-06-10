@@ -46,6 +46,10 @@ from evolution.core.lm_timing_callback import (
 from evolution.core.pr_automation import disabled_pr_block
 from evolution.core.quality_gate import write_gate_decision
 from evolution.core.run_inputs import build_run_inputs
+from evolution.core.search_telemetry import (
+    append_search_telemetry,
+    resolve_ledger_root,
+)
 from evolution.core.saturation_check import (
     is_non_interactive,
     interactive_confirm,
@@ -533,6 +537,7 @@ def evolve_prompt_section(
                     metric=metric,
                     lm=eval_lm,
                     baseline_artifact_text=baseline_text,
+                    suite_path=suite.path,
                 )
                 render_saturation_panel(sat_report, console=console)
 
@@ -595,8 +600,14 @@ def evolve_prompt_section(
         # Guard released here — prompt_builder.py is restored to baseline.
         elapsed = time.time() - start_time
 
+        # Capture the val-score distribution for search telemetry: the
+        # MIPROv2 fallback module has no detailed_results, so these stay None.
+        val_aggregate_scores: Optional[list[float]] = None
+        best_candidate_idx: Optional[int] = None
         if hasattr(optimized, "detailed_results"):
             details = optimized.detailed_results
+            val_aggregate_scores = [float(v) for v in details.val_aggregate_scores]
+            best_candidate_idx = int(details.best_idx)
             evolved_text = _section_text_from_candidate(
                 details.candidates[details.best_idx], section_name
             )
@@ -686,11 +697,24 @@ def evolve_prompt_section(
         "cost": COST_LEDGER.summary(),
         "run_inputs": run_inputs,
         "pr_created": pr_block,
+        # Persist the val distribution so the discrimination signal survives in
+        # the run record (it was never stored historically). None on MIPROv2.
+        "val_aggregate_scores": val_aggregate_scores,
         **({"val_signal_warning": val_warning} if val_warning is not None else {}),
         **section_payload,
     }
     gate_path = write_gate_decision(output_dir, decision_payload)
     console.print(f"  [dim]Gate decision logged to {gate_path}[/dim]")
+
+    if val_aggregate_scores is not None:
+        append_search_telemetry(
+            resolve_ledger_root(output_dir),
+            artifact=section_name,
+            artifact_type="prompt_section",
+            val_scores=val_aggregate_scores,
+            best_idx=best_candidate_idx,
+            decision=decision_payload["decision"],
+        )
 
     cost_summary = COST_LEDGER.summary()
     n_uncaptured = cost_summary["n_cost_uncaptured"]
