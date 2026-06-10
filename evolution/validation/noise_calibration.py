@@ -43,9 +43,28 @@ class NoiseReport:
     suite_sha256: str
     agent_model: Optional[str] = None
     aborted: bool = False
+    # Verdict accounting so a degenerate probe (agents erroring → abstaining)
+    # is visible rather than reading as a clean 0% floor: an all-abstain run
+    # produces 0 wins / 0 regressions / empty flips, identical to a perfectly
+    # stable suite. scored_fraction near 0 means the probe measured nothing.
+    n_scored: int = 0
+    n_abstained: int = 0
+
+    @property
+    def scored_fraction(self) -> float:
+        total = self.n_scored + self.n_abstained
+        return (self.n_scored / total) if total else 0.0
+
+    @property
+    def is_degenerate(self) -> bool:
+        """True when too few verdicts scored to trust the floor."""
+        return self.scored_fraction < 0.5
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d["scored_fraction"] = self.scored_fraction
+        d["is_degenerate"] = self.is_degenerate
+        return d
 
 
 class _SupportsValidate(Protocol):
@@ -73,10 +92,13 @@ def aggregate_noise(
     n_regression = sum(1 for r in reports if r.decision == "regression")
 
     verdicts: dict[str, list[bool]] = {}
+    n_scored = n_abstained = 0
     for r in reports:
         for t in list(r.baseline.tasks) + list(r.evolved.tasks):
             if t.abstained:
+                n_abstained += 1
                 continue
+            n_scored += 1
             verdicts.setdefault(t.task_id, []).append(bool(t.passed))
 
     per_task_flip: dict[str, float] = {}
@@ -95,6 +117,8 @@ def aggregate_noise(
         suite_sha256=suite_sha256,
         agent_model=agent_model,
         aborted=aborted,
+        n_scored=n_scored,
+        n_abstained=n_abstained,
     )
 
 
@@ -161,7 +185,14 @@ def _summary_text(report: NoiseReport) -> str:
         f"  spurious strict-win rate: {report.spurious_strict_win_rate:.1%}",
         f"  spurious regression rate: {report.spurious_regression_rate:.1%}",
         f"  mean per-task flip:       {report.mean_per_task_flip:.1%}",
+        f"  verdicts scored:          {report.n_scored}/"
+        f"{report.n_scored + report.n_abstained} ({report.scored_fraction:.0%})",
     ]
+    if report.is_degenerate:
+        lines.append(
+            "  ⚠ DEGENERATE: most verdicts abstained (agents likely errored) — "
+            "the rates above are NOT a meaningful noise floor."
+        )
     if report.aborted:
         lines.append("  (ABORTED on cost ceiling — rates are over completed runs only)")
     flips = sorted(report.per_task_flip.items(), key=lambda kv: kv[1], reverse=True)
@@ -255,10 +286,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         agent_model=args.agent_model,
         aborted=aborted,
     )
-    sidecar = write_noise_sidecar(report, args.tasks)
     print(_summary_text(report))
-    print(f"\nWrote {sidecar}")
     print(f"Cost: {json.dumps(COST_LEDGER.summary())}")
+    if report.is_degenerate:
+        # Don't persist a degenerate floor — the pre-flight panel would render
+        # it as a clean 0% noise floor. Surface the failure instead.
+        print(
+            "\nRefusing to write the sidecar: this probe did not measure a "
+            "usable floor (see DEGENERATE above)."
+        )
+        return 2
+    sidecar = write_noise_sidecar(report, args.tasks)
+    print(f"\nWrote {sidecar}")
     return 0
 
 

@@ -229,6 +229,10 @@ def _noise_line(noise: Optional[dict]) -> Optional[str]:
     """One-line A/A noise-floor summary, or None when no sidecar was loaded."""
     if not noise:
         return None
+    # A degenerate sidecar (mostly-abstained probe) would otherwise read as a
+    # clean 0% floor; flag it instead of presenting it as a measurement.
+    if noise.get("is_degenerate"):
+        return "Noise floor: degenerate calibration (mostly abstained) — re-run the probe"
     return (
         f"Noise floor: spurious strict-win {noise['spurious_strict_win_rate']:.0%}, "
         f"mean per-task flip {noise['mean_per_task_flip']:.0%} "

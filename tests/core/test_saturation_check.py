@@ -371,6 +371,18 @@ class TestRenderPanel:
         )
         assert "Noise floor" not in self._render_to_string(report)
 
+    def test_degenerate_noise_sidecar_is_flagged_not_shown_as_clean(self):
+        report = SaturationReport(
+            band="healthy", holdout_score=0.60, holdout_n=50,
+            holdout_per_example=[0.6] * 50,
+            suggestions=[], thresholds=DEFAULT_THRESHOLDS,
+            noise={**self._NOISE, "is_degenerate": True,
+                   "spurious_strict_win_rate": 0.0, "mean_per_task_flip": 0.0},
+        )
+        out = self._render_to_string(report)
+        assert "degenerate" in out.lower()
+        assert "spurious strict-win 0%" not in out  # don't present it as a clean floor
+
     def test_noise_row_renders_in_warn_panel(self):
         report = SaturationReport(
             band="no_headroom", holdout_score=0.99, holdout_n=50,

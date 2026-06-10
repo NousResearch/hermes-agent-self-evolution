@@ -71,8 +71,13 @@ class ClaudeCodeAgentRunner:
     ) -> None:
         # The installer owns ``append_prompt_file``; ``claude`` reads it via
         # --append-system-prompt-file each run, so re-installing a new candidate
-        # is picked up without reconstructing the runner.
-        self.append_prompt_file = append_prompt_file
+        # is picked up without reconstructing the runner. Resolve to absolute:
+        # ``claude`` runs with cwd=fixture_dir, so a relative path (the default
+        # output/<...> tree is relative) would be resolved under the fixture and
+        # silently not found, abstaining every task.
+        self.append_prompt_file = (
+            Path(append_prompt_file).resolve() if append_prompt_file is not None else None
+        )
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.allowed_tools = allowed_tools or list(_DEFAULT_ALLOWED_TOOLS)

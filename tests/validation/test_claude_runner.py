@@ -21,6 +21,18 @@ STREAM = "\n".join([
 ])
 
 
+def test_append_prompt_file_resolved_to_absolute():
+    # claude runs with cwd=fixture_dir, so a relative append-prompt path would
+    # be looked up under the fixture and silently not found (all tasks abstain).
+    runner = ClaudeCodeAgentRunner(append_prompt_file=Path("output/run/append.txt"))
+    assert runner.append_prompt_file.is_absolute()
+    assert runner.append_prompt_file == Path("output/run/append.txt").resolve()
+
+
+def test_append_prompt_file_none_stays_none():
+    assert ClaudeCodeAgentRunner(append_prompt_file=None).append_prompt_file is None
+
+
 def test_parse_extracts_tool_calls_cost_tokens():
     r = _parse_stream_json(STREAM, duration_seconds=2.0)
     assert r.error is None

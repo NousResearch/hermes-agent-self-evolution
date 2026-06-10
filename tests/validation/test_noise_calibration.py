@@ -88,6 +88,34 @@ def test_aggregate_excludes_abstentions_from_flip():
     rpt = aggregate_noise(reports, reps=1, suite_sha256="sha")
     # Only the evolved (non-abstained) verdict counts → single True → flip 0.
     assert rpt.per_task_flip["a"] == pytest.approx(0.0)
+    assert rpt.n_scored == 1 and rpt.n_abstained == 1
+    assert rpt.scored_fraction == pytest.approx(0.5)
+
+
+def test_all_abstain_is_degenerate_not_clean_zero():
+    # Every verdict abstained: 0 wins / 0 regressions / empty flips would
+    # otherwise be indistinguishable from a perfectly stable suite.
+    reports = [
+        _report([_task("a", False, abstained=True)], [_task("a", False, abstained=True)],
+                n_wins=0, n_losses=0, decision="pass"),
+        _report([_task("a", False, abstained=True)], [_task("a", False, abstained=True)],
+                n_wins=0, n_losses=0, decision="pass"),
+    ]
+    rpt = aggregate_noise(reports, reps=1, suite_sha256="sha")
+    assert rpt.n_scored == 0
+    assert rpt.scored_fraction == 0.0
+    assert rpt.is_degenerate is True
+    assert rpt.per_task_flip == {}
+
+
+def test_fully_scored_run_is_not_degenerate():
+    reports = [
+        _report([_task("a", True)], [_task("a", True)], n_wins=0, n_losses=0, decision="pass"),
+    ]
+    rpt = aggregate_noise(reports, reps=1, suite_sha256="sha")
+    assert rpt.n_abstained == 0 and rpt.n_scored == 2
+    assert rpt.is_degenerate is False
+    assert rpt.to_dict()["scored_fraction"] == pytest.approx(1.0)
 
 
 class _StubValidator:
