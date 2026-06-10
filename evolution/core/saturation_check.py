@@ -45,6 +45,12 @@ class SaturationReport:
     # A/A noise floor (loaded from <suite>.noise.json if a calibration was run),
     # so the gate's measured intrinsic noise surfaces in every pre-flight.
     noise: Optional[dict] = None
+    # Behavioral score of baseline + a zero-LM compiled constraint floor. When
+    # this nears the ceiling, GEPA's search spend is unlikely to be justified
+    # (the suite's constraints already state most of the win).
+    floor_score: Optional[float] = None
+    floor_n: Optional[int] = None
+    floor_per_example: Optional[list[float]] = None
 
 
 def _classify_band(
@@ -148,6 +154,7 @@ def saturation_preflight(
     baseline_artifact_text: Optional[str] = None,
     thresholds: Optional[dict[str, float]] = None,
     suite_path: Optional[Path] = None,
+    floor_text: Optional[str] = None,
 ) -> SaturationReport:
     """Score baseline on holdout (and closed-loop suite if cache provided),
     classify into a band, return a report.
@@ -182,6 +189,23 @@ def saturation_preflight(
         closed_loop_n = len(per_example)
         closed_loop_mean = sum(per_example) / len(per_example) if per_example else 0.0
 
+    # Optional zero-LM floor: score baseline + compiled constraint clauses on the
+    # same suite. A second force_run, so it's only paid when a floor is supplied.
+    floor_mean: Optional[float] = None
+    floor_n: Optional[int] = None
+    floor_per_example: Optional[list[float]] = None
+    if floor_text and closed_loop_cache is not None:
+        if baseline_artifact_text is None:
+            raise ValueError(
+                "baseline_artifact_text is required when floor_text is provided"
+            )
+        floor_report = closed_loop_cache.force_run(
+            baseline_artifact_text + "\n\n" + floor_text
+        )
+        floor_per_example = [1.0 if t.passed else 0.0 for t in floor_report.evolved.tasks]
+        floor_n = len(floor_per_example)
+        floor_mean = sum(floor_per_example) / len(floor_per_example) if floor_per_example else 0.0
+
     band, suggestions = _classify_band(
         holdout_score=holdout_mean,
         closed_loop_score=closed_loop_mean,
@@ -207,6 +231,9 @@ def saturation_preflight(
         suggestions=suggestions,
         thresholds=dict(thresholds),
         noise=noise,
+        floor_score=floor_mean,
+        floor_n=floor_n,
+        floor_per_example=floor_per_example,
     )
 
 
@@ -240,6 +267,41 @@ def _noise_line(noise: Optional[dict]) -> Optional[str]:
     )
 
 
+def floor_comparison_lines(
+    baseline_score: float, floor_score: float, n: Optional[int]
+) -> list[str]:
+    """The 3-row compiled-floor comparison text.
+
+    baseline / baseline+floor / residual-to-ceiling, plus a recommendation when
+    the floor already nears the ceiling (search spend likely unjustified). Shared
+    by the saturation panel and the prompt-section pre-GEPA floor probe.
+    """
+    captured = floor_score - baseline_score
+    residual = max(0.0, 1.0 - floor_score)
+    lines = [
+        f"Constraint-floor pre-flight ({n} tasks):" if n is not None
+        else "Constraint-floor pre-flight:",
+        f"  baseline:            {baseline_score:.2f}",
+        f"  baseline + floor:    {floor_score:.2f}  (compiled constraints captured {captured:+.2f})",
+        f"  residual to ceiling: {residual:.2f}",
+    ]
+    if floor_score >= 0.95 or residual <= 0.10:
+        lines.append(
+            "  → floor nears the ceiling; GEPA search spend may not be justified "
+            "— consider deploying the compiled floor."
+        )
+    return lines
+
+
+def _floor_lines(report: SaturationReport) -> Optional[list[str]]:
+    """The 3-row floor comparison for a SaturationReport, or None if unscored."""
+    if report.floor_score is None or report.closed_loop_score is None:
+        return None
+    return floor_comparison_lines(
+        report.closed_loop_score, report.floor_score, report.floor_n
+    )
+
+
 def render_saturation_panel(
     report: SaturationReport, *, console: Optional[Console] = None,
 ) -> None:
@@ -264,6 +326,10 @@ def render_saturation_panel(
         noise_line = _noise_line(report.noise)
         if noise_line is not None:
             console.print(f"[dim]{noise_line}[/dim]")
+        floor_lines = _floor_lines(report)
+        if floor_lines is not None:
+            for line in floor_lines:
+                console.print(f"[dim]{line}[/dim]")
         return
 
     body = Text()
@@ -276,6 +342,10 @@ def render_saturation_panel(
     noise_line = _noise_line(report.noise)
     if noise_line is not None:
         body.append(f"{noise_line}\n")
+    floor_lines = _floor_lines(report)
+    if floor_lines is not None:
+        for line in floor_lines:
+            body.append(f"{line}\n")
     body.append("\nSuggestions:\n", style="bold")
     for s in report.suggestions:
         body.append(f"  • {s}\n")

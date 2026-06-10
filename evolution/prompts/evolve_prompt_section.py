@@ -346,6 +346,7 @@ def evolve_prompt_section(
     gepa_acceptance: str = "improvement-or-equal",
     skip_saturation_check: bool = False,
     force_saturation_check: bool = False,
+    compile_floor: bool = False,
     apply: bool = False,
     create_pr_flag: bool = False,
     dry_run: bool = False,
@@ -579,6 +580,54 @@ def evolve_prompt_section(
                         console.print("[yellow]Aborted by user.[/yellow]")
                         return {"decision": "aborted", "reason": "user_abort"}
 
+            # --- Constraint-floor pre-flight (opt-in) ---
+            # Behaviorally score baseline vs baseline + a zero-LM compiled floor
+            # on the holdout, BEFORE spending GEPA budget. If the floor already
+            # nears the ceiling, search is unlikely to earn its cost. One CL pass
+            # (baseline arm + floor arm) via the A/A-style two-slot validate.
+            floor_block: Optional[dict] = None
+            if compile_floor:
+                from evolution.core.saturation_check import floor_comparison_lines
+                from evolution.validation.suite_compiler import (
+                    assert_no_holdout_leakage,
+                    compile_suite_floor,
+                )
+                floor_text = compile_suite_floor(train_tasks)
+                assert_no_holdout_leakage(floor_text, holdout_tasks)
+                if not floor_text.strip():
+                    console.print(
+                        "[yellow]--compile-floor: no compilable constraints in the "
+                        "train split; skipping floor probe.[/yellow]"
+                    )
+                else:
+                    base_file = output_dir / "floor_baseline.txt"
+                    base_file.write_text(baseline_text, encoding="utf-8")
+                    plus_file = output_dir / "floor_baseline_plus.txt"
+                    plus_file.write_text(baseline_text + "\n\n" + floor_text, encoding="utf-8")
+                    floor_validator = ClosedLoopValidator(
+                        installer=installer, runner=runner,
+                        layer2_judge_factory=layer2_factory,
+                        layer2_threshold=layer2_threshold, reps=gate_reps,
+                    )
+                    probe_suite = TaskSuite(
+                        path=suite.path, sha256=suite.sha256, tasks=tuple(holdout_tasks)
+                    )
+                    probe = floor_validator.validate(ValidationInputs(
+                        tool_name=section_name, suite=probe_suite,
+                        baseline_artifact=base_file, evolved_artifact=plus_file,
+                    ))
+                    base_score = probe.baseline.pass_rate
+                    floor_score = probe.evolved.pass_rate
+                    for line in floor_comparison_lines(base_score, floor_score, len(holdout_tasks)):
+                        console.print(f"[dim]{line}[/dim]")
+                    floor_block = {
+                        "floor_text": floor_text,
+                        "baseline_score": base_score,
+                        "floor_score": floor_score,
+                        "floor_captured": floor_score - base_score,
+                        "n_tasks": len(holdout_tasks),
+                    }
+
             # --- GEPA optimization ---
             console.print(
                 f"\n[bold cyan]Running GEPA (max_full_evals={iterations})[/bold cyan]\n"
@@ -700,6 +749,7 @@ def evolve_prompt_section(
         # Persist the val distribution so the discrimination signal survives in
         # the run record (it was never stored historically). None on MIPROv2.
         "val_aggregate_scores": val_aggregate_scores,
+        **({"constraint_floor": floor_block} if floor_block is not None else {}),
         **({"val_signal_warning": val_warning} if val_warning is not None else {}),
         **section_payload,
     }
@@ -799,6 +849,10 @@ def evolve_prompt_section(
 @click.option("--skip-saturation-check", is_flag=True, default=False)
 @click.option("--force-saturation-check", is_flag=True, default=False,
               help="Proceed even if the baseline looks saturated.")
+@click.option("--compile-floor", is_flag=True, default=False,
+              help="Before GEPA, behaviorally score baseline + a zero-LM compiled "
+                   "constraint floor on the holdout (one extra CL pass). If the floor "
+                   "nears the ceiling, search spend is likely unjustified.")
 @click.option("--apply", is_flag=True, default=False,
               help="On a passing gate, write the evolved section into prompt_builder.py.")
 @click.option("--create-pr", "create_pr_flag", is_flag=True, default=False,
@@ -818,7 +872,7 @@ def main(section_name, target, hermes_repo, claude_md, tasks_path, iterations,
          layer2_threshold, task_timeout_seconds, max_total_cost_usd,
          fitness_reps, gate_reps,
          gepa_minibatch_size, gepa_acceptance, skip_saturation_check,
-         force_saturation_check, apply, create_pr_flag, dry_run, output_dir,
+         force_saturation_check, compile_floor, apply, create_pr_flag, dry_run, output_dir,
          baseline_override_file):
     """Evolve a system-prompt section via GEPA + closed-loop validation (Hermes or Claude Code)."""
     result = evolve_prompt_section(
@@ -844,6 +898,7 @@ def main(section_name, target, hermes_repo, claude_md, tasks_path, iterations,
         gepa_acceptance=gepa_acceptance,
         skip_saturation_check=skip_saturation_check,
         force_saturation_check=force_saturation_check,
+        compile_floor=compile_floor,
         apply=apply,
         create_pr_flag=create_pr_flag,
         dry_run=dry_run,

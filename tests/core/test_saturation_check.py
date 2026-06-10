@@ -251,6 +251,48 @@ class TestSaturationPreflightWithClosedLoop:
         assert report.closed_loop_score == pytest.approx(3 / 7)
         assert report.closed_loop_per_example == [1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]
 
+    def test_compiled_floor_scored_via_second_force_run(self):
+        cache = MagicMock()
+        # First force_run = baseline (2/7); second = baseline+floor (5/7).
+        cache.force_run.side_effect = [
+            self._make_validation_report(n_pass=2, n_fail=5),
+            self._make_validation_report(n_pass=5, n_fail=2),
+        ]
+        with patch(
+            "evolution.core.saturation_check._score_baseline_on_holdout",
+            return_value=(0.80, [1.0] * 5),
+        ):
+            report = saturation_preflight(
+                baseline_module=MagicMock(),
+                holdout_examples=[MagicMock() for _ in range(5)],
+                metric=MagicMock(), lm=MagicMock(),
+                closed_loop_cache=cache,
+                baseline_artifact_text="baseline desc",
+                floor_text="Use bin/check, not pytest.",
+            )
+        assert report.closed_loop_score == pytest.approx(2 / 7)
+        assert report.floor_score == pytest.approx(5 / 7)
+        assert report.floor_n == 7
+        # second call scored baseline + floor appended
+        second_arg = cache.force_run.call_args_list[1].args[0]
+        assert "baseline desc" in second_arg and "bin/check" in second_arg
+
+    def test_no_floor_score_without_floor_text(self):
+        cache = MagicMock()
+        cache.force_run.return_value = self._make_validation_report(n_pass=3, n_fail=4)
+        with patch(
+            "evolution.core.saturation_check._score_baseline_on_holdout",
+            return_value=(0.80, [1.0] * 5),
+        ):
+            report = saturation_preflight(
+                baseline_module=MagicMock(),
+                holdout_examples=[MagicMock() for _ in range(5)],
+                metric=MagicMock(), lm=MagicMock(),
+                closed_loop_cache=cache, baseline_artifact_text="b",
+            )
+        assert report.floor_score is None
+        cache.force_run.assert_called_once()  # no second run
+
     def test_uniform_failure_band_triggers(self):
         cache = MagicMock()
         cache.force_run.return_value = self._make_validation_report(n_pass=0, n_fail=7)
@@ -382,6 +424,28 @@ class TestRenderPanel:
         out = self._render_to_string(report)
         assert "degenerate" in out.lower()
         assert "spurious strict-win 0%" not in out  # don't present it as a clean floor
+
+    def test_floor_rows_render_with_recommendation_near_ceiling(self):
+        report = SaturationReport(
+            band="healthy", holdout_score=0.60, holdout_n=50,
+            holdout_per_example=[0.6] * 50,
+            closed_loop_score=0.10, closed_loop_n=7, closed_loop_per_example=[],
+            suggestions=[], thresholds=DEFAULT_THRESHOLDS,
+            floor_score=0.95, floor_n=7, floor_per_example=[],
+        )
+        out = self._render_to_string(report)
+        assert "baseline + floor" in out
+        assert "captured +0.85" in out
+        assert "may not be justified" in out  # floor near ceiling → recommend
+
+    def test_floor_rows_absent_without_floor_score(self):
+        report = SaturationReport(
+            band="healthy", holdout_score=0.60, holdout_n=50,
+            holdout_per_example=[0.6] * 50,
+            closed_loop_score=0.10, closed_loop_n=7, closed_loop_per_example=[],
+            suggestions=[], thresholds=DEFAULT_THRESHOLDS,
+        )
+        assert "baseline + floor" not in self._render_to_string(report)
 
     def test_noise_row_renders_in_warn_panel(self):
         report = SaturationReport(
