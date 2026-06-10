@@ -238,6 +238,45 @@ class SkillFileInstaller:
             ) from exc
 
 
+class ClaudeAppendPromptInstaller:
+    """Write the candidate convention region to a workdir append-prompt file.
+
+    The runner passes ``target_path`` to ``claude -p --append-system-prompt-file``,
+    so candidates are injected statelessly — the user's real CLAUDE.md is never
+    touched during validation (mirrors ``SkillFileInstaller``'s don't-touch-the-
+    original contract). Deployment into a real CLAUDE.md is the prompt source's job
+    (``--apply``).
+    """
+
+    def __init__(self, *, workdir: Path, baseline_text: str) -> None:
+        if not workdir.is_dir():
+            raise NotADirectoryError(f"workdir not found or not a directory: {workdir}")
+        self.target_path: Path = workdir / "append_system_prompt.txt"
+        atomic_write_bytes(self.target_path, baseline_text.encode("utf-8"))
+
+    def install(self, artifact_source: Path) -> str:
+        """Overwrite ``target_path`` with the candidate's bytes; return its sha256."""
+        atomic_write_bytes(self.target_path, artifact_source.read_bytes())
+        return sha256_of(self.target_path)
+
+    def install_text(self, text: str) -> str:
+        """Install a candidate given inline text (the GEPA inner-loop splice)."""
+        atomic_write_bytes(self.target_path, text.encode("utf-8"))
+        return sha256_of(self.target_path)
+
+    def verify_backup(self, backup_path: Path) -> None:
+        """Append-prompts are UTF-8 text; reject empty or non-UTF-8 backups."""
+        data = backup_path.read_bytes()
+        if not data:
+            raise ValueError(f"append-prompt backup at {backup_path} is empty")
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"append-prompt backup at {backup_path} is not valid UTF-8: {exc}"
+            ) from exc
+
+
 def sha256_of(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

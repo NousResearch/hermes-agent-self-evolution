@@ -202,6 +202,8 @@ class ClosedLoopValidator:
                     expected_action=task.expected_action,
                     target_skill=task.target_skill,
                     stale_token=task.stale_token,
+                    required_cmd_substr=task.required_cmd_substr,
+                    forbidden_cmd_substr=task.forbidden_cmd_substr,
                 )
             last_run = run
             if abstained:
@@ -287,3 +289,8 @@ def _materialize_fixture(fixture_dir: Path, setup: dict[str, str]) -> None:
         dest = fixture_dir / relative_path
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(content)
+        # Scripts (shebang) must be executable so a task can run `./wrapper`;
+        # otherwise the agent hits "permission denied" and the verdict reflects
+        # the fixture, not the prompt. General rule, not a bin/ special-case.
+        if content.startswith("#!"):
+            dest.chmod(0o755)

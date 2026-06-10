@@ -67,11 +67,12 @@ evolution/
 │   └── tool_judge.py                    # tool-flavored LLMJudge + GEPA-shaped metric
 ├── validation/                          # closed-loop validation against a real agent
 │   ├── agent_runner.py                  # AgentRunner Protocol + AgentRunResult dataclass
-│   ├── artifact_installer.py            # ArtifactInstaller Protocol + HermesToolDescriptionInstaller + HermesPromptSectionInstaller
+│   ├── artifact_installer.py            # ArtifactInstaller Protocol + HermesToolDescriptionInstaller + HermesPromptSectionInstaller + SkillFileInstaller + ClaudeAppendPromptInstaller
+│   ├── claude_runner.py                 # ClaudeCodeAgentRunner — subprocess claude -p (stream-json, OS sandbox, OAuth token auth)
 │   ├── closed_loop.py                   # CLI: drive baseline + evolved through hermes -z, compare
 │   ├── hermes_runner.py                 # HermesAgentRunner — subprocess hermes -z; reads sessions from SQLite state.db (parse_session_from_db)
-│   ├── report.py                        # ValidationReport + TaskResult + decision rule + Layer-2 SaveCallJudge in score_task
-│   ├── suites/                          # JSONL task suites (patch.jsonl, write_file.jsonl, search_files.jsonl, memory_guidance.jsonl)
+│   ├── report.py                        # ValidationReport + TaskResult + decision rule + Layer-2 SaveCallJudge + _score_convention in score_task
+│   ├── suites/                          # JSONL task suites (patch.jsonl, write_file.jsonl, search_files.jsonl, memory_guidance.jsonl, claude_conventions.jsonl)
 │   ├── task.py                          # Task + TaskSuite.from_jsonl (with sha256 audit)
 │   └── validator.py                     # ClosedLoopValidator.validate — mutates + restores live agent file
 ├── prompts/                             # Tier 3: system-prompt-section evolution
@@ -80,7 +81,8 @@ evolution/
 │   ├── hermes_prompt_source.py          # HermesPromptSource — AST read/write of prompt_builder.py constants
 │   ├── prompt_module.py                 # PromptModule — passthrough predictor carrying candidate in sentinels
 │   ├── prompt_proposer.py               # PromptSectionProposer — sentinel-preserving GEPA proposer
-│   └── prompt_judge.py                  # SaveCallJudge + judge_save_calls Layer-2 content judge + fitness/splice scorers
+│   ├── prompt_judge.py                  # SaveCallJudge + judge_save_calls Layer-2 content judge + fitness/splice scorers
+│   └── claude_prompt_source.py          # ClaudeCodePromptSource — read/write a sentinel-delimited region in a CLAUDE.md
 ├── code/                                # Tier 4: planned, empty package
 └── monitor/                             # planned, empty package
 ```
@@ -107,21 +109,23 @@ evolution/
 | `evolution/core/skill_sources.py` | ~210 | Hermes / Claude Code / LocalDir |
 | `evolution/core/quality_gate.py` | ~210 | preset table + proposer-mode resolution + gate-decision persistence |
 | `evolution/skills/knee_point.py` | ~205 | parsimony-based candidate picker |
+| `evolution/validation/claude_runner.py` | ~205 | ClaudeCodeAgentRunner — claude -p subprocess, stream-json parse, OS sandbox |
 | `evolution/validation/hermes_runner.py` | ~205 | hermes -z subprocess with sandboxed HOME |
 | `evolution/tools/tool_proposer.py` | ~200 | sentinel-preserving reflection prompt |
 | `evolution/prompts/prompt_proposer.py` | ~160 | sentinel-preserving GEPA proposer for prompt sections |
-| `evolution/validation/artifact_installer.py` | ~150 | byte-precise splice + atomic restore (tool + prompt-section installers) |
+| `evolution/validation/artifact_installer.py` | ~310 | byte-precise splice + atomic restore (tool / prompt-section / skill / Claude-append installers) |
+| `evolution/validation/task.py` | ~155 | Task (incl. convention + action verdict fields) + TaskSuite.from_jsonl |
 | `evolution/prompts/hermes_prompt_source.py` | ~135 | AST read/write of prompt_builder.py string constants |
 | `evolution/prompts/prompt_module.py` | ~120 | PromptModule passthrough predictor + sentinel parse |
 | `evolution/validation/closed_loop.py` | ~135 | standalone closed-loop CLI |
 | `evolution/skills/skill_module.py` | ~125 | wraps SKILL.md as `dspy.Module` |
-| `evolution/validation/task.py` | ~90 | Task + TaskSuite.from_jsonl |
+| `evolution/prompts/claude_prompt_source.py` | ~95 | ClaudeCodePromptSource — read/write a sentinel region in a CLAUDE.md |
 | `evolution/core/config.py` | ~80 | `EvolutionConfig` dataclass |
 | `evolution/core/stats.py` | ~60 | `paired_bootstrap` helper |
 | `evolution/prompts/prompt_source.py` | ~55 | PromptSource Protocol + SectionDescriptor |
 | `evolution/validation/agent_runner.py` | ~55 | AgentRunner Protocol + dataclasses |
 | `evolution/core/behavioral_example.py` | ~35 | builder for behavioral dspy.Examples |
-| **Total** | **~10,400** | excludes empty `__init__.py` shims |
+| **Total** | **~10,900** | excludes empty `__init__.py` shims |
 
 Test suite: 61 test files under `tests/core/`, `tests/skills/`, `tests/tools/`, `tests/validation/`. **1166 tests** collected.
 
@@ -151,7 +155,7 @@ The README's table summarizes intent; reality:
 |---|---|---|---|
 | 1 | Skill files (SKILL.md) | DSPy + GEPA | ✅ implemented in `evolution/skills/` |
 | 2 | Tool descriptions | DSPy + GEPA | ✅ implemented in `evolution/tools/` — MCP-JSON and Hermes-Python-AST adapters; one target tool per run |
-| 3 | System prompt sections | DSPy + GEPA | ✅ implemented in `evolution/prompts/` — AST splice of `prompt_builder.py` constants; purely-behavioral closed-loop deploy gate (no synthetic signal) |
+| 3 | System prompt sections | DSPy + GEPA | ✅ implemented in `evolution/prompts/` — two backends via `--target`: `hermes` (AST splice of `prompt_builder.py` constants) and `claude` (CLAUDE.md sentinel region via `--append-system-prompt-file`); purely-behavioral closed-loop deploy gate (no synthetic signal) |
 | 4 | Tool implementation code | Darwinian Evolver | 🔲 `evolution/code/` package exists, empty; `[darwinian]` extra reserves the dep |
 | 5 | Continuous improvement loop | Automated pipeline | 🔲 `evolution/monitor/` package exists, empty |
 

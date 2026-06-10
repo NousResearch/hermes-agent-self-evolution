@@ -16,6 +16,7 @@ The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and 
 | **How a skill run works end-to-end** | `workflows.md` (Workflow 1) → `architecture.md` (top-level flow) |
 | **How a tool-description run works end-to-end** | `workflows.md` (Workflow 9) → `components.md` (`evolve_tool.py`) |
 | **How a prompt-section run works end-to-end** | `workflows.md` (Workflow 12) → `components.md` (`evolve_prompt_section.py`) |
+| **How a Claude CLAUDE.md convention run works** | `workflows.md` (Workflow 13) → `components.md` (Claude Code backend) |
 | **What flag does X / how to run the CLI** | `interfaces.md` (CLI section) |
 | **Why the deploy gate rejected a run** | `data_models.md` (gate_decision.json) → `components.md` (`constraints.py`) |
 | **What's in `gate_decision.json` / `metrics.json`** | `data_models.md` (full schema with examples) |

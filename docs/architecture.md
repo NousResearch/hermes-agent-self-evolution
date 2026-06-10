@@ -63,12 +63,14 @@ graph TB
         prompt_judge[prompts.prompt_judge<br/>SaveCallJudge + judge_save_calls<br/>+ prompt fitness/splice scorer]
         prompt_source[prompts.prompt_source<br/>PromptSource protocol + SectionDescriptor]
         hermes_prompt_source[prompts.hermes_prompt_source<br/>HermesPromptSource — prompt_builder.py AST]
+        claude_prompt_source[prompts.claude_prompt_source<br/>ClaudeCodePromptSource — CLAUDE.md region]
     end
 
     subgraph validation_subsystem[Closed-loop validation]
         validator[validation.validator<br/>ClosedLoopValidator]
         hermes_runner[validation.hermes_runner<br/>hermes -z subprocess]
-        installer[validation.artifact_installer<br/>HermesToolDescriptionInstaller +<br/>HermesPromptSectionInstaller]
+        claude_runner[validation.claude_runner<br/>ClaudeCodeAgentRunner — claude -p]
+        installer[validation.artifact_installer<br/>HermesToolDescriptionInstaller +<br/>HermesPromptSectionInstaller +<br/>ClaudeAppendPromptInstaller]
         savejudge[validation.report<br/>score_task Layer-2 judge hook]
         report[validation.report<br/>ValidationReport + decision]
         task[validation.task<br/>Task + TaskSuite]
@@ -93,6 +95,7 @@ graph TB
         dspy[dspy.GEPA / dspy.MIPROv2 / dspy.LM / dspy.Evaluate]
         litellm[litellm.failure_callback]
         hermes[hermes -z subprocess]
+        claude[claude -p subprocess]
     end
 
     evolve_skill --> skill_module
@@ -132,23 +135,28 @@ graph TB
     evolve_prompt --> prompt_judge
     evolve_prompt --> prompt_source
     evolve_prompt --> hermes_prompt_source
+    evolve_prompt -.target=claude.-> claude_prompt_source
+    evolve_prompt -.target=claude.-> claude_runner
     evolve_prompt --> config
     evolve_prompt --> quality
     evolve_prompt --> timing
     evolve_prompt --> validator
     hermes_prompt_source --> prompt_source
+    claude_prompt_source --> prompt_source
     prompt_module --> dspy
     prompt_proposer --> budget
     prompt_judge --> fitness
     installer --> hermes_prompt_source
 
     validator --> hermes_runner
+    validator -.target=claude.-> claude_runner
     validator --> installer
     validator --> report
     validator --> task
     validator --> savejudge
     cl_cli --> validator
     hermes_runner --> hermes
+    claude_runner --> claude
 
     skill_module --> dspy
     budget --> dspy
@@ -166,7 +174,13 @@ graph TB
 
 `evolution/core/` has no dependency on `evolution/skills/`, `evolution/tools/`, `evolution/prompts/`, or `evolution/validation/`. The reverse holds: tier packages use core helpers but core never imports from a tier package. `closed_loop_feedback.py` imports `evolution.validation.*` types because it's the integration seam, but the validation subpackage doesn't import from skills/tools/prompts. This keeps the tier-4/5 expansion path open.
 
-The `prompts` tier (Phase 3) is the prompt-section evolution path: `evolve_prompt_section` wraps a named `prompt_builder.py` constant as a `PromptModule` (a passthrough predictor carrying the candidate in sentinel-delimited instructions), mutates it with `PromptSectionProposer`, and — because there is no synthetic classification signal for a system-prompt section — scores **purely behaviorally** through the closed-loop validator running a real `hermes -z` against a curated JSONL suite. The deploy gate is therefore a closed-loop pass-rate / win-loss decision, not a paired-bootstrap one. Unlike the skill/tool tiers it reuses `ClosedLoopValidator` directly rather than going through `closed_loop_feedback.py`, and it integrates by AST-splicing the candidate into the live `agent/prompt_builder.py` (`HermesPromptSectionInstaller`) with atomic restore. The Layer-2 content judge (`SaveCallJudge` / `judge_save_calls`) runs inside `score_task` to grade memory-save *content* on top of the Layer-1 trigger-membership check.
+The `prompts` tier (Phase 3) is the prompt-section evolution path: `evolve_prompt_section` wraps a named section as a `PromptModule` (a passthrough predictor carrying the candidate in sentinel-delimited instructions), mutates it with `PromptSectionProposer`, and — because there is no synthetic classification signal for a system-prompt section — scores **purely behaviorally** through the closed-loop validator running a real agent against a curated JSONL suite. The deploy gate is therefore a closed-loop pass-rate / win-loss decision, not a paired-bootstrap one. Unlike the skill/tool tiers it reuses `ClosedLoopValidator` directly rather than going through `closed_loop_feedback.py`.
+
+The tier supports **two agent backends** behind the same three protocols, selected by `--target`:
+- **`hermes`** (default): the section is a `prompt_builder.py` constant; the agent is `hermes -z`; integration is an in-place AST splice into the live `agent/prompt_builder.py` (`HermesPromptSectionInstaller`) with atomic restore; the verdict is the Layer-1 trigger-membership check plus an optional Layer-2 content judge (`SaveCallJudge` / `judge_save_calls`) grading memory-save *content* inside `score_task`.
+- **`claude`**: the section is a sentinel-delimited region of a CLAUDE.md; the agent is `claude -p` run hermetically under an OS sandbox; integration is stateless — the candidate is injected via `--append-system-prompt-file` (`ClaudeAppendPromptInstaller`) so the user's real CLAUDE.md is never touched during validation, and only `--apply` writes the evolved region back via `ClaudeCodePromptSource`; the verdict is the agent-agnostic `expected_action:"convention"` branch (`_score_convention`, Bash-command substring adherence, no LLM judge).
+
+Both backends feed the **same** agnostic GEPA + `ClosedLoopValidator` + `score_task` core: the Claude backend is `ClaudeCodeAgentRunner` (AgentRunner), `ClaudeCodePromptSource` (PromptSource), and `ClaudeAppendPromptInstaller` (ArtifactInstaller) — three adapters, no core change. The headroom is in project-specific conventions (inert in the base prompt by construction, yet temptable); generic disciplines saturate.
 
 ## Design patterns in active use
 

@@ -697,6 +697,62 @@ The selected candidate is GEPA's val-argmax (`detailed_results.best_idx`) — th
 
 **Empirical anchors.** The real `MEMORY_GUIDANCE` section saturates — it scored 1.0 across the holdout (`no_headroom` band) and the harness correctly default-denied a non-interactive run before GEPA started. To exercise the full deploy path, an adversarially-weakened baseline (via `--baseline-override-file`) evolved `0.67 → 1.00` pass-rate with 2 wins / 0 losses on the holdout, clearing the closed-loop gate and deploying. The saturating-real-section result is the expected, correct outcome, not a bug: there is no headroom to evolve into when the section already passes every behavioral task.
 
+## Workflow 13: Evolve a CLAUDE.md convention (Claude Code backend)
+
+The `--target claude` analog of Workflow 12. Same purely-behavioral shape — seed a region → GEPA with per-candidate injection → behavioral scoring → closed-loop deploy gate → `--apply` — but against `claude -p` instead of `hermes -z`. The agnostic core (GEPA, `ClosedLoopValidator`, `score_task`) is shared; the backend is three adapters (`ClaudeCodeAgentRunner`, `ClaudeCodePromptSource`, `ClaudeAppendPromptInstaller`). Three structural contrasts with the Hermes prompt path:
+
+- **The evolved section is a CLAUDE.md region**, delimited by `<!-- evolve:NAME start -->` … `<!-- evolve:NAME end -->`, not a `prompt_builder.py` constant. The seed region is read via `ClaudeCodePromptSource.read`.
+- **Validation never touches the user's CLAUDE.md.** Each candidate is written to a throwaway `append_system_prompt.txt` (`ClaudeAppendPromptInstaller`) that `claude -p` reads via `--append-system-prompt-file`. The agent also runs hermetically — fresh tmp `HOME` (no ambient `~/.claude` config), an OS `sandbox` confining writes to the fixture dir, `--strict-mcp-config`, `--no-session-persistence`. The real CLAUDE.md is read once (to seed) and written once (on `--apply`); never during scoring.
+- **The verdict is convention adherence**, not memory-content judging. A task is `expected_action:"convention"`: pass iff a `Bash` call used the repo wrapper (`required_cmd_substr`) and none bypassed it with the default tool (`forbidden_cmd_substr`). No LLM judge.
+
+```bash
+export CLAUDE_CODE_OAUTH_TOKEN=...   # subscription auth; the runner does NOT pass --bare
+python -m evolution.prompts.evolve_prompt_section \
+    --target claude \
+    --section repo_conventions \
+    --claude-md ~/myrepo/CLAUDE.md \
+    --tasks evolution/validation/suites/claude_conventions.jsonl \
+    --iterations 10 \
+    --apply
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_prompt_section
+    participant Src as ClaudeCodePromptSource
+    participant Inst as ClaudeAppendPromptInstaller
+    participant GEPA as dspy.GEPA
+    participant Scorer as splice scorer
+    participant R as ClaudeCodeAgentRunner
+    participant C as claude -p (sandboxed)
+    participant V as ClosedLoopValidator
+
+    CLI->>Src: read(section) — baseline region from CLAUDE.md (or --baseline-override-file)
+    CLI->>Inst: ClaudeAppendPromptInstaller(workdir, baseline_text)
+    CLI->>R: ClaudeCodeAgentRunner(append_prompt_file=installer.target_path, model="sonnet")
+    loop GEPA per iteration (multi-rep)
+        GEPA->>Scorer: candidate region under reflection
+        Scorer->>Inst: install_text(candidate) → append_system_prompt.txt
+        Scorer->>R: run(TaskRunContext(user_message, fixture_dir))
+        R->>C: claude -p ... --append-system-prompt-file <file> --add-dir <fixture>
+        C-->>R: stream-json (tool_use blocks + result event: cost + usage)
+        R-->>Scorer: AgentRunResult(tool_calls_with_args, agent_cost_usd, ...)
+        Scorer->>Scorer: _score_convention — Bash used required_cmd_substr AND no forbidden_cmd_substr
+        Scorer-->>GEPA: score ∈ {0.0, 1.0}
+    end
+    GEPA-->>CLI: optimized region (val-argmax)
+    CLI->>V: validate(holdout) — baseline vs evolved region, same convention verdict
+    V-->>CLI: ValidationReport(pass-rate + win/loss)
+    alt decision == pass AND --apply
+        CLI->>Src: write(section, evolved_text) — only write to the real CLAUDE.md
+    end
+```
+
+The runner records each `claude -p` invocation's `total_cost_usd` against the shared `CostLedger` and enforces `--max-cost-usd` eagerly (convention scoring makes no in-process LM call, so the cost guard fires in the runner rather than at a `BaseLM` boundary). The deploy gate is the same `ClosedLoopValidator.validate` over the holdout with its own backup/restore + flock, and `--create-pr` is still `skipped` (deferred for prompt sections); `--apply` is the only write to the user's CLAUDE.md, splicing the evolved region back in via `ClaudeCodePromptSource.write` (other bytes preserved; a fresh block is appended if the markers are absent).
+
+**Where the headroom is.** As with the Hermes backend, generic disciplines saturate. The convention suite targets project-specific commands the base agent cannot guess (custom `bin/check` / `bin/run` / `bin/fmt` / `bin/lint` wrappers) — inert in the base prompt by construction, yet temptable toward the default tool — which is where an evolved CLAUDE.md region has room to move the behavior.
+
 ## Failure-mode summary
 
 | Trigger | Outcome | Where to look |

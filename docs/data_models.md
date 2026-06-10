@@ -209,14 +209,23 @@ class Task:
     expected_tools: tuple[str, ...] = ()
     forbidden_tools: tuple[str, ...] = ()
     fixture_setup: dict[str, str] = field(default_factory=dict)
+    test_command: Optional[str] = None          # skill-side: pass iff this exits 0 in fixture_dir
+    expected_save_content: Optional[str] = None  # Layer-2 rubric for memory-save content
+    skills_src: Optional[str] = None
+    expected_action: Optional[str] = None        # "patch" | "convention" — action-level verdict mode
+    target_skill: Optional[str] = None           # for expected_action == "patch"
+    stale_token: Optional[str] = None            # for expected_action == "patch"
+    required_cmd_substr: tuple[str, ...] = ()    # for expected_action == "convention"
+    forbidden_cmd_substr: tuple[str, ...] = ()   # for expected_action == "convention"
 ```
 
 `fixture_setup` is a `relative_path → file_content` map materialized into the task's per-task tmp dir before the agent runs. `user_message.format(fixture_dir=...)` substitutes the placeholder.
 
-Scoring rule (`score_task` in `report.py`):
-- Returns `(passed: bool, abstained: bool)`.
-- Abstention if the runner errored (timeout, no session JSON, parse failure) — neither evidence for nor against the artifact.
-- Else: passes iff `expected_tools` were invoked AND no `forbidden_tools` were invoked. Empty `expected_tools` short-circuits to true; empty `forbidden_tools` is no-op.
+Scoring rule (`score_task` in `report.py`) — returns `(passed: bool, abstained: bool)`; abstention if the runner errored (timeout, no session, parse failure), neither evidence for nor against the artifact. Otherwise the verdict mode is chosen by which fields are set, in priority order:
+- **`expected_action == "patch"`** (with `target_skill` + `stale_token`): pass iff the agent called `skill_manage(action in {patch, edit})` on `target_skill` and the call actually touched the stale token.
+- **`expected_action == "convention"`** (Claude convention suites; `_score_convention`): pass iff some `Bash` call's command contains one of `required_cmd_substr` (the agent used the repo wrapper) AND no `Bash` command contains any of `forbidden_cmd_substr` (it didn't fall back to the default tool). No LLM judge — reads only `tool_calls_with_args`, so the verdict is agent-backend-independent. Empty `required_cmd_substr` short-circuits the "used" check to false (the task can't pass without naming a required wrapper).
+- **`test_command` set** (skill-side): pass iff the command exits 0 in `fixture_dir`.
+- **Default (trigger membership):** passes iff `expected_tools` were invoked AND no `forbidden_tools` were invoked. Empty `expected_tools` short-circuits to true; empty `forbidden_tools` is no-op. When a `layer2_judge_fn` is supplied (prompt-section save suites), a passing Layer 1 additionally requires the content judge to score `>= layer2_threshold`.
 
 ### TaskSuite (`evolution/validation/task.py`)
 

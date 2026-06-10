@@ -52,6 +52,7 @@ from evolution.core.saturation_check import (
     render_saturation_panel,
     saturation_preflight,
 )
+from evolution.prompts.claude_prompt_source import ClaudeCodePromptSource
 from evolution.prompts.hermes_prompt_source import HermesPromptSource
 from evolution.prompts.prompt_judge import (
     SaveCallJudge,
@@ -62,10 +63,15 @@ from evolution.prompts.prompt_judge import (
 )
 from evolution.prompts.prompt_module import PromptModule, _extract_from_sentinels
 from evolution.prompts.prompt_proposer import PromptSectionProposer
-from evolution.validation.agent_runner import TaskRunContext
+from evolution.validation.agent_runner import AgentRunner, TaskRunContext
 from evolution.validation.artifact_installer import (
+    ClaudeAppendPromptInstaller,
     HermesPromptSectionInstaller,
     atomic_write_bytes,
+)
+from evolution.validation.claude_runner import (
+    DEFAULT_CLAUDE_TIMEOUT_SECONDS,
+    ClaudeCodeAgentRunner,
 )
 from evolution.validation.hermes_runner import (
     DEFAULT_TASK_TIMEOUT_SECONDS,
@@ -73,7 +79,11 @@ from evolution.validation.hermes_runner import (
 )
 from evolution.validation.report import score_task
 from evolution.validation.task import Task, TaskSuite
-from evolution.validation.validator import ClosedLoopValidator, ValidationInputs
+from evolution.validation.validator import (
+    ClosedLoopValidator,
+    ValidationInputs,
+    _materialize_fixture,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -231,7 +241,7 @@ def _prompt_builder_guard(target_path: Path) -> Iterator[None]:
 def _run_one_task_score(
     task: Task,
     *,
-    runner: HermesAgentRunner,
+    runner: AgentRunner,
     layer2_factory,
     layer2_threshold: float,
     reps: int = 1,
@@ -255,10 +265,7 @@ def _run_one_task_score(
     for _ in range(reps):
         with tempfile.TemporaryDirectory(prefix="ps_inner_") as fixture_tmp:
             fixture_dir = Path(fixture_tmp)
-            for relative_path, content in task.fixture_setup.items():
-                dest = fixture_dir / relative_path
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(content)
+            _materialize_fixture(fixture_dir, task.fixture_setup)
             ctx = TaskRunContext(
                 user_message=task.render_message(fixture_dir),
                 fixture_dir=fixture_dir,
@@ -276,6 +283,8 @@ def _run_one_task_score(
                 expected_action=task.expected_action,
                 target_skill=task.target_skill,
                 stale_token=task.stale_token,
+                required_cmd_substr=task.required_cmd_substr,
+                forbidden_cmd_substr=task.forbidden_cmd_substr,
             )
             if abstained:
                 n_abstain += 1
@@ -325,9 +334,11 @@ def _synth_feedback(task: Task, observed: str) -> str:
 
 def evolve_prompt_section(
     section_name: str,
-    hermes_repo: Path,
+    hermes_repo: Optional[Path],
     tasks_path: Path,
     *,
+    target: str = "hermes",
+    claude_md: Optional[Path] = None,
     iterations: int = 10,
     holdout_ratio: float = 0.5,
     seed: int = 42,
@@ -337,7 +348,7 @@ def evolve_prompt_section(
     eval_model: Optional[str] = None,
     agent_model: Optional[str] = None,
     layer2_threshold: float = 0.7,
-    task_timeout_seconds: int = DEFAULT_TASK_TIMEOUT_SECONDS,
+    task_timeout_seconds: Optional[int] = None,
     max_total_cost_usd: Optional[float] = 150.0,
     gepa_minibatch_size: int = 3,
     gepa_acceptance: str = "improvement-or-equal",
@@ -352,18 +363,46 @@ def evolve_prompt_section(
     gate_reps: int = 1,
 ) -> dict[str, Any]:
     """Evolve one prompt section end-to-end. Returns a summary dict."""
-    hermes_repo = Path(hermes_repo).resolve()
-    source = HermesPromptSource(hermes_repo)
-    # The live section is always the splice/restore target. ``baseline_override``
-    # lets evolution START from different text (e.g. a deliberately-weakened
-    # baseline to create headroom, or a regression-injection ablation) without
-    # touching the real file — the guard still backs up and restores the live
-    # section. ``--apply`` writes the evolved text into the live section as usual.
-    source.read(section_name)  # validate the section exists / is a string constant
+    # The source reads the baseline section + (on --apply) deploys the evolved
+    # text. ``baseline_override`` lets evolution START from different text (e.g. a
+    # deliberately-weakened baseline to create headroom) without touching the real
+    # file — the validation guard backs up + restores its own splice target.
+    if target == "hermes":
+        if hermes_repo is None:
+            raise ValueError("--hermes-repo is required for --target hermes")
+        hermes_repo = Path(hermes_repo).resolve()
+        source = HermesPromptSource(hermes_repo)
+    elif target == "claude":
+        if claude_md is None:
+            raise ValueError("--claude-md is required for --target claude")
+        source = ClaudeCodePromptSource(Path(claude_md))
+    else:
+        raise ValueError(f"unknown --target {target!r} (expected 'hermes' or 'claude')")
+
+    # Claude agent runs are multi-step and slower than hermes -z; give them a longer
+    # default ceiling. An explicit --task-timeout-seconds still wins.
+    if task_timeout_seconds is None:
+        task_timeout_seconds = (
+            DEFAULT_CLAUDE_TIMEOUT_SECONDS if target == "claude" else DEFAULT_TASK_TIMEOUT_SECONDS
+        )
+
+    # Fail fast on a non-existent section BEFORE any LM spend. The one legitimate
+    # exception is claude seeding a brand-new CLAUDE.md region from an override file
+    # (the region is created on --apply); every other path requires the section to
+    # exist, so a typo'd --section errors here instead of after a full GEPA run (or,
+    # worse for claude, silently appending an unintended region at --apply).
+    if not (target == "claude" and baseline_override_file is not None):
+        source.read(section_name)
+
     if baseline_override_file is not None:
         baseline_text = Path(baseline_override_file).read_text(encoding="utf-8")
     else:
         baseline_text = source.read(section_name)
+    if not baseline_text.strip():
+        raise ValueError(
+            f"baseline for section {section_name!r} is empty — add seed text to the "
+            f"section/region or pass a non-empty --baseline-override-file."
+        )
     baseline_chars = len(baseline_text)
 
     suite = TaskSuite.from_jsonl(tasks_path)
@@ -398,7 +437,7 @@ def evolve_prompt_section(
         f"\n[bold cyan]Prompt Section Self-Evolution[/bold cyan] — "
         f"Evolving section: [bold]{section_name}[/bold]\n"
     )
-    console.print(f"  Hermes repo: {hermes_repo}")
+    console.print(f"  Target: {target} ({hermes_repo if target == 'hermes' else claude_md})")
     console.print(f"  Baseline ({baseline_chars} chars): {baseline_text[:80]}…")
     console.print(
         f"  Tasks: {len(suite.tasks)} ({len(train_tasks)} train / "
@@ -452,10 +491,22 @@ def evolve_prompt_section(
             f"scale per-task agent-run cost estimates accordingly.[/dim]"
         )
 
-    installer = HermesPromptSectionInstaller(hermes_repo, section_name)
-    runner = HermesAgentRunner(
-        timeout_seconds=task_timeout_seconds, model=agent_model
-    )
+    if target == "hermes":
+        installer = HermesPromptSectionInstaller(hermes_repo, section_name)
+        runner = HermesAgentRunner(
+            timeout_seconds=task_timeout_seconds, model=agent_model
+        )
+    else:  # claude
+        claude_workdir = output_dir / "claude_workdir"
+        claude_workdir.mkdir(parents=True, exist_ok=True)
+        installer = ClaudeAppendPromptInstaller(
+            workdir=claude_workdir, baseline_text=baseline_text
+        )
+        runner = ClaudeCodeAgentRunner(
+            append_prompt_file=installer.target_path,
+            model=agent_model or "sonnet",
+            timeout_seconds=task_timeout_seconds,
+        )
     judge = SaveCallJudge(config)
     layer2_factory = _make_layer2_factory(judge)
 
@@ -463,7 +514,12 @@ def evolve_prompt_section(
     suite_dir = suite.path.parent if suite.path is not None else None
 
     def install_candidate(candidate_text: str) -> None:
-        source.write(section_name, candidate_text)
+        # hermes: splice the live prompt_builder.py (guarded). claude: write the
+        # throwaway append-prompt file the runner reads — never the user's CLAUDE.md.
+        if target == "hermes":
+            source.write(section_name, candidate_text)
+        else:
+            installer.install_text(candidate_text)
 
     def score_task_id(task_id: str) -> ScoreResult:
         return _run_one_task_score(
@@ -711,9 +767,12 @@ def evolve_prompt_section(
         f"{report.delta.n_wins}W/{report.delta.n_losses}L)[/green]"
     )
     if apply:
+        # Deploys to the real artifact: hermes prompt_builder.py constant, or the
+        # claude CLAUDE.md sentinel region (the only place the user's file is written).
         source.write(section_name, evolved_text)
+        deploy_target = installer.target_path if target == "hermes" else claude_md
         console.print(
-            f"  [green]✓ Applied evolved {section_name} to {installer.target_path}[/green]"
+            f"  [green]✓ Applied evolved {section_name} to {deploy_target}[/green]"
         )
 
     return {
@@ -726,10 +785,17 @@ def evolve_prompt_section(
 
 @click.command()
 @click.option("--section", "section_name", required=True,
-              help="The prompt_builder.py string constant to evolve (e.g. MEMORY_GUIDANCE).")
-@click.option("--hermes-repo", required=True,
+              help="The section to evolve: a prompt_builder.py constant (hermes) or a "
+                   "CLAUDE.md sentinel-region name (claude).")
+@click.option("--target", default="hermes", type=click.Choice(["hermes", "claude"]),
+              help="Which agent backend to evolve against (default hermes).")
+@click.option("--hermes-repo", default=None,
               type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
-              help="Path to your hermes-agent checkout.")
+              help="Path to your hermes-agent checkout (required for --target hermes).")
+@click.option("--claude-md", default=None,
+              type=click.Path(file_okay=True, dir_okay=False, path_type=Path),
+              help="Path to the CLAUDE.md whose evolve-region is seeded/deployed "
+                   "(required for --target claude).")
 @click.option("--tasks", "tasks_path", required=True,
               type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
               help="Path to a JSONL eval suite (e.g. suites/memory_guidance.jsonl).")
@@ -747,8 +813,9 @@ def evolve_prompt_section(
               help="Model the hermes -z agent runs as (deliberately weaker exposes more signal).")
 @click.option("--layer2-threshold", default=0.7, type=click.FloatRange(0.0, 1.0),
               help="Min content-judge score for a save task to pass (default 0.7).")
-@click.option("--task-timeout-seconds", default=DEFAULT_TASK_TIMEOUT_SECONDS,
-              type=click.IntRange(min=1))
+@click.option("--task-timeout-seconds", default=None,
+              type=click.IntRange(min=1),
+              help="Per-agent-run timeout. Default: 120s (hermes) / 300s (claude).")
 @click.option("--max-cost-usd", "max_total_cost_usd", default=150.0, type=float,
               help="Abort if cumulative spend exceeds this (default $150).")
 @click.option("--fitness-reps", default=3, type=click.IntRange(min=1),
@@ -774,18 +841,21 @@ def evolve_prompt_section(
               help="Start evolution from this text instead of the live section "
                    "(e.g. a weakened baseline to create headroom). The live file "
                    "is still backed up + restored; --apply writes the evolved text.")
-def main(section_name, hermes_repo, tasks_path, iterations, holdout_ratio, seed,
+def main(section_name, target, hermes_repo, claude_md, tasks_path, iterations,
+         holdout_ratio, seed,
          max_growth, optimizer_model, reflection_model, eval_model, agent_model,
          layer2_threshold, task_timeout_seconds, max_total_cost_usd,
          fitness_reps, gate_reps,
          gepa_minibatch_size, gepa_acceptance, skip_saturation_check,
          force_saturation_check, apply, create_pr_flag, dry_run, output_dir,
          baseline_override_file):
-    """Evolve one Hermes system-prompt section via GEPA + closed-loop validation."""
+    """Evolve a system-prompt section via GEPA + closed-loop validation (Hermes or Claude Code)."""
     result = evolve_prompt_section(
         section_name=section_name,
         hermes_repo=hermes_repo,
         tasks_path=tasks_path,
+        target=target,
+        claude_md=claude_md,
         iterations=iterations,
         holdout_ratio=holdout_ratio,
         seed=seed,

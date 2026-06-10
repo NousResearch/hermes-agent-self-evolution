@@ -185,6 +185,20 @@ Unlike skill and tool evolution — where the deploy gate can lean on a syntheti
 
 `--apply` writes the evolved section into `prompt_builder.py` in place; results land in `output/prompts/<section>/<timestamp>/`. PR automation (`--create-pr`) is not yet wired for prompt sections — use `--apply` plus a manual PR. To demonstrate the loop on an already-tuned section (which the saturation pre-flight will otherwise correctly default-deny as having no headroom), `--baseline-override-file` starts evolution from arbitrary text — e.g. a deliberately-weakened baseline that gives GEPA real failures to learn from.
 
+### Evolve a Claude Code CLAUDE.md convention
+
+The same pipeline targets **Claude Code** with `--target claude`. Instead of a `prompt_builder.py` constant, the evolvable section is a sentinel-delimited region in a `CLAUDE.md` (`<!-- evolve:NAME start -->` … `<!-- evolve:NAME end -->`); the agent is driven headlessly with `claude -p`:
+
+```bash
+uv run python -m evolution.prompts.evolve_prompt_section \
+    --target claude --section REPO_CONVENTIONS \
+    --claude-md ./CLAUDE.md \
+    --tasks evolution/validation/suites/claude_conventions.jsonl \
+    --agent-model sonnet --apply
+```
+
+Headless runs authenticate with `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; subscription billing). The defensible headroom is **project-specific conventions** the base prompt cannot know (e.g. "run tests with `./bin/check`, never `pytest`") — not generic disciplines the base prompt already enforces. The verdict is **convention adherence**: a task passes iff the agent used the repo's wrapper command and never fell back to the default tool (scored from the agent's `Bash` calls — no LLM judge). During evolution the candidate region is injected via `--append-system-prompt` inside an OS-sandboxed run (filesystem confined to the task fixture), so **your real `CLAUDE.md` is touched only by `--apply`**, which splices the evolved text into the named region (preserving everything outside it). Seed the region with `--baseline-override-file` to start GEPA from a vague convention.
+
 ### Mine real session history for evals
 
 For skill evolution:
@@ -347,7 +361,7 @@ Cost: each task is one `hermes -z` run (~$0.05–$0.50). The bundled `patch.json
 |-------|--------|--------|--------|
 | **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ [Validated](reports/phase1_validation_report.pdf) |
 | **Phase 2** | Tool descriptions + dual-signal deploy gate | DSPy + GEPA | ✅ [Validated](reports/phase2_validation_report.pdf) |
-| **Phase 3** | System prompt sections | DSPy + GEPA | ✅ [Validated](reports/phase3_validation_report.pdf) |
+| **Phase 3** | System prompt sections (Hermes `prompt_builder.py` + Claude Code `CLAUDE.md`) | DSPy + GEPA | ✅ [Validated](reports/phase3_validation_report.pdf) |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
 
