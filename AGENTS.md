@@ -23,15 +23,15 @@ Project-specific context for AI coding assistants. Read this first when picking 
 
 `[meta:project-overview]` Cross-ref: [docs/codebase_info.md](docs/codebase_info.md), [docs/architecture.md](docs/architecture.md), [README.md](README.md)
 
-`agent-self-evolution` evolves two kinds of agent artifacts via DSPy + GEPA (a reflective prompt optimizer): **skill files** (`SKILL.md` bodies wrapped as `dspy.Module`) and **tool descriptions** (the `description` field on tools in an MCP-shape manifest, or in Hermes-style `*_SCHEMA` Python files). The pipeline is API calls only — no GPU training. GEPA mutates the instruction text using execution-trace feedback, candidates are scored by an LLM-as-judge, and the winner clears a paired-bootstrap quality gate on a held-out split before being accepted.
+`agent-self-evolution` evolves three kinds of agent artifacts via DSPy + GEPA (a reflective prompt optimizer): **skill files** (`SKILL.md` bodies wrapped as `dspy.Module`), **tool descriptions** (the `description` field on tools in an MCP-shape manifest, or in Hermes-style `*_SCHEMA` Python files), and **system-prompt sections** (a named constant in Hermes `prompt_builder.py`, or a sentinel-delimited region of a Claude Code `CLAUDE.md`). The pipeline is API calls only — no GPU training. GEPA mutates the instruction text using execution-trace feedback, candidates are scored (an LLM-as-judge for skills/tools; a purely behavioral closed-loop verdict for prompt sections), and the winner clears a deploy gate on a held-out split before being accepted.
 
-A separate **closed-loop validation** surface (`evolution/validation/`) runs a real agent (`hermes -z`) through a JSONL task suite with baseline vs evolved artifacts spliced into the live install, scores actual tool-selection behavior, and compares with a two-condition decision rule. The harness ships as a standalone CLI, a reflection-LM feedback enricher during the GEPA loop, and a score channel that contributes to GEPA's minibatch acceptance (so behavioral wins can break judge ties on saturated baselines).
+A separate **closed-loop validation** surface (`evolution/validation/`) runs a real agent — `hermes -z`, or `claude -p` for the Claude Code backend — through a JSONL task suite with baseline vs evolved artifacts spliced into the live install (or, for Claude, injected statelessly via `--append-system-prompt-file`), scores actual tool-call behavior, and compares with a two-condition decision rule. The harness ships as a standalone CLI, a reflection-LM feedback enricher during the GEPA loop, and a score channel that contributes to GEPA's minibatch acceptance (so behavioral wins can break judge ties on saturated baselines).
 
-Framework-agnostic at the optimizer layer: any agent that emits `SKILL.md` files (Hermes Agent, Claude Code skills, custom local layouts) is supported via the `SkillSource` Protocol in `evolution/core/skill_sources.py`. Tool sources are similarly pluggable via the `ToolSource` Protocol (`MCPManifestSource` for MCP-shape JSON, `HermesToolSource` for Python `*_SCHEMA` declarations resolved via AST).
+Framework-agnostic at the optimizer layer: any agent that emits `SKILL.md` files (Hermes Agent, Claude Code skills, custom local layouts) is supported via the `SkillSource` Protocol in `evolution/core/skill_sources.py`. Tool sources are pluggable via the `ToolSource` Protocol (`MCPManifestSource` for MCP-shape JSON, `HermesToolSource` for Python `*_SCHEMA` declarations resolved via AST). Prompt-section backends are pluggable via the `PromptBackend` strategy (`evolution/prompts/backend.py`, `build_backend`): `hermes` (AST-splice a `prompt_builder.py` constant + `hermes -z`) and `claude` (sentinel-region in a `CLAUDE.md` + `claude -p`, OS-sandboxed). The agnostic core (GEPA, `ClosedLoopValidator`, `score_task`) is unchanged across backends; a third backend is a factory branch + three adapter classes (`AgentRunner` / `PromptSource` / `ArtifactInstaller`).
 
 For *why this differs from raw DSPy + GEPA* (the small-N selection layer, the paired-bootstrap deploy gate, the composite judge fitness) see [docs/framework_advantages.md](docs/framework_advantages.md).
 
-Tiers 1 and 2 are implemented: skill files in `evolution/skills/`, tool descriptions in `evolution/tools/`. Tiers 3-5 (prompt sections, code, continuous loop) exist as empty package stubs. See `PLAN.md` for each phase's "Deviations from plan" subsection.
+Tiers 1-3 are implemented: skill files in `evolution/skills/`, tool descriptions in `evolution/tools/`, system-prompt sections in `evolution/prompts/` (Hermes + Claude Code backends). Tiers 4-5 (code, continuous loop) exist as empty package stubs. See `PLAN.md` for each phase's "Deviations from plan" subsection.
 
 ## Repo layout at a glance
 
@@ -43,8 +43,8 @@ agent-self-evolution/
 │   ├── core/            # framework-agnostic infrastructure
 │   ├── skills/          # Tier 1 — skill-file evolution
 │   ├── tools/           # Tier 2 — tool-description evolution
-│   ├── validation/      # closed-loop validation against a real agent
-│   ├── prompts/         # Tier 3 stub
+│   ├── validation/      # closed-loop validation against a real agent (hermes -z / claude -p)
+│   ├── prompts/         # Tier 3 — system-prompt-section evolution (Hermes + Claude backends)
 │   ├── code/            # Tier 4 stub
 │   └── monitor/         # Tier 5 stub
 ├── tests/
@@ -109,9 +109,16 @@ The `evolution/<tier>/` directories form **a clean layering**: `evolution/core/`
 | Closed-loop CLI (real-agent validation) | `evolution/validation/closed_loop.py` |
 | Validator: mutate + restore live agent file, run task suite | `evolution/validation/validator.py` |
 | `hermes -z` subprocess runner with sandboxed HOME | `evolution/validation/hermes_runner.py` |
-| Description splice into live tool file | `evolution/validation/artifact_installer.py` |
+| `claude -p` runner (stream-json parse, `sandbox-exec` containment, OAuth-token auth, cost ledger) | `evolution/validation/claude_runner.py` |
+| Description splice into live tool file; prompt-section + Claude append-prompt installers | `evolution/validation/artifact_installer.py` |
 | Task / TaskSuite (JSONL with sha256 audit) | `evolution/validation/task.py` |
-| ValidationReport + two-condition decision rule | `evolution/validation/report.py` |
+| ValidationReport + two-condition decision rule; `_score_convention` (Bash-wrapper adherence) | `evolution/validation/report.py` |
+| Prompt-section CLI + orchestration (`--target {hermes,claude}`) | `evolution/prompts/evolve_prompt_section.py` |
+| `PromptBackend` strategy + `build_backend` factory (single per-target seam) | `evolution/prompts/backend.py` |
+| Hermes `prompt_builder.py` constant read/write (AST splice) | `evolution/prompts/hermes_prompt_source.py` |
+| Claude `CLAUDE.md` sentinel-region read/write | `evolution/prompts/claude_prompt_source.py` |
+| `PromptModule` + sentinel-preserving GEPA proposer | `evolution/prompts/prompt_module.py`, `prompt_proposer.py` |
+| `SaveCallJudge` + prompt fitness/splice scorers | `evolution/prompts/prompt_judge.py` |
 
 ## Coding conventions
 
@@ -159,8 +166,9 @@ Inferred from the existing source — follow these unless you have a specific re
 
 `[meta:test-workflow]` Cross-ref: [docs/interfaces.md](docs/interfaces.md), [docs/workflows.md Workflow 8](docs/workflows.md)
 
-- Run all tests: `pytest tests/ -q` from the repo root, **inside the venv** (`source .venv/bin/activate`). Currently ~680 tests.
-- All tests use mocks for LM calls — no API keys required.
+- Run all tests: `uv run pytest tests/ -q` from the repo root (CI runs this on Python 3.10–3.13). Currently ~1390 tests.
+- All tests use mocks/fixtures for LM + agent calls — no API keys, no live `hermes`/`claude` required (the Claude runner tests parse captured stream-json; the sandbox/refusal paths are unit-tested without spawning a subprocess).
+- Live runs (not the test suite) need `OPENAI_API_KEY` (reflection/judge LMs); the Claude backend additionally needs `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) and macOS `sandbox-exec` for containment.
 - The `_skill_source_env` autouse fixture (defined per-module, e.g., `tests/core/test_constraints.py:9`) sets `SKILL_SOURCES_HERMES_REPO` to a `tmp_path` fake repo so discovery doesn't pick up real `~/.hermes` / `~/.claude` installs. Add this fixture to any new test that touches `EvolutionConfig`.
 
 ### What to test
@@ -199,7 +207,19 @@ uv run python -m evolution.skills.evolve_skill \
 For Hermes Agent skills: `export SKILL_SOURCES_HERMES_REPO=~/.hermes/hermes-agent` (or set to wherever your checkout lives).
 For Claude Code skills: nothing needed — `~/.claude/plugins/cache/` is auto-discovered.
 
-Cost rough cuts: light budget on a small skill = $0.50-2.00; heavy budget on a large skill = $5-15.
+```bash
+# evolve a Hermes prompt-section constant
+uv run python -m evolution.prompts.evolve_prompt_section \
+    --section MEMORY_GUIDANCE --hermes-repo /path/to/hermes-agent \
+    --tasks evolution/validation/suites/memory_guidance.jsonl
+
+# evolve a Claude Code CLAUDE.md convention region (needs CLAUDE_CODE_OAUTH_TOKEN; macOS sandbox-exec)
+uv run python -m evolution.prompts.evolve_prompt_section \
+    --target claude --section REPO_CONVENTIONS --claude-md ./CLAUDE.md \
+    --tasks evolution/validation/suites/claude_conventions.jsonl --agent-model sonnet --apply
+```
+
+Cost rough cuts: light budget on a small skill = $0.50-2.00; heavy budget on a large skill = $5-15. Prompt-section runs spend on the agent subprocess per task × reps — meter with `--max-cost-usd`.
 
 ## Output artifacts on disk
 
@@ -224,7 +244,10 @@ Per-run dir: `output/<skill>/<YYYYMMDD_HHMMSS>/`. Contents vary by outcome:
 
 `[meta:gotchas]`
 
-- **Empty `evolution/{tools,prompts,code,monitor}/`** — these are stubs anchoring the planned tier 2-5 work. See [docs/codebase_info.md](docs/codebase_info.md) status table.
+- **Empty `evolution/{code,monitor}/`** — these are stubs anchoring the planned tier 4-5 work. `evolution/prompts/` is now implemented (Tier 3). See [docs/codebase_info.md](docs/codebase_info.md) status table.
+- **The Claude backend uses `sandbox-exec`, NOT the Claude Code `sandbox` *setting*** — the setting only confines Bash, so the native Write/Edit tools escape it (verified). Containment is a kernel-level `sandbox-exec` write-restrict profile around the `claude -p` subprocess; the runner *refuses to run* (`SandboxUnavailableError`) when OS sandboxing is unavailable rather than running an agent unconfined.
+- **`claude -p` reports `$0` cost on subscription/OAuth auth** — the runner falls back to a litellm token-pricing estimate (`computed`) so spend still meters against `--max-cost-usd`; a true `$0`-with-no-tokens run is flagged `uncaptured`, not silently free.
+- **Prompt-section validation uses the installer's throwaway file, never the user's real artifact** — for Claude, candidates are injected via a workdir `--append-system-prompt-file`; only `--apply` writes the real `CLAUDE.md`. `install_candidate` (validation) and `deploy` (`--apply`) target different files and must not be merged.
 - **`logging.basicConfig` at module import** — `evolve_skill.py:30-34` configures the root logger when imported. Side effect, intentional for the CLI; surprising if you `from evolution.skills.evolve_skill import evolve` in a notebook.
 - **`val_ratio + holdout_ratio + train_ratio = 1.40`** — looks like a bug; isn't. `split_examples()` normalizes the three ratios so they sum to 1; the synthetic, sessiondb, and golden paths all go through the same helper.
 - **`max_tokens=16000` on dataset gen LM** — load-bearing. At `eval_dataset_size>=60` the JSON output truncates mid-string with anything lower; the current default `eval_dataset_size=150` makes this even more critical. Locked by `TestSyntheticGeneratorLMConfig`.
@@ -261,7 +284,7 @@ PR description template (loose, but the existing PRs follow it):
 |---|---|---|
 | 1 | Skill files (`SKILL.md`) | ✅ implemented (`evolution/skills/`) |
 | 2 | Tool descriptions | ✅ implemented (`evolution/tools/`) — MCP-JSON and Hermes-Python-AST adapters; one target tool per run |
-| 3 | System prompt sections | 🔲 stub (`evolution/prompts/`) |
+| 3 | System prompt sections | ✅ implemented (`evolution/prompts/`) — Hermes `prompt_builder.py` + Claude Code `CLAUDE.md` backends behind `PromptBackend`; purely-behavioral closed-loop deploy gate |
 | 4 | Tool implementation code | 🔲 stub (`evolution/code/`); needs `[darwinian]` extra |
 | 5 | Continuous improvement loop | 🔲 stub (`evolution/monitor/`) |
 
@@ -284,6 +307,7 @@ Open questions deferred to future PRs (per `PLAN.md` deviation notes):
 | How does the deploy gate decide? | [docs/architecture.md](docs/architecture.md) + [docs/components.md](docs/components.md) (`constraints.py`) |
 | What dependency do I add for X? | [docs/dependencies.md](docs/dependencies.md) |
 | What are the documented flow paths? | [docs/workflows.md](docs/workflows.md) |
+| How does prompt-section / Claude CLAUDE.md evolution work? | [docs/workflows.md](docs/workflows.md) + [docs/components.md](docs/components.md) (Claude Code backend) |
 | Where am I supposed to put new tests? | This file (Testing section) |
 | What does the long-term roadmap look like? | [PLAN.md](PLAN.md) |
 | Why use this over raw DSPy + GEPA? | [docs/framework_advantages.md](docs/framework_advantages.md) |

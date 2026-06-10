@@ -137,6 +137,18 @@ The default LM provider. Three call patterns with different cost profiles:
 
 Typical run cost (light budget on a small skill): **$0.50 - $2.00**. Heavy budget on a large skill: **$5 - $15**.
 
+### Agent subprocesses (closed-loop validation)
+
+Closed-loop validation and prompt-section evolution shell out to a real agent CLI per task; these are runtime dependencies, not Python packages.
+
+| Tool | Used by | Auth | Notes |
+|---|---|---|---|
+| `hermes` CLI (`hermes -z`) | Hermes backend / closed-loop tool+skill suites | per the hermes checkout | Sandboxed via `HERMES_HOME`/`HOME` override to a tmp dir. |
+| `claude` CLI (`claude -p`) | Claude Code backend (`--target claude`) | `CLAUDE_CODE_OAUTH_TOKEN` env (from `claude setup-token`; subscription billing) — **not** `--bare`, which ignores the token | stream-json parsed for tool calls + cost. |
+| macOS `sandbox-exec` | Claude backend containment | n/a | Wraps `claude -p` in a write-restrict profile (deny writes outside the fixture + HOME + temp). The runner raises `SandboxUnavailableError` rather than running unconfined when it's absent (non-macOS). |
+
+`litellm.cost_per_token` is used as a cost fallback in the Claude runner: subscription/OAuth runs report `total_cost_usd == 0`, so the runner prices the reported token usage via litellm to meter spend against `--max-cost-usd` (recorded as `computed`; a no-token run stays `uncaptured`).
+
 ### Local filesystem reads (sessiondb path)
 
 | Source | Path | Format |
