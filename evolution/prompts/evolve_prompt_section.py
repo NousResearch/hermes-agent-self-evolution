@@ -272,6 +272,7 @@ def _run_one_task_score(
                 stale_token=task.stale_token,
                 required_cmd_substr=task.required_cmd_substr,
                 forbidden_cmd_substr=task.forbidden_cmd_substr,
+                command_tool=task.command_tool,
             )
             if abstained:
                 n_abstain += 1

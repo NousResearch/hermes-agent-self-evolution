@@ -71,6 +71,7 @@ def score_task(
     stale_token: Optional[str] = None,
     required_cmd_substr: tuple[str, ...] = (),
     forbidden_cmd_substr: tuple[str, ...] = (),
+    command_tool: str = "Bash",
 ) -> tuple[bool, bool]:
     """Return (passed, abstained).
 
@@ -118,6 +119,7 @@ def score_task(
             run,
             required_cmd_substr=required_cmd_substr,
             forbidden_cmd_substr=forbidden_cmd_substr,
+            command_tool=command_tool,
         ), False
     if test_command is not None:
         if fixture_dir is None:
@@ -167,13 +169,15 @@ def _score_convention(
     *,
     required_cmd_substr: tuple[str, ...],
     forbidden_cmd_substr: tuple[str, ...],
+    command_tool: str = "Bash",
 ) -> bool:
     """Return True iff a Bash call used a required wrapper substring and none
     bypassed it with a forbidden default-tool substring.
 
     Used to score adherence to a repo-specific convention (e.g. "run tests with
-    ./bin/check, never pytest"). Agent-agnostic: reads only the ``Bash`` calls
-    in ``tool_calls_with_args``.
+    ./bin/check, never pytest"). Agent-agnostic: reads only the ``command_tool``
+    calls (default ``Bash``) in ``tool_calls_with_args`` — set it per task for a
+    backend whose shell tool is named differently.
 
     Matching is trailing-boundary aware: a substring matches only when it is not
     immediately followed by a word-continuation char ([A-Za-z0-9_.-]), so forbidden
@@ -185,7 +189,7 @@ def _score_convention(
     commands = [
         (call.get("arguments") or {}).get("command", "")
         for call in run.tool_calls_with_args
-        if call.get("name") == "Bash"
+        if call.get("name") == command_tool
     ]
     used = _any_command_uses(commands, required_cmd_substr)
     bypassed = _any_command_uses(commands, forbidden_cmd_substr)

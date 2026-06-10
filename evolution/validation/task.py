@@ -52,6 +52,7 @@ class Task:
     stale_token: Optional[str] = None
     required_cmd_substr: tuple[str, ...] = ()
     forbidden_cmd_substr: tuple[str, ...] = ()
+    command_tool: str = "Bash"
 
     def render_message(self, fixture_dir: Path) -> str:
         """Substitute ``{fixture_dir}`` in the message with the resolved path.
@@ -158,4 +159,5 @@ def _task_from_dict(obj: dict, *, source: str) -> Task:
         stale_token=stale_token,
         required_cmd_substr=required_cmd_substr,
         forbidden_cmd_substr=forbidden_cmd_substr,
+        command_tool=obj.get("command_tool") or "Bash",
     )

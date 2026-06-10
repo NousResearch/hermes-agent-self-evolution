@@ -82,6 +82,33 @@ def test_convention_boundary_matches_default_at_token_end():
     assert passed is False
 
 
+def _run_named(tool, cmds):
+    return AgentRunResult(
+        tool_calls_seq=[tool] * len(cmds), final_text_tail="", duration_seconds=1.0,
+        tool_calls_with_args=[{"name": tool, "arguments": {"command": c}} for c in cmds],
+    )
+
+
+def test_convention_default_tool_is_bash():
+    # A Shell call is ignored by default (command_tool defaults to "Bash").
+    passed, _ = score_task(
+        expected_tools=(), forbidden_tools=(), run=_run_named("Shell", ["./bin/check"]),
+        expected_action="convention",
+        required_cmd_substr=("bin/check",), forbidden_cmd_substr=("pytest",),
+    )
+    assert passed is False
+
+
+def test_convention_honors_command_tool_field():
+    # With command_tool="Shell", the verdict scores Shell calls instead of Bash.
+    passed, _ = score_task(
+        expected_tools=(), forbidden_tools=(), run=_run_named("Shell", ["./bin/check"]),
+        expected_action="convention", command_tool="Shell",
+        required_cmd_substr=("bin/check",), forbidden_cmd_substr=("pytest",),
+    )
+    assert passed is True
+
+
 def test_convention_task_requires_required_cmd_substr():
     import pytest
     from evolution.validation.task import TaskSuite
