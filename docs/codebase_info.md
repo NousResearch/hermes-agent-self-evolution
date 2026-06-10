@@ -82,7 +82,8 @@ evolution/
 │   ├── prompt_module.py                 # PromptModule — passthrough predictor carrying candidate in sentinels
 │   ├── prompt_proposer.py               # PromptSectionProposer — sentinel-preserving GEPA proposer
 │   ├── prompt_judge.py                  # SaveCallJudge + judge_save_calls Layer-2 content judge + fitness/splice scorers
-│   └── claude_prompt_source.py          # ClaudeCodePromptSource — read/write a sentinel-delimited region in a CLAUDE.md
+│   ├── claude_prompt_source.py          # ClaudeCodePromptSource — read/write a sentinel-delimited region in a CLAUDE.md
+│   └── backend.py                       # PromptBackend + build_backend — the single per-target selection seam
 ├── code/                                # Tier 4: planned, empty package
 └── monitor/                             # planned, empty package
 ```
@@ -123,6 +124,7 @@ evolution/
 | `evolution/core/config.py` | ~80 | `EvolutionConfig` dataclass |
 | `evolution/core/stats.py` | ~60 | `paired_bootstrap` helper |
 | `evolution/prompts/prompt_source.py` | ~55 | PromptSource Protocol + SectionDescriptor |
+| `evolution/prompts/backend.py` | ~125 | PromptBackend strategy + build_backend factory (single per-target seam) |
 | `evolution/validation/agent_runner.py` | ~55 | AgentRunner Protocol + dataclasses |
 | `evolution/core/behavioral_example.py` | ~35 | builder for behavioral dspy.Examples |
 | **Total** | **~10,900** | excludes empty `__init__.py` shims |

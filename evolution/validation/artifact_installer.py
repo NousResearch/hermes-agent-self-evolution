@@ -50,6 +50,20 @@ class ArtifactInstaller(Protocol):
         ...
 
 
+class SupportsInlineInstall(ArtifactInstaller, Protocol):
+    """An installer whose candidate is inline text (a prompt-section body).
+
+    Narrower than ``ArtifactInstaller``: only the prompt-section installers
+    (Hermes constant splice, Claude append-prompt) can splice raw text, so the
+    GEPA inner loop installs through this contract. Artifact-file installers
+    (skills, tool descriptions) deliberately do NOT implement it — their
+    artifact is a whole file, not an inline string."""
+
+    def install_text(self, text: str) -> str:
+        """Install ``text`` as the candidate; return ``target_path``'s sha256."""
+        ...
+
+
 class HermesToolDescriptionInstaller:
     """Splice an evolved tool description into a Hermes ``*_SCHEMA`` file.
 
@@ -163,8 +177,14 @@ class HermesPromptSectionInstaller:
     def install(self, artifact_source: Path) -> str:
         """Splice the candidate section text from ``artifact_source`` into the
         live ``prompt_builder.py`` and return the post-install sha256."""
-        new_text = artifact_source.read_text(encoding="utf-8")
-        self._source.write(self.section_name, new_text)
+        return self.install_text(artifact_source.read_text(encoding="utf-8"))
+
+    def install_text(self, text: str) -> str:
+        """Splice ``text`` into the live section constant; return post-install sha256.
+
+        The GEPA inner-loop entry point — byte-equivalent to ``HermesPromptSource.
+        write`` (both re-parse the live file and splice by fresh byte offset)."""
+        self._source.write(self.section_name, text)
         return sha256_of(self.target_path)
 
     def verify_backup(self, backup_path: Path) -> None:

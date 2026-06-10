@@ -52,8 +52,7 @@ from evolution.core.saturation_check import (
     render_saturation_panel,
     saturation_preflight,
 )
-from evolution.prompts.claude_prompt_source import ClaudeCodePromptSource
-from evolution.prompts.hermes_prompt_source import HermesPromptSource
+from evolution.prompts.backend import build_backend
 from evolution.prompts.prompt_judge import (
     SaveCallJudge,
     ScoreResult,
@@ -64,19 +63,7 @@ from evolution.prompts.prompt_judge import (
 from evolution.prompts.prompt_module import PromptModule, _extract_from_sentinels
 from evolution.prompts.prompt_proposer import PromptSectionProposer
 from evolution.validation.agent_runner import AgentRunner, TaskRunContext
-from evolution.validation.artifact_installer import (
-    ClaudeAppendPromptInstaller,
-    HermesPromptSectionInstaller,
-    atomic_write_bytes,
-)
-from evolution.validation.claude_runner import (
-    DEFAULT_CLAUDE_TIMEOUT_SECONDS,
-    ClaudeCodeAgentRunner,
-)
-from evolution.validation.hermes_runner import (
-    DEFAULT_TASK_TIMEOUT_SECONDS,
-    HermesAgentRunner,
-)
+from evolution.validation.artifact_installer import atomic_write_bytes
 from evolution.validation.report import score_task
 from evolution.validation.task import Task, TaskSuite
 from evolution.validation.validator import (
@@ -363,46 +350,27 @@ def evolve_prompt_section(
     gate_reps: int = 1,
 ) -> dict[str, Any]:
     """Evolve one prompt section end-to-end. Returns a summary dict."""
-    # The source reads the baseline section + (on --apply) deploys the evolved
-    # text. ``baseline_override`` lets evolution START from different text (e.g. a
-    # deliberately-weakened baseline to create headroom) without touching the real
-    # file — the validation guard backs up + restores its own splice target.
-    if target == "hermes":
-        if hermes_repo is None:
-            raise ValueError("--hermes-repo is required for --target hermes")
-        hermes_repo = Path(hermes_repo).resolve()
-        source = HermesPromptSource(hermes_repo)
-    elif target == "claude":
-        if claude_md is None:
-            raise ValueError("--claude-md is required for --target claude")
-        source = ClaudeCodePromptSource(Path(claude_md))
-    else:
-        raise ValueError(f"unknown --target {target!r} (expected 'hermes' or 'claude')")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if output_dir is None:
+        output_dir = Path("output") / "prompts" / section_name / timestamp
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Claude agent runs are multi-step and slower than hermes -z; give them a longer
-    # default ceiling. An explicit --task-timeout-seconds still wins.
-    if task_timeout_seconds is None:
-        task_timeout_seconds = (
-            DEFAULT_CLAUDE_TIMEOUT_SECONDS if target == "claude" else DEFAULT_TASK_TIMEOUT_SECONDS
-        )
-
-    # Fail fast on a non-existent section BEFORE any LM spend. The one legitimate
-    # exception is claude seeding a brand-new CLAUDE.md region from an override file
-    # (the region is created on --apply); every other path requires the section to
-    # exist, so a typo'd --section errors here instead of after a full GEPA run (or,
-    # worse for claude, silently appending an unintended region at --apply).
-    if not (target == "claude" and baseline_override_file is not None):
-        source.read(section_name)
-
-    if baseline_override_file is not None:
-        baseline_text = Path(baseline_override_file).read_text(encoding="utf-8")
-    else:
-        baseline_text = source.read(section_name)
-    if not baseline_text.strip():
-        raise ValueError(
-            f"baseline for section {section_name!r} is empty — add seed text to the "
-            f"section/region or pass a non-empty --baseline-override-file."
-        )
+    # Select the backend once — the sole per-target branch lives in build_backend.
+    # It validates required args + section existence (fail-fast before any LM spend),
+    # computes the baseline (override file or the live section, refusing an empty one),
+    # and resolves the per-target agent timeout. The driver below is target-agnostic.
+    backend = build_backend(
+        target,
+        section_name=section_name,
+        hermes_repo=hermes_repo,
+        claude_md=claude_md,
+        output_dir=output_dir,
+        agent_model=agent_model,
+        task_timeout_seconds=task_timeout_seconds,
+        baseline_override_file=baseline_override_file,
+    )
+    baseline_text = backend.baseline_text
     baseline_chars = len(baseline_text)
 
     suite = TaskSuite.from_jsonl(tasks_path)
@@ -415,12 +383,6 @@ def evolve_prompt_section(
     train_tasks, holdout_tasks = _split_train_holdout(
         suite.tasks, holdout_ratio=holdout_ratio, seed=seed
     )
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if output_dir is None:
-        output_dir = Path("output") / "prompts" / section_name / timestamp
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     config = EvolutionConfig(
         iterations=iterations,
@@ -437,7 +399,7 @@ def evolve_prompt_section(
         f"\n[bold cyan]Prompt Section Self-Evolution[/bold cyan] — "
         f"Evolving section: [bold]{section_name}[/bold]\n"
     )
-    console.print(f"  Target: {target} ({hermes_repo if target == 'hermes' else claude_md})")
+    console.print(f"  Target: {target} ({backend.deploy_target})")
     console.print(f"  Baseline ({baseline_chars} chars): {baseline_text[:80]}…")
     console.print(
         f"  Tasks: {len(suite.tasks)} ({len(train_tasks)} train / "
@@ -491,22 +453,8 @@ def evolve_prompt_section(
             f"scale per-task agent-run cost estimates accordingly.[/dim]"
         )
 
-    if target == "hermes":
-        installer = HermesPromptSectionInstaller(hermes_repo, section_name)
-        runner = HermesAgentRunner(
-            timeout_seconds=task_timeout_seconds, model=agent_model
-        )
-    else:  # claude
-        claude_workdir = output_dir / "claude_workdir"
-        claude_workdir.mkdir(parents=True, exist_ok=True)
-        installer = ClaudeAppendPromptInstaller(
-            workdir=claude_workdir, baseline_text=baseline_text
-        )
-        runner = ClaudeCodeAgentRunner(
-            append_prompt_file=installer.target_path,
-            model=agent_model or "sonnet",
-            timeout_seconds=task_timeout_seconds,
-        )
+    installer = backend.installer
+    runner = backend.runner
     judge = SaveCallJudge(config)
     layer2_factory = _make_layer2_factory(judge)
 
@@ -514,12 +462,10 @@ def evolve_prompt_section(
     suite_dir = suite.path.parent if suite.path is not None else None
 
     def install_candidate(candidate_text: str) -> None:
-        # hermes: splice the live prompt_builder.py (guarded). claude: write the
-        # throwaway append-prompt file the runner reads — never the user's CLAUDE.md.
-        if target == "hermes":
-            source.write(section_name, candidate_text)
-        else:
-            installer.install_text(candidate_text)
+        # Uniform across backends: install through the installer (whose target_path
+        # the runner reads). For claude this is a throwaway append-prompt file — never
+        # the user's CLAUDE.md, which only --apply writes (backend.deploy).
+        backend.install_candidate(candidate_text)
 
     def score_task_id(task_id: str) -> ScoreResult:
         return _run_one_task_score(
@@ -767,12 +713,12 @@ def evolve_prompt_section(
         f"{report.delta.n_wins}W/{report.delta.n_losses}L)[/green]"
     )
     if apply:
-        # Deploys to the real artifact: hermes prompt_builder.py constant, or the
-        # claude CLAUDE.md sentinel region (the only place the user's file is written).
-        source.write(section_name, evolved_text)
-        deploy_target = installer.target_path if target == "hermes" else claude_md
+        # Deploys to the real artifact via the source: hermes prompt_builder.py
+        # constant, or the claude CLAUDE.md region (the only place the user's file is
+        # written — distinct from install_candidate's throwaway validation target).
+        backend.deploy(section_name, evolved_text)
         console.print(
-            f"  [green]✓ Applied evolved {section_name} to {deploy_target}[/green]"
+            f"  [green]✓ Applied evolved {section_name} to {backend.deploy_target}[/green]"
         )
 
     return {
