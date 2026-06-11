@@ -29,7 +29,7 @@ def _call(payload: dict, **overrides) -> None:
 
 
 class TestAppendClDecisionFields:
-    def test_all_nine_fields_added(self):
+    def test_all_fields_added(self):
         payload: dict = {}
         _call(payload)
         assert set(payload.keys()) == {
@@ -38,11 +38,16 @@ class TestAppendClDecisionFields:
             "evolved_closed_loop_errored_tasks",
             "cl_tasks_gained",
             "cl_required_gain",
+            "cl_noise_floor_passes",
+            "noise_aware_gate",
             "synthetic_sanity_check",
             "evolved_cl_eval_cost_usd",
             "band_trigger_score",
             "validator_agent_model",
         }
+        # Default call supplies no noise floor → legacy behavior recorded.
+        assert payload["cl_noise_floor_passes"] == 0.0
+        assert payload["noise_aware_gate"] is False
         assert payload["cl_tasks_gained"] == 3 - 2
         assert payload["evolved_cl_eval_cost_usd"] == 0.0123
         assert payload["band_trigger_score"] == {"holdout": 0.7, "closed_loop": 0.4}

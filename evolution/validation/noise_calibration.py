@@ -199,6 +199,16 @@ def noise_tolerances(
     return per_task, aggregate
 
 
+def noise_floor_pass_count(sidecar: dict[str, Any], *, multiplier: float = 1.0) -> float:
+    """Expected spurious pass-COUNT gain from the A/A floor = sum of per-task flips.
+
+    For the pass-count CL-primary gate (evolve_tool/evolve_skill): a deploy gain
+    smaller than this many tasks is plausibly noise. Degenerate sidecar → 0.0.
+    """
+    per_task, _ = noise_tolerances(sidecar, multiplier=multiplier)
+    return sum(per_task.values())
+
+
 def _summary_text(report: NoiseReport) -> str:
     lines = [
         f"A/A noise floor over {report.runs} run(s), reps={report.reps}"

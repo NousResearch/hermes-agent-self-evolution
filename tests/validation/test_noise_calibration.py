@@ -35,6 +35,19 @@ def test_noise_tolerances_multiplier_scales():
 def test_degenerate_sidecar_yields_zero_tolerance():
     sidecar = {"per_task_flip": {"a": 0.5}, "mean_per_task_flip": 0.5, "is_degenerate": True}
     assert noise_tolerances(sidecar) == ({}, 0.0)
+
+
+def test_noise_floor_pass_count_sums_per_task_flip():
+    from evolution.validation.noise_calibration import noise_floor_pass_count
+    sidecar = {"per_task_flip": {"a": 0.375, "b": 0.0, "c": 0.5}, "mean_per_task_flip": 0.29}
+    assert noise_floor_pass_count(sidecar) == pytest.approx(0.875)
+    assert noise_floor_pass_count(sidecar, multiplier=2.0) == pytest.approx(1.75)
+
+
+def test_noise_floor_pass_count_degenerate_is_zero():
+    from evolution.validation.noise_calibration import noise_floor_pass_count
+    sidecar = {"per_task_flip": {"a": 0.5, "b": 0.5}, "mean_per_task_flip": 0.5, "is_degenerate": True}
+    assert noise_floor_pass_count(sidecar) == 0.0
 from evolution.validation.report import (
     PhaseResult,
     TaskResult,

@@ -380,6 +380,7 @@ def evolve(
     benchmark_cmd: Optional[str] = None,
     benchmark_timeout_seconds: int = 600,
     closed_loop_suite_path: Optional[Path] = None,
+    noise_aware_gate: bool = False,
     closed_loop_hermes_repo: Optional[Path] = None,
     closed_loop_saturation_threshold: float = 0.95,
     closed_loop_min_iters: int = 3,
@@ -887,6 +888,19 @@ def evolve(
                 and closed_loop_cache is not None
             )
 
+            # Noise floor (opt-in) for the CL-primary gain bar: the expected
+            # spurious pass-count gain from the suite's A/A floor. 0.0 → the gate
+            # is byte-identical to the legacy +1-task rule.
+            cl_noise_floor_passes = 0.0
+            if noise_aware_gate and closed_loop_suite_path is not None:
+                from evolution.validation.noise_calibration import (
+                    load_noise_sidecar,
+                    noise_floor_pass_count,
+                )
+                _sidecar = load_noise_sidecar(closed_loop_suite_path)
+                if _sidecar is not None:
+                    cl_noise_floor_passes = noise_floor_pass_count(_sidecar)
+
             evolved_cl_report = None
             evolved_cl_per_example: Optional[list[float]] = None
             evolved_cl_errored_task_ids: list[str] = []
@@ -986,6 +1000,7 @@ def evolve(
                     baseline_synth_mean=avg_baseline,
                     evolved_synth_mean=avg_evolved,
                     growth_pct=growth_pct,
+                    noise_floor_passes=cl_noise_floor_passes,
                 )
                 icon = "✓" if cl_constraint.passed else "✗"
                 color = "green" if cl_constraint.passed else "red"
@@ -1120,6 +1135,7 @@ def evolve(
                     preflight_holdout_score=preflight_holdout_score,
                     preflight_cl_score=preflight_cl_score,
                     closed_loop_agent_model=closed_loop_agent_model,
+                    noise_floor_passes=cl_noise_floor_passes,
                 )
 
             if not use_cl_primary and preflight_band is None:
@@ -1473,6 +1489,14 @@ def evolve(
          "in place. Required iff --closed-loop-during-evolution is set.",
 )
 @click.option(
+    "--noise-aware-gate",
+    is_flag=True,
+    default=False,
+    help="When the CL-primary gate fires, require the pass-count gain to exceed "
+         "the suite's A/A noise floor (sum of per_task_flip from <suite>.noise.json) "
+         "so a within-noise gain can't deploy. No-op without a sidecar.",
+)
+@click.option(
     "--closed-loop-saturation-threshold",
     default=0.95,
     type=click.FloatRange(min=0.0, max=1.0),
@@ -1687,6 +1711,7 @@ def main(
     closed_loop_in_valset: bool,
     closed_loop_agent_model: Optional[str],
     closed_loop_task_timeout_seconds: Optional[int],
+    noise_aware_gate: bool,
 ) -> None:
     """Evolve one tool description in an MCP manifest using DSPy + GEPA."""
     if apply_flag and patch_flag:
@@ -1726,6 +1751,7 @@ def main(
             closed_loop_in_valset=closed_loop_in_valset,
             closed_loop_agent_model=closed_loop_agent_model,
             closed_loop_task_timeout_seconds=closed_loop_task_timeout_seconds,
+            noise_aware_gate=noise_aware_gate,
             skip_preflight=skip_preflight,
             skip_cost_suggest=skip_cost_suggest,
             skip_saturation_check=skip_saturation_check,

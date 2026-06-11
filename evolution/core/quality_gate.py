@@ -37,6 +37,23 @@ CL_PRIMARY_GROWTH_SLOPE = 1.0
 CL_PRIMARY_SYNTH_TOLERANCE = 0.05
 
 
+def _cl_required_gain(growth_pct: float, *, noise_floor_passes: float = 0.0) -> int:
+    """Minimum CL pass-count gain to deploy, in tasks.
+
+    The growth term scales with description growth so a +1 task win can't deploy
+    +400% wallpaper. The noise term (opt-in, from a ``<suite>.noise.json`` A/A
+    floor) requires the gain to STRICTLY EXCEED the expected spurious flip count
+    (``sum(per_task_flip)``) — ``floor(noise_floor_passes) + 1`` is the smallest
+    integer greater than the floor. ``noise_floor_passes=0`` (the default) makes
+    the noise term ``1``, leaving the formula byte-identical to the legacy gate.
+    """
+    growth_required = math.ceil(
+        max(0.0, CL_PRIMARY_GROWTH_SLOPE * (growth_pct - CL_PRIMARY_GROWTH_FREE_THRESHOLD))
+    )
+    noise_required = math.floor(noise_floor_passes) + 1
+    return max(1, growth_required, noise_required)
+
+
 def _check_cl_primary_gate(
     *,
     baseline_cl_passes: int,
@@ -45,14 +62,17 @@ def _check_cl_primary_gate(
     evolved_synth_mean: float,
     growth_pct: float,
     synth_tolerance: float = CL_PRIMARY_SYNTH_TOLERANCE,
+    noise_floor_passes: float = 0.0,
 ) -> ConstraintResult:
     """Deploy-gate decision rule used when the saturation pre-flight
     classifies the run as ``weak_signal`` (synthetic judge saturated,
     closed-loop signal has a gradient).
 
     ACCEPT iff (gain >= required_gain) AND (synthetic not catastrophically
-    collapsed). ``required_gain`` scales with description growth so a
-    +1 task win can't deploy +400% wallpaper.
+    collapsed). ``required_gain`` scales with description growth so a +1 task
+    win can't deploy +400% wallpaper, and — when ``noise_floor_passes`` is
+    supplied from an A/A floor — must exceed the expected spurious flips so a
+    within-noise pass-count gain can't deploy.
 
     Parameters are scalars (not SaturationReport) so this helper is
     independent of the preflight subsystem and trivially unit-testable.
@@ -60,12 +80,7 @@ def _check_cl_primary_gate(
     existing aggregation code works without changes.
     """
     cl_gain = evolved_cl_passes - baseline_cl_passes
-    required_gain = max(
-        1,
-        math.ceil(
-            max(0.0, CL_PRIMARY_GROWTH_SLOPE * (growth_pct - CL_PRIMARY_GROWTH_FREE_THRESHOLD))
-        ),
-    )
+    required_gain = _cl_required_gain(growth_pct, noise_floor_passes=noise_floor_passes)
     synth_delta = evolved_synth_mean - baseline_synth_mean
     synth_passed = synth_delta >= -synth_tolerance
 
@@ -109,20 +124,25 @@ def append_cl_decision_fields(
     preflight_holdout_score: Optional[float],
     preflight_cl_score: Optional[float],
     closed_loop_agent_model: str,
+    noise_floor_passes: float = 0.0,
 ) -> None:
-    """Append the closed-loop deploy-gate decision fields to ``decision_payload``."""
+    """Append the closed-loop deploy-gate decision fields to ``decision_payload``.
+
+    ``noise_floor_passes`` (default 0.0 → legacy behavior) inflates the required
+    gain by the suite's A/A floor when noise-aware gating is on; recorded so the
+    decision record shows why the bar moved.
+    """
     decision_payload["baseline_closed_loop_per_example"] = cached_baseline_cl_per_example
     decision_payload["evolved_closed_loop_per_example"] = evolved_cl_per_example
     decision_payload["evolved_closed_loop_errored_tasks"] = []
     decision_payload["cl_tasks_gained"] = (
         int(sum(evolved_cl_per_example)) - int(sum(cached_baseline_cl_per_example))
     )
-    decision_payload["cl_required_gain"] = max(
-        1,
-        math.ceil(
-            max(0.0, CL_PRIMARY_GROWTH_SLOPE * (growth_pct - CL_PRIMARY_GROWTH_FREE_THRESHOLD))
-        ),
+    decision_payload["cl_required_gain"] = _cl_required_gain(
+        growth_pct, noise_floor_passes=noise_floor_passes
     )
+    decision_payload["cl_noise_floor_passes"] = noise_floor_passes
+    decision_payload["noise_aware_gate"] = noise_floor_passes > 0.0
     decision_payload["synthetic_sanity_check"] = {
         "tolerance": CL_PRIMARY_SYNTH_TOLERANCE,
         "baseline_mean": avg_baseline,

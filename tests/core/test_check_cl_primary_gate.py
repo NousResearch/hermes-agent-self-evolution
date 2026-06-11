@@ -140,3 +140,76 @@ class TestCheckClPrimaryGate:
         cfg = EvolutionConfig()
         assert CL_PRIMARY_GROWTH_FREE_THRESHOLD == cfg.growth_free_threshold
         assert CL_PRIMARY_GROWTH_SLOPE == 1.0
+
+
+class TestNoiseAwareClPrimaryGate:
+    """Opt-in noise floor inflates required_gain in the pass-count domain."""
+
+    def test_zero_noise_floor_is_byte_identical(self):
+        from evolution.core.quality_gate import _cl_required_gain
+        # Default noise_floor_passes=0 must not change required_gain anywhere.
+        for growth in (0.0, 0.20, 0.55, 1.40):
+            assert _cl_required_gain(growth) == _cl_required_gain(
+                growth, noise_floor_passes=0.0
+            )
+
+    def test_required_gain_must_strictly_exceed_noise_floor(self):
+        from evolution.core.quality_gate import _cl_required_gain
+        # 0.8 expected spurious flips → a +1 gain still clears it (1 > 0.8).
+        assert _cl_required_gain(0.0, noise_floor_passes=0.8) == 1
+        # 1.0 expected flips → +1 could be the flip; require +2.
+        assert _cl_required_gain(0.0, noise_floor_passes=1.0) == 2
+        # 1.4 → require +2 (smallest int > 1.4).
+        assert _cl_required_gain(0.0, noise_floor_passes=1.4) == 2
+
+    def test_noise_floor_rejects_within_noise_gain(self):
+        # +1 task gain that would deploy at zero noise...
+        ok = _check_cl_primary_gate(
+            baseline_cl_passes=3, evolved_cl_passes=4,
+            baseline_synth_mean=0.97, evolved_synth_mean=0.97, growth_pct=0.20,
+        )
+        assert ok.passed
+        # ...is rejected once the A/A floor expects ~1.5 spurious flips.
+        noisy = _check_cl_primary_gate(
+            baseline_cl_passes=3, evolved_cl_passes=4,
+            baseline_synth_mean=0.97, evolved_synth_mean=0.97, growth_pct=0.20,
+            noise_floor_passes=1.5,
+        )
+        assert not noisy.passed
+        # A +2 gain clears the 1.5 floor.
+        clears = _check_cl_primary_gate(
+            baseline_cl_passes=3, evolved_cl_passes=5,
+            baseline_synth_mean=0.97, evolved_synth_mean=0.97, growth_pct=0.20,
+            noise_floor_passes=1.5,
+        )
+        assert clears.passed
+
+    def test_growth_term_still_dominates_when_larger(self):
+        from evolution.core.quality_gate import _cl_required_gain
+        # Large growth requires more than the noise floor would.
+        assert _cl_required_gain(1.40, noise_floor_passes=0.3) == _cl_required_gain(1.40)
+
+    def test_append_records_noise_fields(self):
+        from evolution.core.quality_gate import append_cl_decision_fields
+        payload: dict = {}
+        append_cl_decision_fields(
+            payload,
+            cached_baseline_cl_per_example=[1.0, 0.0, 0.0],
+            evolved_cl_per_example=[1.0, 1.0, 0.0],
+            avg_baseline=0.97, avg_evolved=0.97, growth_pct=0.20,
+            cl_eval_cost_usd=0.0, preflight_holdout_score=None,
+            preflight_cl_score=None, closed_loop_agent_model="haiku",
+            noise_floor_passes=1.5,
+        )
+        assert payload["cl_noise_floor_passes"] == 1.5
+        assert payload["noise_aware_gate"] is True
+        assert payload["cl_required_gain"] == 2  # floor(1.5)+1
+        # Default (no noise) records the flag off.
+        p2: dict = {}
+        append_cl_decision_fields(
+            p2, cached_baseline_cl_per_example=[1.0], evolved_cl_per_example=[1.0],
+            avg_baseline=0.97, avg_evolved=0.97, growth_pct=0.20,
+            cl_eval_cost_usd=0.0, preflight_holdout_score=None,
+            preflight_cl_score=None, closed_loop_agent_model="haiku",
+        )
+        assert p2["noise_aware_gate"] is False
