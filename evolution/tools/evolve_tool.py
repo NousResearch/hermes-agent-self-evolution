@@ -74,6 +74,8 @@ from evolution.core.quality_gate import (
     write_gate_decision,
 )
 from evolution.core.run_inputs import build_run_inputs
+from evolution.core.lineage import LINEAGE_NAME, build_lineage
+from evolution.core.dossier import write_dossier
 from evolution.core.search_telemetry import (
     append_search_telemetry,
     resolve_ledger_root,
@@ -783,8 +785,10 @@ def evolve(
             # Captured for search telemetry; None on the MIPROv2 fallback path.
             val_aggregate_scores: Optional[list[float]] = None
             best_candidate_idx: Optional[int] = None
+            gepa_details: Any = None
             if hasattr(optimized_module, "detailed_results"):
                 details = optimized_module.detailed_results
+                gepa_details = details
                 val_aggregate_scores = [float(v) for v in details.val_aggregate_scores]
                 best_candidate_idx = int(details.best_idx)
                 evolved_description = _candidate_description(
@@ -1201,6 +1205,22 @@ def evolve(
                     best_idx=best_candidate_idx,
                     decision=decision_payload["decision"],
                 )
+            # Lineage + maintainer-local dossier (deployed == GEPA val-argmax).
+            if gepa_details is not None:
+                _lineage = build_lineage(
+                    gepa_details,
+                    extract_text=lambda c: _candidate_description(c, tool_name),
+                    deployed_idx=best_candidate_idx,
+                    selection={"strategy": "val-argmax"},
+                    seed_text=baseline_description,
+                    live_baseline_text=baseline_description,
+                    suite_sha256="",
+                )
+                if _lineage is not None:
+                    (output_dir / LINEAGE_NAME).write_text(
+                        json.dumps(_lineage, indent=2) + "\n", encoding="utf-8"
+                    )
+                    write_dossier(output_dir, _lineage)
             if pr_created_block["status"] == "created":
                 console.print(
                     f"  [green]✓ PR opened: {pr_created_block['url']}[/green]"

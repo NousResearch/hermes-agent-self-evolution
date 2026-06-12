@@ -46,6 +46,8 @@ from evolution.core.lm_timing_callback import (
 from evolution.core.pr_automation import disabled_pr_block
 from evolution.core.quality_gate import write_gate_decision
 from evolution.core.run_inputs import build_run_inputs
+from evolution.core.lineage import LINEAGE_NAME, build_lineage
+from evolution.core.dossier import write_dossier
 from evolution.core.search_telemetry import (
     append_search_telemetry,
     resolve_ledger_root,
@@ -654,8 +656,10 @@ def evolve_prompt_section(
         # MIPROv2 fallback module has no detailed_results, so these stay None.
         val_aggregate_scores: Optional[list[float]] = None
         best_candidate_idx: Optional[int] = None
+        gepa_details: Any = None
         if hasattr(optimized, "detailed_results"):
             details = optimized.detailed_results
+            gepa_details = details
             val_aggregate_scores = [float(v) for v in details.val_aggregate_scores]
             best_candidate_idx = int(details.best_idx)
             evolved_text = _section_text_from_candidate(
@@ -770,6 +774,23 @@ def evolve_prompt_section(
             best_idx=best_candidate_idx,
             decision=decision_payload["decision"],
         )
+
+    # Lineage + maintainer-local dossier (deployed == GEPA val-argmax here).
+    if gepa_details is not None:
+        lineage = build_lineage(
+            gepa_details,
+            extract_text=lambda c: _section_text_from_candidate(c, section_name),
+            deployed_idx=best_candidate_idx,
+            selection={"strategy": "val-argmax"},
+            seed_text=baseline_text,
+            live_baseline_text=baseline_text,
+            suite_sha256=suite.sha256,
+        )
+        if lineage is not None:
+            (output_dir / LINEAGE_NAME).write_text(
+                json.dumps(lineage, indent=2) + "\n", encoding="utf-8"
+            )
+            write_dossier(output_dir, lineage)
 
     cost_summary = COST_LEDGER.summary()
     n_uncaptured = cost_summary["n_cost_uncaptured"]
