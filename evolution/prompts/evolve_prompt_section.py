@@ -52,6 +52,7 @@ from evolution.core.search_telemetry import (
     append_search_telemetry,
     resolve_ledger_root,
 )
+from evolution.core.saturation_telemetry import record_saturation_telemetry
 from evolution.core.saturation_check import (
     is_non_interactive,
     interactive_confirm,
@@ -533,6 +534,9 @@ def evolve_prompt_section(
     try:
         start_time = time.time()
         with _prompt_builder_guard(installer.target_path):
+            # Retained to the post-decision telemetry site below; stays None on
+            # the --no-saturation-check path so the proceed-path row is skipped.
+            sat_report = None
             # --- Saturation pre-flight (baseline behavior on holdout) ---
             if not skip_saturation_check:
                 sat_report = saturation_preflight(
@@ -578,10 +582,29 @@ def evolve_prompt_section(
                             "pr_created": disabled_pr_block(),
                             **section_payload,
                         })
+                        record_saturation_telemetry(
+                            output_dir, sat_report, artifact=section_name,
+                            artifact_type="prompt_section", proceeded=False,
+                            abort_reason="non_interactive_deny",
+                        )
                         return {"decision": "denied", "reason": "saturated_baseline"}
                     if not interactive_confirm():
                         console.print("[yellow]Aborted by user.[/yellow]")
+                        record_saturation_telemetry(
+                            output_dir, sat_report, artifact=section_name,
+                            artifact_type="prompt_section", proceeded=False,
+                            abort_reason="user_decline",
+                        )
                         return {"decision": "aborted", "reason": "user_abort"}
+
+            # One proceed-path telemetry row per pre-flight that didn't abort,
+            # written here (before GEPA) so it's captured regardless of any
+            # later failure; the outcome joins back via run_id.
+            if sat_report is not None:
+                record_saturation_telemetry(
+                    output_dir, sat_report, artifact=section_name,
+                    artifact_type="prompt_section", proceeded=True,
+                )
 
             # --- Constraint-floor pre-flight (opt-in) ---
             # Behaviorally score baseline vs baseline + a zero-LM compiled floor

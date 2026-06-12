@@ -80,6 +80,7 @@ from evolution.core.search_telemetry import (
     append_search_telemetry,
     resolve_ledger_root,
 )
+from evolution.core.saturation_telemetry import record_saturation_telemetry
 from evolution.core.stats import paired_bootstrap
 from evolution.tools.session_mining import (
     HermesToolImporter,
@@ -700,6 +701,9 @@ def evolve(
             cached_baseline_cl_per_example: Optional[list[float]] = None
             preflight_holdout_score: Optional[float] = None
             preflight_cl_score: Optional[float] = None
+            # None on the --no-saturation-check path, so the proceed-path
+            # telemetry row below is skipped.
+            sat_report = None
             if not skip_saturation_check:
                 holdout_examples_for_preflight = _build_examples(
                     dataset.holdout, for_module=True
@@ -722,14 +726,25 @@ def evolve(
                                 "proceed. Pass --force-saturation-check to "
                                 "override.[/yellow]"
                             )
-                            # Exit code 3 distinguishes "refused to run for
+                            # Record the abort the gate archive never captured,
+                            # then exit. Code 3 distinguishes "refused to run for
                             # lack of a TTY to confirm against" from clean
                             # success (0) or hard user errors (1). Lets a
                             # wrapping CI / cron / scheduled runner detect
                             # silent denial.
+                            record_saturation_telemetry(
+                                output_dir, sat_report, artifact=tool_name,
+                                artifact_type="tool", proceeded=False,
+                                abort_reason="non_interactive_deny",
+                            )
                             sys.exit(3)
                         if not interactive_confirm():
                             console.print("[yellow]Aborted by user.[/yellow]")
+                            record_saturation_telemetry(
+                                output_dir, sat_report, artifact=tool_name,
+                                artifact_type="tool", proceeded=False,
+                                abort_reason="user_decline",
+                            )
                             sys.exit(0)
                 else:
                     render_saturation_panel(sat_report, console=console)
@@ -742,6 +757,14 @@ def evolve(
                 cached_baseline_cl_per_example = sat_report.closed_loop_per_example
                 preflight_holdout_score = sat_report.holdout_score
                 preflight_cl_score = sat_report.closed_loop_score
+            # One proceed-path telemetry row per pre-flight that didn't abort,
+            # written here (before GEPA) so it's captured regardless of any
+            # later failure; the outcome joins back via run_id.
+            if sat_report is not None:
+                record_saturation_telemetry(
+                    output_dir, sat_report, artifact=tool_name,
+                    artifact_type="tool", proceeded=True,
+                )
 
             console.print(f"\n[bold cyan]Running GEPA optimization (max_full_evals={iterations})[/bold cyan]\n")
             start_time = time.time()

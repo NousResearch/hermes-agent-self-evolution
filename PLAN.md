@@ -869,6 +869,23 @@ original plan under-weighted.
    even a null result is an empirical certificate for the current magic
    numbers.*
 
+   **Status — shipped, reframed to instrumentation-first.** The archive proved
+   *unable* to calibrate the thresholds, which is itself the finding: the gated
+   region (baseline holdout ≥ 0.95) holds only 15 of 338 paired-vector runs,
+   none with a bootstrap lower bound > 0, so the false-abort rate is 0% with a
+   Wilson 95% upper bound of 20–49% — absence of evidence, not a green light.
+   The circular `decision`-based definition would have inflated that to 75–87%,
+   which is why the primary definition is `lower_bound > 0`.
+   `scripts/analysis/calibrate_saturation.py` and
+   `reports/saturation_calibration_findings.md` ship the honest certificate and
+   become the live calibrator once forward data accrues. The
+   overfitting-trajectory retrospective is **forward-only** — zero historical
+   `lineage.json` (the feature postdates the archive), and per-candidate
+   *holdout* scores are never stored, so the forward signal is "val plateaus
+   before the search budget is spent," not "val climbs while holdout flattens";
+   it ships as a gracefully-empty section. Closed-loop thresholds
+   (`0.95` / `0.15`) remain uncalibratable until the ledger (item 2) fills.
+
 2. **Promote "deploy the compiled floor" to a first-class gate outcome.** The
    zero-LM suite-constraint compiler captures ~79–85% of measured headroom but
    currently only prints a suggestion. When a compiled floor clears the
@@ -877,6 +894,17 @@ original plan under-weighted.
    corpus item 1 lacks. Plausibly the highest value-per-dollar item here.
    *Effort S. Kill: if the compiled floor never clears the gate on any shipped
    suite, the promotion is inert and reverts to a suggestion.*
+
+   **Status — telemetry half shipped; gate half remains.**
+   `evolution/core/saturation_telemetry.py` records the pre-flight band plus
+   holdout / closed-loop / floor scores on every run — including the abort paths
+   the gate archive never captured — joined to each run by `run_id` in
+   `output/saturation_ledger.jsonl`. That is the data-collection fix item 1's
+   certificate recommends and the corpus the closed-loop-threshold calibration
+   needs. `floor_score` is logged whenever it is computed (prompt runs today);
+   it is `None` for skill/tool runs until the gate half wires floor computation
+   into their pre-flights. Still to do: promote a cleared compiled floor to a
+   first-class deploy outcome, and compute the floor on the skill/tool paths.
 
 3. **Memoize the baseline phase during search only.** `ClosedLoopValidator`
    re-runs the baseline phase on every `validate()` call; in trainset mode
