@@ -1,0 +1,276 @@
+{
+  "schema_version": "phase5-g1-one-shot-canary-run-v1",
+  "phase": "5",
+  "mode": "G1 one_shot_canary_manual_local_cli",
+  "authorization": "Sunwoo explicit approval in Discord: G1 one-shot canary execute GO under phase5_g1_one_shot_canary_approval_packet_20260607_1606",
+  "approval_packet": "reports/phase5_g1_one_shot_canary_approval_packet_20260607_1606.json",
+  "started_at_utc": "2026-06-12T23:36:39Z",
+  "ended_at_utc": "2026-06-12T23:36:39Z",
+  "duration_seconds": 0.338,
+  "repeat_count": 1,
+  "status": "G1_PASS_NO_ACTION",
+  "terminal_status": "G1_PASS_NO_ACTION",
+  "recovered_from_failed_attempt": "reports/phase5_g1_one_shot_canary_run_20260612_233440.json",
+  "g2_status": "BLOCKED_PENDING_HUMAN_REVIEW_AND_EXPLICIT_APPROVAL",
+  "repo": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "67cb5550932431ca26518b5047642634ffbd8bb0",
+    "status_short_branch": "## hse/phase5-continuous-loop-prep\n?? reports/phase5_g1_one_shot_canary_run_20260612_233440.json\n?? reports/phase5_g1_one_shot_canary_run_20260612_233440.md",
+    "diff_check_rc": 0
+  },
+  "run_root": "output/phase5-continuous-loop/production-canary-20260612-233639",
+  "artifacts": {
+    "preflight_json": "output/phase5-continuous-loop/production-canary-20260612-233639/preflight/preflight_snapshot.json",
+    "provenance_report_json": "output/phase5-continuous-loop/production-canary-20260612-233639/provenance/provenance_dataset_report.json",
+    "provenance_report_markdown": "output/phase5-continuous-loop/production-canary-20260612-233639/provenance/provenance_dataset_report.md",
+    "provenance_metrics_input_json": "output/phase5-continuous-loop/production-canary-20260612-233639/provenance/provenance_metrics_input.json",
+    "performance_report_json": "output/phase5-continuous-loop/production-canary-20260612-233639/performance/performance_snapshot_report.json",
+    "performance_report_markdown": "output/phase5-continuous-loop/production-canary-20260612-233639/performance/performance_snapshot_report.md",
+    "auto_triage_report_json": "output/phase5-continuous-loop/production-canary-20260612-233639/auto-triage/auto_triage_report.json",
+    "auto_triage_report_markdown": "output/phase5-continuous-loop/production-canary-20260612-233639/auto-triage/auto_triage_report.md",
+    "scheduler_report_json": "output/phase5-continuous-loop/production-canary-20260612-233639/scheduler/scheduler_dry_run_report.json",
+    "scheduler_report_markdown": "output/phase5-continuous-loop/production-canary-20260612-233639/scheduler/scheduler_dry_run_report.md",
+    "side_effect_ledger_json": "reports/phase5_g1_one_shot_canary_side_effect_ledger_20260612_233639.json",
+    "summary_report_json": "reports/phase5_g1_one_shot_canary_run_20260612_233639.json",
+    "summary_report_markdown": "reports/phase5_g1_one_shot_canary_run_20260612_233639.md"
+  },
+  "component_statuses": {
+    "provenance_dataset": "READY_FOR_READONLY_DRY_RUN",
+    "performance_snapshot": "PASS",
+    "auto_triage": "NO_ACTION",
+    "scheduler_dry_run": "DRY_RUN_NOOP"
+  },
+  "metrics": [
+    {
+      "baseline": 0.1111,
+      "component": "tool_descriptions",
+      "higher_is_better": true,
+      "id": "tool_selection_accuracy",
+      "regressed_vs_baseline": false,
+      "sample_count": 45,
+      "severity": 0.0,
+      "status": "PASS",
+      "threshold": 0.9,
+      "value": 1.0
+    },
+    {
+      "baseline": 0.0,
+      "component": "system_prompts",
+      "higher_is_better": false,
+      "id": "prompt_contract_warning_rate",
+      "regressed_vs_baseline": false,
+      "sample_count": 20,
+      "severity": 0.0,
+      "status": "PASS",
+      "threshold": 0.05,
+      "value": 0.0
+    }
+  ],
+  "scheduler_summary": {
+    "dry_run_action_count": 0,
+    "ranked_target_count": 0,
+    "review_required": false,
+    "scheduler_enablement_ready": false,
+    "side_effect_count": 0,
+    "top_metric_id": null
+  },
+  "safety_boundary": {
+    "active_runtime_mutation": false,
+    "auto_merge_or_deploy": false,
+    "automated_pr_created_or_updated": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "optimizer_execution_started": false,
+    "production_continuous_loop_enabled": false,
+    "model_or_api_budget_spent": false
+  },
+  "side_effect_ledger": {
+    "schema_version": "phase5-g1-one-shot-canary-side-effect-ledger-v1",
+    "created_at_utc": "2026-06-12T23:36:39Z",
+    "run_root": "output/phase5-continuous-loop/production-canary-20260612-233639",
+    "hard_blocks_preserved": {
+      "active_runtime_mutation": false,
+      "auto_merge_or_deploy": false,
+      "automated_pr_created_or_updated": false,
+      "cron_jobs_created": false,
+      "external_calls_performed": false,
+      "network_calls_performed": false,
+      "optimizer_execution_started": false,
+      "production_continuous_loop_enabled": false,
+      "model_or_api_budget_spent": false
+    },
+    "false_side_effect_flags": {
+      "provenance_dataset.active_runtime_mutation": false,
+      "provenance_dataset.automated_apply_ready": false,
+      "provenance_dataset.automated_pr_created_or_updated": false,
+      "provenance_dataset.benchmark_cron_enabled": false,
+      "provenance_dataset.cron_jobs_created": false,
+      "provenance_dataset.external_calls_performed": false,
+      "provenance_dataset.network_calls_performed": false,
+      "provenance_dataset.notifications_sent": false,
+      "provenance_dataset.optimizer_execution_started": false,
+      "provenance_dataset.raw_credentials_recorded": false,
+      "provenance_dataset.raw_private_session_data_committed": false,
+      "provenance_dataset.scheduler_or_cron_side_effects_performed": false,
+      "performance_snapshot.active_runtime_mutation": false,
+      "performance_snapshot.automated_pr_created_or_updated": false,
+      "performance_snapshot.cron_jobs_created": false,
+      "performance_snapshot.external_calls_performed": false,
+      "performance_snapshot.network_calls_performed": false,
+      "performance_snapshot.optimizer_execution_started": false,
+      "performance_snapshot.raw_credentials_recorded": false,
+      "performance_snapshot.raw_private_session_data_committed": false,
+      "auto_triage.active_runtime_mutation": false,
+      "auto_triage.auto_optimizer_triggered": false,
+      "auto_triage.automated_apply_ready": false,
+      "auto_triage.automated_pr_created_or_updated": false,
+      "auto_triage.cron_jobs_created": false,
+      "auto_triage.external_calls_performed": false,
+      "auto_triage.network_calls_performed": false,
+      "auto_triage.optimizer_execution_started": false,
+      "auto_triage.raw_credentials_recorded": false,
+      "auto_triage.raw_private_session_data_committed": false,
+      "auto_triage.scheduler_or_cron_side_effects_performed": false,
+      "scheduler_dry_run.active_runtime_mutation": false,
+      "scheduler_dry_run.auto_optimizer_triggered": false,
+      "scheduler_dry_run.automated_apply_ready": false,
+      "scheduler_dry_run.automated_pr_created_or_updated": false,
+      "scheduler_dry_run.benchmark_cron_enabled": false,
+      "scheduler_dry_run.cron_jobs_created": false,
+      "scheduler_dry_run.external_calls_performed": false,
+      "scheduler_dry_run.network_calls_performed": false,
+      "scheduler_dry_run.notifications_sent": false,
+      "scheduler_dry_run.optimizer_execution_started": false,
+      "scheduler_dry_run.raw_credentials_recorded": false,
+      "scheduler_dry_run.raw_private_session_data_committed": false,
+      "scheduler_dry_run.scheduler_or_cron_side_effects_performed": false
+    },
+    "true_side_effect_flags": {},
+    "side_effect_count": 0,
+    "scheduler_summary": {
+      "dry_run_action_count": 0,
+      "ranked_target_count": 0,
+      "review_required": false,
+      "scheduler_enablement_ready": false,
+      "side_effect_count": 0,
+      "top_metric_id": null
+    },
+    "status": "SIDE_EFFECT_ZERO"
+  },
+  "pipeline_steps": [
+    {
+      "name": "provenance_dataset",
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.provenance_dataset",
+        "--tool-selection-report-json",
+        "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+        "--heldout-review-json",
+        "output/tool-description/phase2e-heldout-review/heldout_review.json",
+        "--prompt-source",
+        "prompt_builder=<active-hermes>/agent/prompt_builder.py",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260612-233639/provenance",
+        "--window-start",
+        "2026-06-11",
+        "--window-end",
+        "2026-06-12",
+        "--generated-at",
+        "2026-06-12T23:36:39Z"
+      ],
+      "exit_code": 0,
+      "stdout": "wrote Phase 5 provenance-backed metric input",
+      "stderr": "",
+      "duration_seconds": 0.046
+    },
+    {
+      "name": "performance_snapshot",
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.performance_snapshot",
+        "--metrics-json",
+        "output/phase5-continuous-loop/production-canary-20260612-233639/provenance/provenance_metrics_input.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260612-233639/performance"
+      ],
+      "exit_code": 0,
+      "stdout": "wrote Phase 5 performance monitor snapshot",
+      "stderr": "",
+      "duration_seconds": 0.093
+    },
+    {
+      "name": "auto_triage",
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.auto_triage",
+        "--performance-report-json",
+        "output/phase5-continuous-loop/production-canary-20260612-233639/performance/performance_snapshot_report.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260612-233639/auto-triage"
+      ],
+      "exit_code": 0,
+      "stdout": "wrote Phase 5 auto-triage ranking",
+      "stderr": "",
+      "duration_seconds": 0.122
+    },
+    {
+      "name": "scheduler_dry_run",
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.scheduler_dry_run",
+        "--auto-triage-report-json",
+        "output/phase5-continuous-loop/production-canary-20260612-233639/auto-triage/auto_triage_report.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260612-233639/scheduler"
+      ],
+      "exit_code": 0,
+      "stdout": "wrote Phase 5 scheduler dry-run",
+      "stderr": "",
+      "duration_seconds": 0.077
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "P5-G1-01",
+      "name": "explicit_one_shot_authorization",
+      "status": "PASS",
+      "evidence": "Sunwoo explicit execute GO named the G1 approval packet."
+    },
+    {
+      "id": "P5-G1-02",
+      "name": "bounded_runtime_and_concurrency",
+      "status": "PASS",
+      "evidence": "exactly one successful pipeline run; duration=0.338s; lock=output/phase5-continuous-loop/.phase5-g1-one-shot-canary.lock"
+    },
+    {
+      "id": "P5-G1-03",
+      "name": "side_effect_zero_by_default",
+      "status": "PASS",
+      "evidence": "side_effect_count=0; cron/optimizer/network/runtime/external PR flags false"
+    },
+    {
+      "id": "P5-G1-04",
+      "name": "reviewable_evidence_packet",
+      "status": "PASS",
+      "evidence": "preflight, component JSON/Markdown, side-effect ledger, and run summary emitted"
+    },
+    {
+      "id": "P5-G1-05",
+      "name": "fail_closed_status_contract",
+      "status": "PASS",
+      "evidence": "terminal_status=G1_PASS_NO_ACTION"
+    },
+    {
+      "id": "P5-G1-06",
+      "name": "next_stage_blocked_without_review",
+      "status": "PASS",
+      "evidence": "G2 remains blocked pending review and explicit approval"
+    }
+  ],
+  "recommended_next_action": "Review this fresh G1 evidence packet. If accepted, proceed to G2 bounded supervised N-run approval packet or PR publication reconcile; do not start G2/cron/optimizer/PR automation without separate approval."
+}
