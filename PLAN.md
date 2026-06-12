@@ -827,3 +827,187 @@ See the **Constraints & Guardrails** section above for the full enforcement list
 
 4. What's the minimum viable first target?
    - Recommendation: Pick 2-3 well-used skills with clear success metrics (e.g., arxiv paper search, github-code-review, systematic-debugging)
+
+---
+
+## Forward Roadmap — Signal-First Sequencing (2026-06)
+
+Phases 1–3 shipped the optimizer, the selection/gating layer, and three
+artifact tiers. The accumulated findings (saturation defaults, A/A noise
+floors, the "suite states the win" result, the tier-binarity null) converge on
+a single diagnosis: **the binding constraint is no longer selection or gating
+machinery — it is discriminating evaluation signal.** On hand-tuned artifacts
+the pipeline is regression-catching, not improvement-finding, because the
+suites and judges saturate. The frontier literature agrees on the lever:
+gskill's published headroom came from ~300 planted-fault, test-verified tasks
+per repo, not from a better optimizer.
+
+So this roadmap is sequenced **measurement → signal generation → honest
+mechanism → autonomy**, not by artifact tier. Each item carries the evidence
+it rests on and the cheapest experiment that would falsify it. Items are
+funded only after their prerequisite signal is shown to exist; nothing in the
+mechanism wave spends optimizer budget before its signal wave lands.
+
+This section reframes the original Phase 4 (code evolution) and Phase 5
+(continuous loop) as the probe-gated final wave — guides, not commitments. A
+loop that selects bad targets or evolves against saturated suites compounds
+waste; target selection and signal generation are the prerequisites the
+original plan under-weighted.
+
+### Wave 1 — Measurement & free wins
+
+1. **Mine the gate-decision archive for item statistics.** 336 of 350
+   archived `gate_decision.json` carry paired per-example vectors (201 deploy /
+   148 reject). Calibrate the synthetic saturation threshold (currently the
+   uncalibrated `0.99` in `evolution/core/saturation_check.py`), emit
+   v5-gate-relative error rates, and add a zero-cost overfitting-trajectory
+   retrospective (val score vs discovery order, from `lineage.json`'s
+   `val_subscores`) to address the known many-iteration overfitting caveat.
+   Honestly scoped: only ~12 archived runs carry closed-loop data, so the
+   closed-loop thresholds (`0.95` / `0.15`) are calibrated later from forward
+   telemetry (item 2), not from this archive. *Pure compute, ~$1. Kill: n/a —
+   even a null result is an empirical certificate for the current magic
+   numbers.*
+
+2. **Promote "deploy the compiled floor" to a first-class gate outcome.** The
+   zero-LM suite-constraint compiler captures ~79–85% of measured headroom but
+   currently only prints a suggestion. When a compiled floor clears the
+   noise-aware closed-loop gate, make it a deployable outcome; record
+   `floor_score` and preflight closed-loop pass-rates on every run to build the
+   corpus item 1 lacks. Plausibly the highest value-per-dollar item here.
+   *Effort S. Kill: if the compiled floor never clears the gate on any shipped
+   suite, the promotion is inert and reverts to a suggestion.*
+
+3. **Memoize the baseline phase during search only.** `ClosedLoopValidator`
+   re-runs the baseline phase on every `validate()` call; in trainset mode
+   that is near-pure duplication (≈2× closed-loop savings). The memo must be
+   exposed as a freshness-aware API that **never** serves a gate decision
+   (see item 9) — search-phase reuse only, staleness-bounded against
+   intra-run provider drift. Moved early because items 6–7's reps pay this
+   cost today. *Effort S. Kill: concordance check — memoized vs fresh
+   baseline phase must agree within the A/A flip floor.*
+
+### Wave 2 — Signal generation (the bottleneck)
+
+4. **Mine Claude Code project transcripts.** The in-code claim that Claude
+   Code logs carry no tool-call data (`evolution/tools/session_mining.py`) is
+   false for `~/.claude/projects/*/*.jsonl`, which carry thousands of
+   `tool_use` blocks (true only for the older `history.jsonl`). Add a
+   `ClaudeCodeSessionImporter` beside the Hermes one, feeding the existing
+   confidence-banded misselection judge. These are judge-scored dataset
+   examples, not verifiable behavioral tasks — the "use X not Y" tractability
+   limit still applies. Correct the false docstring regardless of yield.
+   *Effort S. Kill: $1 parse-only spike — if usable misselection/correction
+   density is near zero, the importer ships only as a correction-miner.*
+
+5. **Claude Code skill closed-loop + planted-fault task synthesis.** Two
+   halves. (a) Adapter: `claude_runner.py` never consumes the protocol's
+   `skills_src` field; `hermes_runner.py` shows the staging pattern. A $1
+   canary first resolves headless skill-discovery semantics. (b) Signal
+   engine: a gskill-style spike generating N planted-bug, `test_command`-
+   verified tasks against one target repo, discrimination-labeled. This is the
+   artifact class with the strongest published headroom evidence; the
+   synthetic-generation drop-rate null does not bind here (planted faults +
+   real tests are a different mechanism than LM-judged dataset cases).
+   *Effort M, $1 + $10 staged. Kill: <30% of generated tasks land
+   discriminative against the live skill → the synthesis approach is shelved
+   for that repo class.*
+
+6. **Consume the discrimination labels: one-shot suite hardening.** The
+   per-task labeler ships labels; nothing acts on them. LLM-mutate
+   `too_easy`-labeled tasks while preserving the verifiable
+   `fixture_setup` / `test_command` scaffold; relabel with reps **and a
+   ceiling artifact** to catch variants that silently became unfillable;
+   output a human-reviewed suite diff plus a regenerated noise sidecar. Fund a
+   recurring co-evolution loop only if ≥30% of variants land discriminative.
+   *Effort M, $10–60.*
+
+7. **Goldilocks tier probe — the experiment is the deliverable.** Sweep the
+   baseline at reps=3 across 3–4 agent tiers × 2 suites, logging graded
+   channels (tool-call sequence, step count, duration) beside the binary
+   verdict. This distinguishes "no mid-band tier exists" from "no mid-band
+   *under binary verdicts*," and pre-feeds item 12's channel-stability
+   question. *Effort S–M, $10–25. Kill: every tier reproduces the
+   all-pass/all-fail cliff → record the null, and item 9's weak-tier
+   improvement framing collapses to a deploy-tier regression guard.*
+
+### Wave 3 — Honest mechanism
+
+8. **Stratified behavioral-aware minibatch sampling (the acceptance fix).**
+   GEPA's `BatchSampler` is a pluggable protocol and `dspy.GEPA`'s
+   `gepa_kwargs` splat straight into `gepa.optimize` (the repo already rides
+   this for `acceptance_criterion`), so no fork is required;
+   `reflection_minibatch_size` must be `None` when a custom sampler is passed.
+   A sampler guaranteeing ≥1 behavioral example per reflective minibatch
+   (weighted toward parent-failing examples) closes the acceptance bottleneck
+   identified in `reports/pareto_frontier_feasibility.md` — per-instance
+   behavioral signal that stochastic small-minibatch sum-acceptance discards
+   ≈62% of the time at 7/46-failing. *Effort M, ~$10. Kill: paired-seed runs
+   (with/without sampler, same seed) show no increase in accepted candidates
+   that win ≥1 behavioral task, compared via lineage acceptance traces.*
+
+9. **Gate on a fresh paired draw; conditional transfer guard.** The gate can
+   currently consume a cached search-phase report (`force_run` returns cache
+   hits), i.e. a stale, unpaired draw with selection bias the A/A floor does
+   not cover. Require one fresh paired baseline-vs-winner run at gate time
+   (evolution tier), with the noise-aware required-gain calibrated for the
+   fresh draw. Separately budgeted — **not** shareable across tiers — an
+   opt-in deploy-tier non-inferiority check, sold as a regression guard, not
+   an overfitting detector (capable tiers saturate). Its weak-tier-improvement
+   framing is funded **iff item 7 finds a mid-band tier.** *Effort M.*
+
+10. **Closed-loop parallelism behind an A/A fidelity gate.** Splice happens
+    once per phase and each rep is tempdir-isolated, so the real risks are
+    cost-ledger races and ceiling overshoot, not splice corruption.
+    Parallelize reps within a task first; cross-task-within-phase is a stretch
+    behind the same serial-vs-N-worker flip-rate check. Makes reps=3–5
+    affordable, which tightens every noise floor. *Effort M. Kill: 4-worker
+    flip rate exceeds the serial A/A floor → keep it serial.*
+
+### Wave 4 — The original creator items, probe-gated
+
+11. **Continuous loop as a propose-only, self-hosting triage queue**
+    (`evolution/monitor/`, currently an empty stub). A ranked queue of
+    (artifact, suite, headroom band, last-evolved age, estimated cost,
+    ready-to-run command), fed by a detection-only sentinel (artifact
+    manifest + scheduled noise-aware live-vs-snapshot validation + a runs
+    registry). No auto-evolve, no auto-PR — matching the original Phase 5
+    human-merge mandate. The manifest **enrolls this repo's own artifacts**
+    (its CLAUDE.md, the orchestration prompts, its skills) as first-class
+    entries, so the loop becomes self-hosting rather than terminating at
+    "improve other agents." This also accumulates the cross-run lineage
+    substrate a future clade-aggregated parent-selection experiment would
+    need. *Effort M–L. Kill: triage ranks a known-saturated artifact above the
+    known-headroom class on ground truth → the ranking signal is broken,
+    shelve until fixed.*
+
+12. **Code-evolution pilot, gated on a measured signal** (`evolution/code/`,
+    empty stub). Before any Darwinian loop: an A/A coefficient-of-variation
+    probe on per-task step-count / cost / duration channels for tool-code
+    fitness (duration is provider-latency-dominated and expected to fail;
+    step-count and cost are the plausible channels). Build the minimal loop
+    (target-repo tests as a hard floor, behavioral suite as fitness, an
+    AGPL-licensed evolver integrated as an external CLI only) **only if a
+    channel proves stable.** *Effort: $10 probe, then L if funded. Kill: no
+    channel's A/A CoV is tight enough to detect a plausible code improvement
+    → the signal is too noisy and the pilot does not proceed.*
+
+### Deferred / not pursued (with reasons, so they aren't re-litigated)
+
+- **Clade-aggregated parent selection** (HGM-style): no campaign substrate
+  yet — the archive holds zero multi-generation lineage trees, and artifact
+  saturation collapses descendant-outcome aggregation precisely where
+  campaigns would run. Revisit after item 11 accumulates real lineage.
+- **MCP description-overriding proxy evolution:** gated behind a $10
+  discrimination-labeler headroom probe on a genuinely confusable server;
+  most servers' tools may be as non-confusable as built-ins.
+- **Task-level gate racing / sequential early stopping:** the offline replay
+  corpus does not exist (no archived per-task validation reports); the
+  rep-level early-stop is folded into item 10.
+- **Novelty rejection-sampling of candidates:** waste is unquantified at this
+  repo's scale (tens of candidates per run); gated behind the near-duplicate-
+  rate measurement in item 1.
+- **Elo / tournament selection** (eval-as-selection): unreviewed single-run
+  preprint evidence, and the design conflicts with the gate-centric
+  architecture. Revisit only if item 8's acceptance fix fails to clear the
+  bottleneck.
