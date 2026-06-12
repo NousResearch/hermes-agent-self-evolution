@@ -885,6 +885,12 @@ original plan under-weighted.
    before the search budget is spent," not "val climbs while holdout flattens";
    it ships as a gracefully-empty section. Closed-loop thresholds
    (`0.95` / `0.15`) remain uncalibratable until the ledger (item 2) fills.
+   To actually settle the thresholds, the corpus must be *generated*, not
+   waited for: the pre-flight stops gated-region runs before they reach an
+   outcome, so the calibration fuel (gated-region runs that proceeded to a
+   `gate_decision.json`) only comes from deliberate overrides. The recipe is a
+   batch run with `--force-saturation-check` on a handful of high-baseline
+   targets, then re-run `scripts/analysis/calibrate_saturation.py`.
 
 2. **Promote "deploy the compiled floor" to a first-class gate outcome.** The
    zero-LM suite-constraint compiler captures ~79–85% of measured headroom but

@@ -163,6 +163,14 @@ def test_render_markdown_data_starved_leads_with_absence_of_evidence():
     assert "Wilson" in md
 
 
+def test_render_markdown_carries_the_calibration_recipe():
+    # The recommendation must always spell out the deliberate-campaign recipe,
+    # not imply the ledger fills passively — guards against the prose dropping out.
+    md = cs.render_markdown(*_analysis_and_friends([_gate(0.6, lower_bound=0.05)]))
+    assert "--force-saturation-check" in md
+    assert "does not fill passively" in md
+
+
 def test_render_markdown_flips_when_gated_region_shows_signal():
     # 40 gated runs, several with real improvement → not data-starved; the
     # report must stop calling itself a survivorship counterfactual.

@@ -498,10 +498,25 @@ def render_markdown(
         "the pre-flight band+score were not logged. The fix ships alongside this "
         "report: `evolution/core/saturation_telemetry.py` writes one "
         "`output/saturation_ledger.jsonl` row per pre-flight — including aborts — "
-        f"joined to each run by `run_id`. Ledger status: **{status}**. Re-run "
-        "this script once the ledger accrues runs in the gated region with "
-        "measured outcomes; the false-abort rate then becomes a real measurement "
-        "rather than a survivorship counterfactual.\n"
+        f"joined to each run by `run_id`. Ledger status: **{status}**.\n"
+    )
+    L.append(
+        "**This corpus does not fill passively.** The calibration needs "
+        "gated-region runs (baseline ≥ 0.95) that *proceeded to an outcome* (a "
+        "`gate_decision.json` with a bootstrap) — but the pre-flight's job is to "
+        "stop gated-region runs: non-interactive ones `sys.exit` before any "
+        "outcome is written, and interactive ones proceed only on an explicit "
+        "override. So the gated-region rows the ledger accrues are mostly aborts "
+        "with no outcome to join; waiting for it to fill on its own will not "
+        "produce calibration data.\n"
+    )
+    L.append(
+        "**Recipe to calibrate (a deliberate campaign, not a wait):** run a "
+        "batch with `--force-saturation-check` against a handful of high-"
+        "baseline targets so they proceed past the pre-flight to a "
+        "`gate_decision.json`, then re-run this script. Once the gated region "
+        "holds proceeded-to-outcome runs, the false-abort rate becomes a real "
+        "measurement rather than a survivorship counterfactual.\n"
     )
 
     L.append("## Overfitting trajectory (forward-only)\n")
