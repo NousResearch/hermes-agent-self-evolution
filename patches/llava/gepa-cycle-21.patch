@@ -1,0 +1,337 @@
+diff --git a/skills/mlops/models/llava/SKILL.md b/skills/mlops/models/llava/SKILL.md
+new file mode 100644
+index 000000000..bdd734a8f
+--- /dev/null
++++ b/skills/mlops/models/llava/SKILL.md
+@@ -0,0 +1,331 @@
++---
++name: llava
++description: Large Language and Vision Assistant. Enables visual instruction tuning and image-based conversations. Combines CLIP vision encoder with Vicuna/LLaMA language models. Supports multi-turn image chat, visual question answering, and instruction following. Use for vision-language chatbots or image understanding tasks. Best for conversational image analysis.
++version: 1.1.0
++author: Orchestra Research
++license: MIT
++dependencies: [transformers, torch, pillow]
++metadata:
++  hermes:
++    tags: [LLaVA, Vision-Language, Multimodal, Visual Question Answering, Image Chat, CLIP, Vicuna, Conversational AI, Instruction Tuning, VQA]
++    trigger_conditions:
++      - "use llava"
++      - "llava model"
++      - "vision language model"
++      - "multimodal image chat"
++      - "visual question answering"
++      - "image understanding"
++      - "llava chatbot"
++      - "llava inference"
++      - "llava training"
++      - "llava quantization"
++      - "run llava"
++      - "install llava"
++      - "setup llava"
++
++---
++
++# LLaVA - Large Language and Vision Assistant
++
++Open-source vision-language model for conversational image understanding.
++
++## When to Use
++
++- Building a vision-language chatbot that handles multi-turn image conversations
++- Implementing visual question answering (VQA) for user-uploaded images
++- Generating detailed image captions or descriptions programmatically
++- Setting up a Gradio web UI for interactive image chat demos
++- Document understanding tasks that combine text and image analysis
++- Evaluating multimodal model benchmarks (VQAv2, GQA, MMBench)
++- Fine-tuning a custom LLaVA model on domain-specific image-instruction data
++
++## Not For
++
++- **Simple zero-shot image classification** → use `clip` instead
++- **Pure text generation without images** → use standard LLM skills like `huggingface-hub` or `llama-cpp`
++- **Production image search/retrieval** → use `clip` or `chroma` with embeddings
++- **Real-time video understanding** → LLaVA is frame-based, not optimized for video streams
++- **Medical/safety-critical image analysis** → LLaVA hallucinates; not validated for clinical use
++- **CPU-only inference** → requires GPU; use API-based models like GPT-4V for CPU environments
++
++## Quick start
++
++### Installation
++
++```bash
++# Clone repository
++git clone https://github.com/haotian-liu/LLaVA
++cd LLaVA
++
++# Install
++pip install -e .
++```
++
++### Basic usage
++
++```python
++from llava.model.builder import load_pretrained_model
++from llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
++from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
++from llava.conversation import conv_templates
++from PIL import Image
++import torch
++
++# Load model
++model_path = "liuhaotian/llava-v1.5-7b"
++tokenizer, model, image_processor, context_len = load_pretrained_model(
++    model_path=model_path,
++    model_base=None,
++    model_name=get_model_name_from_path(model_path)
++)
++
++# Load image
++image = Image.open("image.jpg")
++image_tensor = process_images([image], image_processor, model.config)
++image_tensor = image_tensor.to(model.device, dtype=torch.float16)
++
++# Create conversation
++conv = conv_templates["llava_v1"].copy()
++conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\nWhat is in this image?")
++conv.append_message(conv.roles[1], None)
++prompt = conv.get_prompt()
++
++# Generate response
++input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(model.device)
++
++with torch.inference_mode():
++    output_ids = model.generate(
++        input_ids,
++        images=image_tensor,
++        do_sample=True,
++        temperature=0.2,
++        max_new_tokens=512
++    )
++
++response = tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
++print(response)
++```
++
++## Available models
++
++| Model | Parameters | VRAM | Quality |
++|-------|------------|------|---------|
++| LLaVA-v1.5-7B | 7B | ~14 GB | Good |
++| LLaVA-v1.5-13B | 13B | ~28 GB | Better |
++| LLaVA-v1.6-34B | 34B | ~70 GB | Best |
++
++```python
++# Load different models
++model_7b = "liuhaotian/llava-v1.5-7b"
++model_13b = "liuhaotian/llava-v1.5-13b"
++model_34b = "liuhaotian/llava-v1.6-34b"
++
++# 4-bit quantization for lower VRAM
++load_4bit = True  # Reduces VRAM by ~4×
++```
++
++## CLI usage
++
++```bash
++# Single image query
++python -m llava.serve.cli \
++    --model-path liuhaotian/llava-v1.5-7b \
++    --image-file image.jpg \
++    --query "What is in this image?"
++
++# Multi-turn conversation
++python -m llava.serve.cli \
++    --model-path liuhaotian/llava-v1.5-7b \
++    --image-file image.jpg
++# Then type questions interactively
++```
++
++## Web UI (Gradio)
++
++```bash
++# Launch Gradio interface
++python -m llava.serve.gradio_web_server \
++    --model-path liuhaotian/llava-v1.5-7b \
++    --load-4bit  # Optional: reduce VRAM
++
++# Access at http://localhost:7860
++```
++
++## Multi-turn conversations
++
++```python
++# Initialize conversation
++conv = conv_templates["llava_v1"].copy()
++
++# Turn 1
++conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\nWhat is in this image?")
++conv.append_message(conv.roles[1], None)
++response1 = generate(conv, model, image)  # "A dog playing in a park"
++
++# Turn 2
++conv.messages[-1][1] = response1  # Add previous response
++conv.append_message(conv.roles[0], "What breed is the dog?")
++conv.append_message(conv.roles[1], None)
++response2 = generate(conv, model, image)  # "Golden Retriever"
++
++# Turn 3
++conv.messages[-1][1] = response2
++conv.append_message(conv.roles[0], "What time of day is it?")
++conv.append_message(conv.roles[1], None)
++response3 = generate(conv, model, image)
++```
++
++## Common tasks
++
++### Image captioning
++
++```python
++question = "Describe this image in detail."
++response = ask(model, image, question)
++```
++
++### Visual question answering
++
++```python
++question = "How many people are in the image?"
++response = ask(model, image, question)
++```
++
++### Object detection (textual)
++
++```python
++question = "List all the objects you can see in this image."
++response = ask(model, image, question)
++```
++
++### Scene understanding
++
++```python
++question = "What is happening in this scene?"
++response = ask(model, image, question)
++```
++
++### Document understanding
++
++```python
++question = "What is the main topic of this document?"
++response = ask(model, document_image, question)
++```
++
++## Training custom model
++
++```bash
++# Stage 1: Feature alignment (558K image-caption pairs)
++bash scripts/v1_5/pretrain.sh
++
++# Stage 2: Visual instruction tuning (150K instruction data)
++bash scripts/v1_5/finetune.sh
++```
++
++## Quantization (reduce VRAM)
++
++```python
++# 4-bit quantization
++tokenizer, model, image_processor, context_len = load_pretrained_model(
++    model_path="liuhaotian/llava-v1.5-13b",
++    model_base=None,
++    model_name=get_model_name_from_path("liuhaotian/llava-v1.5-13b"),
++    load_4bit=True  # Reduces VRAM ~4×
++)
++
++# 8-bit quantization
++load_8bit=True  # Reduces VRAM ~2×
++```
++
++## Best practices
++
++1. **Start with 7B model** - Good quality, manageable VRAM
++2. **Use 4-bit quantization** - Reduces VRAM significantly
++3. **GPU required** - CPU inference extremely slow
++4. **Clear prompts** - Specific questions get better answers
++5. **Multi-turn conversations** - Maintain conversation context
++6. **Temperature 0.2-0.7** - Balance creativity/consistency
++7. **max_new_tokens 512-1024** - For detailed responses
++8. **Batch processing** - Process multiple images sequentially
++
++## Performance
++
++| Model | VRAM (FP16) | VRAM (4-bit) | Speed (tokens/s) |
++|-------|-------------|--------------|------------------|
++| 7B | ~14 GB | ~4 GB | ~20 |
++| 13B | ~28 GB | ~8 GB | ~12 |
++| 34B | ~70 GB | ~18 GB | ~5 |
++
++*On A100 GPU*
++
++## Benchmarks
++
++LLaVA achieves competitive scores on:
++- **VQAv2**: 78.5%
++- **GQA**: 62.0%
++- **MM-Vet**: 35.4%
++- **MMBench**: 64.3%
++
++## Limitations
++
++1. **Hallucinations** - May describe things not in image
++2. **Spatial reasoning** - Struggles with precise locations
++3. **Small text** - Difficulty reading fine print
++4. **Object counting** - Imprecise for many objects
++5. **VRAM requirements** - Need powerful GPU
++6. **Inference speed** - Slower than CLIP
++
++## Integration with frameworks
++
++### LangChain
++
++```python
++from langchain.llms.base import LLM
++
++class LLaVALLM(LLM):
++    def _call(self, prompt, stop=None):
++        # Custom LLaVA inference
++        return response
++
++llm = LLaVALLM()
++```
++
++### Gradio App
++
++```python
++import gradio as gr
++
++def chat(image, text, history):
++    response = ask_llava(model, image, text)
++    return response
++
++demo = gr.ChatInterface(
++    chat,
++    additional_inputs=[gr.Image(type="pil")],
++    title="LLaVA Chat"
++)
++demo.launch()
++```
++
++## Pitfalls
++
++1. **GPU out of memory on 34B model** — The 34B model requires ~70 GB VRAM in FP16 which exceeds most single consumer GPUs. Always use 4-bit quantization (`load_4bit=True`) for models ≥13B unless you have an A100 80GB.
++2. **Tokenizer mismatch after model swap** — When switching between LLaVA versions (v1.5 vs v1.6), the tokenizer and conversation template change. Always call `load_pretrained_model()` with the correct `model_name` function; never reuse tokenizers cross-version.
++3. **Multi-GPU inference hangs without device map** — `load_pretrained_model()` defaults to CPU offloading when VRAM is insufficient, causing 10–100× slowdown. Explicitly pass `device_map="auto"` for multi-GPU setups.
++4. **Image preprocessing silently drops images** — `process_images()` expects PIL Images; passing file paths or numpy arrays returns a truncated tensor without error. Always open with `Image.open()` and verify tensor shape before inference.
++5. **Gradio server port conflict** — The default port 7860 may be in use by another Gradio app. Use `--server-port 7861` or `gradio_app.launch(server_port=7861)` to avoid silent failures.
++6. **Conversation state corruption in multi-turn** — Forgetting to update `conv.messages[-1][1]` with the assistant's actual response before the next user turn causes the model to see stale history. Always set the last assistant message before appending the next user message.
++7. **4-bit quantization reduces accuracy on small images** — Compressing a 7B model to 4-bit on images smaller than 224×224 loses fine-grained detail. For small images, use 8-bit or FP16 and resize images to at least 336×336.
++8. **Max_new_tokens too low truncates VQA** — Default `max_new_tokens=512` may cut off detailed descriptions for complex images. Bump to 1024 for document understanding or scene descriptions with multiple objects.
++9. **Temperature=0 causes degenerate repetition** — Unlike text-only LLMs, LLaVA can loop at temperature=0 on certain image-text combinations. Use `temperature=0.2` as the minimum safe value.
++10. **Batch processing without clearing CUDA cache** — Processing 20+ images sequentially without `torch.cuda.empty_cache()` between each accumulates GPU memory fragments. Insert `torch.cuda.empty_cache()` every 5–10 images.
++
++## Resources
++
++- **GitHub**: https://github.com/haotian-liu/LLaVA ⭐ 23,000+
++- **Paper**: https://arxiv.org/abs/2304.08485
++- **Demo**: https://llava.hliu.cc
++- **Models**: https://huggingface.co/liuhaotian
++- **License**: Apache 2.0
++
++
