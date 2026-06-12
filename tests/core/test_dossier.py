@@ -84,6 +84,23 @@ def test_dossier_counts_merge_steps():
     assert "merge step" in out.lower()
 
 
+def test_single_line_diff_does_not_smush():
+    # Single-line artifacts with no trailing newline must still render the
+    # removed and added lines on SEPARATE diff rows.
+    lin = _lineage(
+        deployed_idx=1, best_idx=1, seed_text="use skills.", live_baseline_text="use skills.",
+        candidates=[
+            _cand(0, "use skills.", None, 0.3),
+            _cand(1, "use skills. patch stale ones.", [0], 0.7, is_deployed=True, is_best=True),
+        ],
+    )
+    out = render_dossier(lin)
+    assert "\n-use skills." in out  # removed line on its own row
+    assert "\n+use skills. patch stale ones." in out  # added line on its own row
+    # the two must not be concatenated on one row
+    assert "use skills.+use skills." not in out
+
+
 def test_write_dossier(tmp_path):
     lin = _lineage(
         deployed_idx=0, best_idx=0, seed_text="x", live_baseline_text="x",

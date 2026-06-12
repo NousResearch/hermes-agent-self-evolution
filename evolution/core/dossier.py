@@ -17,13 +17,17 @@ from typing import Any, Optional
 
 
 def _unified_diff(before: str, after: str, *, fromfile: str, tofile: str) -> str:
+    # splitlines() (no keepends) + lineterm="" so each emitted row is its own
+    # line when joined — otherwise a single-line artifact with no trailing
+    # newline smushes the trailing "-old" and leading "+new" onto one line.
     diff = difflib.unified_diff(
-        (before or "").splitlines(keepends=True),
-        (after or "").splitlines(keepends=True),
+        (before or "").splitlines(),
+        (after or "").splitlines(),
         fromfile=fromfile,
         tofile=tofile,
+        lineterm="",
     )
-    return "".join(diff)
+    return "\n".join(diff)
 
 
 def _record_by_idx(lineage: dict[str, Any]) -> dict[int, dict[str, Any]]:
