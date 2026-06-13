@@ -418,6 +418,30 @@ class TestClosedLoopValidatorSkillsSrc:
         for ctx in runner.contexts:
             assert ctx.skills_src is None
 
+    def test_skills_src_falls_back_to_installer_staged_dir(self, tmp_path):
+        """A task without skills_src falls back to the installer's staged skill
+        directory — how a SkillFileInstaller's candidate SKILL.md reaches the
+        agent's sandbox. (A _StubInstaller has no skills_src, so the prior test
+        stays None; here we mimic an installer that exposes one.)
+        """
+        target, baseline, evolved = self._artifacts(tmp_path)
+        suite = _write_suite(tmp_path, [
+            {"task_id": "t1", "user_message": "do", "expected_tools": ["memory"]},
+        ])
+        staged = tmp_path / "workdir" / "skills"
+        staged.mkdir(parents=True)
+        installer = _StubInstaller(target)
+        installer.skills_src = staged  # mimic SkillFileInstaller exposing its workdir
+        runner = _RecordingRunner(target, _ok_result())
+        validator = ClosedLoopValidator(installer, runner)
+        validator.validate(ValidationInputs(
+            tool_name="memory", suite=suite,
+            baseline_artifact=baseline, evolved_artifact=evolved,
+        ))
+        assert runner.contexts
+        for ctx in runner.contexts:
+            assert ctx.skills_src == staged
+
 
 class TestClosedLoopValidatorActionVerdict:
     def _artifacts(self, tmp_path):

@@ -120,9 +120,10 @@ class ClosedLoopValidator:
         backup_path = target.with_suffix(target.suffix + _BACKUP_SUFFIX)
         _refuse_if_stale_backup_exists(backup_path, self.installer)
 
-        # ``skills_src`` on a task is a path relative to the suite file's
-        # directory; tasks without a suite path on disk (synthetic suites) get
-        # no skill staging.
+        # A task's ``skills_src`` is resolved relative to the suite file's
+        # directory; synthetic suites (no path on disk) can't resolve a
+        # task-relative skill, so those fall through to the installer's staged
+        # skill in ``_run_one_task`` below.
         suite_dir = inputs.suite.path.parent if inputs.suite.path is not None else None
 
         with _exclusive_lock(target.parent):
@@ -235,11 +236,18 @@ class ClosedLoopValidator:
             if self.layer2_judge_factory is not None
             else None
         )
-        skills_src = (
-            (suite_dir / task.skills_src)
-            if (task.skills_src and suite_dir is not None)
-            else None
-        )
+        # A task's ``skills_src`` (suite-relative) names a fixture skill the task
+        # operates on (e.g., a stale skill to patch). When a task does NOT set it,
+        # fall back to the installer's own staged skill directory if it exposes one
+        # — that is how a ``SkillFileInstaller``'s evolved candidate SKILL.md reaches
+        # the agent's sandbox. Without this fallback, skill suites whose tasks omit
+        # ``skills_src`` (e.g. systematic_debugging) run with the candidate skill
+        # never delivered, silently scoring a no-op. Tool/prompt installers expose no
+        # ``skills_src`` (``getattr`` → None), so their behavior is unchanged.
+        if task.skills_src and suite_dir is not None:
+            skills_src = suite_dir / task.skills_src
+        else:
+            skills_src = getattr(self.installer, "skills_src", None)
         n_pass = 0
         n_abstain = 0
         last_run = None
