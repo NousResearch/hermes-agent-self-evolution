@@ -1074,6 +1074,32 @@ original plan under-weighted.
     can produce signal a capable agent doesn't already saturate. *Effort L;
     needs its own brainstorm + design pass before any build.*
 
+    **Status — investigated; the turn-level JUDGE is not justified (kill
+    experiment fired).** A measured probe reframed the substrate from mining
+    transcripts to running a live agent against the committed confusable suite
+    (`write_file_ambiguous.jsonl`), comparing the production `write_file`
+    description to an *actively-misdirected* one on a capable agent over three
+    reps. Findings: (1) Active misdirection is **not inert** — it flipped
+    exactly **one of seven** tasks (the agent fell from `patch` to the
+    forbidden, content-wiping `write_file` on a preserve-edit task), a real
+    effect that an earlier passive-weakening probe missed. But it is **faint**:
+    the other six tasks are description-insensitive (the capable agent routes
+    from task semantics, not the description text), the aggregate gap is ~0.10,
+    and it is not shown to exceed the suite's ~15–20% single-run flip noise.
+    (2) The proposed **turn-level judge agreed with the existing zero-LM
+    membership verdict on every signal-bearing task** and added no
+    discrimination on the one task that moved; its only divergence was a
+    false-positive on the either-tool control task. So it does not beat
+    membership — "the suite states the win" again. **Do not build the
+    turn-level judge for built-in tools**; the faint regression signal that
+    exists is already caught by the existing membership verdict on a confusable
+    suite (zero new code). The surface where a description→behavior test could
+    actually pay off is **MCP tool descriptions** — the only framework-evolvable
+    tools, and the one place the description is the sole routing signal rather
+    than inferable from the task. That is the forward path if pursued. (One
+    suite task fails regardless of description — a non-discriminating task worth
+    pruning.)
+
 ### Deferred / not pursued (with reasons, so they aren't re-litigated)
 
 - **Clade-aggregated parent selection** (HGM-style): no campaign substrate
