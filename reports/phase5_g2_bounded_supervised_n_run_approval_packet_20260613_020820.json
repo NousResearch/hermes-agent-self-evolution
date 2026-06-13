@@ -1,0 +1,192 @@
+{
+  "schema_version": "phase5-g2-bounded-supervised-n-run-approval-packet-v1",
+  "phase": "HSE Phase 5",
+  "stage": "G2_BOUNDED_SUPERVISED_N_RUN",
+  "created_at_local": "2026-06-13 02:08:20 CEST",
+  "status": "G2_BOUNDED_SUPERVISED_N_RUN_APPROVAL_PACKET_READY_NOT_EXECUTED",
+  "sunwoo_current_message": "G2 bounded supervised N-run approval packet ← Sunwoo 승인. GO!",
+  "authorization_interpretation": {
+    "approved_now": [
+      "create G2 bounded supervised N-run approval packet",
+      "perform local read-only evidence/repo/PR checks for packet quality"
+    ],
+    "not_performed_now": [
+      "execute G2 N-run",
+      "create/resume cron",
+      "run optimizer",
+      "spend model/API budget",
+      "push/commit/stage",
+      "update PR",
+      "merge or auto-merge",
+      "deploy",
+      "mutate active Hermes runtime"
+    ],
+    "execution_requires_next_explicit_phrase": "G2 bounded supervised N-run execute GO under phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json"
+  },
+  "current_repo_state": {
+    "repo": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution",
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "2fe70c987f1ffc30c06c453f6b8ab4684e1b01b8",
+    "head_short": "2fe70c9",
+    "status_short_branch": "## hse/phase5-continuous-loop-prep",
+    "diff_check_rc": 0
+  },
+  "pr108_state": {
+    "metadata": {
+      "headRefOid": "2fe70c987f1ffc30c06c453f6b8ab4684e1b01b8",
+      "mergeable": "MERGEABLE",
+      "number": 108,
+      "state": "OPEN",
+      "statusCheckRollup": [],
+      "updatedAt": "2026-06-12T23:50:43Z",
+      "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+    },
+    "checks_classification": "MISSING_NOT_CI_PASS"
+  },
+  "prerequisite_evidence": {
+    "fresh_g1_run": {
+      "path": "reports/phase5_g1_one_shot_canary_run_20260612_233639.json",
+      "terminal_status": "G1_PASS_NO_ACTION",
+      "repeat_count": 1,
+      "component_statuses": {
+        "provenance_dataset": "READY_FOR_READONLY_DRY_RUN",
+        "performance_snapshot": "PASS",
+        "auto_triage": "NO_ACTION",
+        "scheduler_dry_run": "DRY_RUN_NOOP"
+      },
+      "side_effect_count": 0,
+      "g2_status_before_packet": "BLOCKED_PENDING_HUMAN_REVIEW_AND_EXPLICIT_APPROVAL"
+    },
+    "fresh_g1_side_effect_ledger": {
+      "path": "reports/phase5_g1_one_shot_canary_side_effect_ledger_20260612_233639.json",
+      "status": "SIDE_EFFECT_ZERO",
+      "side_effect_count": 0
+    },
+    "local_verification_gate": {
+      "targeted_phase5_tool_selection_gate": "66 passed in 0.64s",
+      "full_hse_suite": "360 passed, 11 warnings in 11.39s",
+      "source_closeout": "SnwEvAH/Response/20_Hermes_HSE_and_Ouroboros/2026-06-13-0202-pr108-local-verification-gate-closeout.md"
+    },
+    "historical_g2_pattern_reference": {
+      "path": "reports/phase5_g2_bounded_supervised_run_20260607_183053.json",
+      "status": "G2_PASS_NO_ACTION",
+      "repeat_count": 3,
+      "side_effect_status": "SIDE_EFFECT_ZERO",
+      "side_effect_count": 0,
+      "note": "Historical reference only; current packet is for a fresh post-PR-publication supervised G2 execution if separately approved."
+    }
+  },
+  "proposed_g2_contract": {
+    "N": 3,
+    "N_max": 3,
+    "mode": "manual_supervised_local_zero_budget",
+    "operator": "EvAH local operator under Sunwoo supervision",
+    "per_run_timeout_seconds_max": 1800,
+    "total_timeout_seconds_max": 5400,
+    "exclusive_lock_path": "output/phase5-continuous-loop/.phase5-g2-bounded-supervised.lock",
+    "run_root_template": "output/phase5-continuous-loop/g2-bounded-supervised-<timestamp>",
+    "allowed_input_artifacts": [
+      "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+      "output/tool-description/phase2e-heldout-review/heldout_review.json",
+      "<active-hermes>/agent/prompt_builder.py as sanitized prompt_source label only",
+      "reports/phase5_g1_one_shot_canary_run_20260612_233639.json",
+      "reports/phase5_g1_one_shot_canary_side_effect_ledger_20260612_233639.json"
+    ],
+    "pipeline_per_run": [
+      "evolution.monitor.provenance_dataset",
+      "evolution.monitor.performance_snapshot",
+      "evolution.monitor.auto_triage",
+      "evolution.monitor.scheduler_dry_run"
+    ],
+    "explicitly_disallowed": {
+      "cron_enabled_or_created": false,
+      "optimizer_execution_allowed": false,
+      "model_or_paid_api_budget_allowed": false,
+      "network_calls_allowed": false,
+      "external_pr_update_allowed": false,
+      "git_push_allowed": false,
+      "auto_merge_allowed": false,
+      "deploy_allowed": false,
+      "active_runtime_mutation_allowed": false,
+      "production_continuous_loop_enablement_allowed": false
+    },
+    "stop_conditions": [
+      "any component exits nonzero",
+      "any run status is not PASS_NO_ACTION",
+      "any side_effect_count > 0",
+      "review_required_count > 0",
+      "dry_run_action_count > 0",
+      "lock already exists or cannot be removed",
+      "repo has unexpected worktree changes outside approved output/report artifacts",
+      "timeout is hit"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "P5-G2-01",
+      "name": "explicit_g2_execution_authorization",
+      "required_for_execution": true,
+      "status_before_execution": "PENDING_NEXT_EXPLICIT_EXECUTE_GO"
+    },
+    {
+      "id": "P5-G2-02",
+      "name": "fresh_g1_reviewed_and_side_effect_zero",
+      "required_for_execution": true,
+      "status_before_execution": "PASS",
+      "evidence": "fresh G1 terminal_status=G1_PASS_NO_ACTION, side_effect_count=0"
+    },
+    {
+      "id": "P5-G2-03",
+      "name": "bounded_n_supervised_runs",
+      "required_for_execution": true,
+      "status_before_execution": "READY",
+      "evidence": "N=3, manual supervised foreground execution, no cron"
+    },
+    {
+      "id": "P5-G2-04",
+      "name": "overlap_and_runaway_controls",
+      "required_for_execution": true,
+      "status_before_execution": "READY",
+      "evidence": "exclusive lock path and timeout bounds defined"
+    },
+    {
+      "id": "P5-G2-05",
+      "name": "zero_side_effect_boundary",
+      "required_for_execution": true,
+      "status_before_execution": "READY",
+      "evidence": "optimizer/network/model/PR/cron/active mutation/merge/deploy all disallowed"
+    },
+    {
+      "id": "P5-G2-06",
+      "name": "parseable_evidence_packets",
+      "required_for_execution": true,
+      "status_before_execution": "READY",
+      "evidence": "JSON/Markdown output contract defined"
+    },
+    {
+      "id": "P5-G2-07",
+      "name": "g3_blocked_without_review",
+      "required_for_execution": true,
+      "status_before_execution": "READY",
+      "evidence": "G3 remains blocked pending independent review and explicit approval"
+    }
+  ],
+  "expected_outputs_if_executed_later": {
+    "run_summary_json": "reports/phase5_g2_bounded_supervised_run_<timestamp>.json",
+    "run_summary_markdown": "reports/phase5_g2_bounded_supervised_run_<timestamp>.md",
+    "side_effect_ledger_json": "reports/phase5_g2_bounded_supervised_side_effect_ledger_<timestamp>.json",
+    "run_root": "output/phase5-continuous-loop/g2-bounded-supervised-<timestamp>/"
+  },
+  "packet_side_effects_now": {
+    "local_report_files_written": true,
+    "g2_execution_started": false,
+    "cron_mutation": false,
+    "optimizer_execution": false,
+    "model_or_api_budget_spent": false,
+    "network_calls_performed": false,
+    "git_push_or_pr_update": false,
+    "auto_merge_or_deploy": false,
+    "active_hermes_mutation": false
+  },
+  "recommended_next_action": "If Sunwoo wants to execute the bounded supervised run, say: G2 bounded supervised N-run execute GO under phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json. Otherwise keep this as approval packet only."
+}

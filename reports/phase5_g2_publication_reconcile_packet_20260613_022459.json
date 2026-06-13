@@ -1,0 +1,184 @@
+{
+  "schema_version": "phase5-g2-pr108-publication-reconcile-packet-v1",
+  "created_at_local": "2026-06-13 02:24:59 CEST",
+  "status": "G2_PUBLICATION_RECONCILE_PACKET_READY_NOT_PUBLISHED",
+  "scope": "local/read-only publication reconcile packet only; no stage, commit, push, PR update, merge, auto-merge, cron, optimizer, model/API spend, or active runtime mutation",
+  "go_for_publication_now": false,
+  "recommended_publication_action_if_approved": "G2 evidence publication GO — stage packet + G2 evidence, commit locally, push to fork branch, update PR #108 body addendum, no auto-merge.",
+  "current_repo_state": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "2fe70c987f1ffc30c06c453f6b8ab4684e1b01b8",
+    "status_short_branch": "## hse/phase5-continuous-loop-prep\n?? reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json\n?? reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.md\n?? reports/phase5_g2_bounded_supervised_run_20260613_022018.json\n?? reports/phase5_g2_bounded_supervised_run_20260613_022018.md\n?? reports/phase5_g2_bounded_supervised_side_effect_ledger_20260613_022018.json",
+    "diff_check_rc": 0
+  },
+  "pr108_state": {
+    "metadata": {
+      "headRefName": "hse/phase5-continuous-loop-prep",
+      "headRefOid": "2fe70c987f1ffc30c06c453f6b8ab4684e1b01b8",
+      "isDraft": false,
+      "mergeable": "MERGEABLE",
+      "number": 108,
+      "state": "OPEN",
+      "statusCheckRollup": [],
+      "updatedAt": "2026-06-12T23:50:43Z",
+      "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+    },
+    "checks_classification": "MISSING_NOT_CI_PASS",
+    "head_matches_local": true,
+    "pr_file_count_before_packet": 188
+  },
+  "g2_execution_summary": {
+    "run_summary": "reports/phase5_g2_bounded_supervised_run_20260613_022018.json",
+    "terminal_status": "G2_PASS_NO_ACTION",
+    "repeat_count": 3,
+    "component_statuses": [
+      "PASS_NO_ACTION",
+      "PASS_NO_ACTION",
+      "PASS_NO_ACTION"
+    ],
+    "review_required_count": 0,
+    "dry_run_action_count": 0,
+    "side_effect_count": 0,
+    "g3_status": "BLOCKED_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_APPROVAL"
+  },
+  "g2_side_effect_ledger": {
+    "path": "reports/phase5_g2_bounded_supervised_side_effect_ledger_20260613_022018.json",
+    "status": "SIDE_EFFECT_ZERO",
+    "side_effect_count": 0
+  },
+  "current_g2_evidence_files": [
+    {
+      "path": "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json",
+      "exists": true,
+      "size": 7841,
+      "sha256": "6e502c578d660a3c32de58abd36a7f7bd4beb55ae79cb75572e0cf325d650107",
+      "schema_version": "phase5-g2-bounded-supervised-n-run-approval-packet-v1",
+      "status": "G2_BOUNDED_SUPERVISED_N_RUN_APPROVAL_PACKET_READY_NOT_EXECUTED",
+      "repeat_count": null,
+      "side_effect_count": null,
+      "g3_status": null
+    },
+    {
+      "path": "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.md",
+      "exists": true,
+      "size": 3415,
+      "sha256": "f0a70102ec2b44d06fbb54817dbfb6b7440d90afb07f7f43ba125cd6d6a45a92"
+    },
+    {
+      "path": "reports/phase5_g2_bounded_supervised_run_20260613_022018.json",
+      "exists": true,
+      "size": 21764,
+      "sha256": "e3f4a0ae0913b60543723031d4b4754008570f6e4f75cf7d525939fb4bd02065",
+      "schema_version": "phase5-g2-bounded-supervised-run-v1",
+      "status": "G2_PASS_NO_ACTION",
+      "repeat_count": 3,
+      "side_effect_count": 0,
+      "g3_status": "BLOCKED_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_APPROVAL"
+    },
+    {
+      "path": "reports/phase5_g2_bounded_supervised_run_20260613_022018.md",
+      "exists": true,
+      "size": 2706,
+      "sha256": "c70cf8cc8c57ae92707e9964da3ed22ce1a7149ebd996f8884445c15e01338bc"
+    },
+    {
+      "path": "reports/phase5_g2_bounded_supervised_side_effect_ledger_20260613_022018.json",
+      "exists": true,
+      "size": 1091,
+      "sha256": "66172dd12961b3f87d8bc3f5c82cb20d84258187b2785806938b23d8c6be230b",
+      "schema_version": "phase5-g2-side-effect-ledger-v1",
+      "status": "SIDE_EFFECT_ZERO",
+      "repeat_count": 3,
+      "side_effect_count": 0,
+      "g3_status": null
+    }
+  ],
+  "publication_reconcile": {
+    "current_g2_files_present_in_pr_before_publication": {
+      "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json": false,
+      "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.md": false,
+      "reports/phase5_g2_bounded_supervised_run_20260613_022018.json": false,
+      "reports/phase5_g2_bounded_supervised_run_20260613_022018.md": false,
+      "reports/phase5_g2_bounded_supervised_side_effect_ledger_20260613_022018.json": false
+    },
+    "current_g2_files_missing_from_pr_before_publication": [
+      "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json",
+      "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.md",
+      "reports/phase5_g2_bounded_supervised_run_20260613_022018.json",
+      "reports/phase5_g2_bounded_supervised_run_20260613_022018.md",
+      "reports/phase5_g2_bounded_supervised_side_effect_ledger_20260613_022018.json"
+    ],
+    "future_publication_file_set": [
+      "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json",
+      "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.md",
+      "reports/phase5_g2_bounded_supervised_run_20260613_022018.json",
+      "reports/phase5_g2_bounded_supervised_run_20260613_022018.md",
+      "reports/phase5_g2_bounded_supervised_side_effect_ledger_20260613_022018.json",
+      "reports/phase5_g2_publication_reconcile_packet_20260613_022459.json",
+      "reports/phase5_g2_publication_reconcile_packet_20260613_022459.md"
+    ],
+    "future_publication_file_count": 7,
+    "future_pr_body_addendum_marker": "<!-- phase5-g2-evidence-publication-20260613 -->",
+    "classification": "READY_FOR_SEPARATE_PUBLICATION_APPROVAL"
+  },
+  "side_effects_now": {
+    "local_packet_files_written": true,
+    "stage": false,
+    "commit": false,
+    "push": false,
+    "pr_update": false,
+    "merge": false,
+    "auto_merge": false,
+    "deploy": false,
+    "cron_mutation": false,
+    "optimizer_execution": false,
+    "model_or_api_budget_spent": false,
+    "active_hermes_mutation": false
+  },
+  "pre_packet_worktree": {
+    "allowed_untracked_g2_evidence_only": true,
+    "unexpected_entries": []
+  },
+  "acceptance_criteria": [
+    {
+      "id": "P5-G2-PUB-01",
+      "name": "g2_execution_passed",
+      "status": "PASS"
+    },
+    {
+      "id": "P5-G2-PUB-02",
+      "name": "g2_side_effect_zero",
+      "status": "PASS"
+    },
+    {
+      "id": "P5-G2-PUB-03",
+      "name": "pr_head_matches_local",
+      "status": "PASS"
+    },
+    {
+      "id": "P5-G2-PUB-04",
+      "name": "github_checks_classified",
+      "status": "PASS",
+      "evidence": "MISSING_NOT_CI_PASS"
+    },
+    {
+      "id": "P5-G2-PUB-05",
+      "name": "no_publication_side_effect_now",
+      "status": "PASS"
+    },
+    {
+      "id": "P5-G2-PUB-06",
+      "name": "future_publication_file_set_defined",
+      "status": "PASS",
+      "evidence": [
+        "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json",
+        "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.md",
+        "reports/phase5_g2_bounded_supervised_run_20260613_022018.json",
+        "reports/phase5_g2_bounded_supervised_run_20260613_022018.md",
+        "reports/phase5_g2_bounded_supervised_side_effect_ledger_20260613_022018.json",
+        "reports/phase5_g2_publication_reconcile_packet_20260613_022459.json",
+        "reports/phase5_g2_publication_reconcile_packet_20260613_022459.md"
+      ]
+    }
+  ]
+}
