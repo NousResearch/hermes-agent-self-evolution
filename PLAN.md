@@ -951,6 +951,20 @@ original plan under-weighted.
    *Effort S. Kill: $1 parse-only spike — if usable misselection/correction
    density is near zero, the importer ships only as a correction-miner.*
 
+   **Status — investigated and DEFERRED (kill experiment fired).** A measured
+   spike killed the single-call miner. (1) The only framework-evolvable tools
+   are MCP descriptions, and the privacy-safe scope (a single project's own
+   transcripts — never a glob across all local projects) has **~0 MCP calls**.
+   (2) Claude turns are multi-step (≈14 tool calls/turn), so the judge's
+   `(task, invoked_tool, manifest)` shape — judging one call with no turn
+   context — produces a misselection label that **flips ~20%** of the time vs.
+   judging with context: a context artifact that would poison GEPA, not a
+   description defect. The roadmap's correction-mining fallback is also dead
+   (~0 corrections observed). The docstring premise was itself off — it's
+   accurate about `history.jsonl`; the roadmap conflated that with
+   `projects/*.jsonl`. The docstring now records the negative. The salvageable
+   idea is item 13 below.
+
 5. **Claude Code skill closed-loop + planted-fault task synthesis.** Two
    halves. (a) Adapter: `claude_runner.py` never consumes the protocol's
    `skills_src` field; `hermes_runner.py` shows the staging pattern. A $1
@@ -1042,6 +1056,23 @@ original plan under-weighted.
     channel proves stable.** *Effort: $10 probe, then L if funded. Kill: no
     channel's A/A CoV is tight enough to detect a plausible code improvement
     → the signal is too noisy and the pilot does not proceed.*
+
+13. **Turn-level tool-sequence evaluation** (the salvage from item 4's
+    deferral). Item 4's single-call miner died because Claude agentic turns are
+    multi-step: judging one call out of a ≈14-call turn with no context flips
+    the misselection label ~20% of the time. The idea worth keeping is a
+    different, larger one: evaluate a whole TURN's tool *sequence* rather than
+    individual calls. Shape: mine `(task → ordered tool sequence)` units; judge
+    with full turn context ("was any tool clearly wrong-for-the-task, or any
+    necessary tool missing"); restrict to declared confusable tool pairs
+    (`ToolManifest.confusable_neighbor_for`, `tool_source.py:130`) so a
+    description edit can plausibly move behavior; and add a **turn-level metric**
+    `evolve_tool` lacks today (it is single-choice by construction,
+    `tool_module.py:53`). Open questions: where the privacy-safe turn corpus
+    comes from (a single project's own transcripts are built-in-only; MCP turns
+    aren't present in the privacy-safe scope), and whether a turn-level judge
+    can produce signal a capable agent doesn't already saturate. *Effort L;
+    needs its own brainstorm + design pass before any build.*
 
 ### Deferred / not pursued (with reasons, so they aren't re-litigated)
 

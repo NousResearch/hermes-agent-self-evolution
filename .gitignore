@@ -30,3 +30,7 @@ snapshots/
 
 # Local-only design specs and implementation plans (never committed)
 docs/superpowers/
+
+# Local-only exploratory spikes (throwaway probes; durable findings go in
+# reports/ or PLAN.md, not here)
+spikes/

@@ -7,9 +7,22 @@ extracts ``(user_task, invoked_tool)`` tuples from
 commit) re-judges each tuple against the *current* manifest with a
 confidence-banded LLM judge.
 
-Claude Code (``~/.claude/history.jsonl``) and Copilot
-(``~/.copilot/session-state/*/events.jsonl``) are not mined: their logs
-carry only user/assistant text, no ``tool_use`` blocks.
+Claude Code's ``~/.claude/history.jsonl`` and Copilot's
+``~/.copilot/session-state/*/events.jsonl`` carry only user/assistant text, no
+``tool_use`` blocks, so they aren't mined for tool selection.
+
+Claude Code's richer *project* transcripts (``~/.claude/projects/*/*.jsonl``)
+DO carry ``tool_use`` blocks, but are deliberately NOT mined here either. A
+spike measured why: (1) the only framework-evolvable tools are MCP
+descriptions, and within the privacy-safe scope (a single project's own
+transcripts) MCP calls are ~0; (2) Claude turns are multi-step (≈14 tool
+calls/turn), so judging one call out of a turn with no turn context — the
+``(task, invoked_tool, manifest)`` shape below — flips its misselection label
+~20% of the time vs. judging it with context, i.e. the label is a context
+artifact that would poison GEPA, not a description defect. Turn-level
+tool-sequence evaluation (judge whole turns with context, confusable pairs
+only) is tracked as a separate roadmap item; the single-call miner is not
+viable for Claude.
 
 Tests monkeypatch the session directory via
 ``evolution.core.external_importers.HermesSessionImporter.SESSION_DIR``.
