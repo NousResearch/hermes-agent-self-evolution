@@ -996,6 +996,28 @@ original plan under-weighted.
    all-pass/all-fail cliff → record the null, and item 9's weak-tier
    improvement framing collapses to a deploy-tier regression guard.*
 
+   **Status — investigated; no graded signal (kill experiment fired).** A staged
+   probe (~$12, under budget) ran the experiment as designed. (1) Cheap
+   kill-switch: **no transition rung is reachable** in the [0.3, 0.7] band — even
+   strong active misdirection only drags a capable agent (gpt-5-mini) from 0.86
+   to 0.71–0.79, and the weak tier (gpt-5-nano) does not run on the closed-loop
+   path, so the ladder cannot sample a middle. (2) Thin-rung salvage on the
+   closest rung (0.79, the one tier with a real pass/fail mix): within the only
+   task that flips across reps, the continuous channels (step count,
+   distinct-tool count) do **not** separate passed from failed reps (AUC ≈ 0.50),
+   while the duration negative control tripped *harder* (0.72) at that sample
+   size — no trustworthy graded signal. The failure signature is a tool **swap at
+   identical sequence length** (`read_file→patch` on pass vs `read_file→write_file`
+   on fail, both ~2 steps), so a graded channel only re-encodes the binary
+   membership verdict — no graded gain (the item-13 lesson at the channel level);
+   the pooled cross-task "separation" is a between-task length confound, not a
+   fitness signal. **Verdict: the binary tier-flip (finding #2) is fundamental,
+   not a measurement artifact a continuous channel can rescue.** Consequences:
+   item 9's weak-tier-improvement framing collapses to a deploy-tier regression
+   guard; item 13's deferred partial-credit verdict (Stage 2) is **not** revived.
+   The forward signal path is item 5 (planted-fault, test-verified tasks), which
+   sidesteps this saturation regime.
+
 ### Wave 3 — Honest mechanism
 
 8. **Stratified behavioral-aware minibatch sampling (the acceptance fix).**
