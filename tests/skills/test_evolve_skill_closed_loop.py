@@ -104,6 +104,31 @@ class TestBehavioralExampleLoader:
         assert "task" in examples[0].inputs()
         assert examples[0].task == "do a"
 
+    def test_suite_override_restricts_examples_to_train_split(self, tmp_path):
+        # The --compile-floor leakage guard: GEPA's behavioral examples must come
+        # ONLY from the train split, never the floor's holdout — else the evolved
+        # arm has seen the holdout it's gated on.
+        from evolution.validation.task import split_train_holdout
+
+        suite_path = tmp_path / "s.jsonl"
+        suite_path.write_text(
+            "\n".join(
+                f'{{"task_id": "t{i}", "user_message": "m{i}", "test_command": "python t.py"}}'
+                for i in range(10)
+            ) + "\n"
+        )
+        full = TaskSuite.from_jsonl(suite_path)
+        train, holdout = split_train_holdout(full.tasks, holdout_ratio=0.3, seed=42)
+        train_suite = TaskSuite(path=full.path, sha256=full.sha256, tasks=tuple(train))
+        examples = _load_behavioral_examples_from_suite(
+            suite_path, suite_override=train_suite
+        )
+        ex_ids = {e.closed_loop_task_id for e in examples}
+        train_ids = {t.task_id for t in train}
+        holdout_ids = {t.task_id for t in holdout}
+        assert ex_ids == train_ids
+        assert not (ex_ids & holdout_ids)  # no holdout task leaked into training
+
 
 # ---------------------------------------------------------------------------
 # Cache construction helper
@@ -141,6 +166,27 @@ class TestMaybeBuildClosedLoopCacheSkill:
         assert baseline_text == "baseline body text"
         # Suffix is .md for skill artifacts (not the default .json).
         assert cache._baseline_path.suffix == ".md"
+
+    def test_suite_override_scopes_cache_to_holdout(self, fake_skill_path):
+        # Under --compile-floor the cache scores baseline/evolved/floor on the
+        # holdout split, so the cache's suite must be the override, not the file.
+        full = TaskSuite.from_jsonl(_SUITE_FIXTURE)
+        holdout = TaskSuite(
+            path=full.path, sha256=full.sha256, tasks=full.tasks[:1]
+        )
+        cache = _maybe_build_closed_loop_cache_skill(
+            skill_name="systematic_debugging",
+            skill_path=fake_skill_path,
+            baseline_skill_body="body",
+            suite_path=_SUITE_FIXTURE,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+            suite_override=holdout,
+        )
+        assert cache is not None
+        assert cache._suite.tasks == holdout.tasks
+        assert len(cache._suite.tasks) == 1 < len(full.tasks)
         # Default gate_mode for skills is "sampled" — caller passes "always"
         # only when wiring trainset mode.
         assert cache.gate_mode == "sampled"

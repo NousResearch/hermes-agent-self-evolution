@@ -901,16 +901,33 @@ original plan under-weighted.
    *Effort S. Kill: if the compiled floor never clears the gate on any shipped
    suite, the promotion is inert and reverts to a suggestion.*
 
-   **Status — telemetry half shipped; gate half remains.**
-   `evolution/core/saturation_telemetry.py` records the pre-flight band plus
-   holdout / closed-loop / floor scores on every run — including the abort paths
-   the gate archive never captured — joined to each run by `run_id` in
-   `output/saturation_ledger.jsonl`. That is the data-collection fix item 1's
-   certificate recommends and the corpus the closed-loop-threshold calibration
-   needs. `floor_score` is logged whenever it is computed (prompt runs today);
-   it is `None` for skill/tool runs until the gate half wires floor computation
-   into their pre-flights. Still to do: promote a cleared compiled floor to a
-   first-class deploy outcome, and compute the floor on the skill/tool paths.
+   **Status — shipped (skills + prompts); tools deferred.**
+   *Telemetry half:* `evolution/core/saturation_telemetry.py` records the
+   pre-flight band plus holdout / closed-loop / floor scores on every run —
+   including the abort paths the gate archive never captured — joined to each
+   run by `run_id` in `output/saturation_ledger.jsonl`.
+   *Gate half:* a cleared compiled floor is now a first-class **fallback** deploy
+   outcome — when the GEPA candidate fails the closed-loop gate but
+   `baseline + floor_text` clears the same noise-aware gate, the framework
+   deploys the floor instead of rejecting (`resolve_floor_fallback` in
+   `quality_gate.py`; opt-in behind `--compile-floor`; recorded as
+   `deployed_artifact="compiled_floor"` + a `floor_fallback` block). The skill
+   path computes the floor on a held-out split of the CL suite (the floor is
+   compiled from train, scored on holdout, with GEPA's behavioral examples
+   restricted to train so it never trains on the floor's holdout); the prompt
+   path reuses its existing floor probe (after fixing a noise-aware
+   inconsistency so the probe's verdict matches the gate). **Tools deferred:**
+   the floor's patch/convention clauses are skill/prompt disciplines and don't
+   map onto a tool-selection description (a tool suite yields at most the thin
+   over-eagerness clause); not a char-cap reason — there is no MCP-protocol cap,
+   `max_tool_desc_size=500` is a tunable framework guardrail. Default-off paths
+   are byte-identical; the `resolve_floor_fallback` decision rule is unit-tested
+   and the full floor-deploy path was exercised by a manual `claude -p` smoke
+   (floor deploy fired: baseline 0.00 → floor 0.50, deployed `compiled_floor`).
+   Note an honest asymmetry: the skill CL-primary gate requires a strict gain,
+   so a deployed floor there beat baseline; the prompt no-regression gate does
+   not, so "deployed floor" on the prompt path means the floor cleared the gate
+   over a non-improving evolved, not necessarily a measured win over baseline.
 
 3. **Memoize the baseline phase during search only.** `ClosedLoopValidator`
    re-runs the baseline phase on every `validate()` call; in trainset mode

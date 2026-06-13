@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -94,6 +95,25 @@ class TaskSuite:
         if not tasks:
             raise ValueError(f"{path}: no tasks parsed (empty or all-comment file)")
         return cls(path=path, sha256=sha, tasks=tuple(tasks))
+
+
+def split_train_holdout(
+    tasks: "tuple[Task, ...] | list[Task]", *, holdout_ratio: float, seed: int
+) -> tuple[list[Task], list[Task]]:
+    """Deterministic train/holdout split by seeded shuffle (not stratified).
+
+    Guarantees at least one task on each side when there are >= 2 tasks so the
+    consumer (GEPA training vs. the deploy/floor gate) has something on each
+    side. Shared by the prompt-section and skill closed-loop paths so both
+    split identically.
+    """
+    ordered = list(tasks)
+    random.Random(seed).shuffle(ordered)
+    n_holdout = max(1, int(round(len(ordered) * holdout_ratio)))
+    n_holdout = min(n_holdout, len(ordered) - 1) if len(ordered) > 1 else len(ordered)
+    holdout = ordered[:n_holdout]
+    train = ordered[n_holdout:]
+    return train, holdout
 
 
 def _task_from_dict(obj: dict, *, source: str) -> Task:

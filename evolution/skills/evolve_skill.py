@@ -14,11 +14,16 @@ import time
 import traceback
 from pathlib import Path
 from datetime import datetime
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import click
 import dspy
 from rich.console import Console
+
+if TYPE_CHECKING:
+    # Type-only import; the validation stack is lazy-imported inside the
+    # functions that use it to keep it off the cold path.
+    from evolution.validation.task import TaskSuite
 from rich.panel import Panel
 from rich.table import Table
 
@@ -50,6 +55,7 @@ from evolution.core.quality_gate import (
     QUALITY_GATE_PRESETS,
     _check_cl_primary_gate,
     append_cl_decision_fields,
+    resolve_floor_fallback,
     resolve_proposer_mode,
     run_benchmark_hook,
     write_cost_ceiling_abort,
@@ -527,6 +533,7 @@ def _maybe_build_closed_loop_cache_skill(
     gate_mode: str = "sampled",
     agent_model: Optional[str] = None,
     agent_timeout_seconds: Optional[int] = None,
+    suite_override: "Optional[TaskSuite]" = None,
 ):
     """Build a ClosedLoopFeedbackCache for the skill path; return None when disabled.
 
@@ -567,7 +574,9 @@ def _maybe_build_closed_loop_cache_skill(
         runner_kwargs["timeout_seconds"] = agent_timeout_seconds
     runner = HermesAgentRunner(**runner_kwargs)
     validator = ClosedLoopValidator(installer=installer, runner=runner)
-    suite = TaskSuite.from_jsonl(suite_path)
+    # suite_override (the --compile-floor holdout split) scopes baseline/evolved/
+    # floor scoring to the same held-out tasks; default reads the whole suite.
+    suite = suite_override if suite_override is not None else TaskSuite.from_jsonl(suite_path)
     return ClosedLoopFeedbackCache(
         validator=validator,
         suite=suite,
@@ -582,19 +591,24 @@ def _maybe_build_closed_loop_cache_skill(
     )
 
 
-def _load_behavioral_examples_from_suite(suite_path: Path) -> list:
+def _load_behavioral_examples_from_suite(
+    suite_path: Path, *, suite_override: "Optional[TaskSuite]" = None
+) -> list:
     """Build behavioral dspy.Examples from a suite file.
 
     Uses ``task_field="task_input"`` so the examples are shape-compatible
     with ``SkillModule.forward(task_input=...)`` — tool-side uses ``"task"``.
     Local-import path keeps the validation stack out of the cold path.
+
+    ``suite_override`` (the --compile-floor train split) restricts GEPA's
+    behavioral examples to the train tasks so it never trains on the floor's
+    holdout; default reads the whole suite.
     """
     from evolution.core.behavioral_example import build_behavioral_examples
     from evolution.validation.task import TaskSuite
 
-    return build_behavioral_examples(
-        TaskSuite.from_jsonl(suite_path), task_field="task_input"
-    )
+    suite = suite_override if suite_override is not None else TaskSuite.from_jsonl(suite_path)
+    return build_behavioral_examples(suite, task_field="task_input")
 
 
 def _apply_in_place(skill_path: Path, evolved_full: str) -> bool:
@@ -654,6 +668,7 @@ def evolve(
     skip_cost_suggest: bool = False,
     skip_saturation_check: bool = False,
     force_saturation_check: bool = False,
+    compile_floor: bool = False,
     gepa_minibatch_size: int = 3,
     gepa_acceptance: str = "improvement-or-equal",
     closed_loop_suite_path: Optional[Path] = None,
@@ -911,6 +926,41 @@ def evolve(
             _cache_gate_mode = (
                 "always" if closed_loop_mode in ("trainset", "both") else "sampled"
             )
+
+            # --- Compiled-floor split (opt-in: --compile-floor + a CL suite) ---
+            # Score baseline/evolved/floor all on a held-out split so the floor
+            # (compiled from the train split) is judged on tasks it wasn't
+            # derived from — never in-sample. The cache's suite becomes the
+            # holdout; GEPA's behavioral examples come from train only.
+            floor_text: Optional[str] = None
+            cl_holdout_suite = None
+            cl_train_suite = None
+            if compile_floor and closed_loop_suite_path is not None:
+                from evolution.validation.suite_compiler import (
+                    assert_no_holdout_leakage,
+                    compile_suite_floor,
+                )
+                from evolution.validation.task import TaskSuite, split_train_holdout
+
+                _cl_suite = TaskSuite.from_jsonl(closed_loop_suite_path)
+                _cl_train, _cl_holdout = split_train_holdout(
+                    _cl_suite.tasks, holdout_ratio=config.holdout_ratio, seed=config.seed
+                )
+                cl_holdout_suite = TaskSuite(
+                    path=_cl_suite.path, sha256=_cl_suite.sha256, tasks=tuple(_cl_holdout)
+                )
+                cl_train_suite = TaskSuite(
+                    path=_cl_suite.path, sha256=_cl_suite.sha256, tasks=tuple(_cl_train)
+                )
+                _ft = compile_suite_floor(_cl_train)
+                assert_no_holdout_leakage(_ft, _cl_holdout)
+                floor_text = _ft or None  # empty floor → no fallback
+                if floor_text is None:
+                    console.print(
+                        "[yellow]--compile-floor: no compilable constraints in the "
+                        "CL train split; floor fallback disabled.[/yellow]"
+                    )
+
             closed_loop_cache = _maybe_build_closed_loop_cache_skill(
                 skill_name=skill_name,
                 skill_path=skill_path,
@@ -922,7 +972,32 @@ def evolve(
                 gate_mode=_cache_gate_mode,
                 agent_model=closed_loop_agent_model,
                 agent_timeout_seconds=closed_loop_task_timeout_seconds,
+                suite_override=cl_holdout_suite,
             )
+
+            # Under --compile-floor the deploy/floor cache is scoped to the
+            # HOLDOUT split (above), so it must NOT also feed GEPA's metric —
+            # GEPA's behavioral examples and feedback augmentation would then be
+            # scored on the floor's holdout, leaking it into the search the
+            # deploy gate evaluates against. Give the metric its own TRAIN-scoped
+            # cache so GEPA learns from train CL signal and the holdout stays
+            # held out. Without --compile-floor both are the same whole-suite cache.
+            if compile_floor and closed_loop_cache is not None:
+                metric_cache = _maybe_build_closed_loop_cache_skill(
+                    skill_name=skill_name,
+                    skill_path=skill_path,
+                    baseline_skill_body=skill["body"],
+                    suite_path=closed_loop_suite_path,
+                    saturation_threshold=closed_loop_saturation_threshold,
+                    min_iters=closed_loop_min_iters,
+                    window_size=closed_loop_window_size,
+                    gate_mode=_cache_gate_mode,
+                    agent_model=closed_loop_agent_model,
+                    agent_timeout_seconds=closed_loop_task_timeout_seconds,
+                    suite_override=cl_train_suite,
+                )
+            else:
+                metric_cache = closed_loop_cache
 
             # Build the metric once: DSPy's LM cache lines up across GEPA's
             # per-iteration scoring and the holdout eval below. The [BUDGET]
@@ -934,7 +1009,7 @@ def evolve(
                 judge,
                 baseline_skill_text=skill["body"],
                 max_growth=config.growth_free_threshold,
-                closed_loop_cache=closed_loop_cache,
+                closed_loop_cache=metric_cache,
             )
 
             trainset = dataset.to_dspy_examples("train")
@@ -951,7 +1026,7 @@ def evolve(
                         "--closed-loop-during-evolution to be set"
                     )
                 behavioral_examples = _load_behavioral_examples_from_suite(
-                    closed_loop_suite_path
+                    closed_loop_suite_path, suite_override=cl_train_suite
                 )
                 trainset = trainset + behavioral_examples
                 if closed_loop_in_valset:
@@ -975,6 +1050,7 @@ def evolve(
                     closed_loop_cache=closed_loop_cache,
                     baseline_artifact_text=skill["body"],
                     suite_path=closed_loop_suite_path,
+                    floor_text=floor_text,
                 )
                 if sat_report.band != "healthy":
                     render_saturation_panel(sat_report, console=console)
@@ -1229,6 +1305,10 @@ def evolve(
             cl_eval_cost_before: float = 0.0
             cl_eval_cost_usd: Optional[float] = None
             cl_constraint: Optional[ConstraintResult] = None
+            # Compiled-floor fallback (only populated under --compile-floor on the
+            # CL-primary path). floor_full is baseline + the zero-LM floor clause.
+            floor_gate: Optional[ConstraintResult] = None
+            floor_full: Optional[str] = None
 
             if use_cl_primary:
                 console.print(
@@ -1330,6 +1410,47 @@ def evolve(
                     f"  [{color}]{icon} cl_primary_gate[/{color}]: {cl_constraint.message}"
                 )
 
+                # Compiled-floor verdict (same noise-aware rule as evolved,
+                # scored on the same holdout the cache used). The floor is
+                # zero-LM, so its synthetic mean == baseline's (synth Δ = 0).
+                # A floor deploy must also clear the static + char-ceiling
+                # checks evolved gets, so an oversized/malformed floor can't ship.
+                if floor_text and sat_report is not None and sat_report.floor_per_example:
+                    floor_full = reassemble_skill(
+                        skill["frontmatter"], skill["body"] + "\n\n" + floor_text
+                    )
+                    floor_cl_passes = int(sum(sat_report.floor_per_example))
+                    floor_growth_pct = (len(floor_full) - baseline_chars) / max(1, baseline_chars)
+                    _floor_cl = _check_cl_primary_gate(
+                        baseline_cl_passes=baseline_cl_passes,
+                        evolved_cl_passes=floor_cl_passes,
+                        baseline_synth_mean=avg_baseline,
+                        evolved_synth_mean=avg_baseline,
+                        growth_pct=floor_growth_pct,
+                        noise_floor_passes=cl_noise_floor_passes,
+                    )
+                    _floor_static = validator.validate_static(floor_full, "skill")
+                    _floor_ceiling = validator._check_absolute_chars(floor_full, baseline_chars)
+                    _floor_static_failures = [c for c in _floor_static if not c.passed]
+                    _floor_ok = (
+                        _floor_cl.passed
+                        and not _floor_static_failures
+                        and _floor_ceiling.passed
+                    )
+                    # Surface the specific failing check so a rejected floor is
+                    # debuggable, not a generic "static/ceiling" string.
+                    if _floor_ok:
+                        _floor_msg = "floor cleared CL + static + ceiling"
+                    elif not _floor_cl.passed:
+                        _floor_msg = _floor_cl.message
+                    elif _floor_static_failures:
+                        _floor_msg = "; ".join(c.message for c in _floor_static_failures)
+                    else:
+                        _floor_msg = _floor_ceiling.message
+                    floor_gate = ConstraintResult(
+                        passed=_floor_ok, constraint_name="floor_gate", message=_floor_msg,
+                    )
+
             if evaluate_band_on_holdout and knee_pick is not None:
                 console.print(
                     f"\n[bold]Re-evaluating {knee_pick.band_size} band candidate(s) on holdout[/bold] "
@@ -1382,6 +1503,27 @@ def evolve(
                 if not c.passed:
                     growth_pass = False
 
+            # Compiled-floor fallback: if the evolved candidate failed the gate
+            # but the floor cleared the same gate, deploy the floor. Reassign
+            # growth_pass to the deploy decision so all downstream write/PR/apply
+            # logic and the benchmark hook treat a floor deploy like any deploy;
+            # deployed_full carries what actually ships.
+            # CL-primary deployability requires a strict gain, so improved ==
+            # deployable here (both are growth_pass).
+            choice = resolve_floor_fallback(
+                evolved_improved=growth_pass,
+                evolved_deployable=growth_pass,
+                floor_clears=floor_gate is not None and floor_gate.passed,
+            )
+            floor_deployed = choice == "floor"
+            deployed_full = floor_full if floor_deployed else evolved_full
+            growth_pass = choice in ("evolved", "floor")
+            if floor_deployed:
+                console.print(
+                    "  [green]✓ floor_fallback[/green]: evolved failed the gate; "
+                    "the compiled floor cleared it — deploying baseline + floor"
+                )
+
             # Write artifacts before the hook so it can reference them via
             # $EVOLVED_PATH / $BASELINE_PATH. On benchmark failure the deploy
             # path's identical write becomes a no-op overwrite of the reject
@@ -1390,7 +1532,7 @@ def evolve(
             if growth_pass and benchmark_cmd is not None:
                 evolved_path = output_dir / "evolved_skill.md"
                 baseline_path = output_dir / "baseline_skill.md"
-                evolved_path.write_text(evolved_full)
+                evolved_path.write_text(deployed_full)  # the artifact being shipped
                 baseline_path.write_text(skill["raw"])
                 benchmark_block = run_benchmark_hook(
                     benchmark_cmd,
@@ -1416,7 +1558,7 @@ def evolve(
             # Single source of truth for the rule string — same helper the constraint uses.
             decision_rule_used = resolve_decision_rule(config, growth_pct)
             if growth_pass:
-                decision_reason = "passed"
+                decision_reason = "floor_fallback" if floor_deployed else "passed"
             elif benchmark_block is not None and not benchmark_block["passed"]:
                 decision_reason = "benchmark_failed"
             else:
@@ -1461,6 +1603,28 @@ def evolve(
             if benchmark_block is not None:
                 decision_payload["benchmark"] = benchmark_block
 
+            # Gate on growth_pass too: a benchmark hook can flip a floor deploy
+            # to reject AFTER floor_deployed was set, and a reject record must not
+            # claim a compiled-floor deployment.
+            if floor_deployed and growth_pass:
+                # The evolved candidate failed; the compiled floor cleared the
+                # same gate and shipped. Record it distinctly (decision stays
+                # "deploy"/decision_signal "closed_loop"); the evolved arm's
+                # numbers remain in append_cl_decision_fields below for audit.
+                decision_payload["deployed_artifact"] = "compiled_floor"
+                decision_payload["floor_fallback"] = {
+                    "floor_text": floor_text,
+                    "deployed_chars": len(deployed_full),
+                    "floor_growth_pct": (len(deployed_full) - baseline_chars)
+                    / max(1, baseline_chars),
+                    "baseline_cl_passes": int(sum(cached_baseline_cl_per_example)),
+                    "floor_cl_passes": int(sum(sat_report.floor_per_example)),
+                    "evolved_cl_passes": (
+                        int(sum(evolved_cl_per_example))
+                        if evolved_cl_per_example is not None else None
+                    ),
+                }
+
             if use_cl_primary:
                 append_cl_decision_fields(
                     decision_payload,
@@ -1486,7 +1650,7 @@ def evolve(
             # reporting (needs them on disk for the user).
             if growth_pass:
                 evolved_skill_path = output_dir / "evolved_skill.md"
-                evolved_skill_path.write_text(evolved_full)
+                evolved_skill_path.write_text(deployed_full)
                 (output_dir / "baseline_skill.md").write_text(skill["raw"])
 
             # Run PR automation BEFORE writing gate_decision.json so the PR
@@ -1571,7 +1735,10 @@ def evolve(
                         f"required {decision_payload['cl_required_gain']}[/yellow]"
                     )
                 failed_path = output_dir / "evolved_FAILED.md"
-                failed_path.write_text(evolved_full)
+                # Save what was actually rejected: deployed_full is the floor on a
+                # benchmark-failed floor deploy (floor_deployed ⟹ growth_pass was
+                # True until the benchmark flipped it), else the evolved candidate.
+                failed_path.write_text(deployed_full)
                 console.print(f"  Saved failed variant to {failed_path}")
                 reject_reason = decision_payload.get("reason", "growth_quality_gate")
                 if apply_in_place:
@@ -1653,16 +1820,25 @@ def evolve(
 
             if growth_pass:
                 if emit_patch:
-                    patch_text = _emit_patch(skill["raw"], evolved_full, skill_path)
+                    patch_text = _emit_patch(skill["raw"], deployed_full, skill_path)
                     sys.stdout.write(patch_text)
                     if patch_text and not patch_text.endswith("\n"):
                         sys.stdout.write("\n")
                 if apply_in_place:
-                    applied = _apply_in_place(skill_path, evolved_full)
+                    applied = _apply_in_place(skill_path, deployed_full)
                     if applied:
-                        console.print(f"  --apply: wrote evolved skill to {skill_path}")
+                        console.print(f"  --apply: wrote {'baseline+floor' if floor_deployed else 'evolved'} skill to {skill_path}")
 
-            if use_cl_primary:
+            if floor_deployed:
+                _fb = decision_payload["floor_fallback"]
+                console.print(
+                    f"\n[bold green]✓ Deployed the compiled floor "
+                    f"(floor {_fb['floor_cl_passes']} vs baseline "
+                    f"{_fb['baseline_cl_passes']} CL passes; evolved "
+                    f"{_fb['evolved_cl_passes']} failed the gate)[/bold green]"
+                )
+                console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+            elif use_cl_primary:
                 console.print(
                     f"\n[bold green]✓ Evolution improved skill "
                     f"(CL gained +{decision_payload['cl_tasks_gained']} tasks)[/bold green]"
@@ -1965,6 +2141,17 @@ def evolve(
          "in non-interactive contexts (no TTY).",
 )
 @click.option(
+    "--compile-floor",
+    "compile_floor",
+    is_flag=True,
+    default=False,
+    help="With a closed-loop suite: split it train/holdout, compile a zero-LM "
+         "constraint floor from the train tasks, and — if the GEPA candidate "
+         "fails the deploy gate but baseline+floor clears the same gate — deploy "
+         "baseline+floor as a fallback. Scores baseline/evolved/floor all on the "
+         "holdout split (the evolved gate uses the holdout subset under this flag).",
+)
+@click.option(
     "--gepa-minibatch-size",
     "gepa_minibatch_size",
     default=3,
@@ -2136,6 +2323,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          skip_cost_suggest,
          skip_saturation_check,
          force_saturation_check,
+         compile_floor,
          gepa_minibatch_size,
          gepa_acceptance,
          create_pr_flag,
@@ -2191,6 +2379,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             skip_cost_suggest=skip_cost_suggest,
             skip_saturation_check=skip_saturation_check,
             force_saturation_check=force_saturation_check,
+            compile_floor=compile_floor,
             gepa_minibatch_size=gepa_minibatch_size,
             gepa_acceptance=gepa_acceptance,
             closed_loop_suite_path=closed_loop_suite_path,

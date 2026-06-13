@@ -8,7 +8,36 @@ from pathlib import Path
 
 import pytest
 
-from evolution.validation.task import Task, TaskSuite
+from evolution.validation.task import Task, TaskSuite, split_train_holdout
+
+
+def _tasks(n: int) -> list[Task]:
+    return [Task(task_id=f"t{i}", user_message=f"msg {i}") for i in range(n)]
+
+
+class TestSplitTrainHoldout:
+    def test_deterministic_for_a_seed(self):
+        a = split_train_holdout(tuple(_tasks(10)), holdout_ratio=0.3, seed=7)
+        b = split_train_holdout(tuple(_tasks(10)), holdout_ratio=0.3, seed=7)
+        assert [t.task_id for t in a[0]] == [t.task_id for t in b[0]]
+        assert [t.task_id for t in a[1]] == [t.task_id for t in b[1]]
+
+    def test_partition_is_complete_and_disjoint(self):
+        train, holdout = split_train_holdout(tuple(_tasks(10)), holdout_ratio=0.3, seed=1)
+        ids = {t.task_id for t in train} | {t.task_id for t in holdout}
+        assert ids == {f"t{i}" for i in range(10)}
+        assert not ({t.task_id for t in train} & {t.task_id for t in holdout})
+        assert len(holdout) == 3  # round(10*0.3)
+
+    def test_guarantees_one_each_side_for_two_tasks(self):
+        train, holdout = split_train_holdout(tuple(_tasks(2)), holdout_ratio=0.9, seed=0)
+        assert len(train) == 1 and len(holdout) == 1
+
+    def test_high_ratio_still_leaves_a_nonempty_train(self):
+        # The clamp prevents an all-holdout/empty-train split — else the floor
+        # would be compiled from zero tasks and silently no-op.
+        train, holdout = split_train_holdout(tuple(_tasks(5)), holdout_ratio=1.0, seed=0)
+        assert len(train) == 1 and len(holdout) == 4
 
 
 class TestTaskRendering:

@@ -18,7 +18,6 @@ from evolution.prompts.evolve_prompt_section import (
     _prompt_builder_guard,
     _run_one_task_score,
     _section_text_from_candidate,
-    _split_train_holdout,
     evolve_prompt_section,
     main,
     val_signal_warning,
@@ -238,22 +237,6 @@ class TestRunOneTaskScoreActionVerdict:
             assert kw["expected_action"] is None
             assert kw["target_skill"] is None
             assert kw["stale_token"] is None
-
-
-def test_split_is_deterministic_and_non_empty():
-    tasks = tuple(_task(f"t{i}") for i in range(10))
-    train1, holdout1 = _split_train_holdout(tasks, holdout_ratio=0.5, seed=42)
-    train2, holdout2 = _split_train_holdout(tasks, holdout_ratio=0.5, seed=42)
-    assert [t.task_id for t in train1] == [t.task_id for t in train2]
-    assert [t.task_id for t in holdout1] == [t.task_id for t in holdout2]
-    assert train1 and holdout1
-    assert len(train1) + len(holdout1) == 10
-
-
-def test_split_keeps_both_sides_non_empty_at_extremes():
-    tasks = tuple(_task(f"t{i}") for i in range(4))
-    train, holdout = _split_train_holdout(tasks, holdout_ratio=1.0, seed=1)
-    assert train and holdout  # never starve the train side
 
 
 def test_layer2_factory_returns_none_without_rubric():

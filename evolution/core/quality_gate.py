@@ -12,7 +12,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from rich.console import Console
 
@@ -110,6 +110,43 @@ def _check_cl_primary_gate(
             f"synth Δ {synth_delta:+.3f} within ±{synth_tolerance:.3f}"
         ),
     )
+
+
+FloorFallbackChoice = Literal["evolved", "floor", "reject"]
+
+
+def resolve_floor_fallback(
+    *,
+    evolved_improved: bool,
+    floor_clears: bool,
+    evolved_deployable: bool,
+) -> FloorFallbackChoice:
+    """Pick what to deploy: the GEPA candidate, the compiled floor, or nothing.
+
+    Precedence: a strictly-improving evolved candidate always wins; otherwise a
+    winning floor is deployed (the "suite states the win" fallback, which fires
+    even when GEPA produced a no-op evolved that merely didn't regress);
+    otherwise a still-deployable evolved candidate ships; otherwise reject.
+
+    - ``evolved_improved`` — evolved strictly improved over baseline.
+    - ``floor_clears`` — the compiled floor cleared the gate vs baseline (False
+      when the floor was uncompilable/empty/not requested → degrades to the
+      no-floor path).
+    - ``evolved_deployable`` — evolved is shippable absent strict improvement
+      (e.g. a no-regression pass). On gates where deployability *requires*
+      improvement (the skill CL-primary gate) callers pass the same value as
+      ``evolved_improved``; on the prompt no-regression gate they differ, so the
+      floor preempts a non-improving evolved only where the deploy gate itself
+      would have shipped one. Passed explicitly (no default) so the per-gate
+      relationship is visible at each call site.
+    """
+    if evolved_improved:
+        return "evolved"
+    if floor_clears:
+        return "floor"
+    if evolved_deployable:
+        return "evolved"
+    return "reject"
 
 
 def append_cl_decision_fields(
