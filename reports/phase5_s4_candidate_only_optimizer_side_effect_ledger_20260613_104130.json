@@ -1,0 +1,49 @@
+{
+  "schema_version": "phase5-s4-candidate-only-optimizer-side-effect-ledger-v1",
+  "created_at_local": "2026-06-13 10:44 CEST +0200",
+  "created_at_utc": "2026-06-13T08:44:56Z",
+  "status": "APPROVED_SIDE_EFFECTS_ONLY",
+  "stage": "S4_CANDIDATE_ONLY_OPTIMIZER_EXECUTION",
+  "approval_packet": "reports/phase5_s4_candidate_only_optimizer_approval_packet_20260613_054510.json",
+  "run_root": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130",
+  "approved_side_effects": [
+    {
+      "name": "repo_local_candidate_only_output_written",
+      "status": "APPROVED",
+      "evidence": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130"
+    },
+    {
+      "name": "repo_local_run_report_written",
+      "status": "APPROVED",
+      "evidence": "reports/phase5_s4_candidate_only_optimizer_run_20260613_104130.json"
+    },
+    {
+      "name": "repo_local_side_effect_ledger_written",
+      "status": "APPROVED",
+      "evidence": "reports/phase5_s4_candidate_only_optimizer_side_effect_ledger_20260613_104130.json"
+    },
+    {
+      "name": "obsidian_response_artifact_written",
+      "status": "APPROVED",
+      "evidence": "SnwEvAH/Response/20_Hermes_HSE_and_Ouroboros/2026-06-13-1041-hse-phase5-s4-candidate-only-optimizer-run.md"
+    }
+  ],
+  "disallowed_side_effect_count": 0,
+  "disallowed_side_effect_flags": {
+    "active_apply_of_candidate": false,
+    "active_hermes_runtime_config_source_skill_memory_mutation": false,
+    "automatic_pr_creation_or_update": false,
+    "auto_merge_or_deploy": false,
+    "credential_read_write_or_rotation": false,
+    "unbounded_recurring_job_or_cron": false,
+    "google_gemini_family_routing_without_override": false,
+    "model_or_api_budget_spent": false,
+    "network_calls_performed": false
+  },
+  "lock": {
+    "lock_path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/.s4-candidate-optimizer.lock",
+    "lock_present_after_run": false,
+    "kill_switch_path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/.s4-candidate-optimizer-kill-switch",
+    "kill_switch_present": false
+  }
+}

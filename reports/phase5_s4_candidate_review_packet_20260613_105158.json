@@ -1,0 +1,116 @@
+{
+  "schema_version": "phase5-s4-candidate-review-packet-v1",
+  "created_at_local": "2026-06-13 10:51 CEST +0200",
+  "created_at_utc": "2026-06-13T08:51:58Z",
+  "status": "S4_CANDIDATE_REVIEW_PACKET_READY_NO_APPLY",
+  "phase": "HSE Phase 5",
+  "stage": "S4_CANDIDATE_REVIEW_PACKET",
+  "source_request": "Sunwoo rec action 1 GO — S4 candidate review packet; candidate diff/sanitized report only.",
+  "scope": {
+    "review_inputs_only": [
+      "candidate_only_report.sanitized.json",
+      "candidate.diff"
+    ],
+    "active_apply_performed": false,
+    "automatic_pr_update_performed_by_this_packet": false,
+    "merge_or_deploy_performed": false,
+    "active_runtime_mutation_performed": false
+  },
+  "review_inputs": {
+    "sanitized_report": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate_only_report.sanitized.json",
+      "sha256": "f2b0de72de787474c4d8ca229ad0b25c5554216e2fa868fadd6b9ffca171cfe9",
+      "size_bytes": 128433
+    },
+    "candidate_diff": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate.diff",
+      "sha256": "07e55738f70f8bff7328df6f106fe4bf27e9245746d8abee6bf64091364e8b75",
+      "size_bytes": 44237
+    },
+    "published_mirrors": {
+      "sanitized_report_copy": {
+        "path": "reports/phase5_s4_candidate_only_report_sanitized_20260613_104130.json",
+        "sha256": "f2b0de72de787474c4d8ca229ad0b25c5554216e2fa868fadd6b9ffca171cfe9",
+        "size_bytes": 128433,
+        "byte_identical_to_source": true
+      },
+      "candidate_diff_copy": {
+        "path": "reports/phase5_s4_candidate_diff_20260613_104130.diff",
+        "sha256": "07e55738f70f8bff7328df6f106fe4bf27e9245746d8abee6bf64091364e8b75",
+        "size_bytes": 44237,
+        "byte_identical_to_source": true
+      }
+    }
+  },
+  "candidate_metrics": {
+    "apply_ready": false,
+    "candidate_count": 63,
+    "case_count": 45,
+    "selection_accuracy": 1.0,
+    "wrong_tool_avoidance": 1.0,
+    "constraint_pass_rate": 1.0,
+    "argument_cue_coverage": 1.0,
+    "warning_count": 0,
+    "non_passing_count": 0,
+    "phase2d_gate_passed": true,
+    "phase2d_failed_checks": [],
+    "baseline_selection_accuracy": 0.6444,
+    "candidate_selection_accuracy": 1.0
+  },
+  "changed_tool_count": 35,
+  "changed_tools": [
+    "browser_back",
+    "browser_click",
+    "browser_console",
+    "browser_get_images",
+    "browser_navigate",
+    "browser_press",
+    "browser_scroll",
+    "browser_snapshot",
+    "browser_type",
+    "browser_vision",
+    "browser_cdp",
+    "clarify",
+    "execute_code",
+    "computer_use",
+    "cronjob",
+    "delegate_task",
+    "discord",
+    "discord_admin",
+    "patch",
+    "read_file",
+    "search_files",
+    "write_file",
+    "yb_send_sticker",
+    "image_generate",
+    "kanban_complete",
+    "memory",
+    "send_message",
+    "session_search",
+    "skill_manage",
+    "process",
+    "terminal",
+    "todo",
+    "text_to_speech",
+    "video_analyze",
+    "vision_analyze"
+  ],
+  "review_verdict": {
+    "candidate_ready_for_human_review": true,
+    "candidate_ready_for_active_apply": false,
+    "why_not_apply_yet": "Candidate-only artifacts require independent/human review and a separate active apply approval packet before touching active Hermes tool schemas.",
+    "minimum_review_checks": [
+      "Confirm sanitized report has private_abs_path_count=0 and sensitive_assignment_like_count=0.",
+      "Review candidate.diff for over-broad cue stuffing or harmful preference inversions.",
+      "Confirm tests remain green and apply_ready=false is preserved.",
+      "Confirm no automatic PR update, merge/deploy, or active runtime mutation occurred."
+    ]
+  },
+  "linked_s4_execution": {
+    "approval_packet": "reports/phase5_s4_candidate_only_optimizer_approval_packet_20260613_054510.json",
+    "run_report": "reports/phase5_s4_candidate_only_optimizer_run_20260613_104130.json",
+    "side_effect_ledger": "reports/phase5_s4_candidate_only_optimizer_side_effect_ledger_20260613_104130.json"
+  },
+  "publication_status": "READY_FOR_PR_PUBLICATION_WITH_REPORT_MIRRORS",
+  "recommended_next_action": "Publish S4 evidence to PR #108 if and only if path-limited publication scope remains reports-only and no active apply occurs."
+}
