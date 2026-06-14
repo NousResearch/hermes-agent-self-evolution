@@ -854,6 +854,34 @@ loop that selects bad targets or evolves against saturated suites compounds
 waste; target selection and signal generation are the prerequisites the
 original plan under-weighted.
 
+### Campaign conclusion — capable-agent artifact decoupling (hardened)
+
+The signal-first sequencing produced one decisive, multi-direction result. **On a
+capable agent (gpt-5-mini class), artifact quality/correctness is decoupled from
+behavior in BOTH directions:**
+- *Improving* an artifact doesn't help — skills (item 5), tool descriptions
+  (item 7), and turn-level sequences (item 13) are all null, including under a
+  **judge-free `test_command` verdict** (so judge saturation is not the cause).
+- *Degrading* an artifact doesn't hurt — a strong misdirecting write_file
+  description and even an **actively-false** one ("write_file merges and preserves
+  content, never deletes") each produced **0/7 caught-losses against a 0/7 A/A
+  false-alarm floor**; the agent routes from the tool name + task + its own prior
+  over the artifact text. The regression-detection rig itself works (a delivery
+  canary separates a real behavior difference, 1.00 vs 0.00) — there is simply
+  nothing to catch.
+
+So the evolution/validation pipeline is **low-value for artifact quality on
+capable agents**. Its value requires an agent whose behavior the artifact actually
+drives: a **weaker/cheaper tier** (where gskill's published headroom lived; the
+weak tier here abstains on the closed-loop path — a diagnosed, fixable delivery
+bug) or a **novel MCP tool** whose behavior the agent can't infer from its name
+(no MCP-bearing agent backend exists — a build, not a probe). The remaining items
+(6/8/9/11) presuppose a discriminating artifact-quality signal this result shows
+is absent on capable agents; pursue them only on a tier/surface where the coupling
+exists. Durable wins from the campaign: a real skill-delivery bug fixed (the
+candidate skill never reached the agent), and the decoupling thesis turned from
+suspicion into a measured, both-directions certificate.
+
 ### Wave 1 — Measurement & free wins
 
 1. **Mine the gate-decision archive for item statistics.** 336 of 350
