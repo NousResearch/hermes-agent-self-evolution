@@ -133,20 +133,24 @@ class RepairEngine:
         self.min_retain_ratio = min_retain_ratio
 
     def repair(
-        self, env: WorktreeEnv, tool_relpath: str, visible_test_relpath: str
+        self, env: WorktreeEnv, tool_relpath: str,
+        visible_tests: "str | tuple[str, ...]",
     ) -> RepairResult:
-        """Repair ``tool_relpath`` until ``visible_test_relpath`` passes.
+        """Repair ``tool_relpath`` until the visible test target passes.
 
-        The worktree must already be authoritative (caller has run
+        ``visible_tests`` is a single test path (held-out-split callers) or a
+        tuple of bug-test node-ids (the measurement campaign). The worktree must
+        already be authoritative (caller has run
         :meth:`WorktreeEnv.assert_authoritative`). Each round writes the
-        candidate, runs only the visible test, and feeds its failure (and any
+        candidate, runs only the visible target, and feeds its failure (and any
         freeze violations) back into the next proposal.
         """
+        visible = (visible_tests,) if isinstance(visible_tests, str) else tuple(visible_tests)
         original = env.read_tool(tool_relpath)
         current = original
         # Seed the first feedback with the bug's own failing output so round 1
         # has signal, mirroring the probe (blind round-1 fixing fails).
-        seed = env.run_test(visible_test_relpath)
+        seed = env.run_test(*visible)
         last_feedback = seed.output
         rounds: list[RoundRecord] = []
 
@@ -178,7 +182,7 @@ class RepairEngine:
                 continue
 
             env.write_tool(tool_relpath, candidate)
-            run = env.run_test(visible_test_relpath)
+            run = env.run_test(*visible)
             rounds.append(RoundRecord(round=rnd, proposed=True, test_passed=run.passed,
                                       output_tail=run.output))
             if run.passed:

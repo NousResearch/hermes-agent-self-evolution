@@ -257,3 +257,156 @@ def _base_source(env: WorktreeEnv, tool_relpath: str) -> str:
         f"could not read base source of {tool_relpath} from HEAD "
         f"(it exists at HEAD but git show failed: {show.stderr.strip()})"
     )
+
+
+def _baseline_diff_floor(
+    env: WorktreeEnv, tool_relpath: str, repaired: str, base_src: str,
+    floor_paths: tuple[str, ...],
+) -> tuple[list[str], dict, str]:
+    """Run the regression floor on repaired vs base source; return the failures
+    the repair INTRODUCED (not pre-existing), a guard dict, and the repaired
+    output tail. Shared by the campaign's oracle gate; the held-out gate keeps
+    its own inline copy so it stays byte-identical."""
+    repaired_floor = env.run_test(*floor_paths, extra_args=["--tb=no"], full_output=True)
+    if repaired_floor.exit_code == _PYTEST_NO_TESTS_COLLECTED:
+        return (["<no tests collected>"],
+                {"ran": list(floor_paths), "collected": 0}, repaired_floor.output[-2000:])
+    repaired_failures = _parse_pytest_failures(repaired_floor.output)
+    if base_src == "":
+        base_failures: set[str] = set()
+    else:
+        env.write_tool(tool_relpath, base_src)
+        try:
+            base_floor = env.run_test(*floor_paths, extra_args=["--tb=no"], full_output=True)
+        finally:
+            env.write_tool(tool_relpath, repaired)
+        base_failures = _parse_pytest_failures(base_floor.output)
+    new_failures = sorted(repaired_failures - base_failures)
+    guard = {
+        "ran": list(floor_paths),
+        "new_failures": new_failures,
+        "base_failure_count": len(base_failures),
+        "repaired_failure_count": len(repaired_failures),
+        "duration_seconds": round(repaired_floor.duration_seconds, 2),
+        "is_full_suite": False,
+    }
+    return new_failures, guard, repaired_floor.output[-2000:]
+
+
+def run_code_oracle_gate(
+    env: WorktreeEnv,
+    *,
+    tool_relpath: str,
+    test_relpath: str,
+    bug_tests: tuple[str, ...],
+    oracle_failures: frozenset[str],
+    base_src: str,
+    repair_result: RepairResult,
+    floor_paths: Optional[tuple[str, ...]] = None,
+    min_retain_ratio: float = DEFAULT_MIN_RETAIN_RATIO,
+    run_inputs: Optional[dict] = None,
+) -> CodeGateResult:
+    """Oracle-based correctness verdict for the measurement campaign.
+
+    Unlike :func:`run_code_gate` (held-out split — for a future novel-bug
+    product), this verifies a repair against the upstream-fix ORACLE that every
+    harvested historical bug carries. The worktree is at ``fix_sha`` (so the
+    fix-commit test file with all bug-catching tests is present) with the buggy
+    parent tool written in; ``base_src`` is that buggy parent source (the repair's
+    starting point) and ``oracle_failures`` is the set of node-ids the upstream
+    fix itself fails on the full test file (env-flaky tests that cancel out).
+
+    A repair is CORRECT iff: surface frozen + file-scope clean + it passes the
+    bug-catching tests + it introduces no failure the upstream fix does not also
+    have (matches the oracle across the full fix-commit test file). The oracle
+    match over the tool's whole test file IS the regression check for a
+    measurement run, so the broad ``tests/tools`` cross-tool floor is OFF by
+    default (it is ~minutes/run and a product-deploy concern, not a
+    correctness-of-re-derivation one); pass ``floor_paths`` to enable it.
+
+    Known limitation (honest): the oracle test-match catches a repair that breaks
+    behavior the upstream fix preserves, but NOT pure input-hardcoding of the bug
+    tests — defending against that needs a fuzzed differential vs the oracle (the
+    deferred L3). An honest repair proposer (not adversarial) makes hardcoding
+    unlikely, which is why test-match is an adequate correctness proxy here.
+    """
+    guards: dict = {}
+    decision: dict = {
+        "schema_version": GATE_SCHEMA_VERSION,
+        "artifact_type": "code",
+        "decision_signal": "oracle_match",
+        "target_tool": tool_relpath,
+        "test": test_relpath,
+        "bug_tests": list(bug_tests),
+        "oracle_failure_count": len(oracle_failures),
+        "repair": {
+            "fixed": repair_result.fixed,
+            "fixed_round": repair_result.fixed_round,
+            "rounds_used": len(repair_result.rounds),
+        },
+        "guards": guards,
+        "run_inputs": run_inputs or {},
+    }
+
+    def _reject(reason: str) -> CodeGateResult:
+        decision["decision"] = "incorrect"
+        decision["reason"] = reason
+        return CodeGateResult(deploy=False, reason=reason, decision=decision)
+
+    if not repair_result.fixed or repair_result.final_source is None:
+        return _reject("repair did not produce a fix that passes the bug tests")
+    repaired = repair_result.final_source
+
+    # surface freeze + blast radius (against the buggy parent the repair started from)
+    violations = freeze_violations(base_src, repaired, min_retain_ratio=min_retain_ratio)
+    guards["freeze_ok"] = not violations
+    guards["freeze_violations"] = violations
+    if violations:
+        return _reject("freeze/diff-shape violation: " + "; ".join(violations))
+
+    # file scope — only the target tool may change; no test file touched
+    changed = [_test_relnorm(p) for p in env.changed_files()]
+    guards["changed_files"] = changed
+    target = _test_relnorm(tool_relpath)
+    offenders = [p for p in changed if p != target]
+    test_touched = [p for p in changed if _is_test_path(p)]
+    guards["file_scope_ok"] = not offenders and not test_touched
+    if test_touched:
+        return _reject(f"a test file was modified: {test_touched}")
+    if offenders:
+        return _reject(f"files other than the target tool changed: {offenders}")
+
+    # the bug is actually fixed
+    bug_run = env.run_test(*bug_tests, extra_args=["--tb=no"], full_output=True)
+    bug_fail = _parse_pytest_failures(bug_run.output)
+    guards["bug_tests_passed"] = not bug_fail
+    if bug_fail:
+        return _reject(f"repair does not pass the bug tests: {sorted(bug_fail)[:6]}")
+
+    # oracle match — the repair introduces no failure the upstream fix doesn't
+    # also have, across the FULL fix-commit test file (catches a fix that passes
+    # the bug tests but breaks other behavior the upstream fix preserves)
+    full = env.run_test(test_relpath, extra_args=["--tb=no"], full_output=True)
+    new_vs_oracle = sorted(_parse_pytest_failures(full.output) - set(oracle_failures))
+    guards["oracle_match"] = {"new_vs_oracle": new_vs_oracle,
+                              "oracle_failure_count": len(oracle_failures)}
+    if new_vs_oracle:
+        return _reject(f"repair fails {len(new_vs_oracle)} test(s) the upstream fix "
+                       f"passes: {new_vs_oracle[:6]}")
+
+    # optional broad cross-tool regression floor (off by default — oracle-match
+    # above is the regression check for a measurement run)
+    if floor_paths:
+        new_failures, floor_guard, tail = _baseline_diff_floor(
+            env, tool_relpath, repaired, base_src, floor_paths)
+        guards["floor"] = floor_guard
+        if new_failures:
+            decision["floor_output_tail"] = tail
+            return _reject(f"regression floor introduced {len(new_failures)} new "
+                           f"failure(s): {new_failures[:10]}")
+    else:
+        guards["floor"] = None
+
+    decision["decision"] = "correct"
+    decision["reason"] = "bug fixed, matches upstream-fix oracle, surface frozen, floor green"
+    return CodeGateResult(deploy=True, reason=decision["reason"], decision=decision)

@@ -1175,8 +1175,45 @@ suspicion into a measured, both-directions certificate.
     repair of real tool bugs, tests as a hard floor + the noise-aware deploy gate,
     self-hosting on the agent's own tools — is the campaign's first viable
     improvement-finding direction, distinct from the capable-agent artifact-quality
-    decoupling.** Next: a larger real-bug probe to tighten the band estimate before
-    building the loop.
+    decoupling.**
+
+    **Loop shipped, then de-risked, then reframed to a measurement campaign.** The
+    iterative test-feedback repair loop shipped (`evolution/code/`: `evolve_code`,
+    isolated git-worktree+venv, a gate with surface-freeze, file-scope, a held-out
+    test split, and a baseline-diff regression floor). Three free de-risking checks
+    then corrected the estimate and the next step:
+    - The pooled "0.60 per-attempt" was **pseudo-replicated** (24/40 over 5 seeds × 8
+      organisms, ICC 0.57, design-effect 3.28). **The honest unit is the organism:
+      band 0.38 [Wilson 0.14, 0.69], deploy-reachable 0.75 [0.41, 0.93]** — one
+      organism above the 0.10 kill line. Demote the 0.60 everywhere.
+    - The `tests/tools` floor is **deterministic** (no flaky node-ids over 5 runs).
+    - The held-out split's anti-gaming power is **real but limited** (only ~3/8 real
+      bugs have input-diverse tests), and there is **no live bug feed** (the repo
+      keeps its tests green). Since every harvested historical bug carries its
+      upstream fix as a ground-truth **oracle**, the next build is a **measurement
+      campaign** that verifies repairs by behavioral match to the oracle (sidestepping
+      the held-out problem) and confirms-or-retracts the GREEN at staged N=8→20→50.
+
+    **Measurement campaign — built, N=8 pilot GREEN.** `evolution/code/{harvest,gate
+    (run_code_oracle_gate),campaign,campaign_report}.py`. A free oracle-validity recon
+    cleared the supply risk (30 valid organisms in 44 checked, 68%, across 54 candidate
+    tools → N=50 reachable). Reporting is organism-level (Wilson + cluster bootstrap +
+    ICC). The campaign stratifies across tools for organism independence and
+    futility-stops if deploy-reachable Wilson-lower < 0.10. **N=8 pilot result:
+    deploy-reachable 5/8 = 0.625, Wilson [0.31, 0.86], cluster-bootstrap P(<0.10
+    kill)=0 → GREEN** — on 8 diverse, non-trivial tools (approval, browser_camofox,
+    checkpoint_manager, cronjob_tools, discord_tool, env_passthrough, file_operations,
+    file_tools), distinct from and harder than the Tier-A self-contained set, so the
+    gradient generalizes. ICC 0.38 (effective-N 13.6); every bug was correctly
+    re-derived on ≥1 seed. A `max_tokens=8000` truncation artifact was caught and fixed
+    (whole-file rewrites of larger tools silently truncated → false failures; raised to
+    32000 + a too-large exclusion). Two known gaps: cost tracking reads $0 for this
+    provider model (no litellm pricing → the $ ceiling has no teeth; runs are bounded by
+    organism count); and the oracle test-match doesn't catch pure input-hardcoding
+    (fuzzed differential deferred). N=20/50 each gate on a fresh go-ahead. The novel-bug-repair **product** (held-out split +
+    a live feed + solving held-out independence) is **deferred**; an oracle-gate honest
+    limitation — test-match catches broken covered behavior but not pure
+    input-hardcoding — is noted for the fuzzed-differential follow-up.
 
 13. **Turn-level tool-sequence evaluation** (the salvage from item 4's
     deferral). Item 4's single-call miner died because Claude agentic turns are

@@ -78,7 +78,9 @@ def _resolve_proposer(proposer_model: str | None):
     import dspy
 
     rlm = resolve_default_lm(role="optimizer", explicit_model=proposer_model)
-    lm = dspy.LM(rlm.model, **rlm.lm_kwargs, temperature=0.7, max_tokens=8000)
+    # 32000 so a whole-file rewrite + reasoning doesn't truncate on larger tools
+    # (an 8000 cap silently truncated → unparseable → false "couldn't repair").
+    lm = dspy.LM(rlm.model, **rlm.lm_kwargs, temperature=0.7, max_tokens=32000)
     console.print(f"  [dim]proposer model: {rlm.model}[/dim]")
     return build_dspy_proposer(lm)
 
