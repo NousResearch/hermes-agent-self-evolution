@@ -1155,10 +1155,28 @@ suspicion into a measured, both-directions certificate.
     Darwinian-evolver machinery is overkill** for single-site bugs — the right
     shape is a simple one-shot test-feedback repair loop under the existing
     deterministic-floor + noise-aware gate (the commodity SWE-agent pattern; the
-    project's distinctive asset is the gate, not the evolver). **OPEN (probing
-    next):** whether genuinely-hard multi-step **real** bugs (Tier-A git-history,
-    via `mini_swe_runner`) populate the band more — the honest caveat before fully
-    ruling out the evolutionary gradient.
+    project's distinctive asset is the gate, not the evolver).
+
+    **Tier-A update — the single-site KILL was a difficulty artifact; real bugs
+    show a real gradient (GREEN).** Re-ran the proposer-gradient probe on **8 real
+    git-history bugs** (parent-commit tool source + the fix commit's test, on the
+    self-contained tools) plus 14 harder multi-site mutations. On the **real**
+    stratum: **0/8 one-shot (none trivial), 6/8 climb to a fix with iterative test
+    feedback, 2/8 cliff** → band fraction **0.38, Wilson [0.14, 0.69]** (lower
+    bound 0.14 > 0.10) → **GREEN**. So on authentic bugs the proposer never
+    one-shots and iterative test-feedback fixing has a genuine gradient — the
+    multi-round loop IS justified, **reversing the single-site interim read**
+    (single-site mechanical mutations, and trivial-module multi-site like
+    `ansi_strip`, are one-shot-trivial — too easy to populate the band; difficulty
+    tracks code complexity, not mutation count). A real bug backlog exists (8 from
+    5 self-contained tools; far more across the repo). Caveats: N=8 (wide CI); the
+    multi-site supplement was contaminated by `ansi_strip`'s simplicity, so the
+    real stratum is authoritative. **Net: code evolution — iterative test-feedback
+    repair of real tool bugs, tests as a hard floor + the noise-aware deploy gate,
+    self-hosting on the agent's own tools — is the campaign's first viable
+    improvement-finding direction, distinct from the capable-agent artifact-quality
+    decoupling.** Next: a larger real-bug probe to tighten the band estimate before
+    building the loop.
 
 13. **Turn-level tool-sequence evaluation** (the salvage from item 4's
     deferral). Item 4's single-call miner died because Claude agentic turns are
