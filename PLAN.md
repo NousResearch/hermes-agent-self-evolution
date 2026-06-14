@@ -978,6 +978,33 @@ original plan under-weighted.
    discriminative against the live skill → the synthesis approach is shelved
    for that repo class.*
 
+   **Status — a real bug found + fixed; the signal probe is a NULL.**
+   *(a) Bug fixed (the durable win):* the skill closed loop never delivered the
+   candidate `SKILL.md` to the agent for suites whose tasks omit `skills_src`
+   (systematic_debugging) — the validator only threaded `task.skills_src`, so the
+   `SkillFileInstaller`'s staged candidate never reached the sandbox. The prior
+   "advanced suite saturates 5/5=5/5" result was therefore a **no-op** (no skill
+   delivered), not evidence. The validator now falls back to the installer's
+   staged skill; a delivery canary confirmed it (sentinel skill 1.00 vs weak skill
+   0.00). *(b) Signal probe → NULL.* With the skill genuinely delivered, a gated
+   difficulty probe on a capable agent (gpt-5-mini): **Gate A** — five
+   genuinely-tricky hand-authored planted bugs (merge-touching-intervals,
+   wrong-end LRU eviction, memo-missing-key, sliding-window off-by-one,
+   float-equality) all solved **1.00**; **Gate C** — even an *actively-misdirecting*
+   skill ("don't read the code, try random edits") did **not** degrade the agent:
+   **1.00 vs 1.00 on every bug, zero discrimination** (Fisher p=1.0). Rig
+   sensitivity was confirmed by the canary, so the null is trustworthy. A capable
+   agent root-cause-debugs planted faults regardless of skill guidance — **null #1
+   holds for skills via a judge-free verdict**, the third artifact class (after
+   tool descriptions and turn-level sequences) where a capable agent saturates the
+   quality signal. The synthesis engine (b) is **not justified**: the
+   discriminative band is empty for a capable agent, so generating more bugs can't
+   help. The Claude `skills_src` adapter (a) is likewise moot for *signal* (though
+   it remains a real backend gap). Forward: the untested surface is **MCP tool
+   descriptions on an MCP-bearing agent** (the description is the sole routing
+   signal there); or a weaker validator tier (but the weak tier abstains on the
+   closed-loop path); or accept the pipeline's regression-catching nature.
+
 6. **Consume the discrimination labels: one-shot suite hardening.** The
    per-task labeler ships labels; nothing acts on them. LLM-mutate
    `too_easy`-labeled tasks while preserving the verifiable
