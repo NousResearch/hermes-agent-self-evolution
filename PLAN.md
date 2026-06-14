@@ -1199,18 +1199,20 @@ suspicion into a measured, both-directions certificate.
     cleared the supply risk (30 valid organisms in 44 checked, 68%, across 54 candidate
     tools → N=50 reachable). Reporting is organism-level (Wilson + cluster bootstrap +
     ICC). The campaign stratifies across tools for organism independence and
-    futility-stops if deploy-reachable Wilson-lower < 0.10. **N=8 pilot result:
-    deploy-reachable 5/8 = 0.625, Wilson [0.31, 0.86], cluster-bootstrap P(<0.10
-    kill)=0 → GREEN** — on 8 diverse, non-trivial tools (approval, browser_camofox,
-    checkpoint_manager, cronjob_tools, discord_tool, env_passthrough, file_operations,
-    file_tools), distinct from and harder than the Tier-A self-contained set, so the
-    gradient generalizes. ICC 0.38 (effective-N 13.6); every bug was correctly
-    re-derived on ≥1 seed. A `max_tokens=8000` truncation artifact was caught and fixed
-    (whole-file rewrites of larger tools silently truncated → false failures; raised to
-    32000 + a too-large exclusion). Two known gaps: cost tracking reads $0 for this
-    provider model (no litellm pricing → the $ ceiling has no teeth; runs are bounded by
-    organism count); and the oracle test-match doesn't catch pure input-hardcoding
-    (fuzzed differential deferred). N=20/50 each gate on a fresh go-ahead. The novel-bug-repair **product** (held-out split +
+    futility-stops if deploy-reachable Wilson-lower < 0.10. **Staged result (GREEN,
+    tightening):** N=8 pilot deploy-reachable 5/8 = 0.625 [0.31, 0.86]; **N=20
+    deploy-reachable 12/20 = 0.600, Wilson [0.39, 0.78], cluster-bootstrap P(<0.10
+    kill)=0 → GREEN** (CI materially narrowed from N=8; ICC 0.33, effective-N 36). All
+    on diverse, non-trivial tools (approval, browser_camofox, checkpoint_manager,
+    cronjob_tools, discord_tool, env_passthrough, file_operations, file_tools, …),
+    distinct from and harder than the Tier-A self-contained set — so the gradient
+    generalizes. The loop re-derives a correct (oracle-matching) fix for ~60% of real
+    bugs on a majority of seeds. A `max_tokens=8000` truncation artifact was caught and
+    fixed (whole-file rewrites of larger tools silently truncated → false failures;
+    raised to 32000 + a too-large exclusion). Cost tracking was a no-op until the
+    litellm cost callback was wired into the campaign (now real: N=20 cost ≈ $3.10, the
+    --max-cost-usd ceiling enforced). N=50 is available to tighten further but the GREEN
+    is robust at N=20; gates on a fresh go-ahead. The novel-bug-repair **product** (held-out split +
     a live feed + solving held-out independence) is **deferred**; an oracle-gate honest
     limitation — test-match catches broken covered behavior but not pure
     input-hardcoding — is noted for the fuzzed-differential follow-up.

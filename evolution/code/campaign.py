@@ -149,11 +149,21 @@ def run_campaign(
     cost_summary = dict
     if organism_runner is None:
         import dspy  # noqa: PLC0415
-        from evolution.core.lm_timing_callback import LMTimingCallback  # noqa: PLC0415
+        from evolution.core.lm_timing_callback import (  # noqa: PLC0415
+            LMTimingCallback,
+            register_litellm_cost_callback,
+            register_litellm_failure_callback,
+        )
 
         rlm = resolve_default_lm(role="optimizer", explicit_model=proposer_model)
         lm = dspy.LM(rlm.model, **rlm.lm_kwargs, temperature=0.7, max_tokens=PROPOSER_MAX_TOKENS)
         dspy.configure(callbacks=[LMTimingCallback()])
+        # Record per-call usage/cost into COST_LEDGER and surface auth aborts —
+        # without these the dspy timing callback fires but no cost accrues, so the
+        # --max-cost-usd ceiling has no teeth (the pilot's $0 was this omission,
+        # not absent pricing; litellm does price this model).
+        register_litellm_cost_callback()
+        register_litellm_failure_callback()
         COST_LEDGER.reset()
         if max_cost_usd is not None:
             COST_LEDGER.set_ceiling(max_cost_usd)
