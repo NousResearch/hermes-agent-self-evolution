@@ -226,7 +226,14 @@ def create_pr(
     draft: bool,
     allow_dirty: bool,
     console: Console,
+    labels: Optional[list[str]] = None,
+    body_override: Optional[str] = None,
 ) -> PRResult:
+    """Branch from ``origin/<base>``, copy the evolved artifact in, commit, push,
+    and open a PR. ``body_override`` replaces the default GEPA-shaped body (used
+    by code evolution to carry its own anti-gaming evidence); ``labels`` are
+    passed through to ``gh pr create`` (e.g. a ``human-review`` label).
+    """
     if source_repo_root is None:
         return PRResult(
             status="skipped",
@@ -288,7 +295,7 @@ def create_pr(
 
     # 7. gh pr create
     title = _commit_message(artifact_name, metrics, signal, gate_decision)
-    body = _format_pr_body(gate_decision, metrics)
+    body = body_override if body_override is not None else _format_pr_body(gate_decision, metrics)
     gh_args = [
         "gh", "pr", "create",
         "--base", base_branch,
@@ -298,6 +305,8 @@ def create_pr(
     ]
     if draft:
         gh_args.append("--draft")
+    for label in labels or []:
+        gh_args += ["--label", label]
     try:
         gh_res = subprocess.run(
             gh_args,
