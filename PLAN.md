@@ -1134,6 +1134,32 @@ suspicion into a measured, both-directions certificate.
     channel's A/A CoV is tight enough to detect a plausible code improvement
     → the signal is too noisy and the pilot does not proceed.*
 
+    **Status — multi-round evolver NOT justified on single-site bugs; one-shot
+    test-feedback repair works; Tier-A (real bugs) pending.** The item-12 kill as
+    originally specified was mis-specified (A/A CoV on agent-mediated
+    step-count/cost/duration — the channels item 7 found noisy). Reframed to a
+    **proposer-gradient probe**: an LLM proposer fixes broken code under a
+    deterministic test; measure whether iterative test-feedback fixing has a
+    reachable gradient vs one-shot/flat. On **23 non-circular organisms**
+    (mechanical single-site mutations — operator-flips / off-by-one /
+    dropped-returns — of real Hermes tool functions with self-contained tests):
+    **19/23 flat (one-shot-trivial), 3/23 band, 1 near-cliff** → band fraction
+    0.13, Wilson [0.05, 0.32], lower bound 0.05 ≤ 0.10 → **KILL** on the
+    reachable-gradient threshold. A no-feedback ablation decomposed it: the
+    deterministic test's **failure output is the essential signal and it enables
+    ONE-SHOT repair, not multi-round evolution** — feedback survival climbs only
+    0.83→0.94 over five rounds while the blind ablation is dead-flat at 0.75;
+    within-organism, a subtle off-by-one goes 0/5 blind → 5/5 with the test output
+    (one-shot). So a capable proposer + deterministic test feedback = effective
+    one-shot code repair (the clean-fitness premise holds), but the **multi-round
+    Darwinian-evolver machinery is overkill** for single-site bugs — the right
+    shape is a simple one-shot test-feedback repair loop under the existing
+    deterministic-floor + noise-aware gate (the commodity SWE-agent pattern; the
+    project's distinctive asset is the gate, not the evolver). **OPEN (probing
+    next):** whether genuinely-hard multi-step **real** bugs (Tier-A git-history,
+    via `mini_swe_runner`) populate the band more — the honest caveat before fully
+    ruling out the evolutionary gradient.
+
 13. **Turn-level tool-sequence evaluation** (the salvage from item 4's
     deferral). Item 4's single-call miner died because Claude agentic turns are
     multi-step: judging one call out of a ≈14-call turn with no context flips
