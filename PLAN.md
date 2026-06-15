@@ -1123,6 +1123,27 @@ suspicion into a measured, both-directions certificate.
     known-headroom class on ground truth → the ranking signal is broken,
     shelve until fixed.*
 
+    **Status — SHIPPED, reframed to a CODE-target sentinel + validated.** Reframed
+    by the post-validation panel: rather than enrolling the decoupled artifact
+    surfaces (skills/CLAUDE.md — null on capable agents), the sentinel enrolls the
+    one surface with a proven gradient — **code**, with the validated repair loop as
+    its consumer. `evolution/monitor/` now scans a target repo's recent git stream
+    for repair candidates, classifies them (`dependency_regression` first — its
+    pre-bump behavior is a correct reference — then `bug_fix`), ranks them, and emits
+    a propose-only `triage_queue.json` + report. `--attempt-top K` runs the validated
+    worktree→repair→oracle-gate flow on the top K and annotates each row; never opens
+    a PR. A free recon first overturned the "no live feed" premise (~674 tests/tools
+    commits/quarter; ~6 dependency-regressions/quarter). A gated `--attempt-top` demo
+    validated the path end-to-end on real Hermes material: skips correctly classified
+    (`not_valid`/`too_large`/`source_missing`, free), a real deploy-reachable success
+    (`tool_backend_helpers`, a dep-regression, 3/3 seeds), cost tracked ($0.895,
+    ceiling enforced). **Finding:** dep-regressions are a mix — some reproduce and
+    repair in the current worktree, others come back `not_valid` because they need the
+    *historical* dependency environment (the cross-version-dep-env build — the next
+    frontier for the dep-regression case). The general novel-bug product (held-out
+    split, no oracle) stays deferred: metamorphic verification was killed (0/8 — real
+    bugs are input-specific, don't violate generic invariants).
+
 12. **Code-evolution pilot, gated on a measured signal** (`evolution/code/`,
     empty stub). Before any Darwinian loop: an A/A coefficient-of-variation
     probe on per-task step-count / cost / duration channels for tool-code

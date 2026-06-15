@@ -91,16 +91,20 @@ def harvest_candidates(
     targets: list[tuple[str, str]] | None = None,
     *,
     max_commits_per_tool: int = 40,
+    since_days: int | None = None,
 ) -> list[Candidate]:
     """Bug-fix-shaped commits: those touching both the tool and its test.
 
     Cheap (git only). Each candidate's validity is established later in a worktree.
+    ``since_days`` restricts to commits within that recency window (the monitor
+    sentinel uses it to scan the recent stream rather than all history).
     """
     targets = targets if targets is not None else discover_targets(repo)
+    since_args = ["--since", f"{since_days} days ago"] if since_days else []
     candidates: list[Candidate] = []
     for tool_path, test_path in targets:
         log = _git(repo, "log", "--format=%H %P", "-n", str(max_commits_per_tool),
-                   "--no-merges", "--", test_path)
+                   *since_args, "--no-merges", "--", test_path)
         for line in log.stdout.splitlines():
             parts = line.split()
             if len(parts) < 2:
