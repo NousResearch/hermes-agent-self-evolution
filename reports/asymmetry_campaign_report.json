@@ -1,0 +1,51 @@
+{
+  "n_organisms": 20,
+  "deploy_reachable": {
+    "k": 12,
+    "n": 20,
+    "fraction": 0.6,
+    "wilson": [
+      0.38657794231520604,
+      0.7811960325858073
+    ],
+    "cluster_bootstrap": {
+      "mean": 0.60187,
+      "ci_low": 0.4,
+      "ci_high": 0.8,
+      "p_below_kill": 0.0
+    }
+  },
+  "icc": 0.32588699080157685,
+  "design_effect": 1.6517739816031538,
+  "effective_n": 36.32458233890215,
+  "pooled_per_seed_rate_FOR_CONTRAST": {
+    "k": 41,
+    "n": 60,
+    "rate": 0.6833333333333333,
+    "wilson_DISHONEST": [
+      0.5576599505698346,
+      0.7869429415882567
+    ]
+  },
+  "kill_line": 0.1,
+  "verdict": "GREEN",
+  "aborted_on_cost": false,
+  "cost_summary": {
+    "total_usd": 3.100481,
+    "by_model": {
+      "gpt-5.4-mini": {
+        "tokens_in_uncached": 489104,
+        "tokens_in_cached": 403712,
+        "tokens_out": 600750,
+        "reasoning_tokens": 0,
+        "cost_usd": 3.100481,
+        "calls": 106,
+        "cache_hit_rate": 0.4521782763749754
+      }
+    },
+    "agent_cost_usd": 0.0,
+    "n_agent_runs": 0,
+    "n_cost_uncaptured": 0,
+    "total_cost_usd": 3.100481
+  }
+}

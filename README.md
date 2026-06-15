@@ -359,11 +359,42 @@ Cost: each task is one `hermes -z` run (~$0.05–$0.50). The bundled `patch.json
 
 | Phase | Target | Engine | Status |
 |-------|--------|--------|--------|
-| **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ [Validated](reports/phase1_validation_report.pdf) |
-| **Phase 2** | Tool descriptions + dual-signal deploy gate | DSPy + GEPA | ✅ [Validated](reports/phase2_validation_report.pdf) |
-| **Phase 3** | System prompt sections (Hermes + Claude Code) | DSPy + GEPA | ✅ [Validated](reports/phase3_validation_report.pdf) |
-| **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
-| **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
+| **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ [Validated](reports/phase1_validation_report.pdf) † |
+| **Phase 2** | Tool descriptions + dual-signal deploy gate | DSPy + GEPA | ✅ [Validated](reports/phase2_validation_report.pdf) † |
+| **Phase 3** | System prompt sections (Hermes + Claude Code) | DSPy + GEPA | ✅ [Validated](reports/phase3_validation_report.pdf) † |
+| **Phase 4** | Tool implementation code | Iterative test-feedback repair | ✅ [Validated](reports/asymmetry_findings.md) (code-evolution campaign) |
+| **Phase 5** | Continuous improvement loop | Propose-only triage sentinel | ✅ [Sentinel shipped](docs/operating_the_sentinel.md) |
+
+> **†** Phases 1–3 are validated as a working *mechanism* (the pipeline runs end-to-end and the gate catches regressions). The campaign below found that on a *capable* agent, evolving these artifacts does not measurably change behavior for tools whose function it can infer from their name — so the value of artifact-quality evolution is in regression-catching and weaker-tier / novel-contract surfaces, not improvement-finding on capable agents. See [Findings](#findings).
+
+## Findings
+
+The campaign behind those phases produced one consolidated, *spend-allocation* result —
+an **asymmetry**:
+
+> Self-evolution got deploy-grade traction under a **conjunction** — an **executable
+> oracle**, real headroom, and code repair from failing-test feedback:
+> **deploy-reachable 0.60 [Wilson 0.39–0.78] on N=20 real bugs**, clearing a
+> pre-registered *futility floor* (0.10). A leakage check shows the test's expected
+> values are load-bearing (withhold them and 11/12 successes fall to 3/12), so this is
+> **test-feedback repair, not autonomous re-derivation** — though a fuzzed differential
+> found the fixes it could meaningfully check (4 of them) all *generalize* to fresh
+> inputs (0 overfit). Where the signal is instead
+> an LLM judge or a capable agent's behavior, we measured **no detectable effect — but
+> at a power that resolves only large couplings** (n=7 per arm rules out only effects
+> above ~50%), on one capable-agent class, for tools whose behavior it can infer from
+> their name. That bounds the effect; it is not proof of inertness, and it is not a
+> one-axis law.
+
+Traction tracked **how concrete and mechanical the verdict's signal is** (the test's
+expected values are the gradient — exactly what the behavioral arm lacks) — though
+oracle-presence is confounded with headroom and task type, so the clean axis is
+suggested, not isolated. The dependency-regression *supply* of 0 is a real boundary;
+the metamorphic (0/8) and held-out (3/8) pilots are underpowered, not boundaries. Full
+result, honest CIs, validity threats, the leakage check, the fuzzed differential, and a
+provenance table:
+**[reports/asymmetry_findings.md](reports/asymmetry_findings.md)**
+([PDF](reports/asymmetry_report.pdf)).
 
 ## Engines
 
@@ -380,6 +411,26 @@ Every evolved variant must pass:
 3. **Caching compatibility** — No mid-conversation changes
 4. **Semantic preservation** — Must not drift from original purpose
 5. **PR review** — All changes go through human review, never direct commit
+
+## Operating the sentinel
+
+The code-evolution loop has a **propose-only** front-end: a triage sentinel that
+scans a target repo's recent git stream for bugs the validated repair loop could
+fix, ranks them, and writes a triage queue. It never evolves code or opens a PR — a
+human reads the queue and decides what to attempt.
+
+```bash
+# Scan ($0, pure git, no LLM) — safe to schedule
+python -m evolution.monitor --repo /path/to/target-repo --since-days 90
+
+# Attempt the top candidates (the only step that spends; cost-capped, human-gated)
+python -m evolution.monitor --repo /path/to/target-repo --attempt-top 3 --max-cost-usd 5.0
+```
+
+The scan writes `triage_queue.json` + `triage_report.md`; `--attempt-top` reuses the
+validated repair loop and annotates each row with the oracle-gate verdict, still
+without opening a PR. See **[docs/operating_the_sentinel.md](docs/operating_the_sentinel.md)**
+for reading the queue, the verdict taxonomy, and an opt-in scheduled scan.
 
 ## Full Plan
 

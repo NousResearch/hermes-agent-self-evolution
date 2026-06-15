@@ -49,6 +49,13 @@ def main(repo_root, since_days, max_per_tool, top, attempt_top, max_cost_usd,
         output_dir = Path("output") / "monitor" / ts
     output_dir = Path(output_dir)
 
+    if attempt_top and max_cost_usd is None:
+        # --attempt-top is the only step that spends; refuse to run it uncapped so
+        # an omitted ceiling can't turn a triage scan into unbounded LLM cost.
+        raise click.UsageError(
+            "--attempt-top spends on the repair loop; pass --max-cost-usd <cap> "
+            "to bound it (the scan itself is free and needs no cap).")
+
     console.print(f"[bold]monitor[/bold] — scanning [cyan]{repo_root}[/cyan] "
                   f"(last {since_days}d)…")
     candidates = scan(repo_root, since_days=since_days, max_per_tool=max_per_tool)

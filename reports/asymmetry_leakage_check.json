@@ -1,0 +1,133 @@
+{
+  "results": [
+    {
+      "tool": "tools/browser_camofox.py",
+      "fix": "fd5df5fe8e",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 0,
+      "armA_dr": true,
+      "armB_dr": false
+    },
+    {
+      "tool": "tools/checkpoint_manager.py",
+      "fix": "2245879af0",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 3,
+      "armA_dr": true,
+      "armB_dr": true
+    },
+    {
+      "tool": "tools/discord_tool.py",
+      "fix": "8b32a9d0f1",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 3,
+      "armA_dr": true,
+      "armB_dr": true
+    },
+    {
+      "tool": "tools/env_passthrough.py",
+      "fix": "ba4357d13b",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 0,
+      "armA_dr": true,
+      "armB_dr": false
+    },
+    {
+      "tool": "tools/file_tools.py",
+      "fix": "5faea3f618",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 1,
+      "armA_dr": true,
+      "armB_dr": false
+    },
+    {
+      "tool": "tools/kanban_tools.py",
+      "fix": "31fe229039",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 0,
+      "armA_dr": true,
+      "armB_dr": false
+    },
+    {
+      "tool": "tools/mixture_of_agents_tool.py",
+      "fix": "707f3ff41f",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 0,
+      "armA_dr": true,
+      "armB_dr": false
+    },
+    {
+      "tool": "tools/patch_parser.py",
+      "fix": "5e743559e0",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 0,
+      "armA_dr": true,
+      "armB_dr": false
+    },
+    {
+      "tool": "tools/registry.py",
+      "fix": "4b2a1a4337",
+      "orig_correct": 2,
+      "armA_correct": 0,
+      "armB_correct": 0,
+      "armA_dr": false,
+      "armB_dr": false
+    },
+    {
+      "tool": "tools/schema_sanitizer.py",
+      "fix": "aae1615977",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 0,
+      "armA_dr": true,
+      "armB_dr": false
+    },
+    {
+      "tool": "tools/send_message_tool.py",
+      "fix": "41d2c758c3",
+      "orig_correct": 2,
+      "armA_correct": 2,
+      "armB_correct": 3,
+      "armA_dr": true,
+      "armB_dr": true
+    },
+    {
+      "tool": "tools/skill_manager_tool.py",
+      "fix": "b10e38e392",
+      "orig_correct": 3,
+      "armA_correct": 3,
+      "armB_correct": 0,
+      "armA_dr": true,
+      "armB_dr": false
+    }
+  ],
+  "armA_dr": 11,
+  "armB_dr": 3,
+  "n": 12,
+  "cost": {
+    "total_usd": 6.173377,
+    "by_model": {
+      "gpt-5.4-mini": {
+        "tokens_in_uncached": 758558,
+        "tokens_in_cached": 789248,
+        "tokens_out": 1232281,
+        "reasoning_tokens": 0,
+        "cost_usd": 6.173377,
+        "calls": 203,
+        "cache_hit_rate": 0.5099140331540257
+      }
+    },
+    "agent_cost_usd": 0.0,
+    "n_agent_runs": 0,
+    "n_cost_uncaptured": 0,
+    "total_cost_usd": 6.173377
+  }
+}

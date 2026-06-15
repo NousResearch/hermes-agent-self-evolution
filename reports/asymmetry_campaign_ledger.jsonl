@@ -1,0 +1,33 @@
+{"fix_sha": "934fbe3c06174d5b71b02c48c9f099e83c3f1e8e", "tool": "tools/ansi_strip.py", "status": "source_missing"}
+{"status": "organism", "tool": "tools/approval.py", "fix_sha": "7f1b2b4569532d63a7f50e172963da0d4f3082f7", "seeds": [true, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "tools/browser_camofox.py", "fix_sha": "fd5df5fe8e7c6d9b70a707ea14f95ffc40fdcff6", "seeds": [true, true, true], "deploy_reachable": true}
+{"fix_sha": "70744add158f4067a62f57e99bc16a87ced94037", "tool": "tools/browser_camofox_state.py", "status": "source_missing"}
+{"fix_sha": "ce410521b3d21d71f28e0dd041df872ffbd8344f", "tool": "tools/browser_cdp_tool.py", "status": "source_missing"}
+{"fix_sha": "d4b26df8974bca7114fa4fbff83e4600c31230f9", "tool": "tools/browser_supervisor.py", "status": "not_valid"}
+{"status": "organism", "tool": "tools/checkpoint_manager.py", "fix_sha": "2245879af0dcc48f93fa8d516b8748d65ac67c75", "seeds": [true, true, true], "deploy_reachable": true}
+{"fix_sha": "29d7c244c5d55230e838c049afb13d307168679c", "tool": "tools/clarify_gateway.py", "status": "source_missing"}
+{"fix_sha": "96c060018aecf42bd9c28467cd8ed2fb642b50ed", "tool": "tools/credential_files.py", "status": "not_valid"}
+{"status": "organism", "tool": "tools/cronjob_tools.py", "fix_sha": "ccd899318e2290ea9830e7a6f40fabe51a4c2a41", "seeds": [false, false, true], "deploy_reachable": false}
+{"status": "organism", "tool": "tools/discord_tool.py", "fix_sha": "8b32a9d0f1705a126d838e2ecac173de7960b87a", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "tools/env_passthrough.py", "fix_sha": "ba4357d13b1f1ae29ebc202ffc557d32e99a04ce", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "tools/file_operations.py", "fix_sha": "64ad7dec0d02256a0ef8330d98ebe5949b517e5e", "seeds": [false, false, true], "deploy_reachable": false}
+{"status": "organism", "tool": "tools/file_tools.py", "fix_sha": "5faea3f618fc54c4231fc62b02375226a6ccca96", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "tools/fuzzy_match.py", "fix_sha": "6bd0be30bee215ff5dab20dcebfb9481050bf96d", "seeds": [true, false, false], "deploy_reachable": false}
+{"fix_sha": "8dfee98d0627046e60d52f4f8256134a81442fad", "tool": "tools/homeassistant_tool.py", "status": "not_valid"}
+{"status": "organism", "tool": "tools/kanban_tools.py", "fix_sha": "31fe22903931c0e0604267db0e6cb7aefc0a6ca8", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "tools/lazy_deps.py", "fix_sha": "72b5dd865865f2d2c9f5b492bcac9dcdaf045d34", "seeds": [false, false, true], "deploy_reachable": false}
+{"fix_sha": "1cbb1b99cc89a6dfd5a93a2a9362839afdbde56d", "tool": "tools/managed_tool_gateway.py", "status": "not_valid"}
+{"status": "organism", "tool": "tools/mcp_oauth.py", "fix_sha": "8191f663dd00d5f383ce411b925748ab238d7477", "seeds": [true, false, false], "deploy_reachable": false}
+{"fix_sha": "70768665a42167b81deb2d6915a8169b53337c09", "tool": "tools/mcp_oauth_manager.py", "status": "source_missing"}
+{"fix_sha": "5acaeba2bb0ed14f703f3bdd4cf185cc5d97303d", "tool": "tools/mcp_tool.py", "status": "too_large"}
+{"status": "organism", "tool": "tools/memory_tool.py", "fix_sha": "0dee92df22bdc0cfbcad90ca954aa14916f018de", "seeds": [false, false, true], "deploy_reachable": false}
+{"fix_sha": "a152c706b7bbde3efc921e86f302c75fdaef99a2", "tool": "tools/microsoft_graph_auth.py", "status": "source_missing"}
+{"fix_sha": "45d860d424ffbfd143c66ce0ce266c321cd89006", "tool": "tools/microsoft_graph_client.py", "status": "not_valid"}
+{"status": "organism", "tool": "tools/mixture_of_agents_tool.py", "fix_sha": "707f3ff41fff9ae04dce1882bdaa43452150094a", "seeds": [true, true, true], "deploy_reachable": true}
+{"fix_sha": "4494fba1404360fe50a59fa2b549411d3ccf9d41", "tool": "tools/osv_check.py", "status": "source_missing"}
+{"status": "organism", "tool": "tools/patch_parser.py", "fix_sha": "5e743559e0157df42e0f640cd06d736e898370d0", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "tools/process_registry.py", "fix_sha": "7ce6b504a269ac3f9aed5b406b7a18c432e2fdb5", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "tools/registry.py", "fix_sha": "4b2a1a4337a0409d13146596a219b480e216471a", "seeds": [true, true, false], "deploy_reachable": true}
+{"status": "organism", "tool": "tools/schema_sanitizer.py", "fix_sha": "aae1615977b9a4aeda6f4c16ee14ce5615f3dbf4", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "tools/send_message_tool.py", "fix_sha": "41d2c758c39a20c1213b65253a3459c1f96759a3", "seeds": [false, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "tools/skill_manager_tool.py", "fix_sha": "b10e38e392ba5b1ee0f98fd513d3f120f7277565", "seeds": [true, true, true], "deploy_reachable": true}

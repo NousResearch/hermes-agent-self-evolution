@@ -1,0 +1,576 @@
+{
+  "report": [
+    {
+      "tool": "tools/browser_camofox.py",
+      "fix": "fd5df5fe8e",
+      "func": "is_camofox_mode",
+      "n": 2,
+      "matches": 2,
+      "returns_matched": 2,
+      "verdict": "GENERALIZES",
+      "cases_detail": [
+        {
+          "case": {
+            "args": [],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "False"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "False"
+          }
+        },
+        {
+          "case": {
+            "args": [],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "False"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "False"
+          }
+        }
+      ]
+    },
+    {
+      "tool": "tools/checkpoint_manager.py",
+      "fix": "2245879af0",
+      "verdict": "not_fuzzable:AttributeError: module 'tools.checkpoint_manager' has no attribute 'ensure_check"
+    },
+    {
+      "tool": "tools/discord_tool.py",
+      "fix": "8b32a9d0f1",
+      "func": "_channel_type_name",
+      "n": 3,
+      "matches": 3,
+      "returns_matched": 3,
+      "verdict": "GENERALIZES",
+      "cases_detail": [
+        {
+          "case": {
+            "args": [
+              1
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'unknown(1)'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'unknown(1)'"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              14
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'unknown(14)'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'unknown(14)'"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              123
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'unknown(123)'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'unknown(123)'"
+          }
+        }
+      ]
+    },
+    {
+      "tool": "tools/env_passthrough.py",
+      "fix": "ba4357d13b",
+      "func": "register_env_passthrough",
+      "n": 4,
+      "matches": 4,
+      "returns_matched": 4,
+      "verdict": "GENERALIZES",
+      "cases_detail": [
+        {
+          "case": {
+            "args": [
+              [
+                "ALPHA_KEY",
+                "BETA_TOKEN"
+              ]
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              [
+                "  CUSTOM_SECRET  ",
+                "NONEMPTY_VAR"
+              ]
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              [
+                "",
+                "   ",
+                "GAMMA_CRED"
+              ]
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              [
+                "X1",
+                "Y_2",
+                "Z-3"
+              ]
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        }
+      ]
+    },
+    {
+      "tool": "tools/file_tools.py",
+      "fix": "5faea3f618",
+      "func": "read_file_tool",
+      "n": 3,
+      "matches": 3,
+      "returns_matched": 3,
+      "verdict": "GENERALIZES",
+      "cases_detail": [
+        {
+          "case": {
+            "args": [
+              "docs/notes.txt"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'{\"content\": \"\", \"total_lines\": 0, \"file_size\": 0, \"truncated\": false, \"is_binary\": false, \"is_image\": false, \"error\": \"File not found: docs/notes.txt\"}'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'{\"content\": \"\", \"total_lines\": 0, \"file_size\": 0, \"truncated\": false, \"is_binary\": false, \"is_image\": false, \"error\": \"File not found: docs/notes.txt\"}'"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "/var/log/app.log"
+            ],
+            "kwargs": {
+              "offset": 5,
+              "limit": 12
+            }
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'{\"content\": \"\", \"total_lines\": 0, \"file_size\": 0, \"truncated\": false, \"is_binary\": false, \"is_image\": false, \"error\": \"File not found: /var/log/app.log\", \"similar_files\": [\"/var/log/fsck_apfs.log\", \"/var/log/install.log\", \"/var/log/system.log\", \"/var/log/wifi.log\"]}'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'{\"content\": \"\", \"total_lines\": 0, \"file_size\": 0, \"truncated\": false, \"is_binary\": false, \"is_image\": false, \"error\": \"File not found: /var/log/app.log\", \"similar_files\": [\"/var/log/fsck_apfs.log\", \"/var/log/install.log\", \"/var/log/system.log\", \"/var/log/wifi.log\"]}'"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "~/projects/demo/readme.md"
+            ],
+            "kwargs": {
+              "offset": 2,
+              "limit": 1
+            }
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'{\"content\": \"\", \"total_lines\": 0, \"file_size\": 0, \"truncated\": false, \"is_binary\": false, \"is_image\": false, \"error\": \"File not found: /Users/justin/projects/demo/readme.md\"}'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'{\"content\": \"\", \"total_lines\": 0, \"file_size\": 0, \"truncated\": false, \"is_binary\": false, \"is_image\": false, \"error\": \"File not found: /Users/justin/projects/demo/readme.md\"}'"
+          }
+        }
+      ]
+    },
+    {
+      "tool": "tools/kanban_tools.py",
+      "fix": "31fe229039",
+      "func": "_handle_show",
+      "n": 3,
+      "matches": 3,
+      "returns_matched": 3,
+      "verdict": "GENERALIZES",
+      "cases_detail": [
+        {
+          "case": {
+            "args": [
+              {
+                "task_id": "task-123",
+                "board": "alpha"
+              }
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'{\"error\": \"task task-123 not found\"}'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'{\"error\": \"task task-123 not found\"}'"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              {
+                "task_id": "t_other"
+              }
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'{\"error\": \"task t_other not found\"}'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'{\"error\": \"task t_other not found\"}'"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              {
+                "board": "board-2"
+              }
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "'{\"error\": \"task_id is required (or set HERMES_KANBAN_TASK in the env)\"}'"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "'{\"error\": \"task_id is required (or set HERMES_KANBAN_TASK in the env)\"}'"
+          }
+        }
+      ]
+    },
+    {
+      "tool": "tools/mixture_of_agents_tool.py",
+      "fix": "707f3ff41f",
+      "verdict": "not_fuzzable:no_pure_func"
+    },
+    {
+      "tool": "tools/patch_parser.py",
+      "fix": "5e743559e0",
+      "func": "parse_v4a_patch",
+      "n": 7,
+      "matches": 7,
+      "returns_matched": 7,
+      "verdict": "GENERALIZES",
+      "cases_detail": [
+        {
+          "case": {
+            "args": [
+              "*** Begin Patch\n*** Update File: lib/util.py\n@@ init @@\n alpha\n-beta\n+gamma\n*** End Patch"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.UPDATE: 'update'>, file_path='lib/util.py', new_path=None, hunks=[Hunk(context_hint='init', lines=[HunkLine(prefix=' ', content='alpha'), HunkLine(prefix='-', content='beta'), HunkLine(prefix='+', content='gamma')])], content=None)], None)"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.UPDATE: 'update'>, file_path='lib/util.py', new_path=None, hunks=[Hunk(context_hint='init', lines=[HunkLine(prefix=' ', content='alpha'), HunkLine(prefix='-', content='beta'), HunkLine(prefix='+', content='gamma')])], content=None)], None)"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "*** Begin Patch\n*** Add File: pkg/new_file.py\n+from math import sqrt\n+\n+value = sqrt(9)\n*** End Patch"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.ADD: 'add'>, file_path='pkg/new_file.py', new_path=None, hunks=[Hunk(context_hint=None, lines=[HunkLine(prefix='+', content='from math import sqrt'), HunkLine(prefix='+', content=''), HunkLine(prefix='+', content='value = sqrt(9)')])], content=None)], None)"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.ADD: 'add'>, file_path='pkg/new_file.py', new_path=None, hunks=[Hunk(context_hint=None, lines=[HunkLine(prefix='+', content='from math import sqrt'), HunkLine(prefix='+', content=''), HunkLine(prefix='+', content='value = sqrt(9)')])], content=None)], None)"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "*** Begin Patch\n*** Delete File: docs/old_notes.txt\n*** End Patch"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.DELETE: 'delete'>, file_path='docs/old_notes.txt', new_path=None, hunks=[], content=None)], None)"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.DELETE: 'delete'>, file_path='docs/old_notes.txt', new_path=None, hunks=[], content=None)], None)"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "*** Begin Patch\n*** Move File: src/legacy.py -> src/modern.py\n*** End Patch"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.MOVE: 'move'>, file_path='src/legacy.py', new_path='src/modern.py', hunks=[], content=None)], None)"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.MOVE: 'move'>, file_path='src/legacy.py', new_path='src/modern.py', hunks=[], content=None)], None)"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "*** Update File: app/core.py\n keep this\n-old line\n+new line\n*** End Patch"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.UPDATE: 'update'>, file_path='app/core.py', new_path=None, hunks=[Hunk(context_hint=None, lines=[HunkLine(prefix=' ', content='keep this'), HunkLine(prefix='-', content='old line'), HunkLine(prefix='+', content='new line')])], content=None)], None)"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.UPDATE: 'update'>, file_path='app/core.py', new_path=None, hunks=[Hunk(context_hint=None, lines=[HunkLine(prefix=' ', content='keep this'), HunkLine(prefix='-', content='old line'), HunkLine(prefix='+', content='new line')])], content=None)], None)"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "*** Begin Patch\n*** Add File: a.txt\n+one\n*** Delete File: b.txt\n*** Update File: c.txt\n@@ section @@\n x\n-y\n+z\n*** End Patch"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.ADD: 'add'>, file_path='a.txt', new_path=None, hunks=[Hunk(context_hint=None, lines=[HunkLine(prefix='+', content='one')])], content=None), PatchOperation(operation=<OperationType.DELETE: 'delete'>, file_path='b.txt', new_path=None, hunks=[], content=None), PatchOperation(operation=<OperationType.UPDATE: 'update'>, file_path='c.txt', new_path=None, hunks=[Hunk(context_hint='section', lines=[HunkLine(prefix=' ', content='x'), HunkLine(prefix='-', content="
+          },
+          "repaired": {
+            "ok": true,
+            "val": "([PatchOperation(operation=<OperationType.ADD: 'add'>, file_path='a.txt', new_path=None, hunks=[Hunk(context_hint=None, lines=[HunkLine(prefix='+', content='one')])], content=None), PatchOperation(operation=<OperationType.DELETE: 'delete'>, file_path='b.txt', new_path=None, hunks=[], content=None), PatchOperation(operation=<OperationType.UPDATE: 'update'>, file_path='c.txt', new_path=None, hunks=[Hunk(context_hint='section', lines=[HunkLine(prefix=' ', content='x'), HunkLine(prefix='-', content="
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "*** Begin Patch\n*** Move File: src/a.py -> \n*** End Patch"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "([], \"Parse error: MOVE 'src/a.py': missing destination path (expected 'src -> dst')\")"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "([], \"Parse error: MOVE 'src/a.py': missing destination path (expected 'src -> dst')\")"
+          }
+        }
+      ]
+    },
+    {
+      "tool": "tools/schema_sanitizer.py",
+      "fix": "aae1615977",
+      "verdict": "not_fuzzable:no_pure_func"
+    },
+    {
+      "tool": "tools/send_message_tool.py",
+      "fix": "41d2c758c3",
+      "verdict": "repair_failed_this_run"
+    },
+    {
+      "tool": "tools/skill_manager_tool.py",
+      "fix": "b10e38e392",
+      "func": "_validate_name",
+      "n": 5,
+      "matches": 5,
+      "returns_matched": 5,
+      "verdict": "GENERALIZES",
+      "cases_detail": [
+        {
+          "case": {
+            "args": [
+              "skill-x"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "alpha_1"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "z9"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "tool.v3"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        },
+        {
+          "case": {
+            "args": [
+              "a-b.c_d"
+            ],
+            "kwargs": {}
+          },
+          "oracle": {
+            "ok": true,
+            "val": "None"
+          },
+          "repaired": {
+            "ok": true,
+            "val": "None"
+          }
+        }
+      ]
+    }
+  ],
+  "fuzzable": 7,
+  "generalizes": 7,
+  "cost": {
+    "total_usd": 0.770799,
+    "by_model": {
+      "gpt-5.4-mini": {
+        "tokens_in_uncached": 87014,
+        "tokens_in_cached": 101120,
+        "tokens_out": 155101,
+        "reasoning_tokens": 0,
+        "cost_usd": 0.770799,
+        "calls": 14,
+        "cache_hit_rate": 0.5374892363953352
+      }
+    },
+    "agent_cost_usd": 0.0,
+    "n_agent_runs": 0,
+    "n_cost_uncaptured": 0,
+    "total_cost_usd": 0.770799
+  }
+}

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd template for the OPT-IN, propose-only sentinel scan (macOS).
+
+  This is a TEMPLATE: the `.template` suffix keeps launchd from ever loading it
+  by accident. To enable a weekly $0 scan, follow docs/operating_the_sentinel.md
+  ("Scheduling the scan"): replace the two __PLACEHOLDER__ values, copy it to
+  ~/Library/LaunchAgents/com.agent-self-evolution.sentinel-scan.plist, then
+  `launchctl load` it. `launchctl unload` the same path disables it.
+
+  SAFETY — DO NOT add `--attempt-top` to monitor_scan.sh or to this plist. The
+  scan is pure git ($0); --attempt-top runs the repair loop and SPENDS money, so
+  it must stay a manual, cost-capped, human-triggered action — never scheduled.
+
+  RETENTION — each run writes output/monitor/<timestamp>/ and never deletes old
+  ones. Prune periodically (the runbook gives a one-liner) so the dir stays bounded.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.agent-self-evolution.sentinel-scan</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO_ROOT__/scripts/monitor_scan.sh</string>
+    <string>__TARGET_REPO__</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <!-- Weekly: Mondays at 09:00 local time. Adjust to taste. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>1</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <!-- Do not run a scan the instant the agent is loaded; wait for the schedule. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/output/monitor/sentinel-scan.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/output/monitor/sentinel-scan.log</string>
+</dict>
+</plist>
