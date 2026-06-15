@@ -2,15 +2,23 @@
 
 [![tests](https://github.com/jramos/agent-self-evolution/actions/workflows/tests.yml/badge.svg)](https://github.com/jramos/agent-self-evolution/actions/workflows/tests.yml)
 
-**Evolutionary self-improvement for agent skills.**
+**A rigorous deploy gate for machine-proposed agent changes.**
 
-Agent Self-Evolution evolves and optimizes agent skills, tool descriptions, system prompts, and code — producing measurably better versions through reflective evolutionary search. Built on DSPy + GEPA (Genetic-Pareto Prompt Evolution), with extra safeguards on top so what ships is reliably better than the original.
+Agent Self-Evolution answers one question honestly: *did this change actually make the agent better?* Point it at a proposed change to a skill, tool description, system prompt, or piece of tool code, and it adjudicates — with a noise-aware deploy gate, a real-agent behavioral validation loop, and (for code) an executable-test oracle — shipping the change only when it's demonstrably better and refusing the ones that aren't. It can also *generate* candidate changes for you via reflective evolutionary search (DSPy + GEPA), but the gate is the point: the evolver is just one source of candidates feeding it.
 
-**No GPU training required.** Everything operates via API calls — mutating text, evaluating results, and selecting the best variants. ~$1-5 per optimization run.
+**No GPU training required.** Everything operates via API calls. ~$1-5 per run.
 
 Works on any agent framework that emits `SKILL.md` markdown files. [Hermes Agent](https://github.com/NousResearch/hermes-agent) skills are the original target; Claude Code skills (and any other agent's `<dir>/<skill>/SKILL.md` layout) are also supported via a pluggable skill-source abstraction.
 
 > **Already running Hermes Agent?** No env vars to set. If `~/.hermes/config.yaml` exists, `uv run python -m evolution.skills.evolve_skill --skill <name>` picks up your provider, model, and credentials automatically. On startup the framework runs a tiny ~$0.0001 credential probe; if anything's stale you get a Rich-formatted error panel with the exact recovery command (e.g. `hermes auth add anthropic`) instead of a Python traceback. Jump to [Run with Hermes Agent](#run-with-hermes-agent), or read [docs/model_resolution.md](docs/model_resolution.md) for the full provider mapping.
+
+### Where evolution pays off — and where the gate just saves you a wasted run
+
+We ran the campaign so you don't have to guess:
+
+- **Tool code, with a failing test** → the loop repairs **~60% of real bugs** to a fix that matches the upstream commit (given the failing test — the production case). *It works.*
+- **Skill / tool-description / prompt *text*, on a capable agent** → **no measurable behavior change**, in either direction, because the model infers the tool's job from its name and routes past the text. *Here the gate's job is to stop you shipping noise, not to find a win.*
+- The same rigor that ships the code fixes is what **discovered** that null — and a leakage check that demoted our own headline. Most frameworks would have reported a noisy "winner." Full result, confidence intervals, and validity threats: **[the findings](reports/asymmetry_findings.md)**.
 
 ## How It Works
 
@@ -359,13 +367,37 @@ Cost: each task is one `hermes -z` run (~$0.05–$0.50). The bundled `patch.json
 
 | Phase | Target | Engine | Status |
 |-------|--------|--------|--------|
-| **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ [Validated](reports/phase1_validation_report.pdf) † |
-| **Phase 2** | Tool descriptions + dual-signal deploy gate | DSPy + GEPA | ✅ [Validated](reports/phase2_validation_report.pdf) † |
-| **Phase 3** | System prompt sections (Hermes + Claude Code) | DSPy + GEPA | ✅ [Validated](reports/phase3_validation_report.pdf) † |
+| **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ [Mechanism validated](reports/phase1_validation_report.pdf) † |
+| **Phase 2** | Tool descriptions + dual-signal deploy gate | DSPy + GEPA | ✅ [Mechanism validated](reports/phase2_validation_report.pdf) † |
+| **Phase 3** | System prompt sections (Hermes + Claude Code) | DSPy + GEPA | ✅ [Mechanism validated](reports/phase3_validation_report.pdf) † |
 | **Phase 4** | Tool implementation code | Iterative test-feedback repair | ✅ [Validated](reports/asymmetry_findings.md) (code-evolution campaign) |
 | **Phase 5** | Continuous improvement loop | Propose-only triage sentinel | ✅ [Sentinel shipped](docs/operating_the_sentinel.md) |
 
 > **†** Phases 1–3 are validated as a working *mechanism* (the pipeline runs end-to-end and the gate catches regressions). The campaign below found that on a *capable* agent, evolving these artifacts does not measurably change behavior for tools whose function it can infer from their name — so the value of artifact-quality evolution is in regression-catching and weaker-tier / novel-contract surfaces, not improvement-finding on capable agents. See [Findings](#findings).
+
+## Use the gate on your own changes (no evolution required)
+
+The gate is useful whether or not you let GEPA generate the candidate. Bring your own change and ask the framework whether it's real:
+
+```bash
+# "Did my hand-written tool-description change actually help the real agent?"
+# Real-agent A/B with an A/A noise floor so a within-noise gain can't deploy.
+python -m evolution.validation.closed_loop \
+    --tool patch --hermes-repo ~/.hermes/hermes-agent \
+    --tasks suite.jsonl --baseline baseline.py --evolved my_change.py --noise-aware-gate
+
+# "Repair this broken tool from its failing test — and prove the fix isn't gamed."
+# Throwaway worktree + isolated venv; the gate enforces a held-out split (anti
+# teach-to-the-test), surface freeze, file scope, and a regression floor.
+python -m evolution.code.evolve_code --repo ~/.hermes/hermes-agent \
+    --tool tools/foo.py --visible-test tests/tools/test_foo_a.py \
+    --holdout-test tests/tools/test_foo_b.py
+
+# "What real bugs in this repo's git stream could the loop fix?" ($0, pure git, no LLM)
+python -m evolution.monitor --repo ~/.hermes/hermes-agent
+```
+
+None of these run evolutionary search — they exercise the verification + safety machinery directly. The deploy gate (held-out split, surface freeze, baseline-diff regression floor) is the most reusable thing here: point it at any LLM-authored patch and it resists the specific ways a green test lies.
 
 ## Findings
 
