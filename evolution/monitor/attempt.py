@@ -67,6 +67,8 @@ def attempt_candidates(
     from evolution.core.lm_timing_callback import CostCeilingExceeded
 
     if organism_runner is None:
+        from evolution.code.worktree import prune_orphan_worktrees  # noqa: PLC0415
+        prune_orphan_worktrees(repo)  # self-heal leaks from a prior hard-killed run
         organism_runner, cost_summary = _build_runner(
             proposer_model=proposer_model, base_python=base_python,
             seeds=seeds, max_rounds=max_rounds, max_cost_usd=max_cost_usd)

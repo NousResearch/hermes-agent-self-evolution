@@ -31,7 +31,7 @@ from evolution.code.harvest import (
     stratify,
 )
 from evolution.code.repair import RepairEngine, build_dspy_proposer
-from evolution.code.worktree import WorktreeEnv, WorktreeError
+from evolution.code.worktree import WorktreeEnv, WorktreeError, prune_orphan_worktrees
 from evolution.core.hermes_provider import resolve_default_lm
 
 console = Console()
@@ -169,6 +169,9 @@ def run_campaign(
             COST_LEDGER.set_ceiling(max_cost_usd)
         engine = RepairEngine(build_dspy_proposer(lm), max_rounds=max_rounds)
         cost_summary = COST_LEDGER.summary
+        orphans = prune_orphan_worktrees(repo)  # self-heal leaks from hard-killed runs
+        if orphans:
+            console.print(f"  [dim]pruned {orphans} orphan worktree(s)[/dim]")
         console.print(f"[bold]evolve_code_campaign[/bold] — proposer [dim]{rlm.model}[/dim], "
                       f"target {max_organisms} organisms (stages {stages})")
 

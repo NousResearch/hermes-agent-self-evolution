@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
 
-from evolution.code.worktree import WorktreeEnv, WorktreeError
+from evolution.code.worktree import WorktreeEnv, WorktreeError, prune_orphan_worktrees
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git required for worktree harness"
@@ -96,3 +97,39 @@ class TestWorktreeEnv:
     def test_create_rejects_bad_ref(self, synth_repo: Path):
         with pytest.raises(WorktreeError):
             WorktreeEnv.create(synth_repo, base_ref="no-such-ref-xyz")
+
+
+class TestPruneOrphans:
+    def test_removes_orphan_evolve_code_worktree(self, synth_repo: Path):
+        # Simulate a hard-killed run's leak: an evolve_code_*/wt worktree whose
+        # process died before destroy() could run.
+        root = Path(tempfile.mkdtemp(prefix="evolve_code_"))
+        wt = root / "wt"
+        subprocess.run(["git", "-C", str(synth_repo), "worktree", "add", "--detach",
+                        str(wt), "HEAD"], check=True, capture_output=True)
+        listing = subprocess.run(["git", "-C", str(synth_repo), "worktree", "list"],
+                                 capture_output=True, text=True).stdout
+        assert str(wt) in listing  # leak present
+        try:
+            removed = prune_orphan_worktrees(synth_repo)
+            assert removed >= 1
+            after = subprocess.run(["git", "-C", str(synth_repo), "worktree", "list"],
+                                   capture_output=True, text=True).stdout
+            assert str(wt) not in after          # registration gone
+            assert not root.exists()             # tmpdir removed
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_leaves_non_evolve_code_worktrees_alone(self, synth_repo: Path, tmp_path: Path):
+        # A worktree NOT under the evolve_code_ prefix must be untouched.
+        other = tmp_path / "user_wt"
+        subprocess.run(["git", "-C", str(synth_repo), "worktree", "add", "--detach",
+                        str(other), "HEAD"], check=True, capture_output=True)
+        try:
+            prune_orphan_worktrees(synth_repo)
+            listing = subprocess.run(["git", "-C", str(synth_repo), "worktree", "list"],
+                                     capture_output=True, text=True).stdout
+            assert str(other) in listing  # untouched
+        finally:
+            subprocess.run(["git", "-C", str(synth_repo), "worktree", "remove", "--force",
+                            str(other)], capture_output=True)

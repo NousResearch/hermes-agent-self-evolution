@@ -80,6 +80,33 @@ def _run(
     )
 
 
+def prune_orphan_worktrees(repo_root: Path) -> int:
+    """Remove leftover ``evolve_code_*`` worktrees and dead registrations.
+
+    A worktree's ``finally``/``destroy`` cleanup cannot run if the process is
+    hard-killed (SIGKILL, an interrupted background run), which leaks the worktree
+    dir + its git registration. Calling this at the start of a run self-heals
+    those orphans. Scoped to the ``evolve_code_`` mkdtemp prefix, so it never
+    touches a user's real worktree — but it assumes runs are serial (a single
+    user); it does not distinguish a concurrent run's live worktree from a dead
+    orphan, so don't run two campaigns against the same repo at once.
+    """
+    removed = 0
+    res = _run(["git", "worktree", "list", "--porcelain"], cwd=repo_root, timeout=_GIT_TIMEOUT)
+    for line in res.stdout.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        wt = Path(line[len("worktree "):].strip())
+        root = wt.parent
+        if root.name.startswith("evolve_code_") and wt.name == "wt":
+            _run(["git", "worktree", "remove", "--force", str(wt)],
+                 cwd=repo_root, timeout=_GIT_TIMEOUT)
+            shutil.rmtree(root, ignore_errors=True)
+            removed += 1
+    _run(["git", "worktree", "prune"], cwd=repo_root, timeout=_GIT_TIMEOUT)
+    return removed
+
+
 def _detect_base_python(repo_root: Path) -> str:
     """The interpreter whose environment has the target repo's deps installed.
 
