@@ -1137,12 +1137,36 @@ suspicion into a measured, both-directions certificate.
     validated the path end-to-end on real Hermes material: skips correctly classified
     (`not_valid`/`too_large`/`source_missing`, free), a real deploy-reachable success
     (`tool_backend_helpers`, a dep-regression, 3/3 seeds), cost tracked ($0.895,
-    ceiling enforced). **Finding:** dep-regressions are a mix — some reproduce and
-    repair in the current worktree, others come back `not_valid` because they need the
-    *historical* dependency environment (the cross-version-dep-env build — the next
-    frontier for the dep-regression case). The general novel-bug product (held-out
+    ceiling enforced). **Finding:** the `dependency_regression` label is noisy (it
+    flags any pyproject/uv.lock touch, ≠ a dep-version bump); genuine dep-regressions
+    came back `not_valid` (broad migrations). The general novel-bug product (held-out
     split, no oracle) stays deferred: metamorphic verification was killed (0/8 — real
     bugs are input-specific, don't violate generic invariants).
+
+    **Cross-version-dep-env build — KILLED on a $0 supply check (don't build).** The
+    proposed next build (repair dependency-regressions, verified via a cross-version
+    differential: pre-bump tool @ old dep vs repaired @ new dep) presupposed a supply
+    of clean tool-local dep-version regressions. There is none: on Hermes/365d, of
+    ~161-184 dep-manifest commits, **0 in-place pyproject pin bumps and 0 clean
+    tool-local dep-version regressions**; the ~3-6 version-bumps touching a tool+test
+    are all broad migrations (28-97 files) that can't reproduce as a tool-local repair,
+    and the one small candidate was a feature-add. Triple-confirmed (strict + loosened
+    git counts + the live demo's `not_valid` results + an independent red-team re-run).
+    Weeks of two-dep-env machinery for ~0 instances — a clean signal-before-mechanism
+    kill. Salvage angles closed: a looser scope dissolves the tool-local verification
+    model; the cross-version differential is parasitic on absent supply; a higher-churn
+    repo is a pivot off the validated Hermes substrate, not a save.
+
+    **Frontiers mapped → redirect (panel-ranked).** With artifact-quality decoupled,
+    general no-oracle repair dead/narrow, and the dep-regression supply absent, the
+    durable wins are code re-derivation (~60% on real bugs) + the shipped sentinel.
+    Next options: (1) **bank the body of work** — headline the *asymmetry* (code
+    re-derivation works on executable-oracle bugs; artifact-quality is inert on capable
+    agents) — and operate the sentinel→loop as a standing capability; (2) **push N +
+    map the difficulty boundary** on the GREEN (harvest more bugs via the sentinel,
+    stratify) — the only remaining signal-buying build; (3) the **$10 MCP-description
+    probe** for closure on the last artifact surface. Item-10 CL-parallelism (serves
+    the decoupled path) and clade selection (no substrate) are skipped.
 
 12. **Code-evolution pilot, gated on a measured signal** (`evolution/code/`,
     empty stub). Before any Darwinian loop: an A/A coefficient-of-variation
