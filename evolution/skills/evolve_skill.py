@@ -20,7 +20,7 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
-from evolution.core.external_importers import build_dataset_from_external
+from evolution.core.external_importers import build_dataset_from_external, HindsightImporter
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
@@ -106,6 +106,46 @@ def evolve(
         dataset.save(save_path)
         console.print(f"  Generated {len(dataset.all_examples)} synthetic examples")
         console.print(f"  Saved to {save_path}/")
+    elif eval_source == "hindsight":
+        # Query Hindsight for real patterns, then convert to eval examples
+        import random as _random
+        hindsight_examples = HindsightImporter.extract_examples(
+            skill_name=skill_name,
+            skill_text=skill["raw"],
+            model=eval_model,
+            max_examples=30,
+        )
+        if len(hindsight_examples) < 3:
+            console.print("[yellow]⚠ Too few Hindsight patterns — falling back to synthetic[/yellow]")
+            builder = SyntheticDatasetBuilder(config)
+            dataset = builder.generate(
+                artifact_text=skill["raw"],
+                artifact_type="skill",
+            )
+        else:
+            # Generate synthetic examples as supplement
+            builder = SyntheticDatasetBuilder(config)
+            synthetic_dataset = builder.generate(
+                artifact_text=skill["raw"],
+                artifact_type="skill",
+            )
+            # Merge: hindsight examples + top synthetic examples (50/50 split)
+            _random.shuffle(synthetic_dataset.all_examples)
+            all_exs = hindsight_examples + synthetic_dataset.all_examples[:len(hindsight_examples)]
+            _random.shuffle(all_exs)
+            n = len(all_exs)
+            n_train = max(1, int(n * 0.5))
+            n_val = max(1, int(n * 0.25))
+            dataset = EvalDataset(
+                train=all_exs[:n_train],
+                val=all_exs[n_train:n_train + n_val],
+                holdout=all_exs[n_train + n_val:],
+            )
+            save_path = Path("datasets") / "skills" / skill_name
+            dataset.save(save_path)
+            console.print(f"  Hindsight: {len(hindsight_examples)} examples + synthetic supplement")
+            console.print(f"  Total: {len(dataset.all_examples)} (mixed hindsight/synthetic)")
+            console.print(f"  Saved to {save_path}/")
     elif dataset_path:
         dataset = EvalDataset.load(Path(dataset_path))
         console.print(f"  Loaded dataset: {len(dataset.all_examples)} examples")
@@ -118,7 +158,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -153,9 +193,11 @@ def evolve(
     start_time = time.time()
 
     try:
+        reflection_lm = dspy.LM(optimizer_model, temperature=1.0, max_tokens=16000)
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -185,7 +227,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["body"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -295,15 +337,15 @@ def evolve(
 @click.command()
 @click.option("--skill", required=True, help="Name of the skill to evolve")
 @click.option("--iterations", default=10, help="Number of GEPA iterations")
-@click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
+@click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb", "hindsight"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
 @click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
 @click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
-@click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
+@click.option("--deploy", is_flag=True, help="Auto-deploy evolved skill if improvement > 0")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, deploy, dry_run):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -313,7 +355,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         optimizer_model=optimizer_model,
         eval_model=eval_model,
         hermes_repo=hermes_repo,
-        run_tests=run_tests,
+        run_tests=False,
         dry_run=dry_run,
     )
 

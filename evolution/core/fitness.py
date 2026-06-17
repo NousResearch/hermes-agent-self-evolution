@@ -104,7 +104,7 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(example, prediction, trace=None, pred_name=None, pred_trace=None) -> float:
     """DSPy-compatible metric function for skill optimization.
 
     This is what gets passed to dspy.GEPA(metric=...).
