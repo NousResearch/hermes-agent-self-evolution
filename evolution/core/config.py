@@ -70,11 +70,11 @@ def get_hermes_agent_path() -> Path:
     """
     env_path = os.getenv("HERMES_AGENT_REPO")
     if env_path:
-        p = Path(env_path).expanduser()
+        p = _expand_user_path(env_path)
         if p.exists():
             return p
 
-    home_path = Path.home() / ".hermes" / "hermes-agent"
+    home_path = _expand_user_path("~") / ".hermes" / "hermes-agent"
     if home_path.exists():
         return home_path
 
@@ -98,5 +98,23 @@ def resolve_hermes_agent_path(hermes_repo: Optional[str] = None) -> Path:
     falls back to :func:`get_hermes_agent_path`.
     """
     if hermes_repo:
-        return Path(hermes_repo).expanduser()
+        return _expand_user_path(hermes_repo)
     return get_hermes_agent_path()
+
+
+def _expand_user_path(path_value: str) -> Path:
+    """Expand ``~`` while honoring HOME in tests and CLI environments.
+
+    On Windows, ``Path.expanduser()`` prefers USERPROFILE over HOME. The CLI
+    tests monkeypatch HOME to simulate non-default repo locations, so this
+    helper keeps explicit paths and discovery behavior consistent across
+    platforms.
+    """
+    if path_value == "~":
+        home = os.getenv("HOME")
+        return Path(home) if home else Path(path_value).expanduser()
+    if path_value.startswith("~/") or path_value.startswith("~\\"):
+        home = os.getenv("HOME")
+        if home:
+            return Path(home) / path_value[2:]
+    return Path(path_value).expanduser()

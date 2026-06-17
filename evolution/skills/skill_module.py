@@ -25,7 +25,7 @@ def load_skill(skill_path: Path) -> dict:
             "description": str,
         }
     """
-    raw = skill_path.read_text()
+    raw = skill_path.read_text(encoding="utf-8")
 
     # Parse YAML frontmatter
     frontmatter = ""
@@ -72,7 +72,7 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
     # Fuzzy match: check the name field in frontmatter
     for skill_md in skills_dir.rglob("SKILL.md"):
         try:
-            content = skill_md.read_text()[:500]
+            content = skill_md.read_text(encoding="utf-8")[:500]
             if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
                 return skill_md
         except Exception:

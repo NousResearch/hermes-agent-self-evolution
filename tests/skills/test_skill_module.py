@@ -32,7 +32,7 @@ Use this when you need to test things.
 class TestLoadSkill:
     def test_parses_frontmatter(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         assert skill["name"] == "test-skill"
@@ -41,7 +41,7 @@ class TestLoadSkill:
 
     def test_parses_body(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         assert "# Test Skill" in skill["body"]
@@ -50,14 +50,14 @@ class TestLoadSkill:
 
     def test_raw_contains_everything(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         assert skill["raw"] == SAMPLE_SKILL
 
     def test_path_is_stored(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         assert skill["path"] == skill_file
@@ -66,7 +66,7 @@ class TestLoadSkill:
 class TestReassembleSkill:
     def test_roundtrip(self, tmp_path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text(SAMPLE_SKILL)
+        skill_file.write_text(SAMPLE_SKILL, encoding="utf-8")
         skill = load_skill(skill_file)
 
         reassembled = reassemble_skill(skill["frontmatter"], skill["body"])

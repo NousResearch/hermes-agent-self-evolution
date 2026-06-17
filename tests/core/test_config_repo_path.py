@@ -26,7 +26,8 @@ def _make_skill_repo(tmp_path) -> Path:
     skill_dir = repo / "skills" / "testing" / "demo"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
-        "---\nname: demo\ndescription: Demo skill\n---\n\n# Demo\n\n1. Do the thing.\n"
+        "---\nname: demo\ndescription: Demo skill\n---\n\n# Demo\n\n1. Do the thing.\n",
+        encoding="utf-8",
     )
     return repo
 
