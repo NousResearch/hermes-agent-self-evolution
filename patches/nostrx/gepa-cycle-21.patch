@@ -1,0 +1,168 @@
+diff --git a/skills/social-media/nostrx/SKILL.md b/skills/social-media/nostrx/SKILL.md
+new file mode 100644
+index 000000000..56747ae3d
+--- /dev/null
++++ b/skills/social-media/nostrx/SKILL.md
+@@ -0,0 +1,161 @@
++---
++name: nostrx
++description: >
++  Nostr-to-X/Twitter cross-poster. Monitors one or more Nostr npubs and syncs new text posts to Twitter/X via the Twitter API v2.
++  Use when: (1) user reports posts not appearing on X, (2) X posts are truncated or missing content, (3) user wants to change which Nostr pubkeys are monitored, (4) nostrX service needs restart/update/debug.
++version: 1.1.0
++triggers:
++  - "nostrX"
++  - "nostr to twitter"
++  - "nostr to x"
++  - "cross post to x"
++  - "posts not appearing on twitter"
++  - "x posts truncated"
++metadata:
++  hermes:
++    trigger_conditions:
++      - "nostrx"
++      - "nostr to twitter"
++      - "nostr to x"
++      - "cross post to x"
++      - "posts not appearing on twitter"
++      - "x posts truncated"
++      - "nostr cross poster"
++      - "sync nostr posts"
++      - "nostrx debug"
++      - "nostr bridge to x"
++---
++
++# nostrX — Nostr → X/Twitter Sync
++
++## Overview
++
++`nostrx.py` is a Python sync tool running on **CT 202** (`192.168.100.54`). It monitors specified Nostr npubs and cross-posts new text posts to X/Twitter using the Twitter API v2 (via tweepy).
++
++## When to Use
++
++- Nostr posts are not appearing on X/Twitter as expected
++- X posts are truncated, missing content, or cut at 280 characters without threading
++- Need to change which Nostr pubkeys are monitored for cross-posting
++- nostrX service is down, throwing errors, or needs a restart after config changes
++- Debugging why specific posts didn't sync (checking `sync_state.json` or logs)
++- Setting up a new Nostr-to-X bridge for additional npubs
++- Investigating post frequency or rate-limiting issues between Nostr and X
++
++## Not For
++
++- **Posting directly to X/Twitter** → use `xitter` or `xurl` for direct X posting
++- **Posting to Nostr** → use `nostrx` (the Nostr CLI) for direct Nostr posting; nostrX only reads Nostr
++- **Signal + Nostr scheduling** → use `signal-scheduler` for scheduling posts to both Signal and Nostr
++- **Twitter/X account management (reading, DMs)** → use `xitter` for full X/Twitter account operations
++- **General debugging of CT 202 or Proxmox infrastructure** → use `proxmox-host-management` for host-level issues
++- **Bird CLI operations (likes, bookmarks)** → use `xitter` or `xurl` — the `bird` CLI on the host is read-only
++
++**Location:** `/root/nostrX/nostrx.py`
++**State file:** `/root/nostrX/sync_state.json`
++**Service:** Not a systemd service — runs as a cron-triggered script
++**Python venv:** `/root/nostrX/venv`
++
++## Architecture
++
++```
++Nostr relays (wss://relay.damus.io, wss://nos.lol, etc.)
++       ↓
++  nostrx.py (Python, nostr_sdk)
++       ↓
++  Twitter API v2 (tweepy)
++       ↓
++  X/Twitter (@wahiddotmy)
++```
++
++- Uses **Twitter API credentials** (not bird CLI cookies) — API key/secret + access token/secret stored in `.env`
++- State is tracked in `sync_state.json` to avoid duplicate posts
++- Only syncs **top-level posts** (Kind 1, no 'e' or 'reply' tags)
++- Skips posts with media URLs in content (extracts image URLs, uploads separately)
++- 1-second delay between posts to avoid rate limiting
++
++## Common Tasks
++
++### Run manually
++```bash
++ssh root@192.168.100.54 "cd /root/nostrX && source venv/bin/activate && python nostrx.py"
++```
++
++### View recent logs
++```bash
++ssh root@192.168.100.54 "tail -50 /root/nostrX/nostrx.log"
++```
++
++### Check state
++```bash
++ssh root@192.168.100.54 "cat /root/nostrX/sync_state.json"
++```
++
++### Change monitored npubs
++Edit `.env` on CT 202:
++```bash
++ssh root@192.168.100.54 "nano /root/nostrX/.env"
++# Find: NOSTR_NPUBS=<comma-separated npubs>
++# Example: NOSTR_NPUBS=npub1xxx...,npub1yyy...
++```
++
++### Restart/reload after config change
++Since it's cron-triggered, just wait for the next cron run — or kill the running instance and restart manually:
++```bash
++ssh root@192.168.100.54 "pkill -f nostrx.py; cd /root/nostrX && source venv/bin/activate && python nostrx.py &"
++```
++
++## Threading Behavior
++
++Long posts (> 280 chars) are automatically posted as a proper Twitter thread:
++
++- Posts **≤ 280 chars**: single tweet with `https://njump.me/{event_id}` appended at the end
++- Posts **> 280 chars**: split into a thread via `in_reply_to_tweet_id`, each tweet ≤ 275 chars, final tweet ends with the Nostr link
++- Media (images/videos) attach to the **first tweet only** (Twitter threading rule)
++- Nostr link format: `https://njump.me/{event_id}`
++- 1-second delay between thread tweets
++
++Implemented via `post_thread()` method using Tweepy 4.16+ `create_tweet(in_reply_to_tweet_id=...)`.
++
++## Investigation Notes
++
++### Finding nostrX (debugging path)
++1. signal-scheduler on CT 200 only sends to Signal + Nostr — **zero X code there**
++2. The `bird` CLI (@steipete/bird) found in the environment is for **reading** likes/bookmarks, not posting
++3. `/home/wahid/clawd/scripts/health-check.sh` references `nostrX (Proxmox CT 202: 192.168.100.54)` — key clue
++4. nostrX is independent of signal-scheduler — it monitors Nostr pubkeys directly via relay, not the scheduler DB
++5. **Search pattern used:** `find / -maxdepth 8 ... | xargs grep -l 'bird tweet'` across all CTs until /root/nostrX/nostrx.py was found
++6. The actual bug location: `post_thread()` call in `run()` — old code had `if len(clean_text) > 280: clean_text = clean_text[:277] + "..."`
++
++### CT access
++- **Host:** `192.168.100.54`
++- **User:** `root`
++- **Auth:** SSH key — try `ssh root@192.168.100.54` (key auth configured)
++- **Test:** `ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.100.54 "hostname"`
++
++## References
++
++- `references/nostrx-py.md` — full source of nostrx.py with threading implementation (updated 2026-05-20)
++
++## Pitfalls
++
++1. **SSH to CT 202 times out without key** — `ssh root@192.168.100.54` requires SSH key auth. If key forwarding isn't set up, the connection fails silently. Verify with `ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.100.54 "hostname"` before running any nostrX commands.
++2. **`pkill -f nostrx.py` kills the wrong process** — Multiple Python scripts may match the pattern. Verify with `ps aux | grep nostrx.py` before killing, and use `pkill -f "python.*nostrx.py"` for a tighter match.
++3. **`.env` file on CT 202 may have stale Twitter API credentials** — Twitter API v2 keys expire or get rotated. If posts stopped syncing but the script runs without error, check if the access token expired with `ssh root@192.168.100.54 "grep TWITTER /root/nostrX/.env"`.
++4. **`sync_state.json` desync after manual posting** — If someone manually posts to X between nostrX runs, the state file doesn't know about it. The next run may skip a legitimate Nostr post if its event ID was already marked as synced. Clear the `last_synced_event` key to force a re-scan.
++5. **Nostr relay connection failures are silent** — nostrX connects to `wss://relay.damus.io` and others; if these go down, the script exits with code 0 but syncs nothing. Check `nostrx.log` for `"Failed to connect"` or `"0 new posts"` patterns.
++6. **Thread limit (25 tweets) silently drops content** — Twitter's API v2 limits threads to 25 tweets. If a Nostr post splits into >25 tweets, the excess content is lost without error. Verify post length before threading: `echo ${#clean_text}`.
++7. **Media upload fails on non-image attachments** — nostrX extracts image URLs but Twitter API v2 rejects videos >140s or unsupported formats. The post appears on X without media — check the Nostr post for video/gif URLs and handle separately.
++8. **Cron-triggered runs pile up if execution time > interval** — If a sync run takes 5 minutes and cron fires every 3 minutes, two instances race on `sync_state.json`. Add a lockfile (`flock`) or run interval ≥10 minutes.
++9. **Nostr npub format error silently skips all posts** — If `NOSTR_NPUBS` contains a malformed npub (missing prefix, wrong checksum), nostrX may skip all entries without per-npub error reporting. Validate with `nostril <npub>` before adding.
++10. **`source venv/bin/activate` fails in non-interactive SSH** — When running via `ssh root@... "source venv/bin/activate && python nostrx.py"`, the `source` may not persist. Use the venv Python directly: `ssh root@192.168.100.54 "/root/nostrX/venv/bin/python /root/nostrX/nostrx.py"`.
++
++## Related Services
++
++| Service | CT | Port | Purpose |
++|---------|-----|------|---------|
++| signal-scheduler | 200 (192.168.100.47) | 3000 | Signal + Nostr scheduling |
++| nostrX | 202 (192.168.100.54) | — | Nostr → X sync |
++| nostr.js CLI | CT 200 + local | — | Direct Nostr posting CLI |
++
++nostrX is the cross-post layer that reads from Nostr (not the scheduler DB) and posts to X. signal-scheduler handles Signal + Nostr posting only.
+\ No newline at end of file

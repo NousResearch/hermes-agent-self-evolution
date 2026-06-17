@@ -1,0 +1,151 @@
+{
+  "cycle": 21,
+  "date": "2026-06-11T20:51:00Z",
+  "method": "LLM-as-Judge (Strategy A: Direct Parent Execution)",
+  "selection_strategy": "word-count-driven (no delta candidates available)",
+  "skills_evolved": 5,
+  "skills": {
+    "llava": {
+      "path": "mlops/models/llava",
+      "baseline": {
+        "trigger_clarity": 2,
+        "step_completeness": 6,
+        "pitfall_coverage": 0,
+        "command_accuracy": 6,
+        "reuse_potential": 5,
+        "total": 19
+      },
+      "evolved": {
+        "trigger_clarity": 7,
+        "step_completeness": 6,
+        "pitfall_coverage": 8,
+        "command_accuracy": 6,
+        "reuse_potential": 5,
+        "total": 32
+      },
+      "delta": 13,
+      "changes": [
+        "Added 13 trigger_conditions",
+        "Added When to Use (7 items) and Not For (6 items)",
+        "Added 10 numbered Pitfalls",
+        "Bumped version from 1.0.0 to 1.1.0"
+      ],
+      "patch_lines": 337
+    },
+    "simpo-training": {
+      "path": "mlops/training/simpo",
+      "baseline": {
+        "trigger_clarity": 1,
+        "step_completeness": 7,
+        "pitfall_coverage": 3,
+        "command_accuracy": 7,
+        "reuse_potential": 6,
+        "total": 24
+      },
+      "evolved": {
+        "trigger_clarity": 7,
+        "step_completeness": 7,
+        "pitfall_coverage": 8,
+        "command_accuracy": 7,
+        "reuse_potential": 6,
+        "total": 35
+      },
+      "delta": 11,
+      "changes": [
+        "Added 10 trigger_conditions",
+        "Added When to Use (7 items) and Not For (6 items)",
+        "Converted old 'Common issues' table to 10 numbered Pitfalls",
+        "Bumped version from 1.0.0 to 1.1.0"
+      ],
+      "patch_lines": 211
+    },
+    "cron-noninteractive-guardrails": {
+      "path": "devops/cron-noninteractive-guardrails",
+      "baseline": {
+        "trigger_clarity": 1,
+        "step_completeness": 5,
+        "pitfall_coverage": 3,
+        "command_accuracy": 6,
+        "reuse_potential": 5,
+        "total": 20
+      },
+      "evolved": {
+        "trigger_clarity": 8,
+        "step_completeness": 5,
+        "pitfall_coverage": 8,
+        "command_accuracy": 6,
+        "reuse_potential": 5,
+        "total": 32
+      },
+      "delta": 12,
+      "changes": [
+        "Added 10 trigger_conditions",
+        "Added When to Use (7 items) and Not For (6 items)",
+        "Added 10 numbered Pitfalls",
+        "Bumped version from 1.0.0 to 1.1.0"
+      ],
+      "patch_lines": 152
+    },
+    "calcom-api": {
+      "path": "openclaw-imports/calcom-api",
+      "baseline": {
+        "trigger_clarity": 1,
+        "step_completeness": 6,
+        "pitfall_coverage": 2,
+        "command_accuracy": 5,
+        "reuse_potential": 5,
+        "total": 19
+      },
+      "evolved": {
+        "trigger_clarity": 8,
+        "step_completeness": 6,
+        "pitfall_coverage": 8,
+        "command_accuracy": 5,
+        "reuse_potential": 5,
+        "total": 32
+      },
+      "delta": 13,
+      "changes": [
+        "Added 11 trigger_conditions",
+        "Added When to Use (7 items) and Not For (6 items)",
+        "Added 10 numbered Pitfalls",
+        "Bumped to version 1.1.0"
+      ],
+      "patch_lines": 192
+    },
+    "nostrx": {
+      "path": "social-media/nostrx",
+      "baseline": {
+        "trigger_clarity": 5,
+        "step_completeness": 6,
+        "pitfall_coverage": 0,
+        "command_accuracy": 6,
+        "reuse_potential": 4,
+        "total": 21
+      },
+      "evolved": {
+        "trigger_clarity": 8,
+        "step_completeness": 6,
+        "pitfall_coverage": 8,
+        "command_accuracy": 6,
+        "reuse_potential": 4,
+        "total": 32
+      },
+      "delta": 11,
+      "changes": [
+        "Added 10 trigger_conditions (already had legacy 'triggers')",
+        "Added When to Use (7 items) and Not For (6 items)",
+        "Added 10 numbered Pitfalls",
+        "Bumped to version 1.1.0"
+      ],
+      "patch_lines": 168
+    }
+  },
+  "aggregate": {
+    "baseline_avg": 20.6,
+    "evolved_avg": 32.6,
+    "avg_delta": 12.0,
+    "total_delta": 60,
+    "total_patch_lines": 1060
+  }
+}
