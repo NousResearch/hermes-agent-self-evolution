@@ -1,0 +1,166 @@
+{
+  "schema_version": "hse-phase5-p0-production-enablement-packet-v1",
+  "created_at_local": "2026-06-08T15:33:00+02:00",
+  "source_request": "Sunwoo rec action go after recommended next action: prepare a separate P0 production enablement packet",
+  "scope": "Document-only P0 production enablement packet for future staged production continuous loop enablement",
+  "status": "P0_PRODUCTION_ENABLEMENT_PACKET_READY_NOT_EXECUTED",
+  "current_action": "document_and_approval_packet_only",
+  "activation_performed": false,
+  "repo": {
+    "path_label": "<hse-repo>",
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head_before_packet": "cba8ba5deb650279eee836ce466cc7a18c618bb7",
+    "pr": {
+      "number": 108,
+      "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108",
+      "state_at_packet_time": "OPEN",
+      "mergeability_at_packet_time": "MERGEABLE",
+      "status_checks": "MISSING_NOT_CI_PASS"
+    }
+  },
+  "evidence_chain_inputs": [
+    {
+      "artifact": "reports/phase5_production_loop_activation_gate_20260607_1550.json",
+      "status": "PRODUCTION_LOOP_ACTIVATION_GATE_DEFINED_NOT_ENABLED"
+    },
+    {
+      "artifact": "reports/phase5_g1_one_shot_canary_run_20260607_161618.json",
+      "status": "G1_PASS_NO_ACTION"
+    },
+    {
+      "artifact": "reports/phase5_g2_bounded_supervised_run_20260607_183053.json",
+      "status": "G2_PASS_NO_ACTION"
+    },
+    {
+      "artifact": "reports/phase5_g3_limited_cron_pilot_run_20260607_190359.json",
+      "status": "G3_CRON_PILOT_PASS_NO_ACTION"
+    },
+    {
+      "artifact": "reports/phase5_g3_limited_cron_pilot_side_effect_ledger_20260607_190359.json",
+      "status": "APPROVED_SIDE_EFFECTS_ONLY"
+    },
+    {
+      "artifact": "reports/phase5_g3_independent_review_acceptance_20260608_152912.json",
+      "status": "G3_INDEPENDENT_READ_ONLY_REVIEW_ACCEPTED"
+    }
+  ],
+  "hard_blocks_preserved_now": {
+    "production_continuous_loop_enabled": false,
+    "long_running_or_unbounded_cron_enabled": false,
+    "threshold_triggered_optimizer_execution_started": false,
+    "automatic_pr_loop_enabled": false,
+    "auto_merge_or_deploy_enabled": false,
+    "network_or_model_api_budget_spent": false,
+    "active_hermes_runtime_source_config_skill_memory_mutated": false,
+    "secrets_or_credentials_modified": false
+  },
+  "p0_decision": {
+    "go_for_activation": false,
+    "go_for_design_packet": true,
+    "reason": "Evidence chain supports preparing a production enablement packet, but does not authorize unattended production activation. Missing GitHub checks remain MISSING_NOT_CI_PASS and production enablement needs separate explicit approval after packet review."
+  },
+  "required_pre_activation_acceptance_criteria": [
+    "P0 packet is reviewed and accepted by Sunwoo and, if required, an external human maintainer.",
+    "PR evidence chain includes G3 pilot evidence and independent read-only review acceptance.",
+    "GitHub checks are either reported passing or explicitly waived in a reviewer-facing record; missing checks are not CI PASS.",
+    "A finite P1 cron soak plan is approved with max fire count, expiry, timeout, lock, kill switch, allowed write roots, and rollback path.",
+    "Threshold-triggered optimizer remains dry-run/signal-only until a separate budget and optimizer approval is recorded.",
+    "Automatic PR loop remains disabled until a separate gated draft-PR-only approval is recorded.",
+    "Auto-merge and deploy remain out of scope unless a later explicit approval names them.",
+    "Every stage emits JSON/Markdown evidence, side-effect ledger, and fail-closed status.",
+    "A human stop switch and operator rollback path are documented and tested before any recurring automation."
+  ],
+  "proposed_stage_plan": [
+    {
+      "stage": "P0_PACKET_ONLY",
+      "status_after_this_artifact": "READY_NOT_EXECUTED",
+      "allowed_actions": [
+        "write reviewer-facing JSON/Markdown packet",
+        "verify packet",
+        "optionally publish packet to PR after separate approval"
+      ],
+      "blocked_actions": [
+        "cron creation",
+        "production continuous loop start",
+        "optimizer execution",
+        "automatic PR loop",
+        "auto-merge",
+        "deploy",
+        "runtime/config mutation"
+      ]
+    },
+    {
+      "stage": "P1_FINITE_CRON_SOAK_APPROVAL_PACKET",
+      "purpose": "Prepare a future finite cron soak, not run it yet.",
+      "default_bounds": {
+        "max_fire_count": 3,
+        "ttl_hours_max": 24,
+        "per_fire_timeout_seconds_max": 1800,
+        "skip_if_running": true,
+        "kill_switch_required": true
+      },
+      "requires_separate_explicit_approval": true
+    },
+    {
+      "stage": "P1_FINITE_CRON_SOAK_RUN",
+      "purpose": "Run finite expiring cron soak with approved bounds and no optimizer/auto-PR side effects.",
+      "requires_separate_explicit_approval": true,
+      "success_exit": "P1_SOAK_PASS_NO_ACTION_OR_REVIEW_REQUIRED"
+    },
+    {
+      "stage": "P2_THRESHOLD_TRIGGER_DRY_RUN",
+      "purpose": "Evaluate threshold-trigger conditions as dry-run signals only.",
+      "optimizer_execution_allowed": false,
+      "requires_separate_explicit_approval": true
+    },
+    {
+      "stage": "P3_CANDIDATE_ONLY_OPTIMIZER_PACKET",
+      "purpose": "Prepare candidate-only optimizer plan with explicit budget/model/time caps and no active runtime mutation.",
+      "requires_separate_budget_approval": true,
+      "auto_apply_allowed": false
+    },
+    {
+      "stage": "P4_GATED_DRAFT_PR_AUTOMATION_PACKET",
+      "purpose": "Prepare draft-PR-only automation with path limits, rate limits, labels, and human review requirements.",
+      "auto_merge_allowed": false,
+      "requires_separate_explicit_approval": true
+    },
+    {
+      "stage": "P5_PRODUCTION_CONTINUOUS_LOOP_CANDIDATE",
+      "purpose": "Only after P1-P4 evidence passes, propose bounded production continuous loop candidate.",
+      "requires_final_human_approval": true,
+      "default_state": "OFF"
+    }
+  ],
+  "p1_minimum_packet_requirements": {
+    "max_fire_count": "finite, safe default <=3",
+    "expiry": "required wall-clock TTL and auto-disable/remove behavior",
+    "timeout": "per-fire timeout required, safe default <=1800 seconds",
+    "lock": "skip-if-running exclusive lock required",
+    "kill_switch": "repo-local and operator-visible kill switch required",
+    "allowed_writes": [
+      "repo-local output/phase5-continuous-loop/p1-finite-cron-soak-<stamp>/",
+      "matching reports/phase5_p1_* summaries"
+    ],
+    "blocked_side_effects": [
+      "optimizer execution",
+      "automatic PR update loop",
+      "auto-merge",
+      "deploy",
+      "active runtime mutation",
+      "network/model/API budget spend unless separately approved"
+    ],
+    "evidence_outputs": [
+      "run JSON",
+      "run Markdown",
+      "side-effect ledger",
+      "operator summary"
+    ]
+  },
+  "pr_publication_status": {
+    "packet_committed_or_pushed": false,
+    "pr_body_updated": false,
+    "publication_requires_next_approval": true
+  },
+  "recommended_next_action": "Path-limited commit/push this P0 packet into PR #108 and add a PR body addendum, if Sunwoo approves publication. Activation remains OFF."
+}

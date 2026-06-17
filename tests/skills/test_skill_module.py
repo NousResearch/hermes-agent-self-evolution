@@ -90,3 +90,30 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModule:
+    def test_forward_prediction_includes_skill_text_for_constraint_metric(self, monkeypatch):
+        from evolution.skills.skill_module import SkillModule
+
+        module = SkillModule("# Small Skill\nDo the thing.")
+
+        class FakeResult:
+            output = "done"
+
+        class FakePredict:
+            class signature:
+                instructions = "# Small Skill\nDo the thing."
+
+        class FakePredictor:
+            predict = FakePredict()
+
+            def __call__(self, task_input):
+                return FakeResult()
+
+        monkeypatch.setattr(module, "predictor", FakePredictor())
+
+        prediction = module(task_input="task")
+
+        assert prediction.output == "done"
+        assert prediction.skill_text == "# Small Skill\nDo the thing."

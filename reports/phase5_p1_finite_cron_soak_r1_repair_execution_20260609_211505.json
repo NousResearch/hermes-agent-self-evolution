@@ -1,0 +1,197 @@
+{
+  "after_fire_02": {
+    "kill_switch_present": false,
+    "lock_present": false,
+    "replacement_job_enabled": false,
+    "replacement_job_state": "paused",
+    "replacement_repeat_completed": 1,
+    "replacement_repeat_times": 2,
+    "state_completed_fire_count": 2
+  },
+  "authorization": "execute P1 finite cron soak R1 repair; keep old job paused; archive kill switch; create replacement repeat=2; one fire at a time; fail closed; no optimizer; no automatic PR loop; no PR update",
+  "boundary_flags": {
+    "active_runtime_source_config_skill_memory_mutation": false,
+    "automatic_pr_loop_enabled": false,
+    "optimizer_execution_started": false,
+    "pr_update_performed": false,
+    "production_continuous_loop_enabled": false
+  },
+  "completed_at_local": "2026-06-09 21:19:08 +0200 CEST",
+  "final_state": {
+    "actual_completed_fire_count": 3,
+    "fire_02_present": true,
+    "fire_03_present": true,
+    "kill_switch_present": false,
+    "lock_present": false,
+    "max_fire_count": 3,
+    "old_job": {
+      "enabled": false,
+      "id": "b24aca09f168",
+      "last_status": "error",
+      "repeat": {
+        "completed": 2,
+        "times": 3
+      },
+      "state": "paused"
+    },
+    "replacement_job": {
+      "enabled": false,
+      "id": "7ade18f75708",
+      "present_in_jobs_json_after_completion": false,
+      "repeat": {
+        "completed": 2,
+        "inferred_from_fire_outputs": true,
+        "times": 2
+      },
+      "state": "completed_and_removed_from_active_jobs"
+    },
+    "run_report_status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+    "run_report_status_caveat": "aggregate status remains review-required because historical fire-01 is preserved with review_required=true; remaining fires 2 and 3 passed per-fire NOOP guards",
+    "run_report_summary": {
+      "completed_fire_count": 3,
+      "disallowed_side_effect_count": 0,
+      "dry_run_action_count": 1,
+      "max_fire_count": 3,
+      "review_required_count": 1
+    },
+    "side_effect_ledger_disallowed_count": 0,
+    "side_effect_ledger_status": "APPROVED_SIDE_EFFECTS_ONLY",
+    "state_fires": [
+      {
+        "fire_index": 1,
+        "fire_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01",
+        "generated_at": "2026-06-08T14:49:14Z",
+        "status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION"
+      },
+      {
+        "fire_index": 2,
+        "fire_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02",
+        "generated_at": "2026-06-09T19:17:08Z",
+        "status": "P1_SOAK_FIRE_PASS_NO_ACTION"
+      },
+      {
+        "fire_index": 3,
+        "fire_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03",
+        "generated_at": "2026-06-09T19:19:08Z",
+        "status": "P1_SOAK_FIRE_PASS_NO_ACTION"
+      }
+    ]
+  },
+  "fire_results": [
+    {
+      "aggregate_report_status_after_fire": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+      "aggregate_status_caveat": "aggregate remains review-required because historical fire-01 is preserved",
+      "disallowed_side_effect_count": 0,
+      "dry_run_action_count": 0,
+      "fire_index": 2,
+      "per_fire_guard": "PASS",
+      "review_required": false,
+      "scheduler_status": "DRY_RUN_NOOP",
+      "side_effect_count": 0,
+      "status": "P1_SOAK_FIRE_PASS_NO_ACTION"
+    },
+    {
+      "aggregate_report_status_after_fire": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+      "aggregate_status_caveat": "aggregate remains review-required because historical fire-01 is preserved",
+      "disallowed_side_effect_count": 0,
+      "dry_run_action_count": 0,
+      "fire_index": 3,
+      "per_fire_guard": "PASS",
+      "review_required": false,
+      "scheduler_status": "DRY_RUN_NOOP",
+      "side_effect_count": 0,
+      "status": "P1_SOAK_FIRE_PASS_NO_ACTION"
+    }
+  ],
+  "generated_at_local": "2026-06-09 21:15:05 +0200 CEST",
+  "kill_switch_archive": {
+    "archive_verified": true,
+    "archived_path": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/repair-r1-20260609_211505/archive/P1_FINITE_CRON_SOAK_KILL_SWITCH.archived",
+    "content_sanitized": "created_at=2026-06-08T16:54:53+0200\njob_id=b24aca09f168\nrun_id=20260608-164455\nreason=first_fire_returned_review_required; finite soak paused fail-closed before remaining fires\n",
+    "original_path": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/P1_FINITE_CRON_SOAK_KILL_SWITCH",
+    "original_present_after_archive": false,
+    "sha256_after_archive": "1fd81b94d97fbc0624f5da15b3a961c894c011004bee2b51af7bb5b9c867bba0",
+    "sha256_before": "1fd81b94d97fbc0624f5da15b3a961c894c011004bee2b51af7bb5b9c867bba0"
+  },
+  "old_job_id": "b24aca09f168",
+  "old_job_preserved": {
+    "enabled": false,
+    "job_id": "b24aca09f168",
+    "repeat_completed": 2,
+    "repeat_times": 3,
+    "state": "paused"
+  },
+  "post_execution_hashes": {
+    "archived_kill_switch": {
+      "path": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/repair-r1-20260609_211505/archive/P1_FINITE_CRON_SOAK_KILL_SWITCH.archived",
+      "sha256": "1fd81b94d97fbc0624f5da15b3a961c894c011004bee2b51af7bb5b9c867bba0"
+    },
+    "run_report_json": {
+      "path": "reports/phase5_p1_finite_cron_soak_run_20260608-164455.json",
+      "sha256": "89d9fb1584da9237f5ed55869a22ef044a6e24c761c505ca39435b6be39d577c"
+    },
+    "side_effect_ledger_json": {
+      "path": "reports/phase5_p1_finite_cron_soak_side_effect_ledger_20260608-164455.json",
+      "sha256": "9a4f04024fdf028af6345fa833f16b4281cf682382e2a938d6bcc51e07dad772"
+    },
+    "state_json": {
+      "path": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/state.json",
+      "sha256": "0853f46c5f20b65d615698eb8c563f41df2934e7f7335406fe2d82315935ac49"
+    }
+  },
+  "pr_update_performed": false,
+  "pre_execution_hashes": {
+    "jobs_json": {
+      "path": "<hermes-home>/cron/jobs.json",
+      "sha256": "94dffad0cb5f640d92367d639ee435954b4d3d06d347e43bb2d24403d56900d4"
+    },
+    "run_report_json": {
+      "path": "reports/phase5_p1_finite_cron_soak_run_20260608-164455.json",
+      "sha256": "b1ccccc4129f60f46be89feca026aef8bb06790988cfcd930c6165cb16bf44fd"
+    },
+    "script": {
+      "path": "<hermes-home>/scripts/hse_phase5_p1_finite_soak_20260608_164455.py",
+      "sha256": "a7242b0542055ff94d9ca58d171a640e3272156cf5d09d7221efd34af207675a"
+    },
+    "side_effect_ledger_json": {
+      "path": "reports/phase5_p1_finite_cron_soak_side_effect_ledger_20260608-164455.json",
+      "sha256": "d1a9fea556e63b04d5e3b2a5122677aee8c26a220f676729a49754afb27f1232"
+    },
+    "state_json": {
+      "path": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/state.json",
+      "sha256": "247fb511f4e16904feaa09be8ee9ee61fad594d26f598ade5720966e4070f605"
+    }
+  },
+  "recommended_next_step": "Prepare and verify local acceptance/publication packet only if Sunwoo wants PR evidence; otherwise leave state as local R1 repair evidence with old job paused and replacement job completed/removed.",
+  "repair_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/repair-r1-20260609_211505",
+  "replacement_cron_outputs": [
+    {
+      "path": "<hermes-home>/cron/output/7ade18f75708/2026-06-09_21-17-08.md",
+      "sha256": "b9239fdce7f1ebe709fc4672ab89256cab33708559544f70f08e5d8293d971b2",
+      "size": 449
+    },
+    {
+      "path": "<hermes-home>/cron/output/7ade18f75708/2026-06-09_21-19-08.md",
+      "sha256": "873fb2388729c2af979e2fbbe02490bd90625a1b06ade581d8d5f97c5bf152fa",
+      "size": 449
+    }
+  ],
+  "replacement_job_created": {
+    "enabled": false,
+    "job_id": "7ade18f75708",
+    "name": "HSE Phase 5 P1 R1 replacement remaining fires 20260609-211505",
+    "next_run_at": "2026-06-09T21:46:19.597065+02:00",
+    "paused_immediately_after_create": true,
+    "profile": "default",
+    "repeat_completed": 0,
+    "repeat_times": 2,
+    "script": "hse_phase5_p1_finite_soak_20260608_164455.py",
+    "state": "paused",
+    "workdir": "<hse-repo>"
+  },
+  "replacement_job_id": "7ade18f75708",
+  "run_root": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455",
+  "schema_version": "phase5-p1-r1-repair-execution-v1",
+  "status": "R1_REPAIR_REMAINING_FIRES_COMPLETED_NOOP",
+  "verdict": "PASS_REMAINING_FIRES_NOOP"
+}

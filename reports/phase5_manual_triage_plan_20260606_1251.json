@@ -1,0 +1,111 @@
+{
+  "blocked_actions_without_separate_approval": [
+    "create or enable Hermes cron jobs",
+    "start GEPA/DSPy/Darwinian optimizer execution",
+    "spend benchmark/API budget",
+    "mutate active Hermes runtime prompt/config/skills/memory",
+    "create or update external GitHub PRs automatically"
+  ],
+  "created_at": "2026-06-06 12:51 CEST",
+  "execution_sequence": [
+    "Freeze the existing dry-run evidence pack and do not overwrite it.",
+    "Trace metric provenance in repo-local fixtures/reports/tests.",
+    "Produce sanitized classification tables for both targets.",
+    "Write a follow-up triage findings artifact with PASS/WARN/INCONCLUSIVE labels.",
+    "Only after human review, open a separate fix slice for candidate edits and tests."
+  ],
+  "phase": "5",
+  "recommended_next_step": "Run read-only metric provenance tracing and create sanitized miss/warning classification tables.",
+  "schema_version": "phase5-manual-triage-plan-v1",
+  "scope": {
+    "active_runtime_mutation": false,
+    "external_pr_update": false,
+    "formal_phase5_completion_claimed": false,
+    "network_or_api_calls": false,
+    "optimizer_execution": false,
+    "read_only": true,
+    "scheduler_enablement": false,
+    "type": "manual_triage_plan_only"
+  },
+  "source_evidence": {
+    "auto_triage_status": "REVIEW_REQUIRED",
+    "dry_run_root": "output/phase5-continuous-loop/unattended-dry-run-20260606-124310",
+    "performance_status": "NEEDS_TRIAGE",
+    "repo_branch": "hse/phase5-continuous-loop-prep",
+    "repo_head": "74210b6c7dc8f45b7de39a2c085e9018074018b8",
+    "scheduler_dry_run_action_count": 2,
+    "scheduler_side_effect_count": 0,
+    "scheduler_status": "DRY_RUN_REVIEW_REQUIRED"
+  },
+  "source_request": "rec action GO after Phase 5 read-only unattended dry-run verification",
+  "status": "ready_for_manual_triage",
+  "targets": [
+    {
+      "baseline": 0.88,
+      "component": "tool_descriptions",
+      "definition_of_done": [
+        "A sanitized miss-classification table exists.",
+        "At least the top 3 failure clusters are named with evidence counts.",
+        "Any proposed edit is linked to a specific failure cluster.",
+        "No scheduler, optimizer, API, or external PR mutation occurred."
+      ],
+      "initial_hypotheses": [
+        "Some tool descriptions may overlap semantically, causing ambiguous tool routing in held-out examples.",
+        "The metric may be fixture-derived rather than a live benchmark regression, so the first step is evidence classification, not immediate mutation.",
+        "Tool-selection failures may cluster around file/search/terminal/web boundaries or mandatory skill-loading behavior."
+      ],
+      "manual_triage_tasks": [
+        "Locate the metric source and fixture/eval file that produced tool_selection_accuracy=0.86.",
+        "Extract a miss table with expected tool, selected tool, task text, and failure class; do not include private paths or raw session data.",
+        "Classify misses as description ambiguity, eval-label issue, task ambiguity, or true routing regression.",
+        "Draft candidate tool-description edits only for true description ambiguity; do not apply them automatically.",
+        "Define an evaluation command and expected PASS threshold for a future reviewed fix slice."
+      ],
+      "metric_id": "tool_selection_accuracy",
+      "priority_score": 3.6,
+      "rank": 1,
+      "sample_count": 90,
+      "severity": 0.04,
+      "status": "FAIL",
+      "threshold": 0.9,
+      "value": 0.86
+    },
+    {
+      "baseline": 0.06,
+      "component": "system_prompts",
+      "definition_of_done": [
+        "A sanitized warning-class table exists.",
+        "Each warning class is marked behavior-affecting, fixture-only, or inconclusive.",
+        "Future fixes include explicit focused tests before prompt mutation.",
+        "No active runtime prompt/config mutation occurred in this triage step."
+      ],
+      "initial_hypotheses": [
+        "Warnings may reflect prompt-contract drift between Phase 3 guidance and current tests or fixtures.",
+        "The warning rate may be sensitive to small sample size, so each warning needs class-level inspection before any prompt change.",
+        "Some warnings may be documentation/fixture warnings rather than behavioral prompt regressions."
+      ],
+      "manual_triage_tasks": [
+        "Locate the report or fixture that produced prompt_contract_warning_rate=0.07.",
+        "Build a sanitized warning table with warning class, affected prompt contract area, count, and severity.",
+        "Separate behavior-affecting warnings from harmless documentation/fixture warnings.",
+        "Draft candidate Phase 3 prompt-contract adjustments only for behavior-affecting warning classes.",
+        "Define focused tests needed before any prompt change is applied to the Hermes operating checkout."
+      ],
+      "metric_id": "prompt_contract_warning_rate",
+      "priority_score": 0.4,
+      "rank": 2,
+      "sample_count": 20,
+      "severity": 0.02,
+      "status": "FAIL",
+      "threshold": 0.05,
+      "value": 0.07
+    }
+  ],
+  "verification_commands_for_future_triage": [
+    "cd ~/.hermes/evolution/repos/hermes-agent-self-evolution",
+    "PY=~/.hermes/evolution/venvs/self-evolution/bin/python",
+    "$PY -m pytest tests/monitor/test_phase5_performance_monitor.py tests/monitor/test_phase5_auto_triage.py tests/monitor/test_phase5_scheduler_dry_run.py tests/monitor/test_phase5_continuous_loop_readiness_manifest.py -q",
+    "$PY -m pytest tests -q",
+    "git diff --check"
+  ]
+}

@@ -23,6 +23,7 @@ from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset,
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
+from evolution.core.hermes_lm import make_lm
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -41,6 +42,8 @@ def evolve(
     optimizer_model: str = "openai/gpt-4.1",
     eval_model: str = "openai/gpt-4.1-mini",
     hermes_repo: Optional[str] = None,
+    seed_skill_path: Optional[str] = None,
+    holdout_limit: Optional[int] = None,
     run_tests: bool = False,
     dry_run: bool = False,
 ):
@@ -69,6 +72,15 @@ def evolve(
     console.print(f"  Size: {len(skill['raw']):,} chars")
     console.print(f"  Description: {skill['description'][:80]}...")
 
+    seed_skill = None
+    if seed_skill_path:
+        seed_path = Path(seed_skill_path).expanduser()
+        if not seed_path.exists():
+            console.print(f"[red]✗ Seed skill not found: {seed_path}[/red]")
+            sys.exit(1)
+        seed_skill = load_skill(seed_path)
+        console.print(f"  Seed: {seed_path} ({len(seed_skill['raw']):,} chars)")
+
     if dry_run:
         console.print(f"\n[bold green]DRY RUN — setup validated successfully.[/bold green]")
         console.print(f"  Would generate eval dataset (source: {eval_source})")
@@ -82,6 +94,13 @@ def evolve(
     if eval_source == "golden" and dataset_path:
         dataset = GoldenDatasetLoader.load(Path(dataset_path))
         console.print(f"  Loaded golden dataset: {len(dataset.all_examples)} examples")
+    elif eval_source == "golden":
+        dataset_path_resolved = GoldenDatasetLoader.find_regression_fixture(skill_name)
+        dataset = GoldenDatasetLoader.load(dataset_path_resolved)
+        console.print(
+            f"  Loaded promoted regression fixture: {dataset_path_resolved} "
+            f"({len(dataset.all_examples)} examples)"
+        )
     elif eval_source == "sessiondb":
         save_path = Path(dataset_path) if dataset_path else Path("datasets") / "skills" / skill_name
         dataset = build_dataset_from_external(
@@ -118,7 +137,10 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    # Validate the complete SKILL.md, not only the body. The skill-structure
+    # constraint intentionally checks YAML frontmatter, so passing only the body
+    # creates a false baseline violation for valid skills.
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -130,6 +152,21 @@ def evolve(
     if not all_pass:
         console.print("[yellow]⚠ Baseline skill has constraint violations — proceeding anyway[/yellow]")
 
+    optimization_seed = seed_skill or skill
+    if seed_skill:
+        console.print(f"\n[bold]Validating seed constraints[/bold]")
+        seed_constraints = validator.validate_all(seed_skill["raw"], "skill", baseline_text=skill["raw"])
+        seed_pass = True
+        for c in seed_constraints:
+            icon = "✓" if c.passed else "✗"
+            color = "green" if c.passed else "red"
+            console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
+            if not c.passed:
+                seed_pass = False
+        if not seed_pass:
+            console.print("[red]✗ Seed skill FAILED constraints — refusing seeded optimization[/red]")
+            sys.exit(1)
+
     # ── 4. Set up DSPy + GEPA optimizer ─────────────────────────────────
     console.print(f"\n[bold]Configuring optimizer[/bold]")
     console.print(f"  Optimizer: GEPA ({iterations} iterations)")
@@ -137,11 +174,12 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = make_lm(eval_model, hermes_repo=str(config.hermes_agent_path))
     dspy.configure(lm=lm)
 
-    # Create the baseline skill module
-    baseline_module = SkillModule(skill["body"])
+    # Create the optimizer seed skill module. This may be a compressed seed
+    # candidate when the active baseline violates hard size constraints.
+    baseline_module = SkillModule(optimization_seed["body"])
 
     # Prepare DSPy examples
     trainset = dataset.to_dspy_examples("train")
@@ -155,7 +193,8 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_metric_calls=iterations,
+            reflection_lm=make_lm(optimizer_model, hermes_repo=str(config.hermes_agent_path)),
         )
 
         optimized_module = optimizer.compile(
@@ -185,7 +224,11 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(
+        evolved_full,
+        "skill",
+        baseline_text=optimization_seed["raw"],
+    )
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -207,6 +250,9 @@ def evolve(
     console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
 
     holdout_examples = dataset.to_dspy_examples("holdout")
+    if holdout_limit is not None and holdout_limit > 0:
+        holdout_examples = holdout_examples[:holdout_limit]
+        console.print(f"  Limited holdout evaluation to {len(holdout_examples)} examples")
 
     baseline_scores = []
     evolved_scores = []
@@ -241,9 +287,9 @@ def evolve(
     )
     table.add_row(
         "Skill Size",
-        f"{len(skill['body']):,} chars",
+        f"{len(optimization_seed['body']):,} chars",
         f"{len(evolved_body):,} chars",
-        f"{len(evolved_body) - len(skill['body']):+,} chars",
+        f"{len(evolved_body) - len(optimization_seed['body']):+,} chars",
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
@@ -261,6 +307,8 @@ def evolve(
 
     # Save baseline for comparison
     (output_dir / "baseline_skill.md").write_text(skill["raw"])
+    if seed_skill:
+        (output_dir / "seed_skill.md").write_text(seed_skill["raw"])
 
     # Save metrics
     metrics = {
@@ -272,11 +320,15 @@ def evolve(
         "baseline_score": avg_baseline,
         "evolved_score": avg_evolved,
         "improvement": improvement,
-        "baseline_size": len(skill["body"]),
+        "baseline_size": len(optimization_seed["body"]),
+        "active_baseline_size": len(skill["body"]),
+        "seed_skill_path": str(Path(seed_skill_path).expanduser()) if seed_skill_path else None,
+        "seed_size": len(seed_skill["body"]) if seed_skill else None,
         "evolved_size": len(evolved_body),
         "train_examples": len(dataset.train),
         "val_examples": len(dataset.val),
-        "holdout_examples": len(dataset.holdout),
+        "holdout_examples": len(holdout_examples),
+        "holdout_total_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
     }
@@ -301,9 +353,23 @@ def evolve(
 @click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
 @click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
+@click.option("--seed-skill-path", default=None, help="Existing SKILL.md candidate to use as optimizer seed")
+@click.option("--holdout-limit", default=None, type=int, help="Limit holdout examples for bounded retry runs")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+def main(
+    skill,
+    iterations,
+    eval_source,
+    dataset_path,
+    optimizer_model,
+    eval_model,
+    hermes_repo,
+    seed_skill_path,
+    holdout_limit,
+    run_tests,
+    dry_run,
+):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -313,6 +379,8 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         optimizer_model=optimizer_model,
         eval_model=eval_model,
         hermes_repo=hermes_repo,
+        seed_skill_path=seed_skill_path,
+        holdout_limit=holdout_limit,
         run_tests=run_tests,
         dry_run=dry_run,
     )

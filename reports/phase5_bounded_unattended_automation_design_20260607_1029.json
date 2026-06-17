@@ -1,0 +1,189 @@
+{
+  "acceptance_criteria": [
+    {
+      "id": "P5-BUA-01",
+      "name": "unattended_execution_proof",
+      "pass_condition": "The dry-run starts from a single command or one-shot scheduled invocation, completes without interactive input, and emits a terminal summary with exit status.",
+      "required_for": "L1 dry-run"
+    },
+    {
+      "id": "P5-BUA-02",
+      "name": "side_effect_zero",
+      "pass_condition": "Every emitted safety invariant remains read-only and all side-effect flags are false.",
+      "required_for": "L1 dry-run"
+    },
+    {
+      "id": "P5-BUA-03",
+      "name": "bounded_runtime_and_scope",
+      "pass_condition": "Runtime, repeat count, write roots, input files, and output files stay within the declared bounds.",
+      "required_for": "L1 dry-run"
+    },
+    {
+      "id": "P5-BUA-04",
+      "name": "reviewable_artifact_packet",
+      "pass_condition": "JSON and Markdown summaries exist, parse/read back, and include source inputs, statuses, safety flags, and recommended next action.",
+      "required_for": "L1 dry-run"
+    },
+    {
+      "id": "P5-BUA-05",
+      "name": "formal_completion_gate_not_weakened",
+      "pass_condition": "The report distinguishes read-only dry-run success from full formal completion unless a separately approved optimizer/handoff cycle also passes or is explicitly waived.",
+      "required_for": "formal Phase 5 claim"
+    }
+  ],
+  "approved_in_this_step": [
+    "write a reviewer-readable design document",
+    "write a machine-readable dry-run contract",
+    "stage an Obsidian Markdown response artifact and Discord attachment copy",
+    "validate JSON, paths, attachment identity, and no high-risk credential material"
+  ],
+  "automation_levels": [
+    {
+      "claim_allowed": "Phase 5 bounded automation contract drafted; not formal completion",
+      "level": "L0",
+      "name": "contract_only",
+      "side_effects_allowed": [
+        "reports/*.json",
+        "reports/*.md",
+        "SnwEvAH/Response/*.md",
+        "document_cache attachment copy"
+      ],
+      "status": "this_artifact"
+    },
+    {
+      "bounds": {
+        "active_runtime_mutation_allowed": false,
+        "allowed_write_roots": [
+          "output/phase5-continuous-loop/bounded-unattended-dry-run-<stamp>/",
+          "reports/phase5_bounded_unattended_run_<stamp>.json",
+          "reports/phase5_bounded_unattended_run_<stamp>.md"
+        ],
+        "external_pr_updates_allowed": false,
+        "max_total_runtime_seconds": 1800,
+        "network_calls_allowed": false,
+        "optimizer_execution_allowed": false,
+        "repeat_count_max": 1
+      },
+      "claim_allowed": "One unattended dry-run proof; still not full formal Phase 5 unless later optimizer/handoff gates are satisfied or explicitly waived",
+      "level": "L1",
+      "name": "one_shot_unattended_readonly_dry_run",
+      "status": "requires_next_approval"
+    },
+    {
+      "bounds": {
+        "auto_merge_allowed": false,
+        "budget_cap_required": true,
+        "candidate_apply_allowed": false,
+        "human_review_required": true,
+        "network_or_benchmark_calls_require_explicit_approval": true,
+        "repeat_count_max": 1
+      },
+      "claim_allowed": "Formal Phase 5 candidate completion after a detected target is optimized to a candidate artifact and handoff packet without manual intervention, with human review preserved",
+      "level": "L2",
+      "name": "budgeted_unattended_optimization_cycle",
+      "status": "requires_separate_budget_and_optimizer_approval"
+    }
+  ],
+  "created_at_local": "2026-06-07 10:29 CEST",
+  "current_state": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "formal_phase5_completion_claimed": false,
+    "head": "74210b6c7dc8f45b7de39a2c085e9018074018b8",
+    "hse_repo": "hermes-agent-self-evolution",
+    "read_only_evidence_state": {
+      "auto_triage_status": "NO_ACTION",
+      "performance_status": "PASS",
+      "prompt_contract_warning_rate": 0.0,
+      "scheduler_action_count": 0,
+      "scheduler_status": "DRY_RUN_NOOP",
+      "tool_selection_accuracy": 1.0
+    },
+    "worktree_note": "Pre-existing modified/untracked Phase 5 provenance/tool-selection artifacts are present; this contract does not commit, push, schedule, or apply them."
+  },
+  "dry_run_contract": {
+    "allowed_terminal_statuses": [
+      "PASS_NO_ACTION",
+      "PASS_REVIEW_REQUIRED",
+      "FAIL_BLOCKED"
+    ],
+    "commands_template": [
+      "cd <HSE_REPO>",
+      "PY=<HSE_VENV>/bin/python",
+      "STAMP=$(date -u +%Y%m%d-%H%M%S)",
+      "RUN_ROOT=output/phase5-continuous-loop/bounded-unattended-dry-run-${STAMP}",
+      "$PY -m evolution.monitor.provenance_dataset --tool-selection-report-json output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json --heldout-review-json output/tool-description/phase2e-heldout-review/heldout_review.json --prompt-source prompt_builder=<HERMES_AGENT_CHECKOUT>/agent/prompt_builder.py --output-dir ${RUN_ROOT}/provenance --window-start <YYYY-MM-DD> --window-end <YYYY-MM-DD>",
+      "$PY -m evolution.monitor.performance_snapshot --metrics-json ${RUN_ROOT}/provenance/provenance_metrics_input.json --output-dir ${RUN_ROOT}/performance",
+      "$PY -m evolution.monitor.auto_triage --performance-report-json ${RUN_ROOT}/performance/performance_snapshot_report.json --output-dir ${RUN_ROOT}/auto-triage",
+      "$PY -m evolution.monitor.scheduler_dry_run --auto-triage-report-json ${RUN_ROOT}/auto-triage/auto_triage_report.json --output-dir ${RUN_ROOT}/scheduler",
+      "$PY scripts_or_inline_verifier.py --run-root ${RUN_ROOT}"
+    ],
+    "failure_policy": "fail_closed_and_report_only; do not retry blindly; do not enable scheduler or optimizer after failure",
+    "mode": "read_only_unattended_dry_run",
+    "name": "phase5-bounded-unattended-readonly-dry-run",
+    "pipeline": [
+      "preflight_git_and_environment_snapshot",
+      "provenance_dataset",
+      "performance_snapshot",
+      "auto_triage",
+      "scheduler_dry_run",
+      "semantic_safety_verifier",
+      "run_summary_report"
+    ],
+    "required_inputs": {
+      "heldout_review_json": "output/tool-description/phase2e-heldout-review/heldout_review.json",
+      "hse_python": "<HSE_VENV>/bin/python",
+      "prompt_source": "prompt_builder=<HERMES_AGENT_CHECKOUT>/agent/prompt_builder.py",
+      "tool_selection_report_json": "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json"
+    },
+    "required_safety_invariants_false": [
+      "cron_jobs_created",
+      "benchmark_cron_enabled",
+      "scheduler_or_cron_side_effects_performed",
+      "notifications_sent",
+      "optimizer_execution_started",
+      "automated_pr_created_or_updated",
+      "active_runtime_mutation",
+      "external_calls_performed",
+      "network_calls_performed",
+      "raw_private_session_data_committed",
+      "raw_credentials_recorded"
+    ]
+  },
+  "human_review_gates": {
+    "before_L1_one_shot_scheduler": [
+      "approve exact invocation method: manual background command vs Hermes cron one-shot",
+      "approve delivery target: local only or current Discord thread",
+      "approve runtime timeout and repeat count"
+    ],
+    "before_L2_optimizer_cycle": [
+      "approve benchmark/API/network budget",
+      "approve optimizer family and model routing",
+      "approve candidate output root and PR handoff policy",
+      "confirm no auto-merge/deploy"
+    ]
+  },
+  "not_approved_in_this_step": [
+    "create or enable Hermes cron jobs",
+    "start GEPA, DSPy, Darwinian, or other optimizers",
+    "run paid or networked benchmark/API calls",
+    "create, update, or merge external GitHub PRs automatically",
+    "edit active Hermes Agent source, skills, prompts, memory, config, or runtime state",
+    "apply candidates to the active EvAH/Hermes operating checkout"
+  ],
+  "phase": "5",
+  "plan_gate_interpretation": {
+    "current_assessment": "not_yet_formal_completion",
+    "phase5_gate": "Automated pipeline runs unattended",
+    "plan_done_when": [
+      "weekly or one-shot benchmark/monitor run executes unattended and emits reviewable reports",
+      "auto-triage identifies underperforming targets or explicitly emits NO_ACTION from valid metrics",
+      "at least one bounded optimization or no-op decision cycle runs end-to-end without manual intervention under approved budget/safety gates",
+      "human still reviews and merges every PR; no auto-merge/deploy"
+    ],
+    "reason": "The current evidence chain is read-only and strong, but no approved unattended run, benchmark/optimizer execution, or automated PR handoff cycle has been enabled or completed."
+  },
+  "purpose": "Define the bounded unattended automation path required before formal Phase 5 completion can be claimed, without enabling scheduler, cron, optimizer, external PR automation, or active runtime mutation in this step.",
+  "recommended_next_action": "Run exactly one L1 one-shot unattended read-only dry-run under this contract, after separate approval of invocation method and delivery target.",
+  "schema_version": "phase5-bounded-unattended-automation-design-v1",
+  "source_authorization": "Sunwoo rec action GO — approved writing the bounded unattended automation design and dry-run contract"
+}

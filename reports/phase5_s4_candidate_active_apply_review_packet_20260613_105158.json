@@ -1,0 +1,73 @@
+{
+  "schema_version": "phase5-s4-candidate-active-apply-review-packet-v1",
+  "created_at_local": "2026-06-13 10:51 CEST +0200",
+  "created_at_utc": "2026-06-13T08:51:58Z",
+  "status": "S4_CANDIDATE_ACTIVE_APPLY_REVIEW_PACKET_READY_NOT_EXECUTED",
+  "phase": "HSE Phase 5",
+  "stage": "S4_CANDIDATE_ACTIVE_APPLY_REVIEW_PACKET",
+  "source_request": "Sunwoo rec action 3 GO — S4 candidate active apply review packet only; actual apply not approved.",
+  "scope": {
+    "plan_only": true,
+    "active_apply_performed": false,
+    "backup_created_now": false,
+    "active_hermes_tool_schema_modified": false,
+    "active_skill_modified": false,
+    "automatic_pr_update_performed": false,
+    "merge_or_deploy_performed": false
+  },
+  "candidate_inputs": {
+    "current_candidate_descriptions": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate_descriptions.json",
+      "sha256": "983ed97fdf22199dc5835cbac3771af0c5aacb25a03b9dcfdfd334f3aeeb0b0e",
+      "size_bytes": 98568
+    },
+    "sanitized_report": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate_only_report.sanitized.json",
+      "sha256": "f2b0de72de787474c4d8ca229ad0b25c5554216e2fa868fadd6b9ffca171cfe9",
+      "size_bytes": 128433
+    },
+    "candidate_diff": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate.diff",
+      "sha256": "07e55738f70f8bff7328df6f106fe4bf27e9245746d8abee6bf64091364e8b75",
+      "size_bytes": 44237
+    }
+  },
+  "pre_apply_requirements": [
+    "Independent/human review of candidate.diff and sanitized report passes.",
+    "Exact active target files/tool schema location is identified and backed up.",
+    "Backup SHA-256 and candidate SHA-256 are recorded before any copy/apply.",
+    "Apply is done in the smallest possible scope, preferably one tool-description bundle or generated schema patch at a time.",
+    "Post-apply read-back verifies active files match expected candidate content.",
+    "Focused tests and tool routing regression tests pass after apply.",
+    "Rollback command/path is available before apply begins.",
+    "No automatic PR update, merge, deploy, or cron resume is bundled with apply."
+  ],
+  "future_apply_contract_if_separately_approved": {
+    "suggested_phrase": "S4 candidate active apply GO — backup active tool descriptions, apply reviewed candidate only, checksum/read-back/pytest verification; no automatic PR update, no merge/deploy, rollback plan required.",
+    "allowed_future_side_effects_only_after_approval": [
+      "backup exact active target files",
+      "write reviewed candidate content to exact active target files",
+      "run local verification",
+      "write apply evidence report and rollback packet"
+    ],
+    "still_disallowed_without_extra_approval": [
+      "automatic PR update",
+      "auto-merge",
+      "deploy",
+      "credential changes",
+      "unbounded cron/resume",
+      "broad source refactor unrelated to candidate descriptions"
+    ]
+  },
+  "rollback_plan": {
+    "required": true,
+    "minimum": [
+      "copy original active files to timestamped backup under repo/local backup root",
+      "record backup path and SHA-256",
+      "verify rollback by dry-run compare before apply",
+      "on failure restore backup and re-run read-back checksum"
+    ]
+  },
+  "publication_status": "LOCAL_ONLY_UNTIL_PR_PUBLICATION_STEP",
+  "recommended_next_action": "Publish this apply-review packet as evidence only; do not active-apply until a separate active apply GO is issued."
+}

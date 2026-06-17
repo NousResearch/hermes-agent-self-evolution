@@ -35,6 +35,13 @@ darwinian = [
 Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"
 Repository = "https://github.com/NousResearch/hermes-agent-self-evolution"
 
+[project.scripts]
+hse-validate-tool-report = "evolution.tools.report_contract:main"
+hse-review-tool-holdout = "evolution.tools.heldout_tool_selection_review:main"
+hse-decide-tool-holdout = "evolution.tools.expanded_holdout_decision:main"
+hse-phase3-candidate-scaffold = "evolution.prompts.phase3_candidate_scaffold:main"
+hse-phase3-preflight-gate = "evolution.prompts.phase3_preflight_gate:main"
+
 [tool.setuptools.packages.find]
 include = ["evolution*"]
 

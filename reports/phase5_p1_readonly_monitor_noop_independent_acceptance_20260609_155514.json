@@ -1,0 +1,126 @@
+{
+  "acceptance_status": "P1_READONLY_MONITOR_RERUN_NOOP_INDEPENDENT_READ_ONLY_REVIEW_ACCEPTED",
+  "accepted_evidence": {
+    "evidence_status": "P1_READONLY_MONITOR_RERUN_NOOP_EVIDENCE_READY_FOR_PATH_LIMITED_PUBLICATION",
+    "files": [
+      {
+        "bytes": 6738,
+        "path": "reports/phase5_p1_readonly_monitor_rerun_noop_evidence_20260609_153945.json",
+        "sha256": "b98379d845d91d1f5c48a976363817bbb130b3b60856a48348e556b8d99f3218"
+      },
+      {
+        "bytes": 3015,
+        "path": "reports/phase5_p1_readonly_monitor_rerun_noop_evidence_20260609_153945.md",
+        "sha256": "0535f76b471448c5c4d719cd35267651ee66399e0656624a2fbb389da772a49e"
+      }
+    ],
+    "files_present_in_paginated_pr_api": true,
+    "pr_body_addendum_present": true,
+    "publication_commit": "7206baf35d5d133671cbd9f321deb13652b22ff8",
+    "run_root": "output/phase5-continuous-loop/p1-readonly-monitor-rerun-20260609-133318"
+  },
+  "accepted_safety_boundaries": {
+    "active_runtime_mutation": false,
+    "auto_merge_or_deploy": false,
+    "automatic_pr_loop_enabled": false,
+    "budget_or_network_benchmark_spend": false,
+    "credential_modification": false,
+    "cron_resume_performed": false,
+    "optimizer_execution_started": false,
+    "p1_cron_enabled_verified_by_parent_and_independent_verifier": false,
+    "p1_cron_job_id": "b24aca09f168",
+    "p1_cron_state_verified_by_parent_and_independent_verifier": "paused",
+    "production_continuous_loop_enabled": false,
+    "remaining_fires_run": false
+  },
+  "accepted_semantics": {
+    "auto_triage_review_required": false,
+    "auto_triage_status": "NO_ACTION",
+    "dry_run_action_count": 0,
+    "failing_metric_count": 0,
+    "performance_status": "PASS",
+    "prompt_contract_warning_rate": 0.0,
+    "prompt_contract_warning_threshold": 0.05,
+    "provenance_source_kind": "provenance_backed_sanitized_dataset",
+    "provenance_status": "READY_FOR_READONLY_DRY_RUN",
+    "ranked_target_count": 0,
+    "regressing_metric_count": 0,
+    "scheduler_review_required": false,
+    "scheduler_status": "DRY_RUN_NOOP",
+    "side_effect_count": 0,
+    "tool_selection_accuracy": 1.0,
+    "tool_selection_fail_rows": 0,
+    "tool_selection_threshold": 0.9,
+    "weak_area_count": 0
+  },
+  "authorization": {
+    "approved_scope": "record and publish independent read-only acceptance for P1 read-only monitor NOOP evidence, keep cron paused, no cron resume, no optimizer, path-limited PR update only",
+    "source": "Sunwoo Discord approval"
+  },
+  "generated_at_local": "2026-06-09 15:55:14 +0200 CEST",
+  "independent_verifier_findings": {
+    "blockers": [],
+    "cron_paused_enabled_false_verified": true,
+    "evidence_files_present_local_and_pr": true,
+    "github_checks_state": "MISSING_NOT_CI_PASS",
+    "high_risk_credential_assignment_hits": 0,
+    "json_parse_and_semantic_pass": true,
+    "local_branch_head_match": true,
+    "pr_body_addendum_contains_required_tokens": true,
+    "pr_open_head_match": true,
+    "private_absolute_path_hits": 0
+  },
+  "phase": "5",
+  "publication_plan": {
+    "commit_push_allowed_by_current_approval": true,
+    "path_limited_files": [
+      "reports/phase5_p1_readonly_monitor_noop_independent_acceptance_20260609_155514.json",
+      "reports/phase5_p1_readonly_monitor_noop_independent_acceptance_20260609_155514.md"
+    ],
+    "pr_body_addendum_allowed_by_current_approval": true,
+    "publish_output_tree": false,
+    "publish_runner_scripts": false,
+    "publish_source_or_config_changes": false
+  },
+  "pull_request": {
+    "base_branch": "main",
+    "check_runs_total_count": 0,
+    "checks_caveat": "MISSING_NOT_CI_PASS: no GitHub status checks/check runs are reported for the evidence commit; local verification is not CI success.",
+    "commit_status_total_count": 0,
+    "head_branch": "hse/phase5-continuous-loop-prep",
+    "head_owner": "Sunwo0u",
+    "is_draft": false,
+    "mergeable": "MERGEABLE",
+    "number": 108,
+    "pre_acceptance_head": "7206baf35d5d133671cbd9f321deb13652b22ff8",
+    "state": "OPEN",
+    "status_check_rollup_count": 0,
+    "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+  },
+  "recommended_next_step": "Prepare a bounded P1 finite cron soak resume/remaining-fire approval packet only if Sunwoo wants to proceed; do not resume the paused cron without separate explicit approval.",
+  "repository": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head_subject": "Add P1 read-only monitor NOOP evidence",
+    "name": "hermes-agent-self-evolution",
+    "owner": "NousResearch",
+    "pre_acceptance_head": "7206baf35d5d133671cbd9f321deb13652b22ff8",
+    "worktree_notes": {
+      "staging_policy": "stage only this acceptance JSON/Markdown pair",
+      "unrelated_untracked_files_present": [
+        "?? reports/phase5_p1_tool_selection_green_remediation_plan_20260609_150247.json",
+        "?? reports/phase5_p1_tool_selection_green_remediation_plan_20260609_150247.md",
+        "?? tests/monitor/test_phase5_tool_selection_triage_regression.py"
+      ]
+    }
+  },
+  "reviewer": {
+    "external_human_maintainer_approval": false,
+    "mutations_performed_by_verifier": false,
+    "read_only": true,
+    "summary": "Independent delegated verifier returned PASS with no blockers and performed no repository, PR, cron, runtime, config, or skill mutations.",
+    "type": "independent_delegated_read_only_verifier"
+  },
+  "schema_version": "phase5-p1-readonly-monitor-noop-independent-acceptance-v1",
+  "stage": "P1_READONLY_MONITOR_RERUN_NOOP_INDEPENDENT_ACCEPTANCE_PUBLICATION",
+  "verdict": "PASS"
+}

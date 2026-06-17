@@ -1,0 +1,261 @@
+{
+  "authorization": {
+    "approved_scope": "prepare P1 finite cron soak remaining-fire resume approval packet only, keep cron paused, no cron resume, no optimizer, no remaining fires, path-limited PR update only",
+    "source": "Sunwoo Discord approval"
+  },
+  "current_enablement_flags": {
+    "active_runtime_mutation": false,
+    "actual_cron_created": false,
+    "actual_cron_modified": false,
+    "actual_cron_resumed": false,
+    "actual_cron_run_started": false,
+    "approval_packet_only": true,
+    "auto_merge_or_deploy": false,
+    "automatic_pr_loop_enabled": false,
+    "budget_or_network_benchmark_spend": false,
+    "credential_modification": false,
+    "go_for_resume": false,
+    "optimizer_execution_started": false,
+    "production_continuous_loop_enabled": false,
+    "remaining_fires_run": false
+  },
+  "current_p1_cron_state": {
+    "completed_fire_count": 1,
+    "delivery": "origin",
+    "enabled": false,
+    "job_id": "b24aca09f168",
+    "last_run_at": "2026-06-08T16:49:15.153992+02:00",
+    "name": "HSE Phase 5 P1 finite cron soak 20260608-164455",
+    "next_run_at_before_resume": "2026-06-08T17:19:15.153992+02:00",
+    "no_agent": true,
+    "paused_at": "2026-06-08T16:54:53.555907+02:00",
+    "profile": "default",
+    "remaining_fire_count": 2,
+    "remaining_fires_run_now": false,
+    "repeat": "1/3",
+    "resume_performed_now": false,
+    "schedule": "every 30m",
+    "script": "hse_phase5_p1_finite_soak_20260608_164455.py",
+    "state": "paused"
+  },
+  "evidence_chain_inputs": [
+    {
+      "bytes": 6913,
+      "path": "reports/phase5_p1_finite_cron_soak_approval_packet_20260608_1604.json",
+      "present_in_pr_files_api": true,
+      "sha256": "72b9848c65a8970ce5aa62df55ec84812ed16c7047480957070b2879a0cbed96"
+    },
+    {
+      "bytes": 3220,
+      "path": "reports/phase5_p1_finite_cron_soak_approval_packet_20260608_1604.md",
+      "present_in_pr_files_api": true,
+      "sha256": "4b6a731b564fcf65efef2a11cff0ac4a5ff75752facdc9e2c54623d21c41ab84"
+    },
+    {
+      "bytes": 6551,
+      "path": "reports/phase5_p1_finite_cron_soak_run_20260608-164455.json",
+      "present_in_pr_files_api": true,
+      "sha256": "c8ca1433d8152e0a1093cced74bc96f2c90cd5b621d7c1ced13721541e458bd6"
+    },
+    {
+      "bytes": 1188,
+      "path": "reports/phase5_p1_finite_cron_soak_run_20260608-164455.md",
+      "present_in_pr_files_api": true,
+      "sha256": "4c4508c6613a74e868f1ccae6d018d3fa25a62ffdf609967cb970a57df93ddf3"
+    },
+    {
+      "bytes": 1229,
+      "path": "reports/phase5_p1_finite_cron_soak_side_effect_ledger_20260608-164455.json",
+      "present_in_pr_files_api": true,
+      "sha256": "96e9352c2450043eef972b082f40a499a05f05ec590a9507758e1e1c547e6025"
+    },
+    {
+      "bytes": 2021,
+      "path": "reports/phase5_p1_finite_cron_soak_operator_pause_20260608_165453.json",
+      "present_in_pr_files_api": true,
+      "sha256": "7f89cd0bee2f37a4d3bd78bdcb94f81b21e68feb42067d6c3f1c953e609a3daf"
+    },
+    {
+      "bytes": 1923,
+      "path": "reports/phase5_p1_finite_cron_soak_operator_pause_20260608_165453.md",
+      "present_in_pr_files_api": true,
+      "sha256": "d680ca08153394a2280663c4abb1380bdcde75f2257f749bbf47cef7b4f76d43"
+    },
+    {
+      "bytes": 7830,
+      "path": "reports/phase5_p1_manual_triage_review_packet_20260608_230139.json",
+      "present_in_pr_files_api": true,
+      "sha256": "9808cb37436ac84331f751962fd395c3d4079e498e042fbc3c457b48c1f6fe94"
+    },
+    {
+      "bytes": 2325,
+      "path": "reports/phase5_p1_manual_triage_review_acceptance_20260608_230139.json",
+      "present_in_pr_files_api": true,
+      "sha256": "70d34f21e9d859a5a02b64c4571d929f18ff104bb414f2105091ba2abeda6b89"
+    },
+    {
+      "bytes": 6738,
+      "path": "reports/phase5_p1_readonly_monitor_rerun_noop_evidence_20260609_153945.json",
+      "present_in_pr_files_api": true,
+      "sha256": "b98379d845d91d1f5c48a976363817bbb130b3b60856a48348e556b8d99f3218"
+    },
+    {
+      "bytes": 3015,
+      "path": "reports/phase5_p1_readonly_monitor_rerun_noop_evidence_20260609_153945.md",
+      "present_in_pr_files_api": true,
+      "sha256": "0535f76b471448c5c4d719cd35267651ee66399e0656624a2fbb389da772a49e"
+    },
+    {
+      "bytes": 5576,
+      "path": "reports/phase5_p1_readonly_monitor_noop_independent_acceptance_20260609_155514.json",
+      "present_in_pr_files_api": true,
+      "sha256": "83b82fde9ebd7be6facf66a43a3d1427ea4dd3aaa435c800afd3f51fef7ac853"
+    },
+    {
+      "bytes": 3189,
+      "path": "reports/phase5_p1_readonly_monitor_noop_independent_acceptance_20260609_155514.md",
+      "present_in_pr_files_api": true,
+      "sha256": "6d709444bf62fa2240c3b46e11881956fa79db5a1562cce9d0a52470f2544a46"
+    }
+  ],
+  "evidence_chain_semantics": {
+    "checks_caveat": "MISSING_NOT_CI_PASS",
+    "external_human_maintainer_approval": false,
+    "first_fire_completed_count": 1,
+    "first_fire_disallowed_side_effect_count": 0,
+    "first_fire_dry_run_action_count": 1,
+    "first_fire_review_required_count": 1,
+    "first_fire_status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+    "initial_p1_packet_status": "P1_FINITE_CRON_SOAK_APPROVAL_PACKET_READY_NOT_EXECUTED",
+    "manual_triage_acceptance_status": "P1_MANUAL_TRIAGE_REVIEW_ACCEPTED_NO_RESUME",
+    "manual_triage_acceptance_verdict": "PASS",
+    "noop_auto_triage_status": "NO_ACTION",
+    "noop_dry_run_action_count": 0,
+    "noop_evidence_status": "P1_READONLY_MONITOR_RERUN_NOOP_EVIDENCE_READY_FOR_PATH_LIMITED_PUBLICATION",
+    "noop_independent_acceptance_status": "P1_READONLY_MONITOR_RERUN_NOOP_INDEPENDENT_READ_ONLY_REVIEW_ACCEPTED",
+    "noop_independent_acceptance_verdict": "PASS",
+    "noop_performance_status": "PASS",
+    "noop_prompt_contract_warning_rate": 0.0,
+    "noop_provenance_status": "READY_FOR_READONLY_DRY_RUN",
+    "noop_ranked_target_count": 0,
+    "noop_review_required": false,
+    "noop_scheduler_status": "DRY_RUN_NOOP",
+    "noop_side_effect_count": 0,
+    "noop_tool_selection_accuracy": 1.0,
+    "noop_tool_selection_fail_rows": 0,
+    "operator_pause_reason": "review-required signal from first fire; fail-closed pause was valid and later addressed by manual triage plus refreshed read-only monitor NOOP evidence",
+    "operator_pause_status": "P1_SOAK_PAUSED_FAIL_CLOSED_AFTER_REVIEW_REQUIRED"
+  },
+  "future_resume_bounds_if_separately_approved": {
+    "allowed_terminal_statuses": [
+      "P1_SOAK_PASS_NO_ACTION",
+      "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+      "P1_SOAK_FAIL_BLOCKED",
+      "P1_SOAK_ABORTED_BY_KILL_SWITCH"
+    ],
+    "allowed_write_roots": [
+      "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-02/",
+      "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-03/",
+      "reports/phase5_p1_finite_cron_soak_remaining_fire_*"
+    ],
+    "automatic_pr_behavior": "disabled; future PR evidence publication remains manual and separately approved",
+    "delivery": "origin",
+    "fail_closed_triggers": [
+      "review_required=true",
+      "dry_run_action_count>0",
+      "side_effect_count>0",
+      "disallowed_side_effect_count>0",
+      "optimizer_trigger_request",
+      "network_or_budget_request",
+      "active_runtime_mutation_request"
+    ],
+    "interval": "30 minutes, unless future approval explicitly resets schedule",
+    "kill_switch_label": "repo-local output/phase5-continuous-loop/P1_SOAK_KILL_SWITCH",
+    "lock_policy": "skip_if_running_abort_on_existing_lock",
+    "max_additional_fire_count": 2,
+    "no_agent": true,
+    "on_fail_closed": "pause_or_keep_paused, stop remaining fires, write operator-pause evidence, require separate Sunwoo approval before any continuation",
+    "optimizer_behavior": "disabled; threshold triggers remain dry-run signals only",
+    "per_fire_timeout_seconds_max": 1800,
+    "pipeline": "preflight -> provenance_dataset -> performance_snapshot -> auto_triage -> scheduler_dry_run -> side_effect_ledger -> summary_report",
+    "profile": "default",
+    "target_job_id": "b24aca09f168",
+    "total_repeat_bound": "3 total fires, currently 1/3 completed"
+  },
+  "generated_at_local": "2026-06-09 16:36:58 +0200 CEST",
+  "phase": "5",
+  "publication_plan": {
+    "commit_push_allowed_by_current_approval": true,
+    "path_limited_files": [
+      "reports/phase5_p1_finite_cron_soak_remaining_fire_resume_approval_packet_20260609_163658.json",
+      "reports/phase5_p1_finite_cron_soak_remaining_fire_resume_approval_packet_20260609_163658.md"
+    ],
+    "pr_body_addendum_allowed_by_current_approval": true,
+    "publish_output_tree": false,
+    "publish_runner_scripts": false,
+    "publish_skill_or_memory_changes": false,
+    "publish_source_or_config_changes": false
+  },
+  "pull_request": {
+    "base_branch": "main",
+    "check_runs_total_count": 0,
+    "checks_caveat": "MISSING_NOT_CI_PASS: no GitHub status checks/check runs are reported for the current PR head; local verification is not CI success.",
+    "commit_status_total_count": 0,
+    "head_branch": "hse/phase5-continuous-loop-prep",
+    "head_owner": "Sunwo0u",
+    "is_draft": false,
+    "mergeable": "MERGEABLE",
+    "number": 108,
+    "pre_packet_head": "95d3b92e45012ea68201ea29140ac5bcfebbdb04",
+    "state": "OPEN",
+    "status_check_rollup_count": 0,
+    "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+  },
+  "recommended_next_step": "If Sunwoo wants to proceed, give a separate explicit approval for the actual remaining-fire resume execution, naming job b24aca09f168, max additional fires 2, schedule/immediate semantics, timeout, delivery target, and fail-closed behavior. Otherwise no action is recommended.",
+  "repository": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head_subject": "Record P1 read-only monitor NOOP acceptance",
+    "name": "hermes-agent-self-evolution",
+    "owner": "NousResearch",
+    "pre_packet_head": "95d3b92e45012ea68201ea29140ac5bcfebbdb04",
+    "worktree_notes": {
+      "path_limited_staging_policy": "stage only this remaining-fire resume approval packet JSON/Markdown pair",
+      "unrelated_untracked_files_present": [
+        "?? reports/phase5_p1_tool_selection_green_remediation_plan_20260609_150247.json",
+        "?? reports/phase5_p1_tool_selection_green_remediation_plan_20260609_150247.md",
+        "?? tests/monitor/test_phase5_tool_selection_triage_regression.py"
+      ]
+    }
+  },
+  "resume_readiness_assessment": {
+    "known_resume_risk": "The paused job next_run_at is in the past; a future resume approval must explicitly choose immediate resume semantics or a bounded schedule reset/update. Do not infer this automatically.",
+    "lock_state_checked": {
+      "repo_local_kill_switch_present": false,
+      "repo_local_soak_lock_present": false
+    },
+    "required_human_decision_before_resume": [
+      "confirm whether to resume existing job b24aca09f168 as-is or update/recreate a bounded replacement schedule",
+      "confirm delivery target origin",
+      "confirm maximum remaining fires 2",
+      "confirm per-fire timeout <=1800s",
+      "confirm handling of stale next_run_at",
+      "confirm fail-closed pause behavior for any review_required/dry-run action/nonzero side effect"
+    ],
+    "resume_ready_status": "PACKET_READY_FOR_SEPARATE_APPROVAL_NOT_EXECUTED",
+    "why_resume_can_be_considered": "The original review-required first-fire signal has a manual triage acceptance, refreshed tool-selection GREEN evidence, read-only monitor rerun NOOP evidence, and independent delegated read-only acceptance.",
+    "why_resume_is_not_done_now": "Current approval explicitly requires keep cron paused, no cron resume, no remaining fires, and no optimizer."
+  },
+  "schema_version": "phase5-p1-finite-cron-soak-remaining-fire-resume-approval-packet-v1",
+  "stage": "P1_FINITE_CRON_SOAK_REMAINING_FIRE_RESUME_APPROVAL_PACKET",
+  "status": "P1_FINITE_CRON_SOAK_REMAINING_FIRE_RESUME_APPROVAL_PACKET_READY_NOT_EXECUTED",
+  "verdict": "READY_NOT_EXECUTED",
+  "verification_performed_for_packet_authoring": {
+    "cron_state_verified_paused_enabled_false": true,
+    "evidence_chain_files_present_locally_and_in_pr": true,
+    "github_checks_state": "MISSING_NOT_CI_PASS",
+    "kill_switch_and_lock_absent_at_packet_time": true,
+    "packet_publication_allowed_by_current_approval": true,
+    "repo_pr_head_inspected": true,
+    "source_json_artifacts_parsed": true
+  }
+}

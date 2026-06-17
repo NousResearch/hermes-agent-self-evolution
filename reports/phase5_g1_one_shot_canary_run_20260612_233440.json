@@ -1,0 +1,51 @@
+{
+  "schema_version": "phase5-g1-one-shot-canary-run-v1",
+  "phase": "5",
+  "mode": "G1 one_shot_canary_manual_local_cli",
+  "authorization": "Sunwoo explicit approval in Discord: G1 one-shot canary execute GO under phase5_g1_one_shot_canary_approval_packet_20260607_1606",
+  "started_at_utc": "2026-06-12T23:34:40Z",
+  "status": "G1_FAIL_BLOCKED",
+  "terminal_status": "G1_FAIL_BLOCKED",
+  "error": "RuntimeError: provenance_dataset failed rc=1: [Errno 2] No such file or directory: '<hermes-agent>/agent/prompt_builder.py'",
+  "run_root": "output/phase5-continuous-loop/production-canary-20260612-233440",
+  "pipeline_steps": [
+    {
+      "name": "provenance_dataset",
+      "logical_command": [
+        "/Users/snw/.hermes/evolution/venvs/self-evolution/bin/python",
+        "-m",
+        "evolution.monitor.provenance_dataset",
+        "--tool-selection-report-json",
+        "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+        "--heldout-review-json",
+        "output/tool-description/phase2e-heldout-review/heldout_review.json",
+        "--prompt-source",
+        "prompt_builder=<hermes-agent>/agent/prompt_builder.py",
+        "--output-dir",
+        "output/phase5-continuous-loop/production-canary-20260612-233440/provenance",
+        "--window-start",
+        "2026-06-11",
+        "--window-end",
+        "2026-06-12",
+        "--generated-at",
+        "2026-06-12T23:34:40Z"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "[Errno 2] No such file or directory: '<hermes-agent>/agent/prompt_builder.py'",
+      "duration_seconds": 0.044
+    }
+  ],
+  "safety_boundary": {
+    "active_runtime_mutation": false,
+    "auto_merge_or_deploy": false,
+    "automated_pr_created_or_updated": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "optimizer_execution_started": false,
+    "production_continuous_loop_enabled": false,
+    "model_or_api_budget_spent": false
+  },
+  "g2_status": "BLOCKED_PENDING_HUMAN_REVIEW_AND_EXPLICIT_APPROVAL"
+}

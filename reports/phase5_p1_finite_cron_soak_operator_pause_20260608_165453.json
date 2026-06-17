@@ -1,0 +1,40 @@
+{
+  "schema_version": "phase5-p1-finite-cron-soak-operator-pause-v1",
+  "run_id": "20260608-164455",
+  "cron_job_id": "b24aca09f168",
+  "created_at": "2026-06-08T16:54:53+02:00",
+  "operator": "EvAH",
+  "authorized_by": "Sunwoo",
+  "status": "P1_SOAK_PAUSED_FAIL_CLOSED_AFTER_REVIEW_REQUIRED",
+  "reason": "The first fire completed without disallowed side effects, but auto-triage/scheduler dry-run returned REVIEW_REQUIRED with one manual_triage_review dry-run action.",
+  "completed_fire_count": 1,
+  "max_fire_count": 3,
+  "remaining_fires_paused": 2,
+  "cron_state_after_pause": "paused",
+  "kill_switch_created": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/P1_FINITE_CRON_SOAK_KILL_SWITCH",
+  "primary_report": "reports/phase5_p1_finite_cron_soak_run_20260608-164455.json",
+  "side_effect_ledger": "reports/phase5_p1_finite_cron_soak_side_effect_ledger_20260608-164455.json",
+  "first_fire": {
+    "status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+    "auto_triage_status": "REVIEW_REQUIRED",
+    "scheduler_status": "DRY_RUN_REVIEW_REQUIRED",
+    "review_required": true,
+    "dry_run_action_count": 1,
+    "dry_run_action_type": "manual_triage_review",
+    "target_metric_id": "tool_selection_accuracy",
+    "recommendation": "review_target_no_scheduler_side_effects",
+    "required_approval": "human_review_required_before_scheduler_enablement",
+    "side_effect_count": 0,
+    "disallowed_side_effect_count": 0
+  },
+  "preserved_off_boundaries": {
+    "production_continuous_loop_enabled": false,
+    "threshold_optimizer_execution_started": false,
+    "automatic_pr_loop_enabled": false,
+    "auto_merge_or_deploy_performed": false,
+    "network_api_model_budget_spend": false,
+    "credential_modification": false,
+    "active_runtime_source_config_skill_memory_mutation": false
+  },
+  "recommended_next_step": "Publish the P1 first-fire run report, side-effect ledger, and operator pause artifact to the reviewer-facing evidence chain, then obtain review before resuming or escalating."
+}

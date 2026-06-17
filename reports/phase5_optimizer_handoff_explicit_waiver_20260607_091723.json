@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-06-07T09:17:23Z",
+  "mode": "explicit_waiver_record",
+  "non_waived_boundaries": [
+    "No Hermes cron or scheduler enablement is authorized by this waiver.",
+    "No optimizer, benchmark/API spend, network call, or active runtime mutation is authorized by this waiver.",
+    "No external PR creation/update, merge, auto-merge, or deployment is authorized by this waiver.",
+    "Future production-like continuous loop still requires a separate scheduler/cron enablement command and human review."
+  ],
+  "phase": "5",
+  "safety_invariants": {
+    "active_runtime_mutation": false,
+    "automated_pr_created_or_updated": false,
+    "benchmark_cron_enabled": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "notifications_sent": false,
+    "optimizer_execution_started": false,
+    "raw_credentials_recorded": false,
+    "raw_private_session_data_committed": false,
+    "read_only": true,
+    "scheduler_or_cron_side_effects_performed": false
+  },
+  "schema_version": "phase5-optimizer-handoff-explicit-waiver-v1",
+  "source_authorization": "Sunwoo rec action GO \u2014 approved L1 evidence packet commit/publish review, L2 budgeted unattended optimization/no-op decision cycle, and explicit optimizer/handoff waiver for formal Phase 5",
+  "status": "WAIVER_APPROVED_AND_RECORDED",
+  "waiver_scope": [
+    {
+      "decision": "WAIVED",
+      "id": "optimizer_execution_for_this_cycle",
+      "reason": "L2 decision cycle selected the no-op branch because the L1 evidence has no weak target; running an optimizer would be unnecessary risk and would weaken the no-op proof."
+    },
+    {
+      "decision": "WAIVED",
+      "id": "automated_external_handoff_for_this_cycle",
+      "reason": "No candidate artifact was generated; therefore automated PR creation/update is not required for this cycle and human review remains the handoff gate."
+    },
+    {
+      "decision": "ACKNOWLEDGED_AND_WAIVED_FOR_LOCAL_FORMAL_COMPLETION_ONLY",
+      "id": "phase4_upstream_merge_dependency_for_local_formal_phase5_claim",
+      "reason": "Readiness manifest records local Phase 4 engineering/tests green while upstream PR merge/check reporting is incomplete; Sunwoo's explicit handoff waiver is recorded for local formal Phase 5 completion, not for production scheduler enablement or auto-merge/deploy."
+    }
+  ]
+}

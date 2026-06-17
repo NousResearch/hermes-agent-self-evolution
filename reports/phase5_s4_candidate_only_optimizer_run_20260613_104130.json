@@ -1,0 +1,142 @@
+{
+  "schema_version": "phase5-s4-candidate-only-optimizer-run-v1",
+  "created_at_local": "2026-06-13 10:44 CEST +0200",
+  "created_at_utc": "2026-06-13T08:44:56Z",
+  "status": "S4_CANDIDATE_ONLY_OPTIMIZER_RUN_PASS_CANDIDATE_READY_NO_APPLY",
+  "phase": "HSE Phase 5",
+  "stage": "S4_CANDIDATE_ONLY_OPTIMIZER_EXECUTION",
+  "source_request": "Sunwoo S4 candidate-only optimizer execute GO under phase5_s4_candidate_only_optimizer_approval_packet_20260613_054510.json — provider/model/budget/time/path caps confirmed; no active apply, no automatic PR update, no merge/deploy.",
+  "approval_packet": "reports/phase5_s4_candidate_only_optimizer_approval_packet_20260613_054510.json",
+  "execution_mode": {
+    "engine": "evolution.tools.evolve_tool_descriptions deterministic candidate-only generator",
+    "provider_model_used": null,
+    "provider_model_policy": "zero-budget local deterministic path; no Gemini/Google routing; no model/API calls used",
+    "network_calls_performed": false,
+    "model_or_api_budget_spent": false,
+    "wall_clock_cap_seconds": 1800,
+    "actual_exit_code": 0,
+    "candidate_only": true
+  },
+  "scope_boundaries": {
+    "active_apply_of_candidate": false,
+    "active_hermes_runtime_config_source_skill_memory_mutation": false,
+    "automatic_pr_creation_or_update": false,
+    "auto_merge_or_deploy": false,
+    "credential_read_write_or_rotation": false,
+    "unbounded_recurring_job_or_cron": false,
+    "google_gemini_family_routing_without_override": false,
+    "model_or_api_budget_spent": false,
+    "network_calls_performed": false,
+    "candidate_applied": false,
+    "active_hermes_runtime_mutation": false,
+    "active_skill_mutation": false,
+    "cron_created_or_resumed": false,
+    "pr_created_or_updated": false,
+    "git_stage_commit_push": false
+  },
+  "metrics": {
+    "apply_ready": false,
+    "candidate_count": 63,
+    "case_count": 45,
+    "selection_accuracy": 1.0,
+    "wrong_tool_avoidance": 1.0,
+    "constraint_pass_rate": 1.0,
+    "argument_cue_coverage": 1.0,
+    "warning_count": 0,
+    "non_passing_count": 0,
+    "phase2d_gate_passed": true,
+    "phase2d_failed_checks": [],
+    "baseline_selection_accuracy": 0.6444,
+    "candidate_selection_accuracy": 1.0
+  },
+  "artifacts": {
+    "run_root": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130",
+      "exists": true
+    },
+    "inventory": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/inventory.json",
+      "sha256": "012ec663c8912445c0abdc9a241b1f576abb16e5f7d9dfa4e87eaaba763f2d27",
+      "size_bytes": 154691
+    },
+    "candidate_descriptions": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate_descriptions.json",
+      "sha256": "983ed97fdf22199dc5835cbac3771af0c5aacb25a03b9dcfdfd334f3aeeb0b0e",
+      "size_bytes": 98568
+    },
+    "candidate_only_report_raw": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate_only_report.json",
+      "sha256": "f74229f3dc4f40162abb6378733c226caaec566311141188846b27c3714da701",
+      "size_bytes": 129519,
+      "private_abs_path_count": 3,
+      "reviewer_facing": false
+    },
+    "candidate_only_report_sanitized": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate_only_report.sanitized.json",
+      "sha256": "f2b0de72de787474c4d8ca229ad0b25c5554216e2fa868fadd6b9ffca171cfe9",
+      "size_bytes": 128433,
+      "private_abs_path_count": 0,
+      "reviewer_facing": true
+    },
+    "candidate_diff": {
+      "path": "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate.diff",
+      "sha256": "07e55738f70f8bff7328df6f106fe4bf27e9245746d8abee6bf64091364e8b75",
+      "size_bytes": 44237
+    }
+  },
+  "verification": {
+    "candidate_generation_command": "python3 -m evolution.tools.evolve_tool_descriptions --inventory-json output/tool-description/phase2e-heldout-review/run/inventory.json --output-dir output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130",
+    "candidate_generation_exit_code": 0,
+    "candidate_generation_stdout_key_lines": [
+      "Phase 2D candidate-only artifacts written",
+      "output: output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130",
+      "active Hermes tool schemas modified: no",
+      "Phase 2D gate: passed"
+    ],
+    "pytest_monitor": {
+      "command": "uv run --no-project --offline --with pytest --with click --with rich python -m pytest tests/monitor/test_phase5_tool_selection_triage_regression.py -q",
+      "exit_code": 0,
+      "output": "2 passed in 0.17s"
+    },
+    "pytest_focused": {
+      "command": "uv run --no-project --offline --with pytest --with click --with rich python -m pytest tests/tools/test_evolve_tool_descriptions.py tests/tools/test_tool_description_eval.py tests/monitor/test_phase5_tool_selection_triage_regression.py -q",
+      "exit_code": 0,
+      "output": "28 passed in 0.13s"
+    },
+    "compileall": {
+      "command": "uv run --no-project --offline --with pytest --with click --with rich python -m compileall -q evolution/tools tests/tools tests/monitor",
+      "exit_code": 0
+    }
+  },
+  "scan_summary": {
+    "raw_candidate_report_private_abs_path_count": 3,
+    "raw_candidate_report_note": "Raw generator report stores absolute artifact paths; sanitized report is the reviewer-facing report for publication/use.",
+    "reviewer_facing_scan": {
+      "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate_only_report.sanitized.json": {
+        "private_abs_path_count": 0,
+        "sensitive_assignment_like_count": 0
+      },
+      "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate_descriptions.json": {
+        "private_abs_path_count": 0,
+        "sensitive_assignment_like_count": 0
+      },
+      "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/inventory.json": {
+        "private_abs_path_count": 0,
+        "sensitive_assignment_like_count": 0
+      },
+      "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/run-20260613_104130/candidate.diff": {
+        "private_abs_path_count": 0,
+        "sensitive_assignment_like_count": 0
+      }
+    },
+    "reviewer_facing_private_abs_path_total": 0,
+    "reviewer_facing_sensitive_assignment_like_total": 0
+  },
+  "side_effect_ledger": "reports/phase5_s4_candidate_only_optimizer_side_effect_ledger_20260613_104130.json",
+  "publication_status": "LOCAL_ONLY_NOT_COMMITTED_OR_PUSHED",
+  "recommended_next_action": {
+    "safe_default": "Review candidate-only artifacts and sanitized report locally; do not apply candidate or update PR automatically.",
+    "if_apply_desired_later": "S4 candidate active apply review packet GO — compare sanitized candidate diff, require independent review, backup/checksum/read-back, no automatic PR update, no merge/deploy.",
+    "if_publication_desired_later": "PR publication GO: publish S4 candidate-only optimizer run evidence to PR #108 as review/comment/update only; no active apply, no auto-merge, no deploy."
+  }
+}

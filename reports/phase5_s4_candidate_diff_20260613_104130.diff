@@ -1,0 +1,481 @@
+--- browser_back/baseline_description
++++ browser_back/candidate_description
+@@ -1 +1 @@
+-Navigate back to the previous page in browser history. Requires browser_navigate to be called first.
+
++Navigate back to the previous page in browser history. Requires browser_navigate to be called first. Use for cues: back, previous, browser, history, page, already, open; Prefer over browser_navigate, session_search, terminal.
+
+
+--- browser_click/baseline_description
++++ browser_click/candidate_description
+@@ -1 +1 @@
+-Click on an element identified by its ref ID from the snapshot (e.g., '@e5'). The ref IDs are shown in square brackets in the snapshot output. Requires browser_navigate and browser_snapshot to be called first.
+
++Click on an element identified by its ref ID from the snapshot (e.g., '@e5'). The ref IDs are shown in square brackets in the snapshot output. Requires browser_navigate and browser_snapshot to be called first. Use for cues: click, button, snapshot, ref, save, already, visible; Prefer over browser_type, computer_use, terminal.
+
+
+--- browser_console/baseline_description
++++ browser_console/candidate_description
+@@ -1 +1 @@
+-Get browser console output and JavaScript errors from the current page. Returns console.log/warn/error/info messages and uncaught JS exceptions. Use this to detect silent JavaScript errors, failed API calls, and application warnings. Requires browser_navigate to be called first. When 'expression' is provided, evaluates JavaScript in the page context and returns the result — use this for DOM inspection, reading page state, or extracting data programmatically.
+
++Get browser console output and JavaScript errors from the current page. Returns console.log/warn/error/info messages and uncaught JS exceptions. Use this to detect silent JavaScript errors, failed API calls, and application warnings. Requires browser_navigate to be called first. When 'expression'… Use for cues: console, javascript, errors, page, document, evaluate, check, after, failed, form, submission, title, current, context; Prefer over terminal, search_files, browser_snapshot, execute_code.
+
+
+--- browser_get_images/baseline_description
++++ browser_get_images/candidate_description
+@@ -1 +1 @@
+-Get a list of all images on the current page with their URLs and alt text. Useful for finding images to analyze with the vision tool. Requires browser_navigate to be called first.
+
++Get a list of all images on the current page with their URLs and alt text. Useful for finding images to analyze with the vision tool. Requires browser_navigate to be called first. Use for cues: images, urls, alt, page, browser, list, all, text, current; Prefer over browser_vision, vision_analyze, browser_snapshot.
+
+
+--- browser_navigate/baseline_description
++++ browser_navigate/candidate_description
+@@ -1 +1 @@
+-Navigate to a URL in the browser. Initializes the session and loads the page. Must be called before other browser tools. For simple information retrieval, prefer web_search or web_extract (faster, cheaper). For plain-text endpoints — URLs ending in .md, .txt, .json, .yaml, .yml, .csv, .xml, raw.githubusercontent.com, or any documented API endpoint — prefer curl via the terminal tool or web_extract; the browser stack is overkill and much slower for these. Use browser tools when you need to interact with a page (click, fill forms, dynamic content). Returns a compact page snapshot with interactive elements and ref IDs — no need to call browser_snapshot separately after navigating.
+
++Navigate to a URL in the browser. Initializes the session and loads the page. Must be called before other browser tools. For simple information retrieval, prefer web_search or web_extract (faster, cheaper). For plain-text endpoints — URLs ending in .md, .txt, .json, .yaml, .yml, .csv, .xml, raw.githubusercontent.com, or any docu… Use for cues: navigate, open, click, dynamic, web, app, login, free, setting, screen, see, what, change, dynamically; Prefer over session_search, web_search, read_file.
+
+
+--- browser_press/baseline_description
++++ browser_press/candidate_description
+@@ -1 +1 @@
+-Press a keyboard key. Useful for submitting forms (Enter), navigating (Tab), or keyboard shortcuts. Requires browser_navigate to be called first.
+
++Press a keyboard key. Useful for submitting forms (Enter), navigating (Tab), or keyboard shortcuts. Requires browser_navigate to be called first. Use for cues: press, enter, key, browser, focused, page, submit, search, form; Prefer over browser_click, computer_use, terminal.
+
+
+--- browser_scroll/baseline_description
++++ browser_scroll/candidate_description
+@@ -1 +1 @@
+-Scroll the page in a direction. Use this to reveal more content that may be below or above the current viewport. Requires browser_navigate to be called first.
+
++Scroll the page in a direction. Use this to reveal more content that may be below or above the current viewport. Requires browser_navigate to be called first. Use for cues: scroll, browser, page, down, reveal, current, more, content, tak, another; Prefer over computer_use, browser_snapshot, terminal.
+
+
+--- browser_snapshot/baseline_description
++++ browser_snapshot/candidate_description
+@@ -1 +1 @@
+-Get a text-based snapshot of the current page's accessibility tree. Returns interactive elements with ref IDs (like @e1, @e2) for browser_click and browser_type. full=false (default): compact view with interactive elements. full=true: complete page content. Snapshots over 8000 chars are truncated or LLM-summarized. Requires browser_navigate first. Note: browser_navigate already returns a compact snapshot — use this to refresh after interactions that change the page, or with full=true for complete content.
+
++Get a text-based snapshot of the current page's accessibility tree. Returns interactive elements with ref IDs (like @e1, @e2) for browser_click and browser_type. full=false (default): compact view with interactive elements. full=true: complete page content. Snap… Use for cues: snapshot, page, buttons, structure, browser, accessible, click, after, navigat, capture, current, available, inspect, loaded, decid, what; Prefer over browser_vision, read_file, computer_use, vision_analyze, browser_click.
+
+
+--- browser_type/baseline_description
++++ browser_type/candidate_description
+@@ -1 +1 @@
+-Type text into an input field identified by its ref ID. Clears the field first, then types the new text. Requires browser_navigate and browser_snapshot to be called first.
+
++Type text into an input field identified by its ref ID. Clears the field first, then types the new text. Requires browser_navigate and browser_snapshot to be called first. Use for cues: type, input, field, browser, text, ref, supplied, email, focused, current, snapshot; Prefer over computer_use, browser_click, terminal.
+
+
+--- browser_vision/baseline_description
++++ browser_vision/candidate_description
+@@ -1 +1 @@
+-Take a screenshot of the current page and analyze it with vision AI. Use this when you need to visually understand what's on the page - especially useful for CAPTCHAs, visual verification challenges, complex layouts, or when the text snapshot doesn't capture important visual information. Returns both the AI analysis and a screenshot_path that you can share with the user by including MEDIA:<screenshot_path> in your response. Requires browser_navigate to be called first.
+
++Take a screenshot of the current page and analyze it with vision AI. Use this when you need to visually understand what's on the page - especially useful for CAPTCHAs, visual verification challenges, complex layouts, or when the text snapshot doesn't capture important visual information. Returns both the AI analysis and a screenshot_path that you can share with the user… Use for cues: browser, screenshot, visual, page, current, take, inspect, layout; Prefer over vision_analyze, browser_snapshot.
+
+
+--- browser_cdp/baseline_description
++++ browser_cdp/candidate_description
+@@ -1 +1 @@
+-Send a raw Chrome DevTools Protocol (CDP) command. Escape hatch for browser operations not covered by browser_navigate, browser_click, browser_console, etc.
+
+**Requires a reachable CDP endpoint.** Available when the user has run '/browser connect' to attach to a running Chrome, Brave, Chromium, or Edge browser, or when 'browser.cdp_url' is set in config.yaml. Not currently wired up for cloud backends (Browserbase, Browser Use, Firecrawl) — those expose CDP per session but live-session routing is a follow-up. Camofox is REST-only and will never support CDP. If the tool is in your toolset at all, a CDP endpoint is already reachable.
+
+**CDP method reference:** https://chromedevtools.github.io/devtools-protocol/ — use web_extract on a method's URL (e.g. '/tot/Page/#method-handleJavaScriptDialog') to look up parameters and return shape.
+
+**Common patterns:**
+- List tabs: method='Target.getTargets', params={}
+- Handle a native JS dialog: method='Page.handleJavaScriptDialog', params={'accept': true, 'promptText': ''}, target_id=<tabId>
+- Get all cookies: method='Network.getAllCookies', params={}
+- Eval in a specific tab: method='Runtime.evaluate', params={'expression': '...', 'returnByValue': true}, target_id=<tabId>
+- Set viewport for a tab: method='Emulation.setDeviceMetricsOverride', params={'width': 1280, 'height': 720, 'deviceScaleFactor': 1, 'mobile': false}, target_id=<tabId>
+
+**Usage rules:**
+- Browser-level methods (Target.*, Browser.*, Storage.*): omit target_id and frame_id.
+- Page-level methods (Page.*, Runtime.*, DOM.*, Emulation.*, Network.* scoped to a tab): pass target_id from Target.getTargets.
+- **Cross-origin iframe scope** (Runtime.evaluate inside an OOPIF, Page.* targeting a frame target, etc.): pass frame_id from the browser_snapshot frame_tree output. This routes through the CDP supervisor's live connection — the only reliable way on Browserbase where stateless CDP calls hit signed-URL expiry.
+- Each stateless call (without frame_id) is independent — sessions and event subscriptions do not persist between calls. For stateful workflows, prefer the dedicated browser tools or use frame_id routing.
+
++Send a raw Chrome DevTools Protocol (CDP) command. Escape hatch for browser operations not covered by browser_navigate, browser_click, browser_console, etc. **Requires a reachable CDP endpoint.** Available when the user has run '/browser connect' to attach to a running Chrome, Brave, Chromium, or Edge browser, or when 'browser.cdp_url' is set in config.yaml. Not currently wired up for cloud backends (Browserbase, Browser Use, Firecrawl) — those expose CDP per session but live-session routing is…
+
+
+--- clarify/baseline_description
++++ clarify/candidate_description
+@@ -1 +1 @@
+-Ask the user a question when you need clarification, feedback, or a decision before proceeding. Supports two modes:
+
+1. **Multiple choice** — provide up to 4 choices. The user picks one or types their own answer via a 5th 'Other' option.
+2. **Open-ended** — omit choices entirely. The user types a free-form response.
+
+Use this tool when:
+- The task is ambiguous and you need the user to choose an approach
+- You want post-task feedback ('How did that work out?')
+- You want to offer to save a skill or update memory
+- A decision has meaningful trade-offs the user should weigh in on
+
+Do NOT use this tool for simple yes/no confirmation of dangerous commands (the terminal tool handles that). Prefer making a reasonable default choice yourself when the decision is low-stakes.
+
++Ask the user a question when you need clarification, feedback, or a decision before proceeding. Supports two modes: 1. **Multiple choice** — provide up to 4 choices. The user picks one or types their own answer via a 5th 'Other' option. 2. **Open-ended** — omit choices entirely. The user types a free-form response. Use this tool when:… Use for cues: ask, choose, clarification, before, decision, between, two, deployment, target, tak, irreversible, action; Prefer over terminal, todo, send_message.
+
+
+--- execute_code/baseline_description
++++ execute_code/candidate_description
+@@ -1 +1 @@
+-Run a Python script that can call Hermes tools programmatically. Use this when you need 3+ tool calls with processing logic between them, need to filter/reduce large tool outputs before they enter your context, need conditional branching (if X then Y else Z), or need to loop (fetch N pages, process N files, retry on failure).
+
+Use normal tool calls instead when: single tool call with no processing, you need to see the full result and apply complex reasoning, or the task requires interactive user input.
+
+Available via `from hermes_tools import ...`:
+
+  web_search(query: str, limit: int = 5) -> dict
+    Returns {"data": {"web": [{"url", "title", "description"}, ...]}}
+  web_extract(urls: list[str]) -> dict
+    Returns {"results": [{"url", "title", "content", "error"}, ...]} where content is markdown
+  read_file(path: str, offset: int = 1, limit: int = 500) -> dict
+    Lines are 1-indexed. Returns {"content": "...", "total_lines": N}
+  write_file(path: str, content: str) -> dict
+    Always overwrites the entire file.
+  search_files(pattern: str, target="content", path=".", file_glob=None, limit=50) -> dict
+    target: "content" (search inside files) or "files" (find files by name). Returns {"matches": [...]}
+  patch(path: str, old_string: str, new_string: str, replace_all: bool = False) -> dict
+    Replaces old_string with new_string in the file.
+  terminal(command: str, timeout=None, workdir=None) -> dict
+    Foreground only (no background/pty). Returns {"output": "...", "exit_code": N}
+
+Limits: 5-minute timeout, 50KB stdout cap, max 50 tool calls per script. terminal() is foreground-only (no background or pty).
+
+Scripts run in the session's working directory with the active venv's python, so project deps (pandas, etc.) and relative paths work like in terminal().
+
+Print your final result to stdout. Use Python stdlib (json, re, math, csv, datetime, collections, etc.) for processing between tool calls.
+
+Also available (no import needed — built into hermes_tools):
+  json_parse(text: str) — json.loads with strict=False; use for terminal() output with control chars
+  shell_quote(s: str) — shlex.quote(); use when interpolating dynamic strings into shell commands
+  retry(fn, max_attempts=3, delay=2) — retry with exponential backoff for transient failures
+
++Run a Python script that can call Hermes tools programmatically. Use this when you need 3+ tool calls with processing logic between them, need to filter/reduce large tool outputs before they enter your context, need conditional branching (if X then Y else Z), or need to loop (fetch N pages, process N files, retry on failure… Use for cues: calculate, math, python, exact, json, compute, grouped, totals, percentages, process, csv, summary, cost, numeric, line, item; Prefer over terminal, read_file.
+
+
+--- computer_use/baseline_description
++++ computer_use/candidate_description
+@@ -1 +1 @@
+-Universal macOS desktop control via cua-driver. Works with any tool-capable model (Anthropic, OpenAI, OpenRouter, local vLLM, etc.). Background computer-use: does NOT steal the user's cursor or keyboard focus.
+
++Universal macOS desktop control via cua-driver. Works with any tool-capable model (Anthropic, OpenAI, OpenRouter, local vLLM, etc.). Background computer-use: does NOT steal the user's cursor or keyboard focus. Use for cues: macos, background, window, click, desktop, native, menu, capture, app, press, visible, export, button, bar, item, safari; Prefer over browser_click, terminal, browser_snapshot, browser_vision.
+
+
+--- cronjob/baseline_description
++++ cronjob/candidate_description
+@@ -1 +1 @@
+-Manage scheduled cron jobs with a single compressed tool.
+
+Use action='create' to schedule a new job from a prompt or one or more skills.
+Use action='list' to inspect jobs.
+Use action='update', 'pause', 'resume', 'remove', or 'run' to manage an existing job.
+
+To stop a job the user no longer wants: first action='list' to find the job_id, then action='remove' with that job_id. Never guess job IDs — always list first.
+
+Jobs run in a fresh session with no current-chat context, so prompts must be self-contained.
+If skills are provided on create, the future cron run loads those skills in order, then follows the prompt as the task instruction.
+On update, passing skills=[] clears attached skills.
+
+NOTE: The agent's final response is auto-delivered to the target. Put the primary
+user-facing content in the final response. Cron jobs run autonomously with no user
+present — they cannot ask questions or request clarification.
+
+Important safety rule: cron-run sessions should not recursively schedule more cron jobs.
+
++Manage scheduled cron jobs with a single compressed tool. Use action='create' to schedule a new job from a prompt or one or more skills. Use action='list' to inspect jobs. Use action='update', 'pause', 'resume', 'remove', or 'run' to manage an existing job. To stop a job the user no longer wants: first action='list' to find the job_id, then action=… Use for cues: schedule, every, recurring, job, self, contained, reminder, check, release, feed, two, hour; Prefer over todo, terminal, send_message.
+
+
+--- delegate_task/baseline_description
++++ delegate_task/candidate_description
+@@ -1 +1 @@
+-Spawn one or more subagents in isolated contexts. Description is rebuilt at every get_definitions() call to reflect the user's current delegation limits.
+
++Spawn one or more subagents in isolated contexts. Description is rebuilt at every get_definitions() call to reflect the user's current delegation limits. Use for cues: subtasks, workers, parallel, isolated, split, three, independent, code, inspection, across, summarize, their, finding; Prefer over terminal, todo, cronjob.
+
+
+--- discord/baseline_description
++++ discord/candidate_description
+@@ -1 +1 @@
+-Read and participate in a Discord server.
+
+Available actions:
+  search_members(guild_id, query)  — find members by name prefix
+  fetch_messages(channel_id)  — recent messages; optional before/after snowflakes
+  create_thread(channel_id, name)  — create a public thread; optional message_id anchor
+
+Use the channel_id from the current conversation context. Use search_members to look up user IDs by name prefix.
+
++Read and participate in a Discord server. Available actions: search_members(guild_id, query) — find members by name prefix fetch_messages(channel_id) — recent messages; optional before/after snowflakes create_thread(channel_id, name) — create a public thread; optional message_id anchor Use the channel_id from the current conversation context. Use search_members to look up user IDs by name prefix.
+
+
+--- discord_admin/baseline_description
++++ discord_admin/candidate_description
+@@ -1 +1 @@
+-Manage a Discord server via the REST API.
+
+Available actions:
+  list_guilds()  — list servers the bot is in
+  server_info(guild_id)  — server details + member counts
+  list_channels(guild_id)  — all channels grouped by category
+  channel_info(channel_id)  — single channel details
+  list_roles(guild_id)  — roles sorted by position
+  member_info(guild_id, user_id)  — lookup a specific member
+  list_pins(channel_id)  — pinned messages in a channel
+  pin_message(channel_id, message_id)  — pin a message
+  unpin_message(channel_id, message_id)  — unpin a message
+  delete_message(channel_id, message_id)  — delete a message
+  add_role(guild_id, user_id, role_id)  — assign a role
+  remove_role(guild_id, user_id, role_id)  — remove a role
+
+Call list_guilds first to discover guild_ids, then list_channels for channel_ids. Runtime errors will tell you if the bot lacks a specific per-guild permission (e.g. MANAGE_ROLES for add_role).
+
++Manage a Discord server via the REST API. Available actions: list_guilds() — list servers the bot is in server_info(guild_id) — server details + member counts list_channels(guild_id) — all channels grouped by category channel_info(channel_id) — single channel details list_roles(guild_id) — roles sorted by position member_info(guild_id, user_id) — lookup a specific member list_pins(channel_id) — pinned messages in a channel pin_message(channel_id, message_id) — pin a message unpin_message(channe…
+
+
+--- patch/baseline_description
++++ patch/candidate_description
+@@ -1 +1 @@
+-Targeted find-and-replace edits in files. Use this instead of sed/awk in terminal. Uses fuzzy matching (9 strategies) so minor whitespace/indentation differences won't break it. Returns a unified diff. Auto-runs syntax checks after editing.
+
+REPLACE MODE (mode='replace', default): find a unique string and replace it. REQUIRED PARAMETERS: mode, path, old_string, new_string.
+PATCH MODE (mode='patch'): apply V4A multi-file patches for bulk changes. REQUIRED PARAMETERS: mode, patch.
+
++Targeted find-and-replace edits in files. Use this instead of sed/awk in terminal. Uses fuzzy matching (9 strategies) so minor whitespace/indentation differences won't break it. Returns a unified diff. Auto-runs syntax checks after editing. REPLACE MODE (mode='replace', default): find a unique string and replace it. REQUIRE… Use for cues: replace, targeted, edit, diff, sed, unique, patch, make, replacement, one, python, preserve, surround, content, apply, small; Prefer over write_file, terminal.
+
+
+--- read_file/baseline_description
++++ read_file/candidate_description
+@@ -1 +1 @@
+-Read a text file with line numbers and pagination. Use this instead of cat/head/tail in terminal. Output format: 'LINE_NUM|CONTENT'. Suggests similar filenames if not found. Use offset and limit for large files. Reads exceeding ~100K characters are rejected; use offset and limit to read specific sections of large files. NOTE: Cannot read images or binary files — use vision_analyze for images.
+
++Read a text file with line numbers and pagination. Use this instead of cat/head/tail in terminal. Output format: 'LINE_NUM|CONTENT'. Suggests similar filenames if not found. Use offset and limit for large files. Reads exceeding ~100K characters are rejected; use offset and limit to read specific sections of large files. NOTE: Cannot read ima… Use for cues: read, file, line, cat, head, tail, lines, offset, limit, show, first, readme, shell, pager, gateway, run; Prefer over terminal, search_files.
+
+
+--- search_files/baseline_description
++++ search_files/candidate_description
+@@ -1 +1 @@
+-Search file contents or find files by name. Use this instead of grep/rg/find/ls in terminal. Ripgrep-backed, faster than shell equivalents.
+
+Content search (target='content'): Regex search inside files. Output modes: full matches with line numbers, file paths only, or match counts.
+
+File search (target='files'): Find files by glob pattern (e.g., '*.py', '*config*'). Also use this instead of ls — results sorted by modification time.
+
++Search file contents or find files by name. Use this instead of grep/rg/find/ls in terminal. Ripgrep-backed, faster than shell equivalents. Content search (target='content'): Regex search inside files. Output modes: full matches with line numbers, file paths only, or match counts. File search (target='files'): Find files by glo… Use for cues: search, files, grep, rg, find, glob, name, python, mention, browser_navigate, tool, directory, every, named, config, yaml; Prefer over terminal, read_file.
+
+
+--- write_file/baseline_description
++++ write_file/candidate_description
+@@ -1 +1 @@
+-Write content to a file, completely replacing existing content. Use this instead of echo/cat heredoc in terminal. Creates parent directories automatically. OVERWRITES the entire file — use 'patch' for targeted edits. Auto-runs syntax checks on .py/.json/.yaml/.toml and other linted languages; only NEW errors introduced by this write are surfaced (pre-existing errors are filtered out).
+
++Write content to a file, completely replacing existing content. Use this instead of echo/cat heredoc in terminal. Creates parent directories automatically. OVERWRITES the entire file — use 'patch' for targeted edits. Auto-runs syntax checks on .py/.json/.yaml/.toml and other linted languages; only NEW errors introduced by this write are surf… Use for cues: write, overwrite, complete, file, create, markdown, new, report, content, brand, artifact, supplied, full, text; Prefer over patch, terminal.
+
+
+--- yb_send_sticker/baseline_description
++++ yb_send_sticker/candidate_description
+@@ -1 +1 @@
+-Send a built-in sticker (TIMFaceElem / 贴纸表情) to the current Yuanbao chat. Call yb_search_sticker first if you don't know the sticker_id/name. Sticker = 贴纸 = TIM face — NOT a message reaction. CRITICAL: Whenever the user asks you to send a sticker / 贴纸 / 表情包, you MUST use this tool. DO NOT draw a PNG via execute_code / Pillow / matplotlib and then call send_image_file — that produces a fake 'sticker' image instead of a real TIM face and is the WRONG path. If no suitable sticker_id is known, call yb_search_sticker first. When the recent thread shows users sending stickers, prefer matching that tone by replying with a sticker instead of (or in addition to) text.
+
++Send a built-in sticker (TIMFaceElem / 贴纸表情) to the current Yuanbao chat. Call yb_search_sticker first if you don't know the sticker_id/name. Sticker = 贴纸 = TIM face — NOT a message reaction. CRITICAL: Whenever the user asks you to send a sticker / 贴纸 / 表情包, you MUST use this tool. DO NOT draw a PNG via execute_code / Pillow / matplotlib and then call send_image_file — that produces a fake 'sticker' image instead of a real TIM face and is the WRONG path. If no suitable sticker_id is known, call…
+
+
+--- image_generate/baseline_description
++++ image_generate/candidate_description
+@@ -1 +1 @@
+-Generate high-quality images from text prompts. The underlying backend (FAL, OpenAI, etc.) and model are user-configured and not selectable by the agent. Returns either a URL or an absolute file path in the `image` field; display it with markdown ![description](url-or-path) and the gateway will deliver it.
+
++Generate high-quality images from text prompts. The underlying backend (FAL, OpenAI, etc.) and model are user-configured and not selectable by the agent. Returns either a URL or an absolute file path in the `image` field; display it with markdown ![description](url-or-path) and the gateway will deliver it. Use for cues: generate, image, illustration, prompt, square, proposed, architecture; Prefer over vision_analyze, browser_vision, write_file.
+
+
+--- kanban_complete/baseline_description
++++ kanban_complete/candidate_description
+@@ -1 +1 @@
+-Mark your current task done with a structured handoff for downstream workers and humans. Prefer ``summary`` for a human-readable 1-3 sentence description of what you did; put machine-readable facts in ``metadata`` (changed_files, tests_run, decisions, findings, etc). At least one of ``summary`` or ``result`` is required. If you created new tasks via ``kanban_create`` during this run, list their ids in ``created_cards`` — the kernel verifies them so phantom references are caught before they leak into downstream automation. If you produced deliverable files (charts, PDFs, spreadsheets, generated images), list their absolute paths in ``artifacts`` — the gateway notifier will upload them as native attachments to the human who subscribed to the task, so the deliverable lands in their chat alongside the summary instead of being a path they have to fetch by hand.
+
++Mark your current task done with a structured handoff for downstream workers and humans. Prefer ``summary`` for a human-readable 1-3 sentence description of what you did; put machine-readable facts in ``metadata`` (changed_files, tests_run, decisions, findings, etc). At least one of ``summary`` or ``result`` is required. If you created new tasks via ``kanban_create`` during this run, list their ids in ``created_cards`` — the kernel verifies them so phantom references are caught before they leak…
+
+
+--- memory/baseline_description
++++ memory/candidate_description
+@@ -1 +1 @@
+-Save durable information to persistent memory that survives across sessions. Memory is injected into future turns, so keep it compact and focused on facts that will still matter later.
+
+WHEN TO SAVE (do this proactively, don't wait to be asked):
+- User corrects you or says 'remember this' / 'don't do that again'
+- User shares a preference, habit, or personal detail (name, role, timezone, coding style)
+- You discover something about the environment (OS, installed tools, project structure)
+- You learn a convention, API quirk, or workflow specific to this user's setup
+- You identify a stable fact that will be useful again in future sessions
+
+PRIORITY: User preferences and corrections > environment facts > procedural knowledge. The most valuable memory prevents the user from having to repeat themselves.
+
+Do NOT save task progress, session outcomes, completed-work logs, or temporary TODO state to memory; use session_search to recall those from past transcripts.
+If you've discovered a new way to do something, solved a problem that could be necessary later, save it as a skill with the skill tool.
+
+TWO TARGETS:
+- 'user': who the user is -- name, role, preferences, communication style, pet peeves
+- 'memory': your notes -- environment facts, project conventions, tool quirks, lessons learned
+
+ACTIONS: add (new entry), replace (update existing -- old_text identifies it), remove (delete -- old_text identifies it).
+
+SKIP: trivial/obvious info, things easily re-discovered, raw data dumps, and temporary task state.
+
++Save durable information to persistent memory that survives across sessions. Memory is injected into future turns, so keep it compact and focused on facts that will still matter later. WHEN TO SAVE (do this proactively, don't wait to be asked): - User corrects you or says 'remember this' / 'don't do that again' - User shares a preference, habit, or personal detail (name… Use for cues: remember, durable, preference, user, prefer, release, tag, update; Prefer over write_file, session_search, todo.
+
+
+--- send_message/baseline_description
++++ send_message/candidate_description
+@@ -1 +1 @@
+-Send a message to a connected messaging platform, or list available targets.
+
+IMPORTANT: When the user asks to send to a specific channel or person (not just a bare platform name), call send_message(action='list') FIRST to see available targets, then send to the correct one.
+If the user just says a platform name like 'send to telegram', send directly to the home channel without listing first.
+
++Send a message to a connected messaging platform, or list available targets. IMPORTANT: When the user asks to send to a specific channel or person (not just a bare platform name), call send_message(action='list') FIRST to see available targets, then send to the correct one. If the user just says a platform name like 'send to telegram', send directly to the home channel without listi… Use for cues: send, discord, message, channel, final, statu, update, configured; Prefer over cronjob, write_file.
+
+
+--- session_search/baseline_description
++++ session_search/candidate_description
+@@ -1 +1 @@
+-Search past sessions stored in the local session DB, or scroll inside one. FTS5-backed retrieval over the SQLite message store. No LLM calls — every shape returns actual messages from the DB.
+
+THREE CALLING SHAPES
+
+  1) DISCOVERY — pass `query`:
+     session_search(query="auth refactor", limit=3)
+     Runs FTS5, dedupes hits by session lineage, returns the top N sessions. Each result carries:
+       - session_id, title, when, source
+       - snippet: FTS5-highlighted match excerpt
+       - bookend_start: first 3 user+assistant messages of the session (the goal / kickoff)
+       - messages: ±5 messages around the FTS5 match, with the anchor message flagged (the hit in context)
+       - bookend_end: last 3 user+assistant messages of the session (the resolution / decisions)
+       - match_message_id, messages_before, messages_after
+     Bookends + window together let you reconstruct goal → match → resolution without paying for the whole transcript.
+
+  2) SCROLL — pass `session_id` + `around_message_id`:
+     session_search(session_id="...", around_message_id=12345, window=10)
+     Returns a window of ±`window` messages centered on the anchor. No FTS5, no bookends — just the slice. Use after a discovery call when you need more context than the ±5 default window.
+       - To scroll FORWARD: pass messages[-1].id back as around_message_id.
+       - To scroll BACKWARD: pass messages[0].id back as around_message_id.
+       - The boundary message appears in both windows — orientation marker.
+       - When messages_before or messages_after is < window, you're at the start or end of the session.
+
+  3) BROWSE — no args:
+     session_search()
+     Returns recent sessions chronologically: titles, previews, timestamps. Use when the user asks "what was I working on" without naming a topic.
+
+FTS5 SYNTAX
+
+  AND is the default — multi-word queries require all terms. Use OR explicitly for broader recall (`alpha OR beta OR gamma`), quoted phrases for exact match (`"docker networking"`), boolean (`python NOT java`), or prefix wildcards (`deploy*`).
+
+WHEN TO USE
+
+  Reach for this on any "what did we do about X" / "where did we leave Y" / "find the session where Z" question — before gh, web search, or filesystem inspection. The session DB carries what was said when; external tools show current world state.
+
++Search past sessions stored in the local session DB, or scroll inside one. FTS5-backed retrieval over the SQLite message store. No LLM calls — every shape returns actual messages from the DB. THREE CALLING SHAPES 1) DISCOVERY — pass `query`: session_search(query="auth refact… Use for cues: past, sessions, conversation, history, previous, session, left, prior, defined, means, scroll, message, window, about, release, update; Prefer over web_search, search_files, browser_navigate, memory, terminal.
+
+
+--- skill_manage/baseline_description
++++ skill_manage/candidate_description
+@@ -1 +1 @@
+-Manage skills (create, update, delete). Skills are your procedural memory — reusable approaches for recurring task types. New skills go to ~/.hermes/skills/; existing skills can be modified wherever they live.
+
+Actions: create (full SKILL.md + optional category), patch (old_string/new_string — preferred for fixes), edit (full SKILL.md rewrite — major overhauls only), delete, write_file, remove_file.
+
+On delete, pass `absorbed_into=<umbrella>` when you're merging this skill's content into another one, or `absorbed_into=""` when you're pruning it with no forwarding target. This lets the curator tell consolidation from pruning without guessing, so downstream consumers (cron jobs that reference the old skill name, etc.) get updated correctly. The target you name in `absorbed_into` must already exist — create/patch the umbrella first, then delete.
+
+Create when: complex task succeeded (5+ calls), errors overcome, user-corrected approach worked, non-trivial workflow discovered, or user asks you to remember a procedure.
+Update when: instructions stale/wrong, OS-specific failures, missing steps or pitfalls found during use. If you used a skill and hit issues not covered by it, patch it immediately.
+
+After difficult/iterative tasks, offer to save as a skill. Skip for simple one-offs. Confirm with user before creating/deleting.
+
+Good skills: trigger conditions, numbered steps with exact commands, pitfalls section, verification steps. Use skill_view() to see format examples.
+
+Pinned skills are protected from deletion only — skill_manage(action='delete') will refuse with a message pointing the user to `hermes curator unpin <name>`. Patches and edits go through on pinned skills so you can still improve them as pitfalls come up; pin only guards against irrecoverable loss.
+
++Manage skills (create, update, delete). Skills are your procedural memory — reusable approaches for recurring task types. New skills go to ~/.hermes/skills/; existing skills can be modified wherever they live. Actions: create (full SKILL.md + optional category), patch (old_string/new_string — preferred for fixes), edit (full SKILL.md rewrite — major overhauls only), delete, write_file, remove_file. On delete, pass `absorbed_into=<umbrella>` when you're merging this skill's content into another…
+
+
+--- process/baseline_description
++++ process/candidate_description
+@@ -1 +1 @@
+-Manage background processes started with terminal(background=true). Actions: 'list' (show all), 'poll' (check status + new output), 'log' (full output with pagination), 'wait' (block until done or timeout), 'kill' (terminate), 'write' (send raw stdin data without newline), 'submit' (send data + Enter, for answering prompts), 'close' (close stdin/send EOF).
+
++Manage background processes started with terminal(background=true). Actions: 'list' (show all), 'poll' (check status + new output), 'log' (full output with pagination), 'wait' (block until done or timeout), 'kill' (terminate), 'write' (send raw stdin data without newline), 'submit' (send data + Enter, for answering prompts), 'close' (close stdin/sen… Use for cues: poll, background, process, output, session, tracked, test, new, start, another, command; Prefer over terminal, execute_code, cronjob.
+
+
+--- terminal/baseline_description
++++ terminal/candidate_description
+@@ -1 +1 @@
+-Execute shell commands on a Linux environment. Filesystem usually persists between calls.
+
+Do NOT use cat/head/tail to read files — use read_file instead.
+Do NOT use grep/rg/find to search — use search_files instead.
+Do NOT use ls to list directories — use search_files(target='files') instead.
+Do NOT use sed/awk to edit files — use patch instead.
+Do NOT use echo/cat heredoc to create files — use write_file instead.
+Reserve terminal for: builds, installs, git, processes, scripts, network, package managers, and anything that needs a shell.
+
+Foreground (default): Commands return INSTANTLY when done, even if the timeout is high. Set timeout=300 for long builds/scripts — you'll still get the result in seconds if it's fast. Prefer foreground for short commands.
+Background: Set background=true to get a session_id. Almost always pair with notify_on_complete=true — bg without notify runs SILENTLY and you have no way to learn it finished short of calling process(action='poll') yourself. Two legitimate uses:
+  (1) Long-lived processes that never exit (servers, watchers, daemons) — silent is correct, there's no exit to notify on.
+  (2) Long-running bounded tasks (tests, builds, deploys, CI pollers, batch jobs) — MUST set notify_on_complete=true. Without it you'll either forget to poll or sit blocked waiting for the user to surface the result.
+For servers/watchers, do NOT use shell-level background wrappers (nohup/disown/setsid/trailing '&') in foreground mode. Use background=true so Hermes can track lifecycle and output.
+After starting a server, verify readiness with a health check or log signal, then run tests in a separate terminal() call. Avoid blind sleep loops.
+Use process(action="poll") for progress checks, process(action="wait") to block until done.
+Working directory: Use 'workdir' for per-command cwd.
+PTY mode: Set pty=true for interactive CLI tools (Codex, Claude Code, Python REPL).
+
+Do NOT use vim/nano/interactive tools without pty=true — they hang without a pseudo-terminal. Pipe git output to cat if it might page.
+
++Execute shell commands on a Linux environment. Filesystem usually persists between calls. Do NOT use cat/head/tail to read files — use read_file instead. Do NOT use grep/rg/find to search — use search_files instead. Do NOT use ls to list directories — use search_files(target=… Use for cues: pytest, command, shell, build, test, git, repository, install, dependencies, npm, server, background, process, start, terminal, run; Prefer over execute_code, read_file, search_files, patch, process, cronjob.
+
+
+--- todo/baseline_description
++++ todo/candidate_description
+@@ -1 +1 @@
+-Manage your task list for the current session. Use for complex tasks with 3+ steps or when the user provides multiple tasks. Call with no parameters to read the current list.
+
+Writing:
+- Provide 'todos' array to create/update items
+- merge=false (default): replace the entire list with a fresh plan
+- merge=true: update existing items by id, add any new ones
+
+Each item: {id: string, content: string, status: pending|in_progress|completed|cancelled}
+List order is priority. Only ONE item in_progress at a time.
+Mark items completed immediately when done. If something fails, cancel it and add a revised item.
+
+Always returns the full current list.
+
++Manage your task list for the current session. Use for complex tasks with 3+ steps or when the user provides multiple tasks. Call with no parameters to read the current list. Writing: - Provide 'todos' array to create/update items - merge=false (default): replace the entire list with a fresh plan - merge=true: update existing items by id, add any new ones Ea… Use for cues: track, steps, in_progress, task, four, implementation, mark, current, one, progress; Prefer over write_file, session_search.
+
+
+--- text_to_speech/baseline_description
++++ text_to_speech/candidate_description
+@@ -1 +1 @@
+-Convert text to speech audio. Returns a MEDIA: path that the platform delivers as native audio. Compatible providers render as a voice bubble on Telegram; otherwise audio is sent as a regular attachment. In CLI mode, saves to ~/voice-memos/. Voice and provider are user-configured (built-in providers like edge/openai or custom command providers under tts.providers.<name>), not model-selected.
+
++Convert text to speech audio. Returns a MEDIA: path that the platform delivers as native audio. Compatible providers render as a voice bubble on Telegram; otherwise audio is sent as a regular attachment. In CLI mode, saves to ~/voice-memos/. Voice and provider are user-configured (built-in providers like edge/openai or custom command providers under tts.providers.<name>)… Use for cues: audio, voice, speech, text, memo, convert, final, announcement; Prefer over send_message, write_file, terminal.
+
+
+--- video_analyze/baseline_description
++++ video_analyze/candidate_description
+@@ -1 +1 @@
+-Analyze a video from a URL or local file path using a multimodal AI model. Sends the video to a video-capable model (e.g. Gemini) for understanding. Use this for video files — for images, use vision_analyze instead. Supports mp4, webm, mov, avi, mkv, mpeg formats. Note: large videos (>20 MB) may be slow; max ~50 MB.
+
++Analyze a video from a URL or local file path using a multimodal AI model. Sends the video to a video-capable model (e.g. Gemini) for understanding. Use this for video files — for images, use vision_analyze instead. Supports mp4, webm, mov, avi, mkv, mpeg formats. Note: large videos (>20 MB) may be slow; max ~50 MB. Use for cues: video, mp4, clip, analyze, summarize, local, what, happen; Prefer over vision_analyze, browser_vision, read_file.
+
+
+--- vision_analyze/baseline_description
++++ vision_analyze/candidate_description
+@@ -1 +1 @@
+-Load an image into the conversation so you can see it. Accepts a URL, local file path, or data URL. When your active model has native vision, the image is attached to your context directly and you read the pixels yourself on the next turn — call this any time the user references an image (filepath in their message, URL in tool output, screenshot from the browser, etc.). For non-vision models, falls back to an auxiliary vision model that returns a text description.
+
++Load an image into the conversation so you can see it. Accepts a URL, local file path, or data URL. When your active model has native vision, the image is attached to your context directly and you read the pixels yourself on the next turn — call this any time the user references an image (filepath in their message, URL in tool output, screenshot from the browser, etc.)… Use for cues: image, screenshot, visible, analyze, tell, what, text; Prefer over read_file, browser_vision, browser_snapshot.

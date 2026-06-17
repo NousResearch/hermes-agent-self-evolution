@@ -1,0 +1,162 @@
+{
+  "schema_version": "phase5-p1-finite-cron-soak-approval-packet-v1",
+  "artifact_type": "phase5_p1_finite_cron_soak_approval_packet",
+  "created_at": "2026-06-08T16:04:18+0200",
+  "status": "P1_FINITE_CRON_SOAK_APPROVAL_PACKET_READY_NOT_EXECUTED",
+  "source_request": "Sunwoo approved the recommended next action: prepare a P1 finite cron soak approval packet. This approval covers packet authoring only, not cron creation or execution.",
+  "repo_state": {
+    "repo_label": "<hse-repo>",
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head_sha_at_packet_creation": "fab14ecf80a3d583b86b3cf242a8ead6c475f4c6",
+    "head_subject_at_packet_creation": "Add Phase 5 P0 independent review acceptance",
+    "worktree_expected_after_write": "packet_artifacts_untracked_only"
+  },
+  "pr_state": {
+    "pr_number": 108,
+    "pr_url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108",
+    "state_at_preflight": "OPEN",
+    "head_repository_owner": "Sunwo0u",
+    "head_sha_at_preflight": "fab14ecf80a3d583b86b3cf242a8ead6c475f4c6",
+    "mergeable_at_preflight": "MERGEABLE",
+    "status_check_count_at_preflight": 0,
+    "checks_caveat": "MISSING_NOT_CI_PASS",
+    "p0_packet_addendum_present": true,
+    "p0_independent_acceptance_addendum_present": true
+  },
+  "stage": {
+    "name": "P1_FINITE_CRON_SOAK_APPROVAL_PACKET",
+    "current_action": "write_and_verify_packet_only",
+    "packet_committed_or_pushed": false,
+    "pr_body_updated_for_this_packet": false,
+    "actual_cron_created": false,
+    "actual_cron_run_started": false,
+    "actual_scheduler_enabled": false,
+    "activation_performed": false,
+    "go_for_activation": false,
+    "future_execution_requires_separate_explicit_approval": true
+  },
+  "evidence_chain_inputs": [
+    {
+      "label": "production_loop_activation_gate",
+      "status": "PRODUCTION_LOOP_ACTIVATION_GATE_DEFINED_NOT_ENABLED"
+    },
+    {
+      "label": "g1_one_shot_canary_run",
+      "status": "G1_PASS_NO_ACTION"
+    },
+    {
+      "label": "g2_bounded_supervised_run",
+      "status": "G2_PASS_NO_ACTION"
+    },
+    {
+      "label": "g3_limited_cron_pilot_run",
+      "status": "G3_CRON_PILOT_PASS_NO_ACTION"
+    },
+    {
+      "label": "g3_limited_cron_pilot_side_effect_ledger",
+      "status": "APPROVED_SIDE_EFFECTS_ONLY"
+    },
+    {
+      "label": "g3_independent_review_acceptance",
+      "status": "G3_INDEPENDENT_READ_ONLY_REVIEW_ACCEPTED",
+      "verdict": "PASS"
+    },
+    {
+      "label": "p0_production_enablement_packet",
+      "status": "P0_PRODUCTION_ENABLEMENT_PACKET_READY_NOT_EXECUTED",
+      "activation_performed": false,
+      "go_for_activation": false
+    },
+    {
+      "label": "p0_independent_review_acceptance",
+      "status": "P0_INDEPENDENT_READ_ONLY_REVIEW_ACCEPTED",
+      "verdict": "PASS"
+    }
+  ],
+  "p1_future_soak_contract": {
+    "purpose": "Observe the same read-only monitor pipeline over a small finite expiring cron window before any threshold optimizer or automatic PR loop is considered.",
+    "default_max_fire_count": 3,
+    "default_interval_minutes": 30,
+    "default_total_ttl_minutes": 120,
+    "per_fire_timeout_seconds_max": 1800,
+    "cron_shape_if_later_approved": {
+      "hermes_cron": true,
+      "repeat": 3,
+      "no_agent": true,
+      "script_only": true,
+      "profile": "default",
+      "deliver": "origin",
+      "auto_expire_or_remove_after_final_fire": true
+    },
+    "pipeline_per_fire": [
+      "preflight",
+      "lock_and_kill_switch_check",
+      "provenance_dataset_or_latest_sanitized_input",
+      "performance_snapshot",
+      "auto_triage",
+      "scheduler_dry_run",
+      "side_effect_ledger",
+      "run_summary_report"
+    ],
+    "allowed_write_roots_if_later_approved": [
+      "output/phase5-continuous-loop/p1-finite-cron-soak-<stamp>/",
+      "reports/phase5_p1_finite_cron_soak_run_<stamp>.*",
+      "reports/phase5_p1_finite_cron_soak_side_effect_ledger_<stamp>.json"
+    ],
+    "lock_contract": {
+      "skip_if_running": true,
+      "abort_on_existing_lock": true,
+      "lock_path_label": "repo-local output/phase5-continuous-loop/p1-finite-cron-soak.lock"
+    },
+    "kill_switch_contract": {
+      "required_before_execution": true,
+      "kill_switch_path_label": "repo-local output/phase5-continuous-loop/P1_SOAK_KILL_SWITCH",
+      "behavior": "abort_fail_closed_without_running_pipeline"
+    },
+    "threshold_behavior": {
+      "threshold_trigger_is_dry_run_signal_only": true,
+      "optimizer_execution_allowed": false,
+      "automatic_pr_update_allowed": false,
+      "on_weak_metric": "emit_review_required_no_action_and_stop"
+    },
+    "allowed_terminal_statuses": [
+      "P1_SOAK_PASS_NO_ACTION",
+      "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+      "P1_SOAK_FAIL_BLOCKED",
+      "P1_SOAK_ABORTED_BY_KILL_SWITCH"
+    ]
+  },
+  "hard_blocks_preserved": {
+    "production_continuous_loop": false,
+    "long_running_or_unbounded_cron": false,
+    "threshold_triggered_optimizer_execution": false,
+    "automatic_pr_loop": false,
+    "auto_merge_or_deploy": false,
+    "network_api_or_model_budget_spend": false,
+    "credential_modification": false,
+    "active_runtime_source_config_skill_or_memory_mutation": false,
+    "external_human_maintainer_approval_claimed": false
+  },
+  "pre_execution_acceptance_criteria_for_future_p1_run": [
+    "Separate explicit Sunwoo approval names P1 finite cron soak or equivalent bounds.",
+    "PR #108 or equivalent reviewer-facing trail contains P0 packet and P0 independent acceptance.",
+    "Invocation method, schedule, max fire count, interval, TTL, timeout, delivery target, lock path, kill switch, and allowed write roots are re-confirmed immediately before execution.",
+    "Existing HSE production, optimizer, or auto-PR cron jobs are absent before creation.",
+    "Future cron is expiring or repeat-bounded and removed/absent after final fire.",
+    "Each fire emits JSON/Markdown evidence and a side-effect ledger.",
+    "Any review-required state stops further escalation and does not start optimizer or PR automation.",
+    "GitHub checks remain reported honestly; missing checks are MISSING_NOT_CI_PASS, not CI success."
+  ],
+  "current_verification_plan": [
+    "JSON parse and semantic validation for packet-ready-not-executed status.",
+    "Verify current action did not create cron or start scheduler/optimizer/PR automation.",
+    "Scan reviewer-facing artifacts for private absolute paths and high-risk credential assignments.",
+    "Run git diff check, focused Phase 5 monitor tests, compileall, and cron list verification."
+  ],
+  "next_gate": {
+    "recommended_next_step": "Path-limited PR publication of this P1 approval packet after separate approval.",
+    "p1_finite_cron_soak_execution": "BLOCKED_PENDING_SEPARATE_EXPLICIT_APPROVAL",
+    "p2_threshold_trigger_dry_run": "BLOCKED_PENDING_SUCCESSFUL_P1_REVIEW_AND_SEPARATE_APPROVAL",
+    "production_activation": "NO_GO"
+  }
+}

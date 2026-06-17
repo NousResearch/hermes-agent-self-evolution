@@ -1,0 +1,283 @@
+{
+  "schema_version": "phase5-p1-tool-selection-green-remediation-plan-v1",
+  "created_at": "2026-06-09T15:02:47+02:00",
+  "status": "P1_TOOL_SELECTION_GREEN_REMEDIATION_PLAN_CLEANED_FOR_LOCAL_COMMIT",
+  "publication_status": "LOCAL_PATH_LIMITED_COMMIT_NO_PUSH",
+  "authorized_by": "Sunwoo: rec action GO for the previously recommended safe cleanup of the remaining tool-selection draft artifacts; no cron resume, optimizer, production loop, or PR push/update approved",
+  "scope": {
+    "stage": "P1_TOOL_SELECTION_GREEN_REMEDIATION_PLAN",
+    "allowed_now": [
+      "clean stale publication/current-state wording in the reviewer-facing GREEN remediation plan artifacts",
+      "refactor tests/monitor/test_phase5_tool_selection_triage_regression.py so it uses pytest tmp_path deterministic candidate-only generation instead of ignored output/ artifacts",
+      "run focused/full verification and static safety scans",
+      "create a path-limited local commit if verification passes"
+    ],
+    "not_performed": {
+      "source_code_fix": true,
+      "test_code_cleanup": false,
+      "repo_local_candidate_report_regeneration": true,
+      "provenance_or_monitor_pipeline_rerun": true,
+      "cron_resume_or_remaining_fire_execution": true,
+      "optimizer_execution": true,
+      "automatic_pr_loop": true,
+      "external_pr_update_or_push": true,
+      "production_loop_enablement": true,
+      "active_hermes_runtime_or_schema_mutation": true,
+      "budget_or_network_spend": true,
+      "credential_change": true
+    },
+    "not_performed_at_plan_creation": {
+      "source_code_fix": true,
+      "test_code_fix_or_commit": true,
+      "candidate_report_regeneration": true,
+      "provenance_or_monitor_pipeline_rerun": true,
+      "cron_resume_or_remaining_fire_execution": true,
+      "optimizer_execution": true,
+      "automatic_pr_loop": true,
+      "external_pr_update_or_push": true,
+      "production_loop_enablement": true,
+      "active_hermes_runtime_or_schema_mutation": true,
+      "budget_or_network_spend": true,
+      "credential_change": true
+    }
+  },
+  "repo": {
+    "label": "hermes-agent-self-evolution",
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "18182eda72929377610fe76e91002a7ac43bd2d8",
+    "head_subject": "Add Phase 5 P1 tool selection RED plan",
+    "worktree_notes": [
+      "At original plan creation, tests/monitor/test_phase5_tool_selection_triage_regression.py was untracked local RED coverage; the 2026-06-11 cleanup stages it as a CI-robust tmp_path regression.",
+      "output/ is ignored by .gitignore; the plan-creation candidate-only report was local evidence, not a tracked PR artifact.",
+      "The existing RED plan reports/phase5_p1_tool_selection_triage_red_plan_20260608_234216.json is tracked and has status P1_TOOL_SELECTION_TRIAGE_RED_PLAN_READY_NOT_EXECUTED."
+    ]
+  },
+  "source_evidence": {
+    "plan_creation_candidate_report": "output/tool-description/phase2e-heldout-review/run/candidate_only_report.json",
+    "plan_creation_inventory": "output/tool-description/phase2e-heldout-review/run/inventory.json",
+    "plan_creation_candidate_descriptions": "output/tool-description/phase2e-heldout-review/run/candidate_descriptions.json",
+    "plan_creation_red_test": "tests/monitor/test_phase5_tool_selection_triage_regression.py",
+    "post_cleanup_regression_test": "tests/monitor/test_phase5_tool_selection_triage_regression.py",
+    "prior_red_plan_json": "reports/phase5_p1_tool_selection_triage_red_plan_20260608_234216.json",
+    "historical_context_only_all_pass_report": "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json"
+  },
+  "paused_cron_state": {
+    "job_id": "b24aca09f168",
+    "name": "HSE Phase 5 P1 finite cron soak 20260608-164455",
+    "enabled": false,
+    "state": "paused",
+    "repeat": "1/3",
+    "script": "hse_phase5_p1_finite_soak_20260608_164455.py",
+    "profile": "default",
+    "not_resumed": true
+  },
+  "diagnosis": {
+    "primary_failure_class": "stale_candidate_only_evidence_with_insufficient_tool_discrimination",
+    "rank_score_formula": "0.65 * description_overlap + 0.2 * baseline_overlap + 0.15 * name_overlap; strict pass requires expected_score greater than every confusing score",
+    "observed_pattern": [
+      "Generic and negated preference tokens in candidate descriptions are counted as positive overlap signals.",
+      "The local current report lacks the privacy-safe request-signal cue enrichment already present in the current generator output.",
+      "In-memory regeneration from the same local inventory with the current generator produced selection_accuracy=1.0 and zero failing rows, without mutating active Hermes schemas."
+    ],
+    "current_generator_in_memory_check": {
+      "input_inventory": "output/tool-description/phase2e-heldout-review/run/inventory.json",
+      "generator": "evolution.tools.evolve_tool_descriptions.generate_candidate_descriptions",
+      "evaluator": "evolution.tools.tool_description_eval.build_candidate_only_report",
+      "selection_accuracy": 1.0,
+      "non_passing_count": 0,
+      "writes_performed": false
+    },
+    "historical_all_pass_report_usage": "context_only_not_current_proof"
+  },
+  "failing_rows": [
+    {
+      "row_id": "tool-selection-002",
+      "expected_tool": "search_files",
+      "selected_tool": "search_files",
+      "expected_score": 0.3,
+      "top_confusing_tool": "terminal",
+      "top_confusing_score": 0.3,
+      "score_margin": 0.0,
+      "cue_coverage": 1.0,
+      "failure_class": "insufficient_discrimination_margin",
+      "green_hypothesis": "Regenerated search_files cues should include benign request-signal variants such as python, mention, browser_navigate, tool, directory, every, named, config, and yaml so search_files clears terminal by a positive margin."
+    },
+    {
+      "row_id": "tool-selection-003",
+      "expected_tool": "terminal",
+      "selected_tool": "terminal",
+      "expected_score": 0.295,
+      "top_confusing_tool": "execute_code",
+      "top_confusing_score": 0.295,
+      "score_margin": 0.0,
+      "cue_coverage": 1.0,
+      "failure_class": "insufficient_discrimination_margin",
+      "green_hypothesis": "Regenerated terminal cues should include dependencies, npm, server, background, process, start, terminal, and run so shell/process work clears execute_code."
+    },
+    {
+      "row_id": "tool-selection-004",
+      "expected_tool": "patch",
+      "selected_tool": "write_file",
+      "expected_score": 0.3,
+      "top_confusing_tool": "write_file",
+      "top_confusing_score": 0.4375,
+      "score_margin": -0.1375,
+      "cue_coverage": 1.0,
+      "failure_class": "wrong_tool_selected",
+      "green_hypothesis": "Regenerated patch cues should include preserve/surround/content/apply/small variants and preserve the patch-over-write_file distinction for targeted edits."
+    },
+    {
+      "row_id": "tool-selection-016",
+      "expected_tool": "read_file",
+      "selected_tool": "search_files",
+      "expected_score": 0.25,
+      "top_confusing_tool": "search_files",
+      "top_confusing_score": 0.255,
+      "score_margin": -0.005,
+      "cue_coverage": 1.0,
+      "failure_class": "wrong_tool_selected",
+      "green_hypothesis": "Regenerated read_file cues should include limit/show/first/readme/shell/pager/gateway/run variants so direct file reading clears search_files."
+    },
+    {
+      "row_id": "tool-selection-028",
+      "expected_tool": "terminal",
+      "selected_tool": "execute_code",
+      "expected_score": 0.2111,
+      "top_confusing_tool": "execute_code",
+      "top_confusing_score": 0.2556,
+      "score_margin": -0.0445,
+      "cue_coverage": 0.6,
+      "failure_class": "wrong_tool_selected_and_cue_coverage_gap",
+      "green_hypothesis": "Regenerated terminal cues should include server/start/background/process/run variants and raise cue coverage above 0.90 for long-running shell/process tasks."
+    }
+  ],
+  "green_remediation_strategy": {
+    "primary_path": "regenerate stale local candidate-only evidence from the existing local inventory with the current deterministic privacy-safe cue-enrichment generator",
+    "why_primary_path_is_minimal": [
+      "The current source generator already produces a 45/45 in-memory pass from the same inventory.",
+      "No active Hermes tool schema or runtime config change is needed.",
+      "The failing artifact lives under ignored output/ local evidence, so the mismatch is evidence freshness rather than an active schema apply issue."
+    ],
+    "fallback_path_if_regeneration_does_not_green": [
+      "Add a narrow RED test against generate_candidate_descriptions using the five row classes, not a one-off report mutation.",
+      "Patch only the deterministic request-signal cue extraction or description budget reservation logic.",
+      "Rerun the focused tool-description tests and the Phase 5 monitor regression before touching any broader pipeline."
+    ],
+    "anti_patterns_to_avoid": [
+      "Do not force apply_ready=true.",
+      "Do not manually edit selected_tool or scores inside candidate_only_report.json.",
+      "Do not weaken MIN_SELECTION_ACCURACY, MIN_SCORE_MARGIN, or cue coverage assertions.",
+      "Do not treat the historical all-pass report as current P1 proof.",
+      "Do not resume the paused P1 cron during GREEN remediation."
+    ]
+  },
+  "future_execution_plan_after_separate_approval": [
+    {
+      "step": 1,
+      "name": "Historical RED preflight before 2026-06-11 tmp_path cleanup",
+      "commands": [
+        "PY=<hse-venv-python>",
+        "$PY -m py_compile tests/monitor/test_phase5_tool_selection_triage_regression.py",
+        "$PY -m pytest tests/monitor/test_phase5_tool_selection_triage_regression.py -q"
+      ],
+      "expected_current_result": "Historical expected result at plan creation: py_compile passed and pytest failed with the five known non-passing rows. Post-cleanup current expectation for the committed regression test is 2 passed because it generates candidate-only evidence under pytest tmp_path instead of reading ignored output/ artifacts."
+    },
+    {
+      "step": 2,
+      "name": "Regenerate candidate-only evidence locally",
+      "commands": [
+        "PY=<hse-venv-python>",
+        "$PY -m evolution.tools.evolve_tool_descriptions --inventory-json output/tool-description/phase2e-heldout-review/run/inventory.json --output-dir output/tool-description/phase2e-heldout-review/run"
+      ],
+      "expected_result": "candidate_descriptions.json, candidate_only_report.json, and candidate.diff are refreshed under ignored output/ with apply_ready=false and candidate_only metrics preserved"
+    },
+    {
+      "step": 3,
+      "name": "Post-cleanup GREEN focused regression",
+      "commands": [
+        "$PY -m pytest tests/monitor/test_phase5_tool_selection_triage_regression.py -q"
+      ],
+      "expected_result": "2 passed; selection_accuracy >= 0.9000; five critical rows select expected tools with score_margin > 0.0200 and row 028 cue_coverage >= 0.9000 using tmp_path-generated candidate-only evidence."
+    },
+    {
+      "step": 4,
+      "name": "Focused tool-description safety tests",
+      "commands": [
+        "$PY -m pytest tests/tools/test_evolve_tool_descriptions.py tests/tools/test_tool_description_eval.py tests/monitor/test_phase5_tool_selection_triage_regression.py -q",
+        "$PY -m compileall -q evolution/tools tests/tools tests/monitor"
+      ],
+      "expected_result": "candidate-only cue enrichment remains privacy-safe and report/evaluator contracts stay green"
+    },
+    {
+      "step": 5,
+      "name": "Read-only Phase 5 monitor rerun only if separately approved",
+      "commands": [
+        "Run provenance_dataset -> performance_snapshot -> auto_triage -> scheduler_dry_run using the regenerated candidate report and sanitized prompt-source labels"
+      ],
+      "expected_result": "tool_selection_accuracy no longer appears as a weak metric; scheduler dry-run remains side-effect-free"
+    }
+  ],
+  "acceptance_criteria": [
+    "Current RED regression test turns GREEN without weakening thresholds or assertions.",
+    "Regenerated candidate-only report has apply_ready=false, metrics.candidate_only=true, case_count=45, selection_accuracy>=0.9000, and preferably non_passing_count=0.",
+    "Critical rows 002, 003, 004, 016, and 028 select their expected tools and have score_margin>0.0200; row 028 cue_coverage>=0.9000.",
+    "No active Hermes tool schema, runtime config, source apply, cron resume, optimizer execution, automatic PR loop, network/API spend, or credential mutation occurs.",
+    "Reviewer-facing artifacts contain no private absolute paths and no high-risk credential assignments.",
+    "The paused P1 finite cron soak remains paused until a later explicit bounded resume approval."
+  ],
+  "verification_plan_for_this_plan_artifact": [
+    "JSON parses with python/json tooling.",
+    "Semantic fields distinguish historical RED evidence from post-cleanup commit readiness.",
+    "The regression test no longer reads ignored output/tool-description artifacts and writes generated candidate-only reports only under pytest tmp_path.",
+    "Reviewer-facing artifacts scan clean for private absolute paths and high-risk credential assignments.",
+    "git diff --check passes for staged report/test artifacts.",
+    "Focused and full pytest suites pass after cleanup.",
+    "cron list confirms job b24aca09f168 remains paused and enabled=false; no resume/run is performed."
+  ],
+  "recommended_next_step": "After this cleanup passes verification and is locally committed, continue with Phase 3 current-Hermes reconcile in a separate safe-mode task. Do not resume the P1 cron, run the optimizer, enable the production loop, or push/update PRs without separate approval.",
+  "cleanup_status": {
+    "cleaned_at": "2026-06-11T22:55:58+02:00",
+    "trigger": "Sunwoo rec action GO after closeout recommended cleaning the remaining tool-selection draft files",
+    "cleanup_repo": {
+      "branch": "hse/phase5-continuous-loop-prep",
+      "base_head": "e693e261c6168a253da154a896e9edfd71a1e6c8",
+      "base_subject": "Record P1 fail-closed resume evidence"
+    },
+    "cleanup_scope": [
+      "CI-robust test refactor away from ignored output/tool-description local artifacts",
+      "stale publication/current-state wording cleanup in JSON/Markdown report artifacts",
+      "path-limited local commit candidate only; no external publication"
+    ],
+    "boundaries_preserved": {
+      "cron_resume": false,
+      "remaining_fire_execution": false,
+      "optimizer_execution": false,
+      "production_loop_enablement": false,
+      "automatic_pr_loop": false,
+      "external_pr_push_or_update": false,
+      "credential_change": false,
+      "active_hermes_runtime_or_schema_mutation": false
+    },
+    "historical_context_note": "Fields describing RED evidence, repo HEAD 18182eda..., and focused pytest 2 failed are the state at the original plan creation time, not the post-cleanup verification result.",
+    "review_blocker_resolution": {
+      "resolved_at": "2026-06-11T22:55:58+02:00",
+      "changes": [
+        "Reworded repo worktree notes so untracked status is explicitly historical.",
+        "Renamed source evidence keys away from current_* to plan_creation_* plus post_cleanup_regression_test.",
+        "Marked RED preflight failure expectations as historical/superseded and documented current post-cleanup 2-passed expectation."
+      ]
+    }
+  },
+  "red_state_at_plan_creation": {
+    "apply_ready": false,
+    "metrics_candidate_only": true,
+    "case_count": 45,
+    "selection_accuracy": 0.8889,
+    "minimum_selection_accuracy": 0.9,
+    "non_passing_count": 5,
+    "py_compile_exit": 0,
+    "focused_pytest_exit": 1,
+    "focused_pytest_result": "2 failed",
+    "red_confirmed": true
+  }
+}

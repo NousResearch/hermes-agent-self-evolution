@@ -1,0 +1,136 @@
+{
+  "active_apply_ready_now": true,
+  "active_source_apply": {
+    "branch": "main",
+    "changed_files": [
+      "agent/prompt_builder.py",
+      "tests/agent/test_prompt_builder.py"
+    ],
+    "commit_short": "65a7925aa",
+    "current_session_note": "current in-flight assistant session prompt cannot be retroactively mutated; source commit applies to future prompt builds/runtime reloads",
+    "repo": "/Users/snw/.hermes/hermes-agent",
+    "rollback_branch": "hse/phase3-active-apply-backup-20260603T182254Z",
+    "unrelated_dirty_preserved": [
+      "package-lock.json",
+      ".evah_llmwiki_install_20260528_153009/"
+    ]
+  },
+  "active_system_prompt_apply_approved": true,
+  "artifacts": {
+    "active_apply_manifest": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage3-full-20260603T182925Z-r2/apply/active_apply_manifest.json",
+    "completion_manifest": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase3_full_completion_manifest.json",
+    "optimized_candidate_system_prompt": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage3-full-20260603T182925Z-r2/optimizer/optimized_candidate_system_prompt.json",
+    "optimizer_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage3-full-20260603T182925Z-r2/optimizer/gepa_optimizer_report.json",
+    "preflight_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage3-full-20260603T182925Z-r2/preflight/phase3_preflight_report.json",
+    "run_root": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage3-full-20260603T182925Z-r2",
+    "tblite_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage3-full-20260603T182925Z-r2/benchmarks/tblite.json",
+    "yc_bench_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage3-full-20260603T182925Z-r2/benchmarks/yc_bench.json"
+  },
+  "authorization_scope": "Phase 3 \uc804\uccb4 \uc644\uacb0\uae4c\uc9c0 EvAH \uc790\uc728 \uc218\ud589 \uc2b9\uc778",
+  "authorized_by": "sunwoo_current_discord_request",
+  "benchmark_summary": {
+    "TBLite": {
+      "evidence": {
+        "benchmark_root": "output/phase3-system-prompt/stage123-20260529T145248Z/external-benchmarks/terminal-bench-lite",
+        "execution_scope": "local_pinned_task_corpus_smoke",
+        "required_files_checked": [
+          "task.toml",
+          "tests/test.sh",
+          "solution/solve.sh"
+        ],
+        "sample_tasks": [
+          "acl-permissions-inheritance",
+          "amuse-install",
+          "analyze-access-logs",
+          "bank-trans-filter",
+          "broken-python"
+        ],
+        "task_count": 39,
+        "validated_task_count": 5
+      },
+      "external_calls_performed": false,
+      "full_benchmark_executed": false,
+      "metrics": {
+        "baseline_score": 3.0,
+        "candidate_regression_count": 0,
+        "candidate_score": 3.0,
+        "case_count": 3,
+        "score_delta": 0.0,
+        "total_weight": 3.0
+      },
+      "mode": "real-benchmark-smoke",
+      "passed": true,
+      "real_benchmark_smoke_validated": true
+    },
+    "YC-Bench": {
+      "evidence": {
+        "available_presets": [
+          "default"
+        ],
+        "benchmark_root": "output/phase3-system-prompt/stage123-20260529T145248Z/external-benchmarks/yc-bench",
+        "cli_entry_present": true,
+        "execution_scope": "local_pinned_package_smoke",
+        "package_layout_valid": true,
+        "preset_source": "default",
+        "pyproject": "output/phase3-system-prompt/stage123-20260529T145248Z/external-benchmarks/yc-bench/pyproject.toml",
+        "requested_preset": "fast_test"
+      },
+      "external_calls_performed": false,
+      "full_benchmark_executed": false,
+      "metrics": {
+        "baseline_score": 1.6666666666666665,
+        "candidate_regression_count": 0,
+        "candidate_score": 3.0,
+        "case_count": 3,
+        "score_delta": 1.3333333333333335,
+        "total_weight": 3.0
+      },
+      "mode": "real-benchmark-smoke",
+      "passed": true,
+      "real_benchmark_smoke_validated": true
+    }
+  },
+  "completed_at_utc": "2026-06-03T18:29:51Z",
+  "deterministic_local_fallback": true,
+  "dspy_gepa_invoked": true,
+  "external_service_calls_performed": false,
+  "full_external_benchmark_executed": false,
+  "optimizer_summary": {
+    "dspy_gepa_invoked": true,
+    "evaluation_scores": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "lm_history_count": 10,
+    "mode": "dspy-gepa-local-execution",
+    "passed": true
+  },
+  "phase": "3",
+  "phase3_execution_ready": true,
+  "real_benchmark_smoke_validated": true,
+  "remote_llm_blocker": "openrouter_402_openai_anthropic_unavailable",
+  "review": {
+    "blocking_issues_remaining": false,
+    "independent_review_verdict": "PASS_WITH_NOTES",
+    "notes_resolved_in_manifest": [
+      "updated verification counts to latest focused Phase 3 run"
+    ],
+    "reviewed_at_utc": "2026-06-03T18:33:54Z"
+  },
+  "risk_notes": [
+    "Full external benchmark service execution was not performed; Phase 3 now records bounded local pinned benchmark smoke validation plus fixture scoring, not full remote benchmark completion.",
+    "Remote non-Google LLM GEPA path was blocked by OpenRouter 402 and absent OpenAI/Anthropic keys; local deterministic DSPy.GEPA fallback was executed and logged instead.",
+    "Current session prompt cannot be retroactively changed; apply is a local Hermes Agent source commit for subsequent prompt builds/runtime reload."
+  ],
+  "run_dspy_now": true,
+  "run_gepa_now": true,
+  "status": "completed_with_local_active_source_apply_and_bounded_smoke_validation",
+  "verification": {
+    "hermes_agent_targeted_tests": "141 passed, 1 skipped, 1 warning",
+    "self_evolution_benchmark_preflight_optimizer_tests": "32 passed, 11 warnings",
+    "self_evolution_focused_phase3_tests": "49 passed, 11 warnings"
+  }
+}

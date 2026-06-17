@@ -1,0 +1,221 @@
+{
+  "schema_version": "phase5-g3-limited-cron-pilot-run-v1",
+  "phase": "HSE Phase 5",
+  "stage": "G3_LIMITED_CRON_PILOT",
+  "status": "G3_CRON_PILOT_PASS_NO_ACTION",
+  "authorization": "Sunwoo explicit approval in Discord: rec action GO -- 1회성 expiring cron pilot 진행 : Sunwoo 승인.",
+  "started_at_utc": "2026-06-07T19:03:59Z",
+  "ended_at_utc": "2026-06-07T19:03:59Z",
+  "mode": "hermes_cron_no_agent_script_one_shot_zero_budget",
+  "cron_context": {
+    "job_id": "e982f5283e20",
+    "job_name": "HSE Phase 5 G3 one-shot expiring cron pilot 20260607-190117",
+    "schedule": "once at 2026-06-07 22:02",
+    "next_run_at": "2026-06-07T22:02:08+02:00",
+    "repeat": "once",
+    "script": "hse_phase5_g3_limited_cron_pilot_20260607_190117.py",
+    "script_sha256": "ae7736431fa5c8c1815bb9b74f522afc6d03fd6bbc6eb4be2c013c48170b2bc3",
+    "no_agent": true,
+    "authorization": "Sunwoo explicit approval in Discord: rec action GO -- 1회성 expiring cron pilot 진행 : Sunwoo 승인.",
+    "bounds": {
+      "max_fire_count": 1,
+      "zero_budget": true,
+      "optimizer_execution_allowed": false,
+      "automatic_pr_loop_allowed": false,
+      "auto_merge_or_deploy_allowed": false,
+      "active_runtime_mutation_allowed": false,
+      "repo_local_evidence_only": true
+    }
+  },
+  "bounds": {
+    "max_fire_count": 1,
+    "repeat": 1,
+    "expiring_or_removed_after_run": true,
+    "per_fire_timeout_seconds_max": 1800,
+    "network_or_model_api_budget_cap": 0,
+    "optimizer_execution_allowed": false,
+    "automatic_pr_loop_allowed": false,
+    "auto_merge_or_deploy_allowed": false,
+    "active_runtime_mutation_allowed": false,
+    "lock_path": "output/phase5-continuous-loop/.phase5-g3-limited-cron.lock",
+    "kill_switch_path": "output/phase5-continuous-loop/.phase5-g3-kill-switch"
+  },
+  "repo": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "5417930c569ec8f2954eafe84b992cf94925a3e9",
+    "subject": "Add Phase 5 G3 cron approval packet",
+    "path_label": "<hse-repo>"
+  },
+  "run_root": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359",
+  "pipeline_steps": [
+    {
+      "name": "preflight",
+      "logical_command": [
+        "git",
+        "status",
+        "--short",
+        "--branch"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.013,
+      "stdout_tail": "## hse/phase5-continuous-loop-prep",
+      "stderr_tail": ""
+    },
+    {
+      "name": "provenance_dataset",
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.provenance_dataset",
+        "--tool-selection-report-json",
+        "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+        "--heldout-review-json",
+        "output/tool-description/phase2e-heldout-review/heldout_review.json",
+        "--prompt-source",
+        "prompt_builder=<hermes-agent>/agent/prompt_builder.py",
+        "--output-dir",
+        "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/provenance",
+        "--window-start",
+        "2026-06-06",
+        "--window-end",
+        "2026-06-07",
+        "--generated-at",
+        "2026-06-07T19:03:59Z"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.037,
+      "stdout_tail": "wrote Phase 5 provenance-backed metric input",
+      "stderr_tail": ""
+    },
+    {
+      "name": "performance_snapshot",
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.performance_snapshot",
+        "--metrics-json",
+        "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/provenance/provenance_metrics_input.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/performance"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.031,
+      "stdout_tail": "wrote Phase 5 performance monitor snapshot",
+      "stderr_tail": ""
+    },
+    {
+      "name": "auto_triage",
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.auto_triage",
+        "--performance-report-json",
+        "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/performance/performance_snapshot_report.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/auto-triage"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.031,
+      "stdout_tail": "wrote Phase 5 auto-triage ranking",
+      "stderr_tail": ""
+    },
+    {
+      "name": "scheduler_dry_run",
+      "logical_command": [
+        "$PY",
+        "-m",
+        "evolution.monitor.scheduler_dry_run",
+        "--auto-triage-report-json",
+        "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/auto-triage/auto_triage_report.json",
+        "--output-dir",
+        "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/scheduler"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.03,
+      "stdout_tail": "wrote Phase 5 scheduler dry-run",
+      "stderr_tail": ""
+    },
+    {
+      "name": "semantic_safety_verifier",
+      "logical_command": [
+        "internal",
+        "semantic_safety_verifier"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.0
+    }
+  ],
+  "component_reports": {
+    "provenance_dataset_report": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/provenance/provenance_dataset_report.json",
+    "provenance_metrics_input": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/provenance/provenance_metrics_input.json",
+    "performance_snapshot_report": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/performance/performance_snapshot_report.json",
+    "auto_triage_report": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/auto-triage/auto_triage_report.json",
+    "scheduler_dry_run_report": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/scheduler/scheduler_dry_run_report.json",
+    "semantic_safety_verifier_report": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359/semantic-safety-verifier/semantic_safety_verifier_report.json"
+  },
+  "component_statuses": {
+    "provenance_dataset": "READY_FOR_READONLY_DRY_RUN",
+    "performance_snapshot": "PASS",
+    "auto_triage": "NO_ACTION",
+    "scheduler_dry_run": "DRY_RUN_NOOP"
+  },
+  "scheduler_summary": {
+    "review_required": false,
+    "dry_run_action_count": 0,
+    "disallowed_side_effect_count": 0
+  },
+  "safety_boundary": {
+    "production_continuous_loop_enabled": false,
+    "threshold_triggered_optimizer_execution_started": false,
+    "automatic_pr_loop_enabled": false,
+    "auto_merge_or_deploy": false,
+    "network_calls_performed": false,
+    "model_or_api_budget_spent": false,
+    "active_runtime_mutation": false
+  },
+  "acceptance_criteria": [
+    {
+      "id": "P5-G3-01",
+      "name": "explicit_g3_pilot_authorization",
+      "status": "PASS",
+      "evidence": "Sunwoo explicit approval in Discord: rec action GO -- 1회성 expiring cron pilot 진행 : Sunwoo 승인."
+    },
+    {
+      "id": "P5-G3-02",
+      "name": "independent_g2_g3_review_acceptance",
+      "status": "PASS",
+      "evidence": "Independent read-only reviewer accepted PR #108 G2/G3 evidence before pilot."
+    },
+    {
+      "id": "P5-G3-03",
+      "name": "one_shot_expiring_cron",
+      "status": "PASS",
+      "evidence": "Hermes cron job configured repeat=1 and removed/expired after run by operator verification."
+    },
+    {
+      "id": "P5-G3-04",
+      "name": "zero_budget_no_optimizer_no_auto_pr_loop",
+      "status": "PASS",
+      "evidence": "Pipeline uses local monitor modules only; optimizer and automatic PR loop remain disabled."
+    },
+    {
+      "id": "P5-G3-05",
+      "name": "repo_local_evidence_only",
+      "status": "PASS",
+      "evidence": "output/phase5-continuous-loop/g3-limited-cron-pilot-20260607-190359"
+    },
+    {
+      "id": "P5-G3-06",
+      "name": "disallowed_side_effects_absent",
+      "status": "PASS",
+      "evidence": "disallowed_side_effect_count=0"
+    },
+    {
+      "id": "P5-G3-07",
+      "name": "no_review_required_actions",
+      "status": "PASS",
+      "evidence": "review_required=False; dry_run_action_count=0"
+    }
+  ],
+  "recommended_next_action": "Verify and review G3 pilot evidence; do not enable production continuous loop, optimizer, automatic PR loop, auto-merge/deploy, or budgeted calls. If accepted, the next safe step is path-limited publication of pilot evidence to PR #108, not broader production automation."
+}

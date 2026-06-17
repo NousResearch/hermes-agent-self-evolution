@@ -1,0 +1,98 @@
+{
+  "acceptance_criteria": [
+    {
+      "evidence": "L1 status=PASS_NO_ACTION",
+      "id": "P5-L2-01",
+      "status": "PASS"
+    },
+    {
+      "evidence": "auto_triage=NO_ACTION, scheduler=DRY_RUN_NOOP, dry_run_action_count=0",
+      "id": "P5-L2-02",
+      "status": "PASS"
+    },
+    {
+      "evidence": "all provenance-backed metrics meet thresholds",
+      "id": "P5-L2-03",
+      "status": "PASS"
+    },
+    {
+      "evidence": "budget cap is zero and no network/API/optimizer call was performed for a no-op decision",
+      "id": "P5-L2-04",
+      "status": "PASS"
+    },
+    {
+      "evidence": "human review remains required; no candidate apply, auto-merge, deploy, or external PR update occurred",
+      "id": "P5-L2-05",
+      "status": "PASS"
+    }
+  ],
+  "bounds": {
+    "auto_merge_allowed": false,
+    "budget_cap_usd": 0.0,
+    "candidate_apply_allowed": false,
+    "max_total_runtime_seconds": 1800,
+    "network_calls_allowed": false,
+    "optimizer_execution_allowed_if_no_weak_target": false,
+    "paid_benchmark_calls_allowed": false,
+    "repeat_count": 1
+  },
+  "decision": {
+    "decision": "NO_OP_OPTIMIZATION_WAIVED",
+    "external_handoff_created_or_updated": false,
+    "human_review_required_for_future_pr": true,
+    "optimizer_candidate_generated": false,
+    "reason": "Auto-triage emitted NO_ACTION and scheduler dry-run emitted DRY_RUN_NOOP; there is no underperforming target requiring optimizer execution in this cycle."
+  },
+  "generated_at": "2026-06-07T09:17:23Z",
+  "inputs": {
+    "l1_auto_triage_status": "NO_ACTION",
+    "l1_scheduler_status": "DRY_RUN_NOOP",
+    "l1_summary_json": "reports/phase5_bounded_unattended_run_20260607_090920.json"
+  },
+  "metrics_evaluated": [
+    {
+      "baseline": 0.1111,
+      "component": "tool_descriptions",
+      "higher_is_better": true,
+      "id": "tool_selection_accuracy",
+      "sample_count": 45,
+      "status": "PASS",
+      "threshold": 0.9,
+      "value": 1.0
+    },
+    {
+      "baseline": 0.0,
+      "component": "system_prompts",
+      "higher_is_better": false,
+      "id": "prompt_contract_warning_rate",
+      "sample_count": 20,
+      "status": "PASS",
+      "threshold": 0.05,
+      "value": 0.0
+    }
+  ],
+  "mode": "budgeted_unattended_optimization_or_noop_decision_cycle",
+  "phase": "5",
+  "recommended_next_action": "Record optimizer/handoff explicit waiver and generate formal Phase 5 local completion artifact; keep production scheduler/cron disabled.",
+  "runtime": {
+    "duration_seconds": 0.047
+  },
+  "safety_invariants": {
+    "active_runtime_mutation": false,
+    "automated_pr_created_or_updated": false,
+    "automatic_merge_or_deploy_allowed": false,
+    "benchmark_cron_enabled": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "notifications_sent": false,
+    "optimizer_execution_started": false,
+    "raw_credentials_recorded": false,
+    "raw_private_session_data_committed": false,
+    "read_only": true,
+    "scheduler_or_cron_side_effects_performed": false
+  },
+  "schema_version": "phase5-l2-budgeted-decision-cycle-v1",
+  "source_authorization": "Sunwoo rec action GO \u2014 approved L1 evidence packet commit/publish review, L2 budgeted unattended optimization/no-op decision cycle, and explicit optimizer/handoff waiver for formal Phase 5",
+  "status": "PASS_NO_OP_DECISION"
+}

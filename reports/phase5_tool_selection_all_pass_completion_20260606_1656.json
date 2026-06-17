@@ -1,0 +1,84 @@
+{
+  "authorization": "Sunwoo rec action GO after previous recommendation to continue triaging remaining non-passing rows",
+  "candidate_dir": "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run",
+  "candidate_metrics": {
+    "case_count": 45,
+    "failed_case_count": 0,
+    "phase2d_gate_passed": true,
+    "selection_accuracy": 1.0,
+    "wrong_tool_avoidance": 1.0
+  },
+  "changed_files": [
+    "evolution/tools/evolve_tool_descriptions.py",
+    "tests/tools/test_evolve_tool_descriptions.py"
+  ],
+  "created_at_local": "2026-06-06 16:56 CEST",
+  "not_formal_phase5_completion": true,
+  "phase": "5-read-only-dry-run-triage",
+  "phase5_metrics": {
+    "auto_triage_status": "NO_ACTION",
+    "performance_status": "PASS",
+    "prompt_contract_warning_count": 0,
+    "prompt_contract_warning_rate": {
+      "baseline": 0.0,
+      "component": "system_prompts",
+      "higher_is_better": false,
+      "id": "prompt_contract_warning_rate",
+      "sample_count": 20,
+      "threshold": 0.05,
+      "value": 0.0
+    },
+    "scheduler_action_count": 0,
+    "scheduler_status": "DRY_RUN_NOOP",
+    "tool_selection_accuracy": {
+      "baseline": 0.1111,
+      "component": "tool_descriptions",
+      "higher_is_better": true,
+      "id": "tool_selection_accuracy",
+      "sample_count": 45,
+      "threshold": 0.9,
+      "value": 1.0
+    },
+    "tool_selection_fail_count": 0
+  },
+  "recommended_next_step": "Keep scheduler/cron/optimizer OFF. If Phase 5 formal completion is desired, next step is a separate human-approved unattended automation design with bounded cron/scheduler, budget, rollback, and PR handoff gates.",
+  "related_existing_changes_from_prior_slice": [
+    "evolution/tools/tool_description_eval.py",
+    "evolution/monitor/performance_snapshot.py",
+    "evolution/monitor/provenance_dataset.py",
+    "tests/monitor/test_phase5_provenance_dataset.py"
+  ],
+  "remaining_risks": [
+    "This remains read-only dry-run evidence, not unattended scheduler/cron enablement.",
+    "No optimizer, external API benchmark, GitHub PR update, or active Hermes runtime mutation was performed.",
+    "Candidate source reports may include non-secret tool-schema documentation text; Phase 5 emitted outputs remain sanitized."
+  ],
+  "run_root": "output/phase5-continuous-loop/tool-selection-all-pass-dry-run-20260606-145446",
+  "safety_invariants": {
+    "active_runtime_mutation": false,
+    "automated_apply_ready": false,
+    "automated_pr_created_or_updated": false,
+    "benchmark_cron_enabled": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "notifications_sent": false,
+    "optimizer_execution_started": false,
+    "raw_credentials_recorded": false,
+    "raw_private_session_data_committed": false,
+    "read_only": true,
+    "scheduler_or_cron_side_effects_performed": false
+  },
+  "scope": "candidate-only local tool-description evidence path and read-only Phase 5 monitor rerun",
+  "verification": {
+    "compileall": "PASS",
+    "focused_tests": "56 passed in 0.50s",
+    "full_tests": "357 passed, 11 warnings in 5.25s",
+    "git_diff_check": "PASS",
+    "green_test": "specific test passed after request-signal cue generation change: 1 passed",
+    "json_semantic_checks": "PASS",
+    "obsidian_cache_byte_identity": "verified after write",
+    "private_scan_scope": "Phase 5 emitted provenance/performance/triage/scheduler outputs passed; candidate source report parsed semantically but intentionally contains non-secret tool-schema documentation fields.",
+    "red_test": "specific test failed before implementation: selection_accuracy 0.9111 != 1.0"
+  }
+}

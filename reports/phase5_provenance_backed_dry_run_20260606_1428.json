@@ -1,0 +1,91 @@
+{
+  "code_changes": [
+    "evolution/monitor/provenance_dataset.py",
+    "evolution/monitor/performance_snapshot.py",
+    "tests/monitor/test_phase5_provenance_dataset.py"
+  ],
+  "created_at_local": "2026-06-06 14:28 CEST",
+  "dry_run_summary": {
+    "artifacts": {
+      "auto_triage_report": "auto-triage/auto_triage_report.json",
+      "metrics_input": "provenance/provenance_metrics_input.json",
+      "performance_report": "performance/performance_snapshot_report.json",
+      "provenance_report": "provenance/provenance_dataset_report.json",
+      "scheduler_report": "scheduler/scheduler_dry_run_report.json"
+    },
+    "auto_triage_status": "REVIEW_REQUIRED",
+    "generated_at": "2026-06-06T12:27:47Z",
+    "metrics_source_kind": "provenance_backed_sanitized_dataset",
+    "mode": "phase5-readonly-provenance-backed-dry-run",
+    "output_root": "output/phase5-continuous-loop/provenance-backed-dry-run-20260606-122725",
+    "performance_status": "NEEDS_TRIAGE",
+    "phase": "5",
+    "prompt_contract_warning_rate": {
+      "baseline": 0.0,
+      "component": "system_prompts",
+      "higher_is_better": false,
+      "id": "prompt_contract_warning_rate",
+      "sample_count": 20,
+      "threshold": 0.05,
+      "value": 0.0
+    },
+    "row_counts": {
+      "prompt_contract_row_count": 20,
+      "prompt_contract_warning_count": 0,
+      "tool_selection_fail_count": 5,
+      "tool_selection_pass_count": 40,
+      "tool_selection_row_count": 45
+    },
+    "safety_invariants": {
+      "active_runtime_mutation": false,
+      "automated_pr_created_or_updated": false,
+      "benchmark_cron_enabled": false,
+      "cron_jobs_created": false,
+      "external_calls_performed": false,
+      "network_calls_performed": false,
+      "optimizer_execution_started": false
+    },
+    "scheduler_dry_run_action_count": 1,
+    "scheduler_side_effect_count": 0,
+    "scheduler_status": "DRY_RUN_REVIEW_REQUIRED",
+    "schema_version": "phase5-provenance-backed-dry-run-summary-v1",
+    "status": "REVIEW_REQUIRED",
+    "status_explanation": "Safety invariants passed, but metric and scheduler gates required manual triage; this was not a gate-passing Phase 5 dry-run.",
+    "tool_selection_accuracy": {
+      "baseline": 0.1111,
+      "component": "tool_descriptions",
+      "higher_is_better": true,
+      "id": "tool_selection_accuracy",
+      "sample_count": 45,
+      "threshold": 0.9,
+      "value": 0.8889
+    }
+  },
+  "formal_phase5_completion_claimed": false,
+  "phase": "5",
+  "recommended_next_step": "Review the single remaining tool_selection_accuracy dry-run target manually; do not enable scheduler/cron/optimizer until separate approval and Phase 5 go/no-go gates are satisfied.",
+  "safety_boundaries": {
+    "active_runtime_mutation": false,
+    "automated_pr_created_or_updated": false,
+    "benchmark_cron_enabled": false,
+    "cron_jobs_created": false,
+    "external_calls_performed": false,
+    "network_calls_performed": false,
+    "optimizer_execution_started": false
+  },
+  "scheduler_enablement_claimed": false,
+  "schema_version": "phase5-provenance-backed-dry-run-report-v1",
+  "scope": "replace synthetic fixture metrics with provenance-backed sanitized dataset and run one read-only dry-run",
+  "status": "REVIEW_REQUIRED",
+  "status_explanation": "Safety invariants passed, but metric and scheduler gates required manual triage; this was not a gate-passing Phase 5 dry-run.",
+  "verification": {
+    "compileall": "PASS",
+    "focused_tests": "11 passed in 0.23s",
+    "full_tests": "356 passed, 11 warnings in 6.06s",
+    "git_diff_check": "PASS",
+    "json_semantics_secret_scan": "PASS",
+    "monitor_tests": "31 passed in 0.45s",
+    "obsidian_cache_byte_identical": "PASS",
+    "red_test_observed": "5 failed due missing evolution.monitor.provenance_dataset before implementation"
+  }
+}

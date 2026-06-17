@@ -1,0 +1,163 @@
+{
+  "acceptance_limitations": [
+    "This is independent delegated read-only verifier acceptance, not external human maintainer approval.",
+    "GitHub status contexts and check-runs are absent; this is MISSING_NOT_CI_PASS, not CI pass.",
+    "The aggregate run status remains review-required due to historical fire-01; R1 repair acceptance applies to fires 2 and 3 only."
+  ],
+  "acceptance_status": "P1_FINITE_CRON_SOAK_R1_REPAIR_EVIDENCE_CHAIN_FINAL_READ_ONLY_ACCEPTED",
+  "acceptance_step_boundary_flags": {
+    "active_runtime_source_config_skill_memory_mutation": false,
+    "auto_merge_deploy_performed": false,
+    "automatic_pr_loop_enabled": false,
+    "budget_spend_started": false,
+    "credential_modification_performed": false,
+    "cron_resume_performed": false,
+    "optimizer_execution_started": false,
+    "production_continuous_loop_enabled": false,
+    "remaining_fire_execution_started": false,
+    "remaining_fires_pending_after_r1": false,
+    "source_config_test_changes_published": false,
+    "unrelated_local_artifacts_published": false
+  },
+  "accepted_evidence_commit": "4c7997b635209fc5cb6ad580ff7af9b0644a390d",
+  "accepted_evidence_files": [
+    "reports/phase5_p1_finite_cron_soak_run_20260608-164455.json",
+    "reports/phase5_p1_finite_cron_soak_run_20260608-164455.md",
+    "reports/phase5_p1_finite_cron_soak_side_effect_ledger_20260608-164455.json",
+    "reports/phase5_p1_finite_cron_soak_r1_repair_execution_20260609_211505.json",
+    "reports/phase5_p1_finite_cron_soak_r1_repair_execution_20260609_211505.md"
+  ],
+  "created_at": "2026-06-09 22:07:51 +0200 CEST",
+  "cron_state": {
+    "historical_job_enabled": false,
+    "historical_job_id": "b24aca09f168",
+    "historical_job_last_status": "error",
+    "historical_job_repeat": {
+      "completed": 2,
+      "times": 3
+    },
+    "historical_job_state": "paused",
+    "replacement_active_pending": false,
+    "replacement_active_pending_count": 0,
+    "replacement_job_id": "7ade18f75708"
+  },
+  "evidence_file_presence": {
+    "reports/phase5_p1_finite_cron_soak_r1_repair_execution_20260609_211505.json": {
+      "local_exists": true,
+      "present_in_paginated_pr_files_api": true
+    },
+    "reports/phase5_p1_finite_cron_soak_r1_repair_execution_20260609_211505.md": {
+      "local_exists": true,
+      "present_in_paginated_pr_files_api": true
+    },
+    "reports/phase5_p1_finite_cron_soak_run_20260608-164455.json": {
+      "local_exists": true,
+      "present_in_paginated_pr_files_api": true
+    },
+    "reports/phase5_p1_finite_cron_soak_run_20260608-164455.md": {
+      "local_exists": true,
+      "present_in_paginated_pr_files_api": true
+    },
+    "reports/phase5_p1_finite_cron_soak_side_effect_ledger_20260608-164455.json": {
+      "local_exists": true,
+      "present_in_paginated_pr_files_api": true
+    }
+  },
+  "external_human_maintainer_approval": false,
+  "github_checks_caveat": {
+    "check_runs_total_count": 0,
+    "claim_ci_pass": false,
+    "classification": "MISSING_NOT_CI_PASS",
+    "combined_status_state": "pending",
+    "combined_status_total_count": 0
+  },
+  "independent_final_read_only_verifier": {
+    "classification": "independent_delegated_read_only_verifier",
+    "files_created_or_modified": 0,
+    "read_only_only": true,
+    "summary": "Verified PR head, evidence files, JSON semantics, aggregate caveat, ledger, PR body, missing checks, cron paused state, hygiene scans, and no disallowed boundary action.",
+    "verdict": "PASS"
+  },
+  "local_branch": "hse/phase5-continuous-loop-prep",
+  "local_validation": {
+    "credential_assignment_scan": "PASS",
+    "json_parse": "PASS",
+    "paginated_pr_files_api_presence": "PASS",
+    "pr_body_r1_addendum_tokens": "PASS",
+    "private_absolute_path_scan": "PASS",
+    "semantic_assertions": "PASS"
+  },
+  "pr": {
+    "base_ref": "main",
+    "head_owner": "Sunwo0u",
+    "head_ref": "hse/phase5-continuous-loop-prep",
+    "head_sha": "4c7997b635209fc5cb6ad580ff7af9b0644a390d",
+    "is_draft": false,
+    "mergeable": "MERGEABLE",
+    "number": 108,
+    "state": "OPEN",
+    "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+  },
+  "publication_scope": "reports_only_acceptance_pair_plus_manual_pr_body_addendum",
+  "r1_repair": {
+    "boundary_flags": {
+      "active_runtime_source_config_skill_memory_mutation": false,
+      "automatic_pr_loop_enabled": false,
+      "optimizer_execution_started": false,
+      "pr_update_performed": false,
+      "production_continuous_loop_enabled": false
+    },
+    "final_state_caveat": "aggregate status remains review-required because historical fire-01 is preserved with review_required=true; remaining fires 2 and 3 passed per-fire NOOP guards",
+    "status": "R1_REPAIR_REMAINING_FIRES_COMPLETED_NOOP",
+    "verdict": "PASS_REMAINING_FIRES_NOOP"
+  },
+  "recommended_next_action": "Request human reviewer/maintainer review of PR #108 or mark ready only with the MISSING_NOT_CI_PASS caveat preserved.",
+  "reviewer_type": "independent_delegated_read_only_verifier",
+  "run_semantics": {
+    "aggregate_status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+    "aggregate_status_caveat": "Aggregate run status remains P1_SOAK_REVIEW_REQUIRED_NO_ACTION because historical fire-01 is preserved with review_required=true and dry-run action count 1; final acceptance of the R1 repair applies only to newly executed remaining fires 2 and 3, which each passed per-fire NOOP guards.",
+    "fire_01_historical_review_required": {
+      "dry_run_action_count": 1,
+      "review_required": true,
+      "scheduler_status": "DRY_RUN_REVIEW_REQUIRED",
+      "side_effect_count": 0,
+      "status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION"
+    },
+    "r1_remaining_fire_acceptance": [
+      {
+        "accepted": true,
+        "disallowed_side_effect_count": 0,
+        "dry_run_action_count": 0,
+        "fire_index": 2,
+        "review_required": false,
+        "scheduler_status": "DRY_RUN_NOOP",
+        "side_effect_count": 0,
+        "status": "P1_SOAK_FIRE_PASS_NO_ACTION"
+      },
+      {
+        "accepted": true,
+        "disallowed_side_effect_count": 0,
+        "dry_run_action_count": 0,
+        "fire_index": 3,
+        "review_required": false,
+        "scheduler_status": "DRY_RUN_NOOP",
+        "side_effect_count": 0,
+        "status": "P1_SOAK_FIRE_PASS_NO_ACTION"
+      }
+    ],
+    "summary": {
+      "completed_fire_count": 3,
+      "disallowed_side_effect_count": 0,
+      "dry_run_action_count": 1,
+      "max_fire_count": 3,
+      "review_required_count": 1
+    }
+  },
+  "side_effect_ledger": {
+    "disallowed_side_effect_count": 0,
+    "status": "APPROVED_SIDE_EFFECTS_ONLY",
+    "verdict": "PASS"
+  },
+  "stage": "P1_FINITE_CRON_SOAK_FINAL_READ_ONLY_ACCEPTANCE_PUBLICATION",
+  "verdict": "PASS"
+}

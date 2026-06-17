@@ -1,0 +1,63 @@
+{
+  "authorization": {
+    "approved_scope": "execute bounded P1 finite cron soak remaining-fire resume for job b24aca09f168, max additional fires 2, keep optimizer off, no automatic PR loop, fail closed on review_required or any dry-run action, publish nothing unless separately approved",
+    "publication_allowed": false,
+    "source": "Sunwoo Discord approval"
+  },
+  "cron_state_after_fail_closed_pause": {
+    "enabled": false,
+    "last_run_at": "2026-06-09T17:52:46.396258+02:00",
+    "last_status": "error",
+    "next_run_at": "2026-06-09T18:22:46.396258+02:00",
+    "paused_at": "2026-06-09T17:55:57.215649+02:00",
+    "state": "paused"
+  },
+  "execution_summary": {
+    "attempted_cron_triggers": 1,
+    "cron_repeat_completed_after_failed_attempt": 2,
+    "cron_repeat_times": 3,
+    "remaining_fire_02_artifacts_created": false,
+    "repeat_counting_caveat": "Hermes cron marked the failed no-agent script attempt as a repeat completion; the run state/report still show only one actual completed fire.",
+    "run_report_fire_count": 1,
+    "state_completed_fire_count": 1,
+    "successful_additional_fires": 0,
+    "target_job_id": "b24aca09f168"
+  },
+  "fail_closed_trigger": {
+    "kill_switch_path": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/P1_FINITE_CRON_SOAK_KILL_SWITCH",
+    "kill_switch_present": true,
+    "kill_switch_sha256": "1fd81b94d97fbc0624f5da15b3a961c894c011004bee2b51af7bb5b9c867bba0",
+    "kill_switch_text": "created_at=2026-06-08T16:54:53+0200\njob_id=b24aca09f168\nrun_id=20260608-164455\nreason=first_fire_returned_review_required; finite soak paused fail-closed before remaining fires\n",
+    "run_report_errors": [
+      "kill switch present: output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/P1_FINITE_CRON_SOAK_KILL_SWITCH"
+    ],
+    "run_report_status": "P1_SOAK_FAIL_BLOCKED",
+    "script_error": "Script exited with code 1\nstderr:\nP1 finite soak 20260608-164455: FAIL_BLOCKED error=kill switch present: output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/P1_FINITE_CRON_SOAK_KILL_SWITCH report=reports/phase5_p1_finite_cron_soak_run_20260608-164455.json",
+    "trigger": "existing_kill_switch_present_before_script_fire"
+  },
+  "generated_at_local": "2026-06-09 17:56:39 +0200 CEST",
+  "ledger_status": "APPROVED_SIDE_EFFECTS_ONLY",
+  "local_artifacts": {
+    "execution_attempt_json": "reports/phase5_p1_finite_cron_soak_remaining_fire_resume_execution_attempt_20260609_175639.json",
+    "execution_attempt_md": "reports/phase5_p1_finite_cron_soak_remaining_fire_resume_execution_attempt_20260609_175639.md",
+    "latest_cron_output": "<hermes-home>/cron/output/b24aca09f168/2026-06-09_17-52-46.md",
+    "run_report_json": "reports/phase5_p1_finite_cron_soak_run_20260608-164455.json",
+    "side_effect_ledger_json": "reports/phase5_p1_finite_cron_soak_side_effect_ledger_20260608-164455.json",
+    "state_json": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/state.json"
+  },
+  "preserved_off_boundaries": {
+    "active_runtime_source_config_skill_memory_mutation": false,
+    "auto_merge_or_deploy_performed": false,
+    "automatic_pr_loop_enabled": false,
+    "credential_modification": false,
+    "network_api_model_budget_spend": false,
+    "optimizer_execution_started": false,
+    "pr_publication_performed": false,
+    "production_continuous_loop_enabled": false
+  },
+  "recommended_next_step": "Do not continue remaining fires yet. Separately decide whether to clear the existing kill switch and repair/recreate cron repeat accounting; then require a new explicit approval before any further trigger.",
+  "schema_version": "phase5-p1-finite-cron-soak-remaining-fire-resume-execution-attempt-v1",
+  "stage": "P1_FINITE_CRON_SOAK_REMAINING_FIRE_RESUME_EXECUTION_ATTEMPT",
+  "status": "FAIL_CLOSED_BLOCKED_BY_EXISTING_KILL_SWITCH",
+  "verdict": "STOPPED_NO_REMAINING_FIRES_EXECUTED_SUCCESSFULLY"
+}

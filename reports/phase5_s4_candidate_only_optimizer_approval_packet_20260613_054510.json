@@ -1,0 +1,244 @@
+{
+  "schema_version": "phase5-s4-candidate-only-optimizer-approval-packet-v1",
+  "created_at_local": "2026-06-13 05:45 CEST +0200",
+  "created_at_utc": "2026-06-13T03:45:10Z",
+  "status": "S4_CANDIDATE_ONLY_OPTIMIZER_APPROVAL_PACKET_READY_NOT_EXECUTED",
+  "phase": "HSE Phase 5",
+  "stage": "S4_CANDIDATE_ONLY_OPTIMIZER_GATE",
+  "source_request": "Sunwoo rec action GO — prepare S4 candidate-only optimizer approval packet based on S3/G3 evidence review; do not execute optimizer yet.",
+  "action_scope": {
+    "interpreted_action": "write and verify local-only S4 candidate-only optimizer approval packet; no optimizer execution",
+    "activation_performed_now": false,
+    "optimizer_execution_performed_now": false,
+    "model_or_api_budget_spent_now": false,
+    "network_calls_performed_by_this_packet": false,
+    "candidate_generated_by_optimizer_now": false,
+    "candidate_applied_now": false,
+    "active_hermes_runtime_mutation_now": false,
+    "active_skill_mutation_now": false,
+    "cron_created_or_resumed_now": false,
+    "pr_created_or_updated_now": false,
+    "git_stage_commit_push_now": false,
+    "auto_merge_or_deploy_now": false,
+    "credential_or_secret_change_now": false
+  },
+  "repo_state": {
+    "repo": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution",
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "ccf51419f7074860cc2bdc2efcf3b8bdc41ceb37",
+    "status_short_branch": [
+      "## hse/phase5-continuous-loop-prep",
+      "?? reports/phase1_active_skill_rebuild_candidate_packet_20260613_053614.json",
+      "?? reports/phase1_active_skill_rebuild_candidate_packet_20260613_053614.md",
+      "?? reports/phase1_active_skill_reconcile_packet_20260613_044202.json",
+      "?? reports/phase1_active_skill_reconcile_packet_20260613_044202.md",
+      "?? reports/phase5_g3_corrective_one_fire_guard_packet_20260613_033224.json",
+      "?? reports/phase5_g3_corrective_one_fire_guard_packet_20260613_033224.md",
+      "?? reports/phase5_g3_limited_cron_approval_packet_20260613_025512.json",
+      "?? reports/phase5_g3_limited_cron_approval_packet_20260613_025512.md",
+      "?? reports/phase5_g3_limited_cron_pilot_guarded_run_20260613_033224_20260613_014105_563626.json",
+      "?? reports/phase5_g3_limited_cron_pilot_guarded_run_20260613_033224_20260613_014105_563626.md",
+      "?? reports/phase5_g3_limited_cron_pilot_guarded_side_effect_ledger_20260613_033224_20260613_014105_563626.json",
+      "?? reports/phase5_g3_limited_cron_pilot_run_20260613_010900.json",
+      "?? reports/phase5_g3_limited_cron_pilot_run_20260613_010900.md",
+      "?? reports/phase5_g3_limited_cron_pilot_run_20260613_010926.json",
+      "?? reports/phase5_g3_limited_cron_pilot_run_20260613_010926.md",
+      "?? reports/phase5_g3_limited_cron_pilot_side_effect_ledger_20260613_010900.json",
+      "?? reports/phase5_g3_limited_cron_pilot_side_effect_ledger_20260613_010926.json",
+      "?? reports/phase5_g4_final_hse_evidence_package_20260613_035610.json",
+      "?? reports/phase5_g4_final_hse_evidence_package_20260613_035610.md",
+      "?? reports/phase5_g4_pr_publication_review_packet_20260613_041851.json",
+      "?? reports/phase5_g4_pr_publication_review_packet_20260613_041851.md"
+    ]
+  },
+  "preconditions_from_g3_evidence_review": {
+    "all_passed_for_packet_preparation": true,
+    "checks": {
+      "g3_corrected_run_pass_no_action": true,
+      "g3_scheduler_review_required_false": true,
+      "g3_scheduler_dry_run_action_count_zero": true,
+      "g3_scheduler_disallowed_side_effect_count_zero": true,
+      "g3_failure_null": true,
+      "g3_ledger_approved_side_effects_only": true,
+      "g3_ledger_disallowed_side_effect_count_zero": true,
+      "g3_watermark_exists": true,
+      "g3_lock_not_present_now": true,
+      "g3_kill_switch_not_present_now": true,
+      "g4_accepts_g3_corrected_one_fire": true,
+      "phase1_rebuild_candidate_ready_not_applied": true
+    },
+    "g3_status": "G3_CRON_PILOT_PASS_NO_ACTION",
+    "g3_mode": "hermes_cron_no_agent_script_one_shot_zero_budget_with_durable_packet_watermark",
+    "g3_failure": null,
+    "g3_scheduler_summary": {
+      "review_required": false,
+      "dry_run_action_count": 0,
+      "disallowed_side_effect_count": 0
+    },
+    "g3_bounds": {
+      "max_fire_count": 1,
+      "repeat": 1,
+      "per_fire_timeout_seconds_max": 1800,
+      "network_or_model_api_budget_cap": 0,
+      "optimizer_execution_allowed": false,
+      "automatic_pr_loop_allowed": false,
+      "auto_merge_or_deploy_allowed": false,
+      "active_runtime_mutation_allowed": false,
+      "repo_local_evidence_only": true
+    },
+    "g3_ledger_status": "APPROVED_SIDE_EFFECTS_ONLY",
+    "g3_ledger_disallowed_side_effect_count": 0,
+    "g4_acceptance_summary": {
+      "overall_ready_for_publication_review": true,
+      "g1_accepted": true,
+      "g2_accepted": true,
+      "g3_corrected_one_fire_accepted": true,
+      "ci_classification": "MISSING_NOT_CI_PASS",
+      "production_enablement": "NOT_STARTED",
+      "optimizer_pr_merge_deploy": "NOT_STARTED"
+    },
+    "phase1_active_skill_rebuild_status": "PHASE1_ACTIVE_SKILL_REBUILD_CANDIDATE_READY_NO_APPLY"
+  },
+  "cron_state_observed": {
+    "observed_with_cronjob_tool_this_turn": true,
+    "hse_g3_corrected_one_fire_job_present": false,
+    "hse_optimizer_or_auto_pr_cron_present": false,
+    "hse_production_readonly_loop_enabled": true,
+    "hse_production_readonly_loop_job_name": "HSE Phase 5 production read-only continuous loop",
+    "hse_production_readonly_loop_last_status": "ok",
+    "old_hse_p1_finite_soak_job_present_but_paused": true,
+    "note": "Production read-only loop is separate from S4 optimizer/full automation and does not authorize optimizer execution."
+  },
+  "current_decision": {
+    "go_for_optimizer_execution_now": false,
+    "go_for_approval_packet": true,
+    "candidate_only_optimizer_execution_started": false,
+    "reason": "G3 corrected one-fire evidence passed with no review-required dry-run action and zero disallowed side effects; therefore S4 should only define the future candidate-only optimizer gate, not spend budget or generate candidates now."
+  },
+  "future_execution_contract": {
+    "requires_separate_explicit_execution_approval": true,
+    "future_prompt_must_name_packet": "phase5_s4_candidate_only_optimizer_approval_packet_20260613_054510.json",
+    "recommended_explicit_execution_phrase_template": "S4 candidate-only optimizer execute GO under phase5_s4_candidate_only_optimizer_approval_packet_20260613_054510.json — provider/model/budget/time/path caps confirmed; no active apply, no automatic PR update, no merge/deploy.",
+    "current_execution_recommendation": "DO_NOT_EXECUTE_OPTIMIZER_NOW_NO_WEAK_TARGET_IN_G3",
+    "why_not_execute_now": [
+      "Latest corrected G3 run is PASS_NO_ACTION.",
+      "scheduler_summary.review_required=false.",
+      "scheduler_summary.dry_run_action_count=0.",
+      "No weak target or review-required action exists in the G3 evidence that would justify optimizer spend now."
+    ],
+    "future_trigger_conditions_all_required": [
+      "A later read-only monitor or supervised run identifies a concrete weak target, review-required dry-run action, or explicitly approved optimization target.",
+      "Sunwoo provides explicit provider/model approval with a non-Google preference preserved unless overridden.",
+      "Sunwoo provides a numeric maximum budget or confirms a zero-cost/local-only optimizer path.",
+      "Input dataset/fixtures and target metric are frozen before optimizer execution.",
+      "A rollback/no-apply boundary is accepted before candidate generation."
+    ],
+    "provider_and_model_policy": {
+      "current_packet_approval": "NOT_APPROVED_FOR_EXECUTION",
+      "preferred_routing": "non-Google/non-Gemini family when configurable",
+      "gemini_or_google_family": "DISALLOWED_UNLESS_SUNWOO_EXPLICITLY_OVERRIDES_FOR_THIS_RUN",
+      "provider": "TBD_REQUIRED_AT_EXECUTION_APPROVAL",
+      "model": "TBD_REQUIRED_AT_EXECUTION_APPROVAL"
+    },
+    "budget_policy": {
+      "current_packet_budget_cap": 0,
+      "future_execution_budget_cap": "TBD_REQUIRED_AT_EXECUTION_APPROVAL_OR_ZERO_COST_LOCAL_ONLY",
+      "network_or_paid_benchmark_calls": "DISALLOWED_UNTIL_SEPARATELY_APPROVED",
+      "stop_on_budget_uncertainty": true
+    },
+    "optimizer_bounds_if_later_approved": {
+      "candidate_only_output": true,
+      "max_candidates_default": 1,
+      "max_wall_clock_seconds_default": 1800,
+      "max_parallel_optimizer_jobs_default": 1,
+      "requires_skip_if_running_lock": true,
+      "requires_kill_switch": true,
+      "requires_side_effect_ledger": true,
+      "requires_json_and_markdown_reports": true,
+      "requires_no_auto_apply": true,
+      "requires_no_active_runtime_mutation": true,
+      "requires_no_automatic_pr_update": true,
+      "requires_no_merge_or_deploy": true
+    },
+    "allowed_write_roots_if_later_approved": [
+      "output/phase5-continuous-loop/s4-candidate-optimizer-20260613_054510/",
+      "reports/phase5_s4_candidate_only_optimizer_run_20260613_054510*.json",
+      "reports/phase5_s4_candidate_only_optimizer_run_20260613_054510*.md",
+      "reports/phase5_s4_candidate_only_optimizer_side_effect_ledger_20260613_054510*.json"
+    ],
+    "disallowed_side_effects_if_later_approved_without_extra_permission": {
+      "active_apply_of_candidate": true,
+      "active_hermes_runtime_config_source_skill_memory_mutation": true,
+      "automatic_pr_creation_or_update": true,
+      "auto_merge_or_deploy": true,
+      "credential_read_write_or_rotation": true,
+      "unbounded_recurring_job_or_cron": true,
+      "google_gemini_family_routing_without_override": true
+    },
+    "candidate_review_requirements_after_future_run": [
+      "Candidate artifact must be diffable and isolated under allowed output root.",
+      "Candidate must include metric/provenance report, holdout/non-regression checks, and side-effect ledger.",
+      "Independent review or human review is required before any active apply or PR publication.",
+      "Missing GitHub checks remain MISSING_NOT_CI_PASS and cannot be treated as CI success."
+    ]
+  },
+  "source_evidence_files": {
+    "on_gate_reference": {
+      "path": "/Users/snw/Library/Mobile Documents/iCloud~md~obsidian/Documents/SnwEvAH/Response/20_Hermes_HSE_and_Ouroboros/2026-06-13-0121-hse-phase5-on-gate-explanation.md",
+      "sha256": "61759d4e3c53767ac1d41ed2424de75fb43bf3e563ce52997f0870201ff45abe",
+      "size_bytes": 8749
+    },
+    "g3_corrective_packet": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase5_g3_corrective_one_fire_guard_packet_20260613_033224.json",
+      "sha256": "7791c55559a94f1131e3bcf63d7dae5cc3dc764fa0de0b8e45c0803b6d956cbc",
+      "size_bytes": 8753
+    },
+    "g3_corrected_run": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase5_g3_limited_cron_pilot_guarded_run_20260613_033224_20260613_014105_563626.json",
+      "sha256": "b10ae359940f5c1fb6c8eef12800293cfdfd1ee980ff653c78fee9ba3877858a",
+      "size_bytes": 7955
+    },
+    "g3_corrected_ledger": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase5_g3_limited_cron_pilot_guarded_side_effect_ledger_20260613_033224_20260613_014105_563626.json",
+      "sha256": "bf7c4bd2614dc768d75a74f045c67640c32254872666b66311de614fcc13d497",
+      "size_bytes": 3252
+    },
+    "g3_watermark": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase5-continuous-loop/.phase5-g3-fired-20260613_033224.json",
+      "sha256": "a57a6451a237c8e2844dc17e0d24dfe47541a4f71ff1c5a64d0457dd9ed838f4",
+      "size_bytes": 716
+    },
+    "g4_final_evidence_package": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase5_g4_final_hse_evidence_package_20260613_035610.json",
+      "sha256": "6de729d3a35ba21a067f60df67da27894791ef279d851cd481bdc6e1cd2dcf50",
+      "size_bytes": 8526
+    },
+    "g4_pr_publication_review_packet": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase5_g4_pr_publication_review_packet_20260613_041851.json",
+      "sha256": "1c59c075b93caea9c1050500085bb930762d162af4444f05fe05a0e1c2da37f0",
+      "size_bytes": 17972
+    },
+    "phase1_active_skill_reconcile_packet": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase1_active_skill_reconcile_packet_20260613_044202.json",
+      "sha256": "60fe965b6907041f40d5d586a0de6f5518293326960448d4da9c6c03c02cfa2a",
+      "size_bytes": 26237
+    },
+    "phase1_active_skill_rebuild_candidate_packet": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase1_active_skill_rebuild_candidate_packet_20260613_053614.json",
+      "sha256": "6db73e9d88067da1bfb0320e3e0c7320fc0d8b6be0b5ae48beb5b17192b840bf",
+      "size_bytes": 11609
+    }
+  },
+  "publication_state": {
+    "packet_local_only": true,
+    "packet_committed_or_pushed": false,
+    "pr_body_updated": false,
+    "status_check_classification_from_last_local_pr_packet": "MISSING_NOT_CI_PASS",
+    "note": "No live GitHub network/API check was performed while preparing this packet."
+  },
+  "recommended_next_action": {
+    "safe_default": "Review S4 approval packet locally. Do not execute optimizer unless Sunwoo explicitly approves provider/model/budget/time/path caps.",
+    "if_execution_desired_later": "S4 candidate-only optimizer execute GO under phase5_s4_candidate_only_optimizer_approval_packet_20260613_054510.json — provider/model/budget/time/path caps confirmed; no active apply, no automatic PR update, no merge/deploy.",
+    "if_external_publication_desired": "PR publication GO: publish S4 candidate-only optimizer approval packet phase5_s4_candidate_only_optimizer_approval_packet_20260613_054510.json/md to PR #108 as review/comment/update only; no optimizer execution, no auto-merge, no deploy."
+  }
+}

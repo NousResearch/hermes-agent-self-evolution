@@ -1,0 +1,171 @@
+{
+  "authorized_by": "Sunwoo rec action GO after recommendation to publish manual_triage_review packet/acceptance",
+  "blocked_without_separate_approval": [
+    "resume cron job b24aca09f168",
+    "run remaining P1 fires",
+    "execute threshold optimizer or GEPA/DSPy optimization",
+    "mutate active Hermes/HSE source/config/runtime",
+    "automatic PR loop or auto-merge/deploy",
+    "network/model/API budget spend",
+    "credential changes"
+  ],
+  "created_at": "2026-06-08T23:01:39+02:00",
+  "definition_of_done_for_this_packet": [
+    "The review-required signal is accepted as valid and not downgraded to pass/no-op.",
+    "The paused P1 cron remains paused and remaining fires are not resumed.",
+    "The target metric and failed rows are reviewer-visible and sanitized.",
+    "The next actionable work is scoped to a separate approval before any fix or rerun."
+  ],
+  "manual_triage_target": {
+    "baseline": 0.1111,
+    "classification_counts": {
+      "insufficient_discrimination_margin": 2,
+      "wrong_tool_selected": 3
+    },
+    "component": "tool_descriptions",
+    "fail_count": 5,
+    "failed_rows": [
+      {
+        "classification": "insufficient_discrimination_margin",
+        "cue_coverage": 1.0,
+        "expected_score": 0.3,
+        "expected_tool": "search_files",
+        "request_hash": "bb3988035b8b3d8a",
+        "row_id": "tool-selection-002",
+        "sanitized_request_excerpt": "Find Python files mentioning browser_navigate in the tools directory.",
+        "score_margin": 0.0,
+        "selected_tool": "search_files",
+        "top_confusing_score": 0.3
+      },
+      {
+        "classification": "insufficient_discrimination_margin",
+        "cue_coverage": 1.0,
+        "expected_score": 0.295,
+        "expected_tool": "terminal",
+        "request_hash": "e787c7e309c9baf2",
+        "row_id": "tool-selection-003",
+        "sanitized_request_excerpt": "Run the focused pytest target for the new tool evaluation tests.",
+        "score_margin": 0.0,
+        "selected_tool": "terminal",
+        "top_confusing_score": 0.295
+      },
+      {
+        "classification": "wrong_tool_selected",
+        "cue_coverage": 1.0,
+        "expected_score": 0.3,
+        "expected_tool": "patch",
+        "request_hash": "c3912ca61513bd24",
+        "row_id": "tool-selection-004",
+        "sanitized_request_excerpt": "Make a targeted replacement in one Python file and preserve surrounding content.",
+        "score_margin": -0.1375,
+        "selected_tool": "write_file",
+        "top_confusing_score": 0.4375
+      },
+      {
+        "classification": "wrong_tool_selected",
+        "cue_coverage": 1.0,
+        "expected_score": 0.25,
+        "expected_tool": "read_file",
+        "request_hash": "a261d5e74557fbf1",
+        "row_id": "tool-selection-016",
+        "sanitized_request_excerpt": "Read only lines 120 through 180 of gateway/run.py.",
+        "score_margin": -0.005,
+        "selected_tool": "search_files",
+        "top_confusing_score": 0.255
+      },
+      {
+        "classification": "wrong_tool_selected",
+        "cue_coverage": 0.6,
+        "expected_score": 0.2111,
+        "expected_tool": "terminal",
+        "request_hash": "6384181019e3714c",
+        "row_id": "tool-selection-028",
+        "sanitized_request_excerpt": "Install the project dependencies and run the npm build script.",
+        "score_margin": -0.0445,
+        "selected_tool": "execute_code",
+        "top_confusing_score": 0.2556
+      }
+    ],
+    "metric_id": "tool_selection_accuracy",
+    "pass_count": 40,
+    "priority_score": 0.4995,
+    "rank": 1,
+    "sample_count": 45,
+    "severity": 0.0111,
+    "status": "FAIL",
+    "threshold": 0.9,
+    "value": 0.8889
+  },
+  "manual_triage_tasks": [
+    "Review five sanitized non-passing tool-selection rows and confirm whether each classification is accurate.",
+    "Separate tie/near-tie insufficient discrimination cases from true wrong-tool-selection cases.",
+    "For patch-vs-write_file confusion, identify reusable cue distinctions without one-off row hacks.",
+    "Define a future RED regression target for the current provenance inventory before any implementation change.",
+    "Recommend a narrow future implementation slice only if it preserves read-only evidence boundaries until separately approved."
+  ],
+  "preserved_off_boundaries": {
+    "active_runtime_source_config_mutation_enabled": false,
+    "auto_merge_or_deploy_enabled": false,
+    "automatic_pr_loop_enabled": false,
+    "credential_modification_enabled": false,
+    "cron_resumed": false,
+    "network_model_api_budget_spend_enabled": false,
+    "production_continuous_loop_enabled": false,
+    "remaining_fires_run": false,
+    "threshold_optimizer_execution_enabled": false
+  },
+  "recommended_next_step": "publish this packet and companion acceptance to the PR evidence chain; then request separate approval for a narrow read-only/manual tool-selection triage or RED-test planning slice before any code change or soak resume",
+  "repo": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head_before_artifact_write": "d922d25ed686dcadc62b1d9d62370bcee41dd66f",
+    "head_subject": "Add Phase 5 P1 finite soak evidence",
+    "pr": {
+      "headOwner": "Sunwo0u",
+      "headRefName": "hse/phase5-continuous-loop-prep",
+      "headRefOid": "d922d25ed686dcadc62b1d9d62370bcee41dd66f",
+      "mergeable": "MERGEABLE",
+      "number": 108,
+      "state": "OPEN",
+      "statusCheckCount": 0,
+      "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+    }
+  },
+  "scheduler_dry_run_action": {
+    "action_id": "dry-run-action-001",
+    "action_type": "manual_triage_review",
+    "component": "tool_descriptions",
+    "dry_run_only": true,
+    "priority_score": 0.4995,
+    "proposed_cadence": "manual_review_only",
+    "recommendation": "review_target_no_scheduler_side_effects",
+    "required_approval": "human_review_required_before_scheduler_enablement",
+    "target_metric_id": "tool_selection_accuracy",
+    "target_rank": 1,
+    "would_create_cron_job": false,
+    "would_enable_benchmark_cron": false,
+    "would_send_external_notification": false,
+    "would_start_optimizer": false,
+    "would_update_external_pr": false
+  },
+  "schema_version": "phase5-p1-manual-triage-review-packet-v1",
+  "scope": "document and publish reviewer-facing manual triage packet for tool_selection_accuracy only; no cron resume, no optimizer, no source mutation",
+  "source_evidence": {
+    "auto_triage_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01/auto-triage/auto_triage_report.json",
+    "auto_triage_status": "REVIEW_REQUIRED",
+    "completed_fire_count": 1,
+    "cron_job_id": "b24aca09f168",
+    "ledger_status": "APPROVED_SIDE_EFFECTS_ONLY",
+    "max_fire_count": 3,
+    "operator_pause_report": "reports/phase5_p1_finite_cron_soak_operator_pause_20260608_165453.json",
+    "operator_pause_status": "P1_SOAK_PAUSED_FAIL_CLOSED_AFTER_REVIEW_REQUIRED",
+    "p1_run_report": "reports/phase5_p1_finite_cron_soak_run_20260608-164455.json",
+    "performance_snapshot_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01/performance/performance_snapshot_report.json",
+    "provenance_dataset_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01/provenance/provenance_dataset_report.json",
+    "remaining_fires_paused": 2,
+    "run_status": "P1_SOAK_REVIEW_REQUIRED_NO_ACTION",
+    "scheduler_dry_run_report": "output/phase5-continuous-loop/p1-finite-cron-soak-20260608-164455/fire-01/scheduler/scheduler_dry_run_report.json",
+    "scheduler_status": "DRY_RUN_REVIEW_REQUIRED",
+    "side_effect_ledger": "reports/phase5_p1_finite_cron_soak_side_effect_ledger_20260608-164455.json"
+  },
+  "status": "P1_MANUAL_TRIAGE_REVIEW_PACKET_READY_NOT_EXECUTED"
+}

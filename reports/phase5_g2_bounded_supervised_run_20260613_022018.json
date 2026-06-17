@@ -1,0 +1,557 @@
+{
+  "schema_version": "phase5-g2-bounded-supervised-run-v1",
+  "phase": "HSE Phase 5",
+  "stage": "G2_BOUNDED_N_SUPERVISED_RUN",
+  "status": "G2_PASS_NO_ACTION",
+  "terminal_status": "G2_PASS_NO_ACTION",
+  "g3_status": "BLOCKED_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_APPROVAL",
+  "authorization": "G2 bounded supervised N-run execute GO under phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json",
+  "approval_packet": "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json",
+  "started_at_utc": "2026-06-13T00:20:18Z",
+  "ended_at_utc": "2026-06-13T00:20:18Z",
+  "mode": "manual_supervised_local_zero_budget",
+  "bounds": {
+    "N": 3,
+    "N_source": "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json",
+    "per_run_timeout_seconds_max": 1800,
+    "total_timeout_seconds_max": 5400,
+    "cron_enabled": false,
+    "network_or_model_api_budget_cap": 0,
+    "optimizer_execution_allowed": false,
+    "external_pr_update_allowed": false,
+    "active_runtime_mutation_allowed": false,
+    "supervision_owner": "EvAH local operator under Sunwoo supervision",
+    "lock_path": "output/phase5-continuous-loop/.phase5-g2-bounded-supervised.lock"
+  },
+  "repo": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "2fe70c987f1ffc30c06c453f6b8ab4684e1b01b8",
+    "subject": "Record Phase 5 G1 canary publication evidence",
+    "path_label": "<hse-repo>",
+    "status_short_branch_before_summary": "## hse/phase5-continuous-loop-prep\n?? reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json\n?? reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.md"
+  },
+  "basis_evidence": {
+    "approval_packet": "reports/phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json",
+    "fresh_g1_run": "reports/phase5_g1_one_shot_canary_run_20260612_233639.json",
+    "fresh_g1_side_effect_ledger": "reports/phase5_g1_one_shot_canary_side_effect_ledger_20260612_233639.json",
+    "fresh_g1_status": "G1_PASS_NO_ACTION",
+    "fresh_g1_side_effect_status": "SIDE_EFFECT_ZERO",
+    "local_verification": "targeted Phase5/tool-selection 66 passed; full HSE suite 360 passed, 11 warnings"
+  },
+  "run_root": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018",
+  "repeat_count": 3,
+  "component_statuses": [
+    "PASS_NO_ACTION",
+    "PASS_NO_ACTION",
+    "PASS_NO_ACTION"
+  ],
+  "scheduler_summary": {
+    "review_required_count": 0,
+    "dry_run_action_count": 0,
+    "side_effect_count": 0
+  },
+  "safety_boundary": {
+    "production_continuous_loop_enabled": false,
+    "cron_jobs_created": false,
+    "scheduler_or_cron_side_effects_performed": false,
+    "optimizer_execution_started": false,
+    "external_pr_automation_performed": false,
+    "auto_merge_or_deploy": false,
+    "active_runtime_mutation": false,
+    "network_calls_performed": false,
+    "external_calls_performed": false,
+    "model_or_api_budget_spent": false
+  },
+  "pipeline_runs": [
+    {
+      "run_index": 1,
+      "status": "PASS_NO_ACTION",
+      "run_root": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1",
+      "generated_at_utc": "2026-06-13T00:20:18Z",
+      "pipeline_steps": [
+        {
+          "name": "provenance_dataset",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.provenance_dataset",
+            "--tool-selection-report-json",
+            "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+            "--heldout-review-json",
+            "output/tool-description/phase2e-heldout-review/heldout_review.json",
+            "--prompt-source",
+            "prompt_builder=<active-hermes>/agent/prompt_builder.py",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/provenance",
+            "--window-start",
+            "2026-06-12",
+            "--window-end",
+            "2026-06-13",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 provenance-backed metric input",
+          "stderr": "",
+          "duration_seconds": 0.039
+        },
+        {
+          "name": "performance_snapshot",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.performance_snapshot",
+            "--metrics-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/provenance/provenance_metrics_input.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/performance",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 performance monitor snapshot",
+          "stderr": "",
+          "duration_seconds": 0.035
+        },
+        {
+          "name": "auto_triage",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.auto_triage",
+            "--performance-report-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/performance/performance_snapshot_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/auto-triage",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 auto-triage ranking",
+          "stderr": "",
+          "duration_seconds": 0.039
+        },
+        {
+          "name": "scheduler_dry_run",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.scheduler_dry_run",
+            "--auto-triage-report-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/auto-triage/auto_triage_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/scheduler",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 scheduler dry-run",
+          "stderr": "",
+          "duration_seconds": 0.037
+        }
+      ],
+      "reports": {
+        "provenance_dataset_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/provenance/provenance_dataset_report.json",
+        "provenance_metrics_input": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/provenance/provenance_metrics_input.json",
+        "performance_snapshot_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/performance/performance_snapshot_report.json",
+        "auto_triage_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/auto-triage/auto_triage_report.json",
+        "scheduler_dry_run_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-1/scheduler/scheduler_dry_run_report.json"
+      },
+      "scheduler_summary": {
+        "dry_run_action_count": 0,
+        "ranked_target_count": 0,
+        "review_required": false,
+        "scheduler_enablement_ready": false,
+        "side_effect_count": 0,
+        "top_metric_id": null
+      },
+      "metric_summary": {
+        "performance_status": "PASS",
+        "auto_triage_status": "NO_ACTION",
+        "scheduler_status": "DRY_RUN_NOOP",
+        "metric_count": 2,
+        "failing_metric_count": 0
+      },
+      "metrics": [
+        {
+          "baseline": 0.1111,
+          "component": "tool_descriptions",
+          "higher_is_better": true,
+          "id": "tool_selection_accuracy",
+          "regressed_vs_baseline": false,
+          "sample_count": 45,
+          "severity": 0.0,
+          "status": "PASS",
+          "threshold": 0.9,
+          "value": 1.0
+        },
+        {
+          "baseline": 0.0,
+          "component": "system_prompts",
+          "higher_is_better": false,
+          "id": "prompt_contract_warning_rate",
+          "regressed_vs_baseline": false,
+          "sample_count": 20,
+          "severity": 0.0,
+          "status": "PASS",
+          "threshold": 0.05,
+          "value": 0.0
+        }
+      ]
+    },
+    {
+      "run_index": 2,
+      "status": "PASS_NO_ACTION",
+      "run_root": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2",
+      "generated_at_utc": "2026-06-13T00:20:18Z",
+      "pipeline_steps": [
+        {
+          "name": "provenance_dataset",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.provenance_dataset",
+            "--tool-selection-report-json",
+            "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+            "--heldout-review-json",
+            "output/tool-description/phase2e-heldout-review/heldout_review.json",
+            "--prompt-source",
+            "prompt_builder=<active-hermes>/agent/prompt_builder.py",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/provenance",
+            "--window-start",
+            "2026-06-12",
+            "--window-end",
+            "2026-06-13",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 provenance-backed metric input",
+          "stderr": "",
+          "duration_seconds": 0.039
+        },
+        {
+          "name": "performance_snapshot",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.performance_snapshot",
+            "--metrics-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/provenance/provenance_metrics_input.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/performance",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 performance monitor snapshot",
+          "stderr": "",
+          "duration_seconds": 0.033
+        },
+        {
+          "name": "auto_triage",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.auto_triage",
+            "--performance-report-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/performance/performance_snapshot_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/auto-triage",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 auto-triage ranking",
+          "stderr": "",
+          "duration_seconds": 0.034
+        },
+        {
+          "name": "scheduler_dry_run",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.scheduler_dry_run",
+            "--auto-triage-report-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/auto-triage/auto_triage_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/scheduler",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 scheduler dry-run",
+          "stderr": "",
+          "duration_seconds": 0.033
+        }
+      ],
+      "reports": {
+        "provenance_dataset_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/provenance/provenance_dataset_report.json",
+        "provenance_metrics_input": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/provenance/provenance_metrics_input.json",
+        "performance_snapshot_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/performance/performance_snapshot_report.json",
+        "auto_triage_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/auto-triage/auto_triage_report.json",
+        "scheduler_dry_run_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-2/scheduler/scheduler_dry_run_report.json"
+      },
+      "scheduler_summary": {
+        "dry_run_action_count": 0,
+        "ranked_target_count": 0,
+        "review_required": false,
+        "scheduler_enablement_ready": false,
+        "side_effect_count": 0,
+        "top_metric_id": null
+      },
+      "metric_summary": {
+        "performance_status": "PASS",
+        "auto_triage_status": "NO_ACTION",
+        "scheduler_status": "DRY_RUN_NOOP",
+        "metric_count": 2,
+        "failing_metric_count": 0
+      },
+      "metrics": [
+        {
+          "baseline": 0.1111,
+          "component": "tool_descriptions",
+          "higher_is_better": true,
+          "id": "tool_selection_accuracy",
+          "regressed_vs_baseline": false,
+          "sample_count": 45,
+          "severity": 0.0,
+          "status": "PASS",
+          "threshold": 0.9,
+          "value": 1.0
+        },
+        {
+          "baseline": 0.0,
+          "component": "system_prompts",
+          "higher_is_better": false,
+          "id": "prompt_contract_warning_rate",
+          "regressed_vs_baseline": false,
+          "sample_count": 20,
+          "severity": 0.0,
+          "status": "PASS",
+          "threshold": 0.05,
+          "value": 0.0
+        }
+      ]
+    },
+    {
+      "run_index": 3,
+      "status": "PASS_NO_ACTION",
+      "run_root": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3",
+      "generated_at_utc": "2026-06-13T00:20:18Z",
+      "pipeline_steps": [
+        {
+          "name": "provenance_dataset",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.provenance_dataset",
+            "--tool-selection-report-json",
+            "output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+            "--heldout-review-json",
+            "output/tool-description/phase2e-heldout-review/heldout_review.json",
+            "--prompt-source",
+            "prompt_builder=<active-hermes>/agent/prompt_builder.py",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/provenance",
+            "--window-start",
+            "2026-06-12",
+            "--window-end",
+            "2026-06-13",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 provenance-backed metric input",
+          "stderr": "",
+          "duration_seconds": 0.038
+        },
+        {
+          "name": "performance_snapshot",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.performance_snapshot",
+            "--metrics-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/provenance/provenance_metrics_input.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/performance",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 performance monitor snapshot",
+          "stderr": "",
+          "duration_seconds": 0.032
+        },
+        {
+          "name": "auto_triage",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.auto_triage",
+            "--performance-report-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/performance/performance_snapshot_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/auto-triage",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 auto-triage ranking",
+          "stderr": "",
+          "duration_seconds": 0.032
+        },
+        {
+          "name": "scheduler_dry_run",
+          "logical_command": [
+            "$PY",
+            "-m",
+            "evolution.monitor.scheduler_dry_run",
+            "--auto-triage-report-json",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/auto-triage/auto_triage_report.json",
+            "--output-dir",
+            "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/scheduler",
+            "--generated-at",
+            "2026-06-13T00:20:18Z"
+          ],
+          "exit_code": 0,
+          "stdout": "wrote Phase 5 scheduler dry-run",
+          "stderr": "",
+          "duration_seconds": 0.032
+        }
+      ],
+      "reports": {
+        "provenance_dataset_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/provenance/provenance_dataset_report.json",
+        "provenance_metrics_input": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/provenance/provenance_metrics_input.json",
+        "performance_snapshot_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/performance/performance_snapshot_report.json",
+        "auto_triage_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/auto-triage/auto_triage_report.json",
+        "scheduler_dry_run_report": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018/run-3/scheduler/scheduler_dry_run_report.json"
+      },
+      "scheduler_summary": {
+        "dry_run_action_count": 0,
+        "ranked_target_count": 0,
+        "review_required": false,
+        "scheduler_enablement_ready": false,
+        "side_effect_count": 0,
+        "top_metric_id": null
+      },
+      "metric_summary": {
+        "performance_status": "PASS",
+        "auto_triage_status": "NO_ACTION",
+        "scheduler_status": "DRY_RUN_NOOP",
+        "metric_count": 2,
+        "failing_metric_count": 0
+      },
+      "metrics": [
+        {
+          "baseline": 0.1111,
+          "component": "tool_descriptions",
+          "higher_is_better": true,
+          "id": "tool_selection_accuracy",
+          "regressed_vs_baseline": false,
+          "sample_count": 45,
+          "severity": 0.0,
+          "status": "PASS",
+          "threshold": 0.9,
+          "value": 1.0
+        },
+        {
+          "baseline": 0.0,
+          "component": "system_prompts",
+          "higher_is_better": false,
+          "id": "prompt_contract_warning_rate",
+          "regressed_vs_baseline": false,
+          "sample_count": 20,
+          "severity": 0.0,
+          "status": "PASS",
+          "threshold": 0.05,
+          "value": 0.0
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "side_effect_ledger": {
+    "schema_version": "phase5-g2-side-effect-ledger-v1",
+    "created_at_utc": "2026-06-13T00:20:18Z",
+    "status": "SIDE_EFFECT_ZERO",
+    "side_effect_count": 0,
+    "run_root": "output/phase5-continuous-loop/g2-bounded-supervised-20260613-022018",
+    "false_side_effect_flags": {
+      "production_continuous_loop_enabled": false,
+      "cron_jobs_created": false,
+      "scheduler_or_cron_side_effects_performed": false,
+      "optimizer_execution_started": false,
+      "external_pr_automation_performed": false,
+      "auto_merge_or_deploy": false,
+      "active_runtime_mutation": false,
+      "network_calls_performed": false,
+      "external_calls_performed": false,
+      "model_or_api_budget_spent": false
+    },
+    "hard_blocks_preserved": [
+      "no production continuous loop enabled",
+      "no cron job created or enabled",
+      "no optimizer execution",
+      "no network/model/API budget spent",
+      "no external PR automation",
+      "no auto-merge or deploy",
+      "no active Hermes runtime/source/config/skill/memory mutation"
+    ],
+    "run_count": 3,
+    "review_required_count": 0,
+    "dry_run_action_count": 0
+  },
+  "acceptance_criteria": [
+    {
+      "id": "P5-G2-01",
+      "name": "explicit_g2_authorization",
+      "status": "PASS",
+      "evidence": "G2 bounded supervised N-run execute GO under phase5_g2_bounded_supervised_n_run_approval_packet_20260613_020820.json"
+    },
+    {
+      "id": "P5-G2-02",
+      "name": "fresh_g1_reviewed_and_accepted",
+      "status": "PASS",
+      "evidence": "fresh G1 PASS and zero side effects"
+    },
+    {
+      "id": "P5-G2-03",
+      "name": "bounded_n_supervised_runs",
+      "status": "PASS",
+      "evidence": "executed 3 manual supervised local runs; no cron"
+    },
+    {
+      "id": "P5-G2-04",
+      "name": "overlap_and_runaway_controls",
+      "status": "PASS",
+      "evidence": "exclusive lock acquired and removed after completion"
+    },
+    {
+      "id": "P5-G2-05",
+      "name": "side_effect_zero",
+      "status": "PASS",
+      "evidence": "side_effect_count=0; hard-block flags false"
+    },
+    {
+      "id": "P5-G2-06",
+      "name": "parseable_evidence_packets",
+      "status": "PASS",
+      "evidence": "component JSON parsed during summary construction"
+    },
+    {
+      "id": "P5-G2-07",
+      "name": "no_repeated_review_required",
+      "status": "PASS",
+      "evidence": "review_required_count=0; dry_run_action_count=0"
+    },
+    {
+      "id": "P5-G2-08",
+      "name": "g3_blocked_without_review",
+      "status": "PASS",
+      "evidence": "BLOCKED_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_APPROVAL"
+    }
+  ]
+}

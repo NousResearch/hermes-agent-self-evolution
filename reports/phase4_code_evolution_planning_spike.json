@@ -1,0 +1,65 @@
+{
+  "phase": "4",
+  "task_type": "analysis",
+  "execution_mode": "planning_spike_only",
+  "status": "completed_planning_artifacts_only",
+  "created_at": "2026-06-04 19:37 CEST",
+  "source_authorization": "rec action GO",
+  "phase4_execution_started": false,
+  "run_darwinian_now": false,
+  "install_or_import_darwinian_now": false,
+  "mutate_hermes_source_now": false,
+  "apply_ready": false,
+  "artifacts": {
+    "seed_yaml": "seeds/phase4_code_evolution_planning_seed.yaml",
+    "spike_readme": ".planning/spikes/001-phase4-darwinian-boundary/README.md",
+    "report_markdown": "reports/phase4_code_evolution_planning_spike.md",
+    "manifest_json": "reports/phase4_code_evolution_planning_spike.json"
+  },
+  "current_evidence": {
+    "hse_branch": "hse/phase2e-closeout-phase3-prep",
+    "hse_head": "f489f5c",
+    "phase4_code_dir_state": "placeholder_only",
+    "darwinian_import_status": "ModuleNotFoundError: No module named 'darwinian_evolver'",
+    "phase3_pr_url": "https://github.com/NousResearch/hermes-agent/pull/39233",
+    "phase3_pr_state": "OPEN draft, mergeable, no checks reported",
+    "phase3_full_external_benchmark_executed": false
+  },
+  "external_research": {
+    "hermes_docs_darwinian_evolver": "AGPL-3.0; invoke via upstream CLI/subprocess/uv run only; do not import upstream classes into Hermes itself.",
+    "imbue_darwinian_evolver_readme": "Maintains a population of organisms; mutates and scores solutions across iterations.",
+    "imbue_license": "GNU Affero General Public License v3",
+    "hse_plan": "Darwinian Evolver handles code files, algorithms, and tool implementations as external CLI only."
+  },
+  "spikes": [
+    {
+      "id": "SPK-001",
+      "name": "darwinian-external-cli-boundary",
+      "risk": "high",
+      "status": "partial_boundary_documented_not_executed"
+    },
+    {
+      "id": "SPK-002",
+      "name": "isolated-dependency-smoke",
+      "risk": "medium",
+      "status": "planned_requires_separate_install_approval"
+    },
+    {
+      "id": "SPK-003",
+      "name": "signature-registry-freeze-checker",
+      "risk": "high",
+      "status": "planned"
+    },
+    {
+      "id": "SPK-004",
+      "name": "first-known-bug-reproduction",
+      "risk": "high",
+      "status": "planned"
+    }
+  ],
+  "go_no_go": {
+    "phase4_execution": "NO-GO",
+    "phase4_planning_spike": "GO",
+    "next_recommended_action": "Run SPK-001 as a read-only design review, then request separate approval for SPK-002 isolated dependency install smoke if needed."
+  }
+}
