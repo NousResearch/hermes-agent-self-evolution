@@ -1,0 +1,12 @@
+# gitleaks config — allowlist test fixtures that contain literal strings
+# passed to assertion helpers (not real secrets).
+title = "hermes-agent-self-evolution gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures with literal secret-like strings"
+paths = [
+    '''tests/core/test_external_importers\.py''',
+]
