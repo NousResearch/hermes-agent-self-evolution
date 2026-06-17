@@ -9,6 +9,12 @@ from dataclasses import dataclass
 from typing import Optional
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.hermes_lm import make_lm
+
+
+DEFAULT_MAX_SKILL_SIZE = 15_000
+SKILL_SIZE_SOFT_LIMIT_RATIO = 0.9
+MAX_SKILL_SIZE_PENALTY = 0.3
 
 
 @dataclass
@@ -72,7 +78,7 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        lm = make_lm(self.config.eval_model, hermes_repo=str(self.config.hermes_agent_path))
 
         with dspy.context(lm=lm):
             result = self.judge(
@@ -104,11 +110,19 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name=None,
+    pred_trace=None,
+) -> float:
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    DSPy 3.x GEPA calls metrics with five arguments:
+    (gold, pred, trace, pred_name, pred_trace). Older optimizers call with
+    two or three. Keep the extra arguments optional so the same metric works
+    across GEPA, MIPROv2, and direct holdout scoring.
     """
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
@@ -133,7 +147,33 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
         overlap = len(expected_words & output_words) / len(expected_words)
         score = 0.3 + (0.7 * overlap)
 
+    skill_text = getattr(prediction, "skill_text", None)
+    if skill_text is not None:
+        size_penalty = _skill_size_penalty(str(skill_text), DEFAULT_MAX_SKILL_SIZE)
+        if size_penalty >= 1.0:
+            return 0.0
+        score -= size_penalty
+
     return min(1.0, max(0.0, score))
+
+
+def _skill_size_penalty(skill_text: str, max_size: int = DEFAULT_MAX_SKILL_SIZE) -> float:
+    """Return hard/soft size penalty for a candidate skill.
+
+    GEPA can otherwise keep an oversize baseline as the Pareto winner when its
+    task score is high. Hard constraint violations must be reflected in the
+    optimization metric itself, not only in post-run validation.
+    """
+    size = len(skill_text)
+    if size > max_size:
+        return 1.0
+
+    soft_limit = max_size * SKILL_SIZE_SOFT_LIMIT_RATIO
+    if size <= soft_limit:
+        return 0.0
+
+    ratio_over_soft_limit = (size - soft_limit) / max(1.0, max_size - soft_limit)
+    return min(MAX_SKILL_SIZE_PENALTY, ratio_over_soft_limit * MAX_SKILL_SIZE_PENALTY)
 
 
 def _parse_score(value) -> float:

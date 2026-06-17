@@ -1,0 +1,44 @@
+{
+  "apply_ready": false,
+  "benchmark_gate_executed_now": false,
+  "blocking_for_phase2_candidate_only_closeout": false,
+  "candidate_only": true,
+  "current_evidence": {
+    "candidate_only_report_contract_green": true,
+    "ci_smoke_available": true,
+    "combined_tool_selection_slice_case_count": 54,
+    "default_gate_case_count": 45,
+    "expanded_holdout_decision_artifact": "reports/phase2e_expanded_holdout_decision.json",
+    "heldout_review_passed": true,
+    "phase2e_expanded_holdout_requires_100_plus_slice": false,
+    "sessiondb_holdout_case_count": 9
+  },
+  "decision": "defer_benchmark_gate_until_phase3_or_active_apply",
+  "defer_rationale": [
+    "Phase 2E is closing a candidate-only tool-description/tool-selection gate, not applying active Hermes tool schemas or system prompts.",
+    "The 45-case formal gate, 9-case SessionDB holdout, heldout review, and CI smoke cover the Phase 2E closeout risk directly.",
+    "TBLite and YC-Bench are broader runtime/system-prompt regression benchmarks and are more appropriate as Phase 3 or active-apply prerequisites.",
+    "Running those benchmarks now would expand Phase 2E into benchmark-infrastructure validation rather than closing the current candidate-only workstream."
+  ],
+  "deferred_benchmarks": [
+    "TBLite",
+    "YC-Bench"
+  ],
+  "mode": "benchmark-gate-decision",
+  "phase": "2E",
+  "remaining_phase2_closeout_items": [
+    "human_review_checkpoint"
+  ],
+  "required_before": [
+    "phase3_execution",
+    "active_tool_schema_apply",
+    "default_gate_promotion",
+    "system_prompt_evolution_acceptance"
+  ],
+  "safety_invariants": {
+    "active_tool_schema_mutation": false,
+    "apply_ready": false,
+    "candidate_only": true,
+    "raw_session_data_committed": false
+  }
+}

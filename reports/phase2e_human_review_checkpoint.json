@@ -1,0 +1,48 @@
+{
+  "active_schema_or_source_apply_approved": false,
+  "active_schema_or_source_apply_requires_separate_approval": true,
+  "apply_ready": false,
+  "authorization": "rec action GO",
+  "candidate_only": true,
+  "checkpoint_status": "recorded",
+  "mode": "human-review-checkpoint",
+  "phase": "2E",
+  "phase2e_closeout_complete": true,
+  "phase3_execution_requires_benchmark_gate": true,
+  "remaining_phase2_closeout_items": [],
+  "review_scope": [
+    "candidate-only Phase 2D report contract",
+    "45-case formal tool-selection gate",
+    "9-case SessionDB privacy-safe holdout",
+    "heldout candidate improvement/no-regression review",
+    "expanded holdout decision",
+    "benchmark gate defer decision",
+    "Phase 2 CI/automation smoke wiring",
+    "README/PLAN/reports closeout state"
+  ],
+  "reviewed_artifacts": [
+    "README.md",
+    "PLAN.md",
+    ".github/workflows/phase2-tool-description-gate.yml",
+    "datasets/golden/tool-description/tool_selection.jsonl",
+    "datasets/golden/tool-description/session_misfire_holdout.jsonl",
+    "reports/phase2e_expanded_holdout_decision.json",
+    "reports/phase2e_expanded_holdout_decision.md",
+    "reports/phase2e_benchmark_gate_decision.json",
+    "reports/phase2e_benchmark_gate_decision.md"
+  ],
+  "reviewed_decisions": {
+    "benchmark_gate_decision": "defer_benchmark_gate_until_phase3_or_active_apply",
+    "benchmark_gate_executed_now": false,
+    "expanded_holdout_decision": "current_45_plus_9_sufficient_for_phase2_closeout",
+    "expanded_holdout_requires_100_plus_slice": false
+  },
+  "reviewer": "Sunwoo",
+  "safety_invariants": {
+    "active_schema_or_source_apply_approved": false,
+    "active_tool_schema_mutation": false,
+    "apply_ready": false,
+    "candidate_only": true,
+    "raw_session_data_committed": false
+  }
+}

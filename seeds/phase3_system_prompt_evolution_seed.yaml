@@ -1,0 +1,102 @@
+phase: "3"
+task_type: analysis
+execution_mode: design_only
+goal: "Design Phase 3 system prompt evolution scope, acceptance criteria, and benchmark gate reactivation before any execution or active apply."
+plan_artifact: "reports/phase3_system_prompt_evolution_plan.json"
+report_artifact: "reports/phase3_system_prompt_evolution_plan.md"
+apply_ready: false
+run_gepa_now: false
+mutate_active_system_prompt_now: false
+requires_human_approval_before_apply: true
+source_authorization: "rec action GO"
+
+constraints:
+  no_active_prompt_or_source_apply: true
+  no_raw_private_session_data: true
+  no_secrets_or_credentials: true
+  benchmark_gate_required_before_execution: true
+  preserve_prompt_cache_boundary: true
+  preserve_identity_and_safety_constraints: true
+  separate_future_apply_pr_or_patch: true
+
+evolvable_sections:
+  - DEFAULT_AGENT_IDENTITY
+  - MEMORY_GUIDANCE
+  - SESSION_SEARCH_GUIDANCE
+  - SKILLS_GUIDANCE
+  - PLATFORM_HINTS
+
+non_evolvable_sections:
+  - durable_user_or_private_memory
+  - auto_generated_skills_index
+  - project_context_files
+  - canonical_identity_or_soul_artifacts
+  - secrets_or_credentials
+  - active_runtime_configuration
+
+benchmark_gate_reactivation:
+  blocking_for_design_only_plan: false
+  blocking_for_phase3_execution: true
+  deferred_benchmarks:
+    - TBLite
+    - YC-Bench
+  required_before:
+    - phase3_execution
+    - system_prompt_evolution_acceptance
+    - active_system_prompt_apply
+    - default_gate_promotion
+
+acceptance_criteria:
+  - id: AC1_phase2_closeout_checkpoint_recorded
+    criterion: "Phase 3 design starts only after the Phase 2E human review checkpoint records Phase 2 closeout as complete."
+    status: planned
+    verification: "Read reports/phase2e_human_review_checkpoint.json and verify phase2e_closeout_complete is true."
+  - id: AC2_design_only_no_runtime_mutation
+    criterion: "This artifact defines a design boundary only; it does not execute optimization, mutate active prompts, or apply source/runtime changes."
+    status: planned
+    verification: "Assert plan_only is true, execution_started is false, and active_system_prompt_apply_approved is false."
+  - id: AC3_evolvable_sections_scoped
+    criterion: "Only the five intended system prompt sections are in scope for later section-as-DSPy-parameter design."
+    status: planned
+    verification: "Compare evolvable_sections to DEFAULT_AGENT_IDENTITY, MEMORY_GUIDANCE, SESSION_SEARCH_GUIDANCE, SKILLS_GUIDANCE, and PLATFORM_HINTS."
+  - id: AC4_private_or_generated_sections_excluded
+    criterion: "Private memory, generated skill indexes, project context files, identity/SOUL artifacts, credentials, and runtime configuration remain non-evolvable."
+    status: planned
+    verification: "Verify non_evolvable_sections includes durable_user_or_private_memory, auto_generated_skills_index, project_context_files, and canonical_identity_or_soul_artifacts."
+  - id: AC5_behavioral_evaluator_defined
+    criterion: "The future evaluator must cover tool-use discipline, memory/session-search behavior, skill loading, platform formatting, identity/safety, and prompt-cache compatibility."
+    status: planned
+    verification: "Check the Seed evaluation_plan lists these evaluator dimensions before any Phase 3 execution."
+  - id: AC6_benchmark_gate_reactivation_before_execution
+    criterion: "TBLite/YC-Bench remain non-blocking for this design-only plan but become blocking before Phase 3 execution or prompt acceptance/apply."
+    status: planned
+    verification: "Verify benchmark_gate_reactivation.required_before includes phase3_execution, system_prompt_evolution_acceptance, active_system_prompt_apply, and default_gate_promotion."
+  - id: AC7_human_approval_before_apply
+    criterion: "Any active system prompt/source apply must be separated into a later human-approved PR or patch."
+    status: planned
+    verification: "Confirm active_system_prompt_apply_approved remains false and apply_ready remains false."
+  - id: AC8_prompt_cache_and_identity_safety_preserved
+    criterion: "Future variants must preserve prompt-cache boundaries and identity/safety constraints; personality or safety drift is a reject condition."
+    status: planned
+    verification: "Require explicit cache-boundary and identity-safety checks in the future execution Seed before optimization starts."
+
+evaluation_plan:
+  behavioral_dimensions:
+    - tool_use_discipline
+    - memory_usage
+    - session_search_triggering
+    - skill_loading
+    - platform_formatting
+    - identity_and_safety
+    - prompt_cache_compatibility
+  benchmark_dimensions:
+    - TBLite_regression_check
+    - YC_Bench_coherence_check
+  human_review_required: true
+
+deliverables:
+  - reports/phase3_system_prompt_evolution_plan.json
+  - reports/phase3_system_prompt_evolution_plan.md
+  - seeds/phase3_system_prompt_evolution_seed.yaml
+  - PLAN.md
+  - README.md

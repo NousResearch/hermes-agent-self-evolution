@@ -1,0 +1,118 @@
+phase: "4"
+task_type: analysis
+execution_mode: planning_spike_only
+status: drafted_not_executed
+goal: "Define the safe planning/spike contract for Phase 4 code evolution via Darwinian Evolver before any Hermes source mutation or optimizer execution."
+source_authorization: "rec action GO"
+created_at: "2026-06-04 19:37 CEST"
+
+phase4_execution_started: false
+run_darwinian_now: false
+install_or_import_darwinian_now: false
+mutate_hermes_source_now: false
+open_code_evolution_pr_now: false
+apply_ready: false
+requires_human_approval_before_execution: true
+requires_human_approval_before_apply: true
+
+source_context:
+  plan_source: "PLAN.md#Phase 4: Code Evolution via Darwinian Evolver"
+  phase3_pr: "https://github.com/NousResearch/hermes-agent/pull/39233"
+  phase3_pr_state: "open_draft_mergeable_no_checks_reported"
+  phase3_full_external_benchmark_executed: false
+  hse_repo_branch: "hse/phase2e-closeout-phase3-prep"
+  hse_repo_head: "f489f5c"
+  current_phase4_code_dir_state: "placeholder_only"
+
+constraints:
+  no_hermes_source_mutation_in_this_seed: true
+  no_active_runtime_or_gateway_change: true
+  no_credential_or_config_change: true
+  no_unattended_apply_or_merge: true
+  candidate_and_planning_outputs_only: true
+  preserve_external_optimizer_boundary: true
+  darwinian_evolver_agpl_boundary: "external CLI or subprocess/uv run only; do not import upstream classes into Hermes-native code"
+  read_only_hermes_agent_repo_pointer_until_explicit_apply_approval: true
+  function_signature_freeze_required_before_mutation: true
+  registry_register_freeze_required_before_mutation: true
+  full_test_and_benchmark_gates_required_before_acceptance: true
+
+allowed_current_outputs:
+  - "seeds/phase4_code_evolution_planning_seed.yaml"
+  - "reports/phase4_code_evolution_planning_spike.json"
+  - "reports/phase4_code_evolution_planning_spike.md"
+  - ".planning/spikes/001-phase4-darwinian-boundary/README.md"
+
+prohibited_current_actions:
+  - "installing Darwinian Evolver into the active Hermes runtime"
+  - "importing Darwinian Evolver in Hermes-native code"
+  - "running code mutation against Hermes Agent source"
+  - "editing tools/*.py or any active Hermes source file"
+  - "creating an evolved-code PR"
+  - "running nonzero-cost external benchmarks"
+  - "changing gateway, credentials, model routing, memories, skills, or SOUL artifacts"
+
+phase4_spikes:
+  - id: SPK-001
+    name: "darwinian-external-cli-boundary"
+    question: "Given Darwinian Evolver is AGPL, when Phase 4 invokes it, then can HSE preserve an external CLI/subprocess boundary without importing upstream classes into Hermes-native code?"
+    risk: high
+    status: planned
+  - id: SPK-002
+    name: "isolated-dependency-smoke"
+    question: "Given an isolated Phase 4 venv, when the dependency is installed there, then can a CLI/help smoke run without touching active Hermes runtime or source?"
+    risk: medium
+    status: planned_requires_separate_install_approval
+  - id: SPK-003
+    name: "signature-registry-freeze-checker"
+    question: "Given a candidate code diff, when static freeze checks run, then function signatures and registry.register calls are proven unchanged before any candidate is accepted."
+    risk: high
+    status: planned
+  - id: SPK-004
+    name: "first-known-bug-reproduction"
+    question: "Given one narrow known Hermes tool bug, when a reproduction test runs before mutation, then Phase 4 can optimize against an observable failing case rather than vague quality."
+    risk: high
+    status: planned
+
+future_execution_boundary:
+  required_before_any_code_mutation:
+    - "Phase 3 PR reviewed/merged or CI/check evidence recorded"
+    - "Phase 3 full external benchmark gate decision recorded, or explicit waiver recorded"
+    - "isolated Darwinian Evolver CLI smoke passed"
+    - "one target bug selected with failing reproduction test"
+    - "target tool file allowlist approved"
+    - "baseline git status, branch, and rollback handle recorded"
+    - "signature and registry freeze checker implemented and tested"
+    - "human approval records nonzero budget/runtime limits"
+  required_before_candidate_acceptance:
+    - "target reproduction test passes after candidate"
+    - "targeted tool tests pass"
+    - "full Hermes Agent pytest suite passes or an explicitly scoped equivalent is approved"
+    - "selected benchmark gates hold or improve"
+    - "freeze checker confirms no signature or registry.register drift"
+    - "human reviewer approves code diff"
+
+acceptance_criteria:
+  - id: AC1_planning_only_boundary
+    criterion: "This Seed produces only planning/spike artifacts and does not execute Darwinian Evolver, install dependencies, mutate source, or apply runtime changes."
+    verification: "Verify phase4_execution_started=false, run_darwinian_now=false, mutate_hermes_source_now=false, and apply_ready=false."
+  - id: AC2_external_cli_boundary_recorded
+    criterion: "The AGPL boundary is explicitly recorded as external CLI/subprocess only, with no upstream class imports in Hermes-native code."
+    verification: "Read constraints.darwinian_evolver_agpl_boundary and future spike SPK-001."
+  - id: AC3_phase3_dependency_not_overclaimed
+    criterion: "The Phase 3 dependency records the current draft PR/no-checks and no-full-external-benchmark facts without treating them as execution-ready Phase 4 evidence."
+    verification: "Check source_context.phase3_pr_state and source_context.phase3_full_external_benchmark_executed."
+  - id: AC4_spike_questions_defined
+    criterion: "At least four Phase 4 spike questions are defined with Given/When/Then-style observable outcomes and risk labels."
+    verification: "Inspect phase4_spikes for SPK-001 through SPK-004."
+  - id: AC5_freeze_checker_required
+    criterion: "Future code mutation is blocked until a function-signature and registry-register freeze checker exists and is tested."
+    verification: "Check constraints and future_execution_boundary.required_before_any_code_mutation."
+  - id: AC6_reproduction_first
+    criterion: "Future Phase 4 targets must start from a known bug or edge case with a failing reproduction test before optimizer mutation."
+    verification: "Check SPK-004 and future_execution_boundary.required_before_any_code_mutation."
+  - id: AC7_human_approval_gates
+    criterion: "Separate approval remains required before install/network spend, code mutation, benchmark spend, apply, PR publish, or merge."
+    verification: "Check requires_human_approval_before_execution/apply and prohibited_current_actions."
+
+recommended_next_action: "Run SPK-001 as a read-only design review, then request separate approval for SPK-002 isolated dependency install smoke if needed."

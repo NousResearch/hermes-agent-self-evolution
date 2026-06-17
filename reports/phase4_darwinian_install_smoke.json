@@ -1,0 +1,78 @@
+{
+  "status": "passed",
+  "phase": "phase4",
+  "artifact_type": "darwinian_install_cli_smoke",
+  "created_at": "2026-06-04 22:14 CEST",
+  "approved_by_user": true,
+  "scope": {
+    "mode": "isolated_dependency_smoke",
+    "darwinian_installation": "approved_and_completed",
+    "darwinian_cli_execution": "approved_and_completed",
+    "darwinian_mutation_against_hermes": "not_performed",
+    "hermes_source_mutation": "not_performed",
+    "networked_benchmark_or_llm_api_call": "not_performed"
+  },
+  "darwinian_evolver": {
+    "source_repo": "https://github.com/imbue-ai/darwinian_evolver.git",
+    "local_repo": "/Users/snw/.hermes/evolution/repos/darwinian_evolver",
+    "repo_head": "7f12365d2059c47e29068a5a6f498a293148d2a9",
+    "package_version": "0.1.0",
+    "license_first_line": "GNU AFFERO GENERAL PUBLIC LICENSE",
+    "isolated_venv": "/Users/snw/.hermes/evolution/venvs/darwinian-evolver",
+    "smoke_run_dir": "/Users/snw/.hermes/evolution/darwinian-smoke/20260604T221240"
+  },
+  "dependency_metadata": {
+    "install_tool": "uv pip install --python /Users/snw/.hermes/evolution/venvs/darwinian-evolver/bin/python -e /Users/snw/.hermes/evolution/repos/darwinian_evolver",
+    "installed_key_packages": {
+      "darwinian-evolver": "0.1.0",
+      "anthropic": "0.105.2",
+      "openai": "2.41.0",
+      "google-genai": "2.8.0",
+      "numpy": "2.4.6",
+      "pydantic": "2.13.4",
+      "jinja2": "3.1.6",
+      "func-timeout": "4.3.5",
+      "fsspec": "2026.4.0"
+    },
+    "note": "google-genai is an upstream package dependency installed into the isolated Darwinian venv only; no Google/Gemini API call was made."
+  },
+  "checks": {
+    "git_ls_remote_head": "passed",
+    "clone_or_repo_presence": "passed",
+    "isolated_venv_created": "passed",
+    "editable_install": "passed",
+    "cli_help": {
+      "status": "passed",
+      "contains_expected_problems_and_options": true,
+      "sha256": "6c2d0f22556b031e9df088c91012ae84a1bf984b97e33960c43f1dbd7d95f68f"
+    },
+    "import_smoke": {
+      "status": "passed",
+      "loaded_count": 5,
+      "modules": [
+        "darwinian_evolver",
+        "darwinian_evolver.problem",
+        "darwinian_evolver.evolve_problem_loop",
+        "darwinian_evolver.git_based_problem",
+        "darwinian_evolver.problems.registry"
+      ]
+    },
+    "no_network_loop": {
+      "status": "passed",
+      "iterations_observed": [0, 1],
+      "initial_best_score": 0.0,
+      "final_best_score": 1.0,
+      "initial_population_size": 1,
+      "final_population_size": 2,
+      "mutate_calls_in_iteration_1": 1
+    }
+  },
+  "safety_boundaries_preserved": {
+    "hse_uses_external_boundary": true,
+    "hse_code_imports_darwinian": false,
+    "darwinian_was_not_pointed_at_hermes_source": true,
+    "darwinian_was_not_run_with_api_backed_example_problem": true,
+    "secrets_logged": false
+  },
+  "verdict": "Darwinian Evolver isolated install, CLI help smoke, module import smoke, and no-network in-process evolution loop passed. This validates availability and basic execution only; it does not approve Hermes source mutation or API-backed benchmark runs."
+}

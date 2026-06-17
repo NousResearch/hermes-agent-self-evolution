@@ -1,0 +1,2 @@
+{"task_input": "time-rewind validation coverage: read-only-no-anchor", "expected_behavior": "read-only; no anchor required; Do not activate", "difficulty": "medium", "category": "activation", "source": "golden"}
+{"task_input": "time-rewind validation coverage: rollback-preview", "expected_behavior": "inspect last; rewind last --mode soft --dry-run; non-dry-run; rescue anchor; checksum validation", "difficulty": "medium", "category": "restore", "source": "golden"}

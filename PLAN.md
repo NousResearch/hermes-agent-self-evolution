@@ -436,11 +436,123 @@ These descriptions are sent with every API call as part of the tool schema — e
 - Must remain factually accurate (can't claim a tool does something it doesn't)
 - Schema structure (parameter names, types, required fields) is FROZEN — only text evolves
 
+#### Phase 2D/2E Candidate-Only Report Contract
+
+Phase 2 closeout standardizes `candidate_only_report.json` as the review and automation contract for tool-description candidates. The report is intentionally **candidate-only**:
+
+- It may reject or approve a candidate set for review.
+- It must not modify active Hermes Agent tool schemas, registry entries, source files, or runtime config.
+- It must keep `apply_ready: false` and must not include an apply payload.
+- If `phase2d_gate.passed` is `false`, the candidate-generation CLI must exit non-zero so automation cannot mistake a failed gate for success.
+
+Each Phase 2 candidate-only run writes four artifacts:
+
+| Artifact | Purpose |
+|----------|---------|
+| `inventory.json` | Read-only tool inventory snapshot from either `--inventory-json` or a trusted Hermes repo import. |
+| `candidate_descriptions.json` | Baseline/candidate descriptions plus normalized parameter descriptions. |
+| `candidate.diff` | Human-readable baseline-vs-candidate diff. |
+| `candidate_only_report.json` | Canonical schema for metrics, gate state, inventory metadata, and artifact paths. |
+
+`candidate_only_report.json` top-level fields:
+
+| Field | Required meaning |
+|-------|------------------|
+| `phase` | Current emitted value is `"2D"`: candidate generation plus formal cross-tool gate. |
+| `mode` | Must be `"candidate-only"`. |
+| `apply_ready` | Must be `false`. |
+| `summary` | Human-readable run summary. |
+| `candidate_count` | Count of tool candidates evaluated. |
+| `metrics` | Candidate-quality evaluation result. Contains `candidate_only`, `apply_ready`, `case_count`, `selection_accuracy`, `wrong_tool_avoidance`, `argument_cue_coverage`, `constraint_pass_rate`, `case_results`, and `warnings`. |
+| `candidates` | Candidate records: `name`, `toolset`, `baseline_description`, `candidate_description`, `parameter_descriptions`, and `description_delta`. |
+| `phase_index_executed` | Phase markers represented by the report, currently `["2A", "2B", "2C", "2D"]`. |
+| `phase2d_gate` | Formal gate result, including thresholds, baseline metrics, candidate metrics, per-tool regressions, and failed checks. |
+| `inventory_metadata` | Inventory collection metadata that is separate from candidate-quality metrics. |
+| `artifacts` | Paths to generated inventory, candidates, and diff artifacts. |
+
+`phase2d_gate` contract:
+
+| Field | Required meaning |
+|-------|------------------|
+| `phase` | `"2D"`. |
+| `candidate_only` | `true`. |
+| `passed` | Overall pass/fail boolean. |
+| `thresholds` | Gate thresholds: `min_case_count`, `min_selection_accuracy`, `min_wrong_tool_avoidance`, `max_per_tool_regression`. |
+| `baseline_metrics` / `candidate_metrics` | Metric snapshots with `case_count`, `selection_accuracy`, `wrong_tool_avoidance`, `argument_cue_coverage`, `constraint_pass_rate`, and `warning_count`. |
+| `per_tool_regressions` | Per expected-tool pass-rate comparison: `expected_tool`, case/pass counts, pass rates, `delta`, and `passed`. |
+| `failed_checks` | Human-readable gate failures; empty only when the gate passes. |
+
+Default Phase 2D thresholds for the expanded 45-case golden set:
+
+```json
+{
+  "min_case_count": 45,
+  "min_selection_accuracy": 0.7,
+  "min_wrong_tool_avoidance": 0.7,
+  "max_per_tool_regression": 0.0
+}
+```
+
+Current Phase 2D closeout status:
+
+- The default tool-selection golden set has been expanded from 30 to 45 cases.
+- The committed `datasets/golden/tool-description/tool_selection.jsonl` fixture is generated from `default_tool_selection_cases()` and must remain exactly synchronized with that generation logic.
+- `CrossToolGateThresholds.min_case_count` and the lightweight `report_contract` default threshold are both 45.
+- Candidate-only semantics remain mandatory: no active Hermes Agent tool schemas, registry entries, source files, or runtime configuration may be modified by a Phase 2D run; `apply_ready` must remain `false` and reports must not contain an apply payload.
+- Candidate-quality warnings and inventory/import warnings remain separate contract surfaces.
+- A local candidate-only smoke run against the Hermes tool inventory must pass `hse-validate-tool-report` before any downstream automation consumes the report.
+
+Phase 2E closeout candidates before moving to Phase 3:
+
+1. **Automation/CI wiring:** `.github/workflows/phase2-tool-description-gate.yml` now provides a lightweight CI path that runs the candidate-only generator against a deterministic 45-case synthetic inventory, validates `candidate_only_report.json`, runs the SessionDB holdout review smoke, and fails visibly on a failed Phase 2D gate.
+2. **Negative contract coverage:** tests prove failed gates exit non-zero in the candidate-generation CLI while structurally valid failed reports remain readable by the schema smoke checker; invalid report contracts still return non-zero from the report-contract CLI.
+3. **SessionDB mining spike:** completed as a privacy-safe scan of Hermes `state.db`; recurring shell/file-operation anti-patterns were generalized into `datasets/golden/tool-description/session_misfire_holdout.jsonl`. Decision: keep these cases as an explicit holdout for now, not part of the default 45-case gate, because the mined categories mostly overlap existing golden coverage and raw session prompts may contain private or volatile context.
+4. **Expanded holdout decision:** completed and recorded in `reports/phase2e_expanded_holdout_decision.json` plus `.md`. Decision: the current 45-case default gate plus 9-case SessionDB holdout is sufficient for candidate-only Phase 2 closeout; a 100+ held-out quality slice is deferred until before any default-gate promotion, active tool-schema apply, or broader Phase 3/benchmark expansion requiring additional lexical diversity.
+5. **Candidate improvement review:** completed for the SessionDB holdout via `evolution.tools.heldout_tool_selection_review` / `hse-review-tool-holdout`. Local current-inventory smoke result: 9 holdout cases, candidate selection accuracy and wrong-tool avoidance improved from `0.1111` to `0.8889`, no per-tool regressions were reported, and the run remained candidate-only/no-apply. The review now fails closed on missing holdout tool coverage, inventory/candidate artifact mismatch, overlong descriptions/parameters, aggregate primary-metric regressions, and per-tool pass-rate regressions. Secondary cue coverage dipped slightly (`0.7989` to `0.7487`) and should remain a human-review observation rather than a default-gate promotion signal.
+6. **Benchmark gate decision:** completed and recorded in `reports/phase2e_benchmark_gate_decision.json` plus `.md`. Decision: TBLite/YC-Bench are not blocking gates for current candidate-only Phase 2 closeout, because the 45-case formal gate, 9-case SessionDB holdout, heldout review, and CI smoke cover the current tool-description/tool-selection risk directly. Benchmark gates are deferred until Phase 3 execution, active tool-schema apply, default-gate promotion, or system-prompt evolution acceptance.
+7. **Human review checkpoint:** completed and recorded in `reports/phase2e_human_review_checkpoint.json` plus `.md`. Sunwoo authorized the checkpoint via `rec action GO`; candidate-only artifacts, README/PLAN/reports, and CI smoke wiring are reviewed as a Phase 2E closeout package. Active schema/source apply remains a separate human-approved PR or patch, and Phase 3 execution still requires the deferred benchmark gate boundary.
+
+`inventory_metadata` contract:
+
+| Field | Required meaning |
+|-------|------------------|
+| `source` | `"inventory_json"` or `"hermes_repo_import"`. |
+| `tool_count` | Number of inventory records used for candidate generation. |
+| `import_warning_count` | Count of import-time warnings captured while collecting inventory. |
+| `import_warnings` | Structured warning records with `module`, `message`, `exception`, `classification`, and `candidate_quality`. |
+| `candidate_quality_warnings_are_separate` | Must be `true`. |
+
+Warning separation rule:
+
+- `metrics.warnings` and `phase2d_gate.candidate_metrics.warning_count` are candidate-quality warnings only.
+- Optional inventory/import warnings, such as `tools.browser_dialog_tool` missing `websockets`, are reported under `inventory_metadata.import_warnings` with `classification: "optional_dependency_import_warning"` and `candidate_quality: false`.
+- This separation is a report contract, not suppression: operational inventory issues remain visible without polluting candidate-quality gate metrics.
+
+Lightweight CI/schema smoke check:
+
+```bash
+python -m evolution.tools.report_contract output/tool-description/<run-name>/candidate_only_report.json
+# or, after package install:
+hse-validate-tool-report output/tool-description/<run-name>/candidate_only_report.json
+```
+
+The smoke check validates the documented contract with no extra runtime dependencies. It checks required top-level fields, candidate-only/no-apply invariants, Phase 2D thresholds, warning-count consistency, `inventory_metadata` shape, and import-warning separation. It exits non-zero when the report contract is invalid, making it suitable for local smoke checks or future CI wiring.
+
 ### Phase 3: System Prompt Evolution
 
 **Goal:** Optimize the sections of the system prompt that guide agent behavior.
 
-**Prerequisite:** Phase 2 gate passed — benchmark gating validated, GEPA producing sensible text mutations.
+**Prerequisite:** Phase 2 closeout passed — Phase 2D candidate-only report contract is green, Phase 2E closeout decisions are recorded, benchmark gating is validated or explicitly deferred with rationale, and GEPA/tool-description text mutations remain sensible under human review.
+
+**Current Phase 3 design status:** planned, not executed. The design boundary is recorded in `reports/phase3_system_prompt_evolution_plan.json` / `.md`, with the design-only Seed at `seeds/phase3_system_prompt_evolution_seed.yaml`. This Seed fixes the scope, acceptance criteria, non-evolvable sections, and benchmark reactivation conditions only; active system-prompt/source apply remains out of scope and must be handled by a later human-approved PR or patch.
+
+Before any Phase 3 execution, benchmark gates are reactivated before Phase 3 execution, system-prompt evolution acceptance, active system-prompt apply, or default-gate promotion. The current design-only plan does not run GEPA/DSPy optimization and does not mutate active Hermes Agent prompt source or runtime configuration.
+
+**Current Phase 3 execution Seed draft status:** drafted, not executed. The draft is recorded in `seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml`, with supporting artifacts at `reports/phase3_execution_seed_draft.json` / `.md`. It fixes benchmark command templates, rollback boundary, and human approval gate before execution while keeping `run_gepa_now`, `run_dspy_now`, `execution_started`, `mutate_active_system_prompt_now`, and `apply_ready` false.
+
+The execution draft is still candidate-only preparation: benchmark command templates must be backed by runnable TBLite/YC-Bench adapters and pass before execution; rollback boundary handles must be created/read back before apply; and separate human approval is required before optimizer execution, benchmark execution, prompt-source edits, active runtime apply, or default-gate promotion.
+
+**Current Phase 3 real benchmark readiness manifest status:** recorded, not executed. The manifest is recorded in `reports/phase3_real_benchmark_readiness_manifest.json` / `.md` and keeps `real_benchmark_ready_now=false` plus `active_apply_ready_now=false`. It machine-records required inputs, environment prerequisites, explicit approval/cost boundaries, rollback requirements, and go/no-go conditions before any future switch from dry-run fixtures to real TBLite/YC-Bench evidence; real benchmarks remain blocked until all go/no-go conditions are satisfied.
 
 **Week 1 (Build):** Build section-as-DSPy-parameter wrapper for the 5 evolvable prompt sections. Build behavioral test suite generator. This is the riskiest tier so far — system prompt changes affect everything.
 
@@ -660,6 +772,35 @@ Best Candidate → PR with full metrics
 ```
 
 **Key principle:** Benchmarks are GATES, not fitness functions. The fitness function is task-specific (did the skill/tool/prompt do its job better?). Benchmarks ensure the improvement didn't break something else. A variant that improves skill quality by 20% but drops TBLite by 5% is REJECTED.
+
+### Phase 3 candidate-only scaffold
+
+Before any real optimizer run, the Phase 3 scaffold can create a candidate review packet:
+
+```bash
+python -m evolution.prompts.phase3_candidate_scaffold --dry-run ...
+```
+
+The scaffold is candidate-only and performs no GEPA/DSPy execution, no real benchmark execution, no source/runtime apply, and no writes outside `output/phase3-system-prompt/`. It snapshots baseline/candidate prompt artifacts, rejects pre-existing/symlinked write targets, rejects input/output path overlap, rejects non-evolvable section changes, and emits `candidate_only_report.json` plus `review_packet.md` for human review. Real TBLite/YC-Bench results remain required before optimizer acceptance, active apply, or default-gate promotion.
+
+### Phase 3 benchmark adapters
+
+The Phase 3 execution draft now has runnable TBLite/YC-Bench adapter entrypoints:
+
+```bash
+python -m evolution.benchmarks.run_tblite --dry-run ...
+python -m evolution.benchmarks.run_yc_bench --preset fast_test --dry-run ...
+```
+
+Current status is a **dry-run fixture contract** only. The adapters are read-only, make no external calls, write only fresh `.json` reports under `output/phase3-system-prompt/`, reject path traversal outside that root, reject pre-existing/symlinked/hardlinked/input-overlapping output targets, and keep `apply_ready=false`. Tests monkeypatch network and external-process APIs (`socket`, `urllib.request.urlopen`, `subprocess.run`/`Popen`, and `os.system`) during in-process adapter main calls so fixture-mode external calls fail visibly. This locks the command-line/report schema before Phase 3 execution; real benchmark results are still required before optimizer acceptance, active apply, or default-gate promotion.
+
+### Phase 3 local preflight gate
+
+After the scaffold and dry-run benchmark adapters have produced local reports, `python -m evolution.prompts.phase3_preflight_gate --dry-run ...` validates them as one preflight bundle. The gate checks candidate-only/apply-blocked flags, dry-run TBLite/YC-Bench reports, hardened output constraints, and prompt artifact checksum consistency across reports. A passing preflight report means the local dry-run contract is coherent; it still records `phase3_execution_ready=false` because real benchmarks and human approval remain blocking before any optimizer execution, prompt/source edit, active apply, or default-gate promotion.
+
+### Phase 3 real benchmark readiness manifest
+
+The Phase 3 real benchmark readiness manifest records the machine-readable transition contract before moving from dry-run fixtures to real TBLite/YC-Bench evidence. It keeps `real_benchmark_ready_now=false` and `active_apply_ready_now=false`, caps current authorized spend at `$0`, records future budget/runtime limits, requires rollback handles and prompt checksums, and states that real benchmarks remain blocked until all go/no-go conditions are satisfied.
 
 ---
 

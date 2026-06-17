@@ -15,6 +15,7 @@ from typing import Optional
 import dspy
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.hermes_lm import make_lm
 
 
 @dataclass
@@ -123,7 +124,7 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        lm = make_lm(self.config.judge_model, hermes_repo=str(self.config.hermes_agent_path))
 
         with dspy.context(lm=lm):
             result = self.generator(
@@ -171,6 +172,54 @@ class SyntheticDatasetBuilder:
 
 class GoldenDatasetLoader:
     """Load hand-curated evaluation datasets from JSONL files."""
+
+    _MANIFEST_FILENAME = "skill-fixtures.json"
+
+    @staticmethod
+    def default_golden_root() -> Path:
+        """Return the repository's bundled golden dataset directory."""
+        return Path(__file__).resolve().parents[2] / "datasets" / "golden"
+
+    @classmethod
+    def available_regression_fixtures(cls, root: Optional[Path] = None) -> dict[str, Path]:
+        """Return skill-name to dataset-path mappings from the fixture manifest."""
+        base = Path(root) if root is not None else cls.default_golden_root()
+        manifest_path = base / cls._MANIFEST_FILENAME
+        if not manifest_path.exists():
+            return {}
+
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        if not isinstance(manifest, dict):
+            raise ValueError(f"Golden fixture manifest must be a JSON object: {manifest_path}")
+
+        fixtures: dict[str, Path] = {}
+        for skill_name, relative_path in manifest.items():
+            if not isinstance(skill_name, str) or not isinstance(relative_path, str):
+                raise ValueError(f"Golden fixture manifest values must be strings: {manifest_path}")
+            if Path(relative_path).is_absolute() or ".." in Path(relative_path).parts:
+                raise ValueError(f"Golden fixture path must stay under {base}: {relative_path}")
+            fixtures[skill_name] = base / relative_path
+        return fixtures
+
+    @classmethod
+    def find_regression_fixture(cls, skill_name: str, root: Optional[Path] = None) -> Path:
+        """Resolve a promoted regression fixture path for a skill name."""
+        fixtures = cls.available_regression_fixtures(root)
+        try:
+            path = fixtures[skill_name]
+        except KeyError as exc:
+            available = ", ".join(sorted(fixtures)) or "none"
+            raise FileNotFoundError(f"No promoted regression fixture for {skill_name!r}; available: {available}") from exc
+        if not path.exists():
+            raise FileNotFoundError(f"Promoted regression fixture missing: {path}")
+        return path
+
+    @classmethod
+    def load_regression_fixture(cls, skill_name: str, root: Optional[Path] = None) -> EvalDataset:
+        """Load the promoted regression fixture for a skill name."""
+        return cls.load(cls.find_regression_fixture(skill_name, root))
 
     @staticmethod
     def load(path: Path) -> EvalDataset:
