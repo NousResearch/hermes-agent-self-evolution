@@ -23,6 +23,7 @@ from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset,
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
+from evolution.skills.body_optimizer import optimize_skill_body
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -118,7 +119,9 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    # Validate the full SKILL.md, not only the markdown body. The structure
+    # constraint checks YAML frontmatter, so passing only body always fails.
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -130,62 +133,46 @@ def evolve(
     if not all_pass:
         console.print("[yellow]⚠ Baseline skill has constraint violations — proceeding anyway[/yellow]")
 
-    # ── 4. Set up DSPy + GEPA optimizer ─────────────────────────────────
+    # ── 4. Set up direct body optimizer ─────────────────────────────────
     console.print(f"\n[bold]Configuring optimizer[/bold]")
-    console.print(f"  Optimizer: GEPA ({iterations} iterations)")
+    console.print(f"  Optimizer: direct SKILL.md body rewrite ({iterations} iterations)")
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
+    # Configure DSPy for evaluation calls.
     lm = dspy.LM(eval_model)
     dspy.configure(lm=lm)
 
-    # Create the baseline skill module
+    # Create the baseline skill module for later holdout comparison.
     baseline_module = SkillModule(skill["body"])
 
-    # Prepare DSPy examples
-    trainset = dataset.to_dspy_examples("train")
-    valset = dataset.to_dspy_examples("val")
-
-    # ── 5. Run GEPA optimization ────────────────────────────────────────
-    console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
+    # ── 5. Generate evolved SKILL.md body candidate ─────────────────────
+    console.print(f"\n[bold cyan]Generating evolved SKILL.md body ({iterations} iterations)...[/bold cyan]\n")
 
     start_time = time.time()
-
-    try:
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
-        )
-
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-            valset=valset,
-        )
-    except Exception as e:
-        # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
-        console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
-        optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
-            auto="light",
-        )
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-        )
-
+    evolved_body, rewrite_metadata = optimize_skill_body(
+        baseline_body=skill["body"],
+        dataset=dataset,
+        optimizer_model=optimizer_model,
+        iterations=iterations,
+    )
     elapsed = time.time() - start_time
-    console.print(f"\n  Optimization completed in {elapsed:.1f}s")
+    console.print(f"\n  Body rewrite completed in {elapsed:.1f}s")
+    console.print(f"  Changed body: {rewrite_metadata['changed']}")
+    console.print(f"  Empty candidates rejected: {rewrite_metadata['rejected_empty']}")
+    console.print(f"  Invalid candidates rejected: {rewrite_metadata.get('rejected_invalid', 0)}")
+    if not rewrite_metadata["changed"]:
+        console.print("[yellow]⚠ No changed body candidate was accepted; saved output will be marked non-evolved[/yellow]")
 
-    # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # ── 6. Reassemble evolved skill text ────────────────────────────────
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
+    evolved_module = SkillModule(evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    # Validate the full reassembled SKILL.md for structure, but compare growth
+    # against the optimizable body text.
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -217,7 +204,7 @@ def evolve(
             baseline_score = skill_fitness_metric(ex, baseline_pred)
             baseline_scores.append(baseline_score)
 
-            evolved_pred = optimized_module(task_input=ex.task_input)
+            evolved_pred = evolved_module(task_input=ex.task_input)
             evolved_score = skill_fitness_metric(ex, evolved_pred)
             evolved_scores.append(evolved_score)
 
@@ -279,6 +266,12 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "artifact_status": (
+            "improved" if rewrite_metadata["changed"] and improvement > 0 else
+            "regressed" if rewrite_metadata["changed"] and improvement < 0 else
+            "non_evolved"
+        ),
+        "body_rewrite": rewrite_metadata,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
@@ -294,11 +287,11 @@ def evolve(
 
 @click.command()
 @click.option("--skill", required=True, help="Name of the skill to evolve")
-@click.option("--iterations", default=10, help="Number of GEPA iterations")
+@click.option("--iterations", default=10, help="Number of skill-body rewrite iterations")
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
+@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for skill body rewrites")
 @click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
