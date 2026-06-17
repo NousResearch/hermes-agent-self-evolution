@@ -138,6 +138,7 @@ def evolve(
 
     # Configure DSPy
     lm = dspy.LM(eval_model)
+    reflection_lm = dspy.LM(optimizer_model, temperature=1.0, max_tokens=3000)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -155,7 +156,8 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
