@@ -1,0 +1,104 @@
+*** Begin Patch
+*** Update File: evolution/skills/evolve_skill.py
+@@ -1,5 +1,10 @@
+ """Skill evolution via GEPA."""
+ import os
+ import json
++from typing import List, Dict, Optional
++import sqlite3
++import yaml
+ from pathlib import Path
+ 
++HERMES_HOME = Path.home() / ".hermes"
++SESSION_DB = HERMES_HOME / "sessions.db"
++
+ def load_config(config_path: str = "config/cross-group-evolution.yaml") -> dict:
+     """Load evolution config with optional universal group discovery."""
+     with open(config_path, 'r') as f:
+         config = yaml.safe_load(f)
+     
++    # Universal group discovery: auto-detect if enabled
++    discovery_mode = config.get('group_discovery', {}).get('method', 'manual')
++    if discovery_mode in ('auto', 'hybrid'):
++        active_groups = discover_groups(config)
++        config['groups'] = active_groups
++    return config
++
++def discover_groups(config: dict) -> List[Dict]:
++    """Auto-discover groups from Hermes session database."""
++    groups = []
++    min_messages = config.get('group_discovery', {}).get('min_messages_last_7d', 5)
++    include_dm = config.get('group_discovery', {}).get('include_dm', False)
++    
++    # Method 1: Query session database
++    if SESSION_DB.exists():
++        try:
++            conn = sqlite3.connect(str(SESSION_DB))
++            cursor = conn.cursor()
++            cursor.execute("""
++                SELECT DISTINCT chat_id, COUNT(*) as msg_count 
++                FROM messages 
++                WHERE timestamp > datetime('now', '-7 days')
++                GROUP BY chat_id
++                HAVING msg_count >= ?
++                ORDER BY msg_count DESC
++            """, (min_messages,))
++            
++            for row in cursor.fetchall():
++                chat_id = str(row[0])
++                # Skip DMs unless explicitly included
++                if not include_dm and not chat_id.startswith('-100'):
++                    continue
++                
++                # Determine priority based on activity level
++                msg_count = row[1]
++                priority = 'low'
++                if msg_count >= 50:
++                    priority = 'high'
++                elif msg_count >= 15:
++                    priority = 'medium'
++                
++                groups.append({
++                    'chat_id': chat_id,
++                    'name': f'auto-detected-{chat_id}',
++                    'priority': priority,
++                    'auto_detect_skills': True
++                })
++            
++            conn.close()
++        except sqlite3.Error:
++            pass  # Fallback to config.yaml detection
++    
++    # Method 2: Fallback to config.yaml
++    if not groups:
++        config_yaml = HERMES_HOME / "config.yaml"
++        if config_yaml.exists():
++            try:
++                with open(config_yaml, 'r') as f:
++                    hermes_config = yaml.safe_load(f)
++                
++                # Extract Telegram group IDs from gateway config
++                gateway = hermes_config.get('gateway', {})
++                for platform in gateway.get('platforms', []):
++                    if platform.get('type') == 'telegram':
++                        for chat in platform.get('chats', []):
++                            chat_id = str(chat.get('id', ''))
++                            if chat_id.startswith('-100'):
++                                groups.append({
++                                    'chat_id': chat_id,
++                                    'name': chat.get('name', f'group-{chat_id}'),
++                                    'priority': chat.get('priority', 'medium'),
++                                    'auto_detect_skills': True
++                                })
++            except yaml.YAMLError:
++                pass
++    
++    # Merge with manually defined groups
++    manual_groups = config.get('manual_groups', [])
++    for manual in manual_groups:
++        # Avoid duplicates
++        if not any(str(manual.get('chat_id')) == str(g.get('chat_id')) for g in groups):
++            groups.append(manual)
++    
++    return groups
+*** End Patch

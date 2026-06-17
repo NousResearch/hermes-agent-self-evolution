@@ -1,0 +1,80 @@
+# ============================================================
+# Hermes Agent Self-Evolution — Cross-Group Configuration
+# Nightly pipeline to evolve skills from all group session traces
+# ============================================================
+
+# Where your hermes-agent lives (source of skills to optimize)
+hermes_agent_repo: /home/prashanth_bhelley/.hermes/hermes-agent
+
+# Where to write evolved skill PRs
+output_repo: /mnt/d/hermes-agent-self-evolution/evolved-skills
+
+# Session DB — captures ALL group conversations
+session_db: /home/prashanth_bhelley/.hermes/sessions.db
+
+# Groups to monitor for evolution (all of them)
+groups:
+  - name: "Baked in BLR x Pablo"
+    chat_id: -1003806480938
+    priority: high
+    skills_focus: ["page-designer", "frontend-design", "marketing-operations"]
+  
+  - name: "Ai Supercharge"
+    chat_id: -1003953572653
+    priority: high
+    skills_focus: ["pablo-codex-sprite-engine", "creative-delivery", "pablo-campaign", "pascal-editor"]
+  
+  - name: "Ai News"
+    chat_id: -1003773897557
+    priority: medium
+    skills_focus: ["alpha-brief", "group-intelligence-operations"]
+  
+  - name: "Test FX"
+    chat_id: -1003855677539
+    priority: medium
+    skills_focus: ["fx-rich-smc-engine", "trading-bot-orchestration", "gemini-trading-intelligence"]
+  
+  - name: "Pablo Pvt"
+    chat_id: -1003686324885
+    priority: low
+    skills_focus: ["bounty-operations", "secure-bounty-sandbox", "open-source-bounty-hunter"]
+
+# Evolution settings
+evolution:
+  iterations: 10
+  eval_source: sessiondb  # Use real session traces instead of synthetic data
+  min_session_count: 3    # Only evolve skills used at least 3 times
+  max_skills_per_run: 3   # Don't overwhelm — evolve top 3 skills per night
+  
+  # API config
+  model: gpt-4o-mini      # Cheap model for evolution runs
+  judge_model: gpt-4o     # Better model for final evaluation
+  
+  # Cost control
+  max_cost_per_run_usd: 5.0
+  skip_if_cost_exceeded: true
+
+# Constraints (guardrails)
+constraints:
+  max_skill_size_kb: 15
+  max_tool_description_chars: 500
+  require_test_pass: true
+  preserve_semantic_meaning: true
+
+# Schedule
+cron:
+  # Run every night at 3 AM when all groups are quiet
+  schedule: "0 3 * * *"
+  timezone: Asia/Kolkata
+  
+  # Only run if previous PR was merged (prevents backlog)
+  require_previous_merged: false  # Set to true once pipeline is stable
+
+# Logging
+log_level: INFO
+log_dir: /mnt/d/hermes-agent-self-evolution/logs
+
+# Notification
+notify_on_complete:
+  target: telegram:-1003806480938  # Notify in Baked in BLR x Pablo
+  format: summary  # Send brief summary, not full logs

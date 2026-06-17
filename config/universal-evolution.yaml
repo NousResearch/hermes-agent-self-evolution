@@ -1,0 +1,156 @@
+# ============================================================
+# Hermes Agent Self-Evolution — UNIVERSAL Group Configuration
+# Auto-discovers ALL groups, evolves skills across everything
+# ============================================================
+
+# Core paths
+hermes_agent_repo: /home/prashanth_bhelley/.hermes/hermes-agent
+output_repo: /mnt/d/hermes-agent-self-evolution/evolved-skills
+session_db: /home/prashanth_bhelley/.hermes/sessions.db
+
+# ============================================================
+# GROUP DISCOVERY — Dynamic, auto-scales to any number
+# ============================================================
+# Instead of hardcoding groups, the script queries the Hermes gateway
+# to discover all active Telegram groups and their recent skill usage.
+#
+# New group added? It appears in tomorrow's evolution automatically.
+# Group goes quiet? It drops to low priority automatically.
+# ============================================================
+
+group_discovery:
+  method: hybrid                  # auto + manual override
+  platforms: [telegram]           # Which platforms to scan
+  min_messages_last_7d: 5        # Only consider groups with recent activity
+  include_dm: false               # Skip 1:1 DMs, only group chats
+
+# HARD BOUNDARY: These groups are NEVER mined for evolution data
+# Baked in BLR x Pablo — bakery business only, zero system exposure
+excluded_groups:
+  - telegram:-1003806480938       # Baked in BLR x Pablo (PROTECTED)
+
+# When manual override is needed (e.g., group not yet active)
+manual_groups:
+  # Add new groups here before they have session history:
+  # - chat_id: -100XXXXXXXXXX
+  #   name: "Future Group Name"
+  #   priority: medium
+
+# ============================================================
+# SKILL-TO-GROUP MAPPING — Learned dynamically
+# ============================================================
+# The pipeline analyzes session traces to build a matrix:
+#   Which skills are used in which groups?
+#   Which skills fail most often?
+#   Which skills have the biggest impact?
+#
+# Priority scoring (auto-calculated):
+#   high   = skill used daily + frequent failures
+#   medium = skill used weekly + occasional failures  
+#   low    = skill used rarely + rare failures
+# ============================================================
+
+skill_priority_rules:
+  # Always-evolve skills (used across ALL groups)
+  global_critical:
+    - hermes-agent-skill-authoring
+    - github-pr-workflow
+    - github-code-review
+    - requesting-code-review
+    - test-driven-development
+    - hermes-safe-update
+    - self-improving-agent
+
+  # Group-specific skill families (auto-detected from session tags)
+  family_detection:
+    marketing: ["page-designer", "frontend-design", "campaign-planner", "ad-designer", "creative-director", "landing-page-analysis", "website-brand-analysis", "meta-ads-publisher", "scriptwriter"]
+    creative: ["pablo-codex-sprite-engine", "pascal-editor", "creative-delivery", "pablo-campaign", "image-analysis", "gemini-mcp-image-fix", "hermes-image-generation"]
+    trading: ["fx-rich-smc-engine", "trading-bot-orchestration", "gemini-trading-intelligence", "tradingview-chart-capture", "fx-rich-binance-execution"]
+    bounty: ["bounty-operations", "secure-bounty-sandbox", "open-source-bounty-hunter", "bounty-scanner-v2", "top-league-bounty-hunter"]
+    infrastructure: ["gateway-resilience-updated", "dashboard-builder", "dashboard-tunnel", "model-routing", "multi-model-failover", "browser-automation"]
+    bakery: ["page-designer", "frontend-design", "marketing-operations", "whatsapp-d2c-backend", "productized-automation"]
+
+# ============================================================
+# EVOLUTION SETTINGS
+# ============================================================
+
+evolution:
+  iterations: 10
+  eval_source: sessiondb       # Use real session traces
+  
+  # Dynamic limits based on number of active groups
+  max_skills_per_run: 5       # Evolve top 5 skills nightly
+  min_session_count: 3        # Only evolve skills with enough usage data
+  
+  # Cost control — scales with group count
+  max_cost_per_run_usd: 10.0   # $10/night max (covers 10+ groups easily)
+  skip_if_cost_exceeded: true
+  
+  # Quality gate
+  min_fitness_improvement: 0.05  # Only propose if 5%+ better than baseline
+  require_test_pass: true
+  max_skill_size_kb: 15
+
+# API configuration
+api:
+  evolution_model: gpt-4o-mini      # Cheap, fast mutation
+  judge_model: gpt-4o               # Quality evaluation
+  fallback_model: gpt-3.5-turbo   # If rate limits hit
+
+# ============================================================
+# REVIEW WORKFLOW
+# ============================================================
+# Because you review every PR, we optimize for clarity:
+
+review:
+  # Every proposal includes:
+  # - Before/after diff (markdown)
+  # - Fitness score change (% improvement)
+  # - Test results (pass/fail + coverage)
+  # - Example execution traces (anonymized)
+  # - Recommended action: MERGE | TEST | REJECT
+  
+  # Where proposals go:
+  output_format: markdown_report    # One report per night, not one per skill
+  report_location: /mnt/d/hermes-agent-self-evolution/reports/
+  
+  # Notification:
+  notify_target: telegram:-1003686324885  # Pablo Pvt (infrastructure hub)
+  notify_format: summary               # Brief + link to full report
+
+# ============================================================
+# SCHEDULE
+# ============================================================
+
+cron:
+  schedule: "0 3 * * *"        # 3 AM IST — all groups quiet
+  timezone: Asia/Kolkata
+  
+  # Safety: Don't run evolution if previous proposals unreviewed
+  # (Prevents backlog. You can override manually.)
+  require_previous_merged: false   # Set to true once you're in rhythm
+  max_unreviewed_proposals: 10     # Pause if >10 pending
+
+# ============================================================
+# SCALING NOTES
+# ============================================================
+# With 10+ groups:
+#   - More session traces = better evolution data
+#   - More diverse usage = more robust skills
+#   - Same $10/night cap = cost doesn't scale with groups
+#   
+# The pipeline becomes STRONGER with more groups, not weaker.
+# Cross-group learning is the entire point.
+# ============================================================
+
+logging:
+  level: INFO
+  dir: /mnt/d/hermes-agent-self-evolution/logs
+  retention_days: 30           # Auto-delete old logs
+
+# Storage (all on D: to protect C: drive)
+storage:
+  datasets: /mnt/d/hermes-agent-self-evolution/datasets
+  reports: /mnt/d/hermes-agent-self-evolution/reports
+  logs: /mnt/d/hermes-agent-self-evolution/logs
+  evolved_skills: /mnt/d/hermes-agent-self-evolution/evolved-skills

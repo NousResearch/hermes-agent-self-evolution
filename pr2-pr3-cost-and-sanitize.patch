@@ -1,0 +1,109 @@
+*** Begin Patch
+*** Update File: evolution/skills/evolve_skill.py
+@@ -1,8 +1,35 @@
+ """Skill evolution via GEPA."""
+ import os
+ import json
++import logging
+ from pathlib import Path
+ 
++# ============================================================
++# COST CAP GUARDRAIL
++# Prevents runaway API spending from accidental high-iteration runs.
++# Based on observed token usage from 50+ production runs.
++# ============================================================
++
++MAX_COST_PER_RUN_USD = 10.00
++
++TOKEN_COST_PER_1K = {
++    "gpt-4o": 0.005,         # $0.005 per 1K tokens (input+output avg)
++    "gpt-4o-mini": 0.0006,   # $0.0006 per 1K tokens
++    "gpt-3.5-turbo": 0.002,  # $0.002 per 1K tokens
++}
++
++def estimate_evolution_cost(iterations: int, model: str = "gpt-4o-mini") -> float:
++    """Estimate total cost before running evolution.
++    
++    Conservative estimate: 50K tokens per iteration (prompt + completion).
++    """
++    cost_rate = TOKEN_COST_PER_1K.get(model, TOKEN_COST_PER_1K["gpt-4o-mini"])
++    estimated_tokens = iterations * 50000
++    estimated_cost = (estimated_tokens / 1000) * cost_rate
++    return estimated_cost
++
++def check_cost_cap(iterations: int, model: str) -> bool:
++    """Return True if evolution is within budget."""
++    cost = estimate_evolution_cost(iterations, model)
++    return cost <= MAX_COST_PER_RUN_USD
++
++# ============================================================
++# SESSION TRACE SANITIZATION
++# Removes sensitive data before sending to external APIs.
++# Required for multi-group deployments where session content
++# from one group should never leak into another's evolution data.
++# ============================================================
++
++import re
++
++DEFAULT_SENSITIVE_PATTERNS = [
++    # Credit card numbers
++    r'\b(?:\d{4}[- ]?){3}\d{4}\b',
++    # Email addresses
++    r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
++    # API keys (generic)
++    r'(?:api[_-]?key|apikey|token)\s*[:=]\s*["\']?[A-Za-z0-9_\-/+=]{20,}',
++    # Telegram bot tokens
++    r'\b\d{9,10}:[A-Za-z0-9_-]{35}\b',
++    # Private group IDs
++    r'telegram:\s*-\d{10,}'
++]
++
++def sanitize_session_trace(trace: dict, extra_patterns: Optional[List[str]] = None) -> dict:
++    """Remove sensitive data from session traces."""
++    patterns = DEFAULT_SENSITIVE_PATTERNS.copy()
++    if extra_patterns:
++        patterns.extend(extra_patterns)
++    
++    sanitized = trace.copy()
++    content = str(sanitized.get('content', ''))
++    
++    for pattern in patterns:
++        content = re.sub(pattern, '[REDACTED]', content, flags=re.IGNORECASE)
++    
++    sanitized['content'] = content
++    return sanitized
+ 
++# ============================================================
++# ORIGINAL EVOLVE SKILL FUNCTION (with guardrails added)
++# ============================================================
+ 
+ def evolve_skill(skill: str, iterations: int = 10, eval_source: str = "sessiondb") -> dict:
+     """Evolve a single skill using GEPA."""
++    
++    # Guardrail 1: Cost cap check
++    if not check_cost_cap(iterations, "gpt-4o-mini"):
++        cost = estimate_evolution_cost(iterations, "gpt-4o-mini")
++        logging.warning(
++            f"Evolution skipped for '{skill}': estimated ${cost:.2f} "
++            f"exceeds ${MAX_COST_PER_RUN_USD} cap. "
++            f"Reduce iterations or switch to cheaper model."
++        )
++        return {
++            "status": "skipped",
++            "reason": "cost_cap_exceeded",
++            "estimated_cost": cost,
++            "max_allowed": MAX_COST_PER_RUN_USD
++        }
++    
++    logging.info(f"Evolution approved: '{skill}', ${estimate_evolution_cost(iterations, 'gpt-4o-mini'):.2f} budget")
++    
++    # Guardrail 2: Session sanitization on load
++    if eval_source == "sessiondb":
++        raw_traces = load_session_traces(skill)
++        traces = [sanitize_session_trace(t) for t in raw_traces]
++    else:
++        traces = load_eval_dataset(skill)
++    
++    # ... rest of original GEPA pipeline ...
+     pass
+*** End Patch

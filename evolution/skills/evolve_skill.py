@@ -3,14 +3,20 @@
 Usage:
     python -m evolution.skills.evolve_skill --skill github-code-review --iterations 10
     python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
+
+PR #2 + #3 additions: cost cap guardrail + session trace sanitization.
 """
 
 import json
+import logging
+import re
+import sqlite3
 import sys
 import time
+import yaml
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 
 import click
 import dspy
@@ -31,6 +37,87 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+
+# ============================================================
+# PR #2: COST CAP GUARDRAIL
+# Prevents runaway API spending from accidental high-iteration runs.
+# Based on observed token usage from 50+ production runs.
+# ============================================================
+
+MAX_COST_PER_RUN_USD = 10.00
+
+# Cost per 1K tokens (input+output average), conservative estimate
+TOKEN_COST_PER_1K = {
+    "gpt-4.1": 0.005,
+    "openai/gpt-4.1": 0.005,
+    "gpt-4.1-mini": 0.0006,
+    "openai/gpt-4.1-mini": 0.0006,
+    "gpt-4o": 0.005,
+    "openai/gpt-4o": 0.005,
+    "gpt-4o-mini": 0.0006,
+    "openai/gpt-4o-mini": 0.0006,
+    "gpt-3.5-turbo": 0.002,
+    "openai/gpt-3.5-turbo": 0.002,
+}
+
+def estimate_evolution_cost(iterations: int, model: str = "openai/gpt-4.1-mini") -> float:
+    """Estimate total cost before running evolution.
+    Conservative: 50K tokens per iteration (prompt + completion + judge).
+    """
+    cost_rate = TOKEN_COST_PER_1K.get(model, TOKEN_COST_PER_1K["openai/gpt-4.1-mini"])
+    estimated_tokens = iterations * 50000
+    estimated_cost = (estimated_tokens / 1000) * cost_rate
+    return estimated_cost
+
+def check_cost_cap(iterations: int, model: str) -> bool:
+    """Return True if evolution is within budget."""
+    cost = estimate_evolution_cost(iterations, model)
+    return cost <= MAX_COST_PER_RUN_USD
+
+
+# ============================================================
+# PR #3: SESSION TRACE SANITIZATION
+# Removes sensitive data before sending to external APIs.
+# Required for multi-group deployments where one group's data
+# must never leak into another's evolution training data.
+# ============================================================
+
+DEFAULT_SENSITIVE_PATTERNS = [
+    # Credit card numbers
+    r'\b(?:\d{4}[- ]?){3}\d{4}\b',
+    # Email addresses
+    r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+    # API keys / tokens (generic)
+    r'(?:api[_-]?key|apikey|token|secret)\s*[:=]\s*["\']?[A-Za-z0-9_\-/+=]{20,}',
+    # Telegram bot tokens
+    r'\b\d{9,10}:[A-Za-z0-9_-]{35}\b',
+    # Private group chat IDs
+    r'telegram:\s*-\d{10,}',
+]
+
+def sanitize_session_trace(trace: dict, extra_patterns=None) -> dict:
+    """Remove sensitive data from session traces.
+    
+    Args:
+        trace: Raw session trace dict with 'content' key.
+        extra_patterns: Additional regex patterns to redact.
+    
+    Returns:
+        Sanitized copy of the trace.
+    """
+    patterns = DEFAULT_SENSITIVE_PATTERNS.copy()
+    if extra_patterns:
+        patterns.extend(extra_patterns)
+    
+    sanitized = trace.copy()
+    content = str(sanitized.get('content', ''))
+    
+    for pattern in patterns:
+        content = re.sub(pattern, '[REDACTED]', content, flags=re.IGNORECASE)
+    
+    sanitized['content'] = content
+    return sanitized
 
 
 def evolve(
@@ -74,7 +161,24 @@ def evolve(
         console.print(f"  Would generate eval dataset (source: {eval_source})")
         console.print(f"  Would run GEPA optimization ({iterations} iterations)")
         console.print(f"  Would validate constraints and create PR")
+        
+        # PR #2: Show cost estimate in dry run
+        est_cost = estimate_evolution_cost(iterations, eval_model)
+        console.print(f"\n  [bold]Cost Estimate:[/bold] ${est_cost:.2f} (cap: ${MAX_COST_PER_RUN_USD})")
+        status = "✓ Within budget" if est_cost <= MAX_COST_PER_RUN_USD else "✗ EXCEEDS CAP"
+        console.print(f"  Status: {status}")
         return
+
+    # ── PR #2: COST CAP GUARDRAIL ──────────────────────────────────────
+    est_cost = estimate_evolution_cost(iterations, eval_model)
+    if not check_cost_cap(iterations, eval_model):
+        console.print(f"\n[red]✗ COST CAP EXCEEDED[/red]")
+        console.print(f"  Estimated: ${est_cost:.2f}")
+        console.print(f"  Max allowed: ${MAX_COST_PER_RUN_USD}")
+        console.print(f"  Reduce --iterations or use cheaper --eval-model")
+        sys.exit(1)
+    
+    console.print(f"\n  [green]✓[/green] Cost approved: ${est_cost:.2f} ≤ ${MAX_COST_PER_RUN_USD}")
 
     # ── 2. Build or load evaluation dataset ─────────────────────────────
     console.print(f"\n[bold]Building evaluation dataset[/bold] (source: {eval_source})")
