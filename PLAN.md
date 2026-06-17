@@ -515,6 +515,8 @@ The system prompt is assembled in `run_agent.py` / `agent/prompt_builder.py` fro
 
 **Prerequisite:** Phases 1-3 complete — strong evaluation pipeline, validated benchmark gating, confidence in the optimization loop.
 
+Initial verifier support lives in `evolution/code/verifier_harness.py`. This is not a mutation engine. It is the admission layer Phase 4 candidates must pass: public workspace files and visible checks are exposed to the candidate, hidden checks stay in harness memory, adaptive candidates are compared against a frozen baseline, rejected candidate keys are cached, rollback/action traces are digested, and the full-suite gate remains mandatory before acceptance.
+
 **Week 1-2 (Build):** Set up Darwinian Evolver as external CLI. Build code-as-organism wrapper mapping tool files to GitBasedOrganism. Build composite fitness function (pytest + benchmarks + bug reproduction). This phase uses a different engine (Darwinian Evolver instead of DSPy+GEPA) so there's new infrastructure to build.
 
 **Week 2-3 (Run):** Start with known bugs from GitHub issues — create reproduction scripts, run evolution to find fixes. Then try edge case hardening on 1-2 tools (e.g., `file_tools.py`, `search_files`).

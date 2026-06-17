@@ -75,6 +75,8 @@ Every evolved variant must pass:
 4. **Semantic preservation** — Must not drift from original purpose
 5. **PR review** — All changes go through human review, never direct commit
 
+6. **Phase 4 verifier gate** - Code candidates must beat a frozen baseline on sealed hidden checks, keep rollback traces, and pass the full-suite gate
+
 ## Full Plan
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.
