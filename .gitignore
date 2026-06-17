@@ -19,8 +19,16 @@ datasets/**/*.json
 snapshots/
 *.pkl
 
+# Run artifacts (per-machine, not shared)
+logs/
+output/
+proposals/
+
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# OS
+.DS_Store
