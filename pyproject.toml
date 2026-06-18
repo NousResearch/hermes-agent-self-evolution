@@ -15,7 +15,12 @@ authors = [
 keywords = ["llm", "optimization", "evolution", "dspy", "gepa", "hermes", "agent"]
 
 dependencies = [
-    "dspy>=3.0.0",
+    # dspy[optuna] pulls in optuna, which MIPROv2 requires. MIPROv2 is the
+    # automatic fallback path in evolve_skill.py when GEPA fails to initialize
+    # (e.g. on DSPy >=3.0 where GEPA's __init__ signature changed). Without
+    # the [optuna] extra the fallback crashes with ModuleNotFoundError, so the
+    # whole pipeline is broken on stock installs.
+    "dspy[optuna]>=3.0.0",
     "openai>=1.0.0",
     "pyyaml>=6.0",
     "click>=8.0",

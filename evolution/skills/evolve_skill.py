@@ -6,6 +6,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Optional
 
 import click
 import dspy
+import litellm
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -31,6 +33,14 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+
+# Default per-request timeout for every LLM call DSPy makes. Without an explicit
+# value, litellm waits forever on silent connection drops (some providers /
+# corporate gateways drop long-poll requests without sending a TCP RST), and the
+# whole optimization loop hangs. 90s is generous for sonnet/opus reasoning calls
+# while still cutting a hung connection. Override with LITELLM_REQUEST_TIMEOUT.
+litellm.request_timeout = float(os.environ.get("LITELLM_REQUEST_TIMEOUT", "90"))
 
 
 def evolve(
