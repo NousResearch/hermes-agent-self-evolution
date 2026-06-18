@@ -24,3 +24,4 @@ snapshots/
 .vscode/
 *.swp
 *.swo
+output/
