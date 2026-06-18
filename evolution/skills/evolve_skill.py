@@ -153,9 +153,11 @@ def evolve(
     start_time = time.time()
 
     try:
+        # DSPy 3.2+ renamed max_steps; use a reflection model + max_full_evals.
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
+            reflection_lm=dspy.LM(model=config.optimizer_model, max_tokens=4096),
         )
 
         optimized_module = optimizer.compile(
@@ -179,13 +181,42 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # GEPA optimizes signature.instructions on the inner predictor, NOT the
+    # wrapper module skill_text attribute. Reading skill_text returns the
+    # original unchanged input, producing a byte-identical no-op artifact.
+    #
+    # We extract the actual evolved instructions (the prompt prefix GEPA
+    # mutated each iteration). The skill body is preserved verbatim because
+    # GEPA never had a chance to mutate it (it was passed as an input string,
+    # not an optimizable parameter).
+    try:
+        evolved_instruction = optimized_module.predictor.predict.signature.instructions
+    except AttributeError:
+        # Fallback for MIPROv2 path or future DSPy reshuffles
+        try:
+            evolved_instruction = optimized_module.predictor.signature.instructions
+        except AttributeError:
+            evolved_instruction = ""
+
+    baseline_instruction = SkillModule(skill["body"]).predictor.predict.signature.instructions
+
+    if evolved_instruction.strip() == baseline_instruction.strip():
+        console.print("[yellow]WARNING GEPA did not improve the prompt - evolved == baseline. Saving baseline as is.[/yellow]")
+        evolved_body = skill["body"]
+    else:
+        evolved_body = evolved_instruction.strip()
+        console.print(f"  Evolved prompt: {len(evolved_body)} chars (baseline prompt: {len(baseline_instruction)} chars)")
+        body_len = len(skill["body"])
+        console.print(f"  Skill body preserved: {body_len} chars (unchanged)")
+
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    # Validate the FULL reassembled skill (frontmatter + body), not just
+    # the body. skill_structure check requires YAML frontmatter which only
+    # exists after reassemble_skill() prepends it.
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["body"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
