@@ -8,11 +8,15 @@ C) Golden sets — hand-curated JSONL files
 
 import json
 import random
+import asyncio
+import uuid
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
 import dspy
+from pydantic import BaseModel, Field
 
 from evolution.core.config import EvolutionConfig
 
@@ -89,28 +93,33 @@ class EvalDataset:
 class SyntheticDatasetBuilder:
     """Generate evaluation datasets using a strong LLM.
 
-    Reads the target artifact (skill file, tool description, etc.)
-    and generates realistic (task_input, expected_behavior) pairs.
+    This builder uses the SSoT (String Seed of Thought) protocol to prevent
+    mode collapse and ensure diverse test case generation.
     """
 
     class GenerateTestCases(dspy.Signature):
         """Generate realistic evaluation test cases for an agent skill or tool.
 
-        Given the full text of a skill/tool description, generate diverse test cases
-        that would exercise different aspects of the skill. Each test case should include:
-        - A realistic task_input (what a user would actually ask)
-        - An expected_behavior rubric (what a good response should contain/do, NOT exact text)
-        - A difficulty level (easy, medium, hard)
-        - A category (what aspect of the skill this tests)
+        Example:
+        text: "Skill to generate jokes"
+        type: "skill"
+        batch_size: 1
+        seed: "xyz123"
+        output: <ssot_random_string>joke_99</ssot_random_string><ssot_math_cot>1+1=2</ssot_math_cot><payload_json>[{"task_input": "Tell me a joke", "expected_behavior": "Should output a joke", "difficulty": "easy", "category": "humor"}]</payload_json>
+
+        You MUST follow this format exactly.
         """
-        artifact_text: str = dspy.InputField(desc="The full text of the skill/tool/prompt being tested")
-        artifact_type: str = dspy.InputField(desc="Type: 'skill', 'tool_description', or 'prompt_section'")
-        num_cases: int = dspy.InputField(desc="Number of test cases to generate")
-        test_cases: str = dspy.OutputField(desc="JSON array of test cases, each with: task_input, expected_behavior, difficulty, category")
+        text: str = dspy.InputField(desc="The text to test")
+        type: str = dspy.InputField(desc="The type of artifact")
+        batch_size: int = dspy.InputField(desc="Number of cases")
+        seed: str = dspy.InputField(desc="Entropy seed")
+        
+        output: str = dspy.OutputField(desc="Combined SSoT stream: <ssot_random_string>, <ssot_math_cot>, <payload_json>")
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
-        self.generator = dspy.ChainOfThought(self.GenerateTestCases)
+        # Use Predict for raw uninterrupted stream
+        self.generator = dspy.Predict(self.GenerateTestCases)
 
     def generate(
         self,
@@ -118,43 +127,91 @@ class SyntheticDatasetBuilder:
         artifact_type: str = "skill",
         num_cases: Optional[int] = None,
     ) -> EvalDataset:
-        """Generate a full eval dataset with train/val/holdout splits."""
+        """Generate a full eval dataset using Anchored SSoT."""
 
-        n = num_cases or self.config.eval_dataset_size
+        total_needed = num_cases or self.config.eval_dataset_size
+        batch_size = 1 # Single examples for high complexity skills
+        num_batches = total_needed
+        
+        # Hardened LM settings for small models
+        lm = dspy.LM(
+            self.config.judge_model, 
+            cache=False,
+            max_tokens=2000,
+            temperature=0.0,
+            presence_penalty=0.0,
+            frequency_penalty=1.0, # Aggressive loop prevention
+            stop=["[[ ## completed ## ]]"]
+        )
+        
+        # We repeat the instruction and truncate the skill if it's too long for 3B models
+        safe_artifact_text = artifact_text[:3000] + "..." if len(artifact_text) > 3000 else artifact_text
+        reinforced_text = f"{safe_artifact_text}\n\nREPEATED INSTRUCTION: Generate {batch_size} synthetic test cases for the above {artifact_type}. Output ONLY a JSON list of objects. Response MUST start with [ and end with ]."
 
-        # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        semaphore = asyncio.Semaphore(2)
 
-        with dspy.context(lm=lm):
-            result = self.generator(
-                artifact_text=artifact_text,
-                artifact_type=artifact_type,
-                num_cases=n,
-            )
+        def _run_gen(seed: str):
+            with dspy.context(lm=lm):
+                try:
+                    res = self.generator(
+                        text=reinforced_text,
+                        type=artifact_type,
+                        batch_size=batch_size,
+                        seed=seed
+                    )
+                    return res
+                except Exception as e:
+                    # Capture the raw output for debugging
+                    from rich.console import Console
+                    console = Console()
+                    console.print(f"[yellow]  DEBUG: Generation failed ({e}). Model response might be invalid JSON.[/yellow]")
+                    return None
 
-        # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+        async def run_batch(seed: str):
+            async with semaphore:
+                return await asyncio.to_thread(_run_gen, seed)
 
-        examples = [
-            EvalExample(
-                task_input=c.get("task_input", ""),
-                expected_behavior=c.get("expected_behavior", ""),
-                difficulty=c.get("difficulty", "medium"),
-                category=c.get("category", "general"),
-                source="synthetic",
-            )
-            for c in cases_raw
-            if c.get("task_input") and c.get("expected_behavior")
-        ]
+        import nest_asyncio
+        nest_asyncio.apply()
+        
+        loop = asyncio.get_event_loop()
+        tasks = [run_batch(str(uuid.uuid4())[:8]) for _ in range(num_batches)]
+        results = loop.run_until_complete(asyncio.gather(*tasks))
+
+        examples = []
+        for result in results:
+            try:
+                payload = getattr(result, "output", "")
+                if not payload:
+                    continue
+                
+                # Extract the payload_json block using regex
+                json_match = re.search(r'<payload_json>(.*?)</payload_json>', payload, re.DOTALL)
+                json_text = json_match.group(1).strip() if json_match else payload
+                
+                # Clean markdown and common LLM debris
+                clean_text = re.sub(r'^```json\s*|```$', '', json_text.strip(), flags=re.MULTILINE)
+                cases = json.loads(clean_text)
+                
+                if not isinstance(cases, list):
+                    continue
+
+                for c in cases:
+                    if not isinstance(c, dict):
+                        continue
+                        
+                    examples.append(
+                        EvalExample(
+                            task_input=c.get("task_input", ""),
+                            expected_behavior=c.get("expected_behavior", ""),
+                            difficulty=c.get("difficulty", "medium"),
+                            category=c.get("category", "general"),
+                            source="synthetic",
+                        )
+                    )
+            except Exception as e:
+                print(f"⚠️ Warning: Failed to parse a batch: {e}")
+                continue
 
         # Shuffle and split
         random.shuffle(examples)
