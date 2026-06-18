@@ -132,17 +132,56 @@ class SyntheticDatasetBuilder:
                 num_cases=n,
             )
 
-        # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
+        # Parse the generated test cases — LLMs often produce slightly malformed JSON
+        import re
+        raw_text = result.test_cases
+
+        def _try_parse_json(text: str) -> list:
+            """Try multiple strategies to parse LLM JSON output."""
+            # Strategy 1: Direct JSON parse
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                pass
+
+            # Strategy 2: Python literal eval — handles single-quoted dicts
+            try:
+                import ast
+                result = ast.literal_eval(text.strip())
+                if isinstance(result, list):
+                    return result
+            except (ValueError, SyntaxError):
+                pass
+
+            # Strategy 3: Extract array from surrounding text
+            match = re.search(r'\[[\s\S]*\]', text)
             if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+                candidate = match.group()
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
+
+                # Try literal_eval on extracted array
+                try:
+                    import ast
+                    result = ast.literal_eval(candidate)
+                    if isinstance(result, list):
+                        return result
+                except (ValueError, SyntaxError):
+                    pass
+
+                # Fix common LLM JSON issues
+                fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+                fixed = re.sub(r"(?<!\\)'([^']+?)'(?=\s*[:,\]\}])", r'"\1"', fixed)
+                try:
+                    return json.loads(fixed)
+                except json.JSONDecodeError:
+                    pass
+
+            raise ValueError(f"Could not parse test cases from LLM output: {raw_text[:500]}")
+
+        cases_raw = _try_parse_json(raw_text)
 
         examples = [
             EvalExample(
