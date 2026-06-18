@@ -6,7 +6,7 @@ Supports length penalties and multi-dimensional scoring.
 
 import dspy
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 from evolution.core.config import EvolutionConfig
 
@@ -55,11 +55,16 @@ class LLMJudge:
         correctness: float = dspy.OutputField(desc="Score 0.0-1.0: Did the response correctly address the task?")
         procedure_following: float = dspy.OutputField(desc="Score 0.0-1.0: Did it follow the expected procedure?")
         conciseness: float = dspy.OutputField(desc="Score 0.0-1.0: Appropriately concise?")
-        feedback: str = dspy.OutputField(desc="Specific, actionable feedback on what could be improved")
+        feedback: str = dspy.OutputField(desc="Specific, actionable feedback on what could be improved.")
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
-        self.judge = dspy.ChainOfThought(self.JudgeSignature)
+        self._lm: Optional[dspy.LM] = None
+
+    def _get_lm(self) -> dspy.LM:
+        if self._lm is None:
+            self._lm = dspy.LM(self.config.eval_model)
+        return self._lm
 
     def score(
         self,
@@ -71,21 +76,28 @@ class LLMJudge:
         max_size: Optional[int] = None,
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
+        try:
+            lm = self._get_lm()
+            with dspy.context(lm=lm):
+                judge = dspy.ChainOfThought(self.JudgeSignature)
+                result = judge(
+                    task_input=task_input,
+                    expected_behavior=expected_behavior,
+                    agent_output=agent_output,
+                    skill_text=skill_text,
+                )
 
-        lm = dspy.LM(self.config.eval_model)
+            # Parse scores (clamp to 0-1)
+            correctness = _parse_score(result.correctness)
+            procedure_following = _parse_score(result.procedure_following)
+            conciseness = _parse_score(result.conciseness)
+            feedback = str(result.feedback) if result.feedback else ""
 
-        with dspy.context(lm=lm):
-            result = self.judge(
-                task_input=task_input,
-                expected_behavior=expected_behavior,
-                agent_output=agent_output,
-                skill_text=skill_text,
+        except Exception as e:
+            # Fall back to keyword overlap when LLM call fails (offline/rate-limited)
+            correctness, procedure_following, conciseness, feedback = _keyword_fallback(
+                agent_output, expected_behavior, task_input, e
             )
-
-        # Parse scores (clamp to 0-1)
-        correctness = _parse_score(result.correctness)
-        procedure_following = _parse_score(result.procedure_following)
-        conciseness = _parse_score(result.conciseness)
 
         # Length penalty
         length_penalty = 0.0
@@ -100,40 +112,81 @@ class LLMJudge:
             procedure_following=procedure_following,
             conciseness=conciseness,
             length_penalty=length_penalty,
-            feedback=str(result.feedback),
+            feedback=feedback,
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def _keyword_fallback(agent_output: str, expected_behavior: str, task: str, error: Exception) -> tuple:
+    """Keyword-overlap fallback when LLM judge is unavailable."""
+    if not agent_output.strip():
+        return 0.0, 0.0, 0.0, "Empty output"
+
+    expected_words = set(expected_behavior.lower().split())
+    output_words = set(agent_output.lower().split())
+
+    if expected_words:
+        overlap = len(expected_words & output_words) / len(expected_words)
+    else:
+        overlap = 0.5
+
+    # Broader score band: 0.2-0.9 instead of 0.3-1.0
+    base_score = 0.2 + (0.7 * overlap)
+    score = min(1.0, max(0.0, base_score))
+
+    feedback = (
+        f"LLM judge unavailable ({error}), used keyword fallback. "
+        f"Keyword overlap: {overlap:.1%}. "
+        f"Expected keywords covered: {len(expected_words & output_words)}/{len(expected_words)}."
+    )
+    return score, score, score, feedback
+
+
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+) -> Union[float, dspy.Prediction]:
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    When trace is provided (GEPA path): returns dspy.Prediction(score, feedback)
+    for reflective mutation. When trace is None (MIPROv2 / BootstrapFewShot path):
+    returns a plain float for numerical optimization.
+
+    Uses LLM-as-judge as the primary scorer. Falls back to keyword overlap
+    on LLM failures (offline, rate-limited, etc.).
     """
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
+    skill_text = getattr(example, "skill_text", "") or ""
 
     if not agent_output.strip():
+        if trace is not None:
+            return dspy.Prediction(score=0.0, feedback="Empty agent output")
         return 0.0
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
+    try:
+        config = EvolutionConfig()
+        judge = LLMJudge(config)
+        result = judge.score(
+            task_input=task,
+            expected_behavior=expected,
+            agent_output=agent_output,
+            skill_text=skill_text,
+        )
+        score = result.composite
+        feedback = result.feedback
+    except Exception as e:
+        # Keyword fallback: broader signal than the old 0.3-1.0 band
+        score, _, _, feedback = _keyword_fallback(agent_output, expected, task, e)
 
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
-    output_lower = agent_output.lower()
+    if trace is not None:
+        # GEPA path: return Prediction for reflective mutation
+        return dspy.Prediction(score=score, feedback=feedback)
 
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
-    if expected_words:
-        overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
-
-    return min(1.0, max(0.0, score))
+    # MIPROv2 / BootstrapFewShot path: return plain float
+    return float(score)
 
 
 def _parse_score(value) -> float:
