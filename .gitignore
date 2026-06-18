@@ -19,6 +19,11 @@ datasets/**/*.json
 snapshots/
 *.pkl
 
+# Local run artifacts and operator-only cron wrappers
+logs/
+output/
+scripts/
+
 # IDE
 .idea/
 .vscode/
