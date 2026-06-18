@@ -29,6 +29,7 @@ from evolution.skills.skill_module import (
     find_skill,
     reassemble_skill,
 )
+from evolution.core.config import MINIMAX_MODELS
 
 console = Console()
 
@@ -43,8 +44,13 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    use_minimax: bool = False,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
+
+    if use_minimax:
+        optimizer_model = f"minimax/{MINIMAX_MODELS[0]}"
+        eval_model = f"minimax/{MINIMAX_MODELS[0]}"
 
     config = EvolutionConfig(
         hermes_agent_path=resolve_hermes_agent_path(hermes_repo),
@@ -137,7 +143,7 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = config.make_lm(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -303,7 +309,8 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--use-minimax", is_flag=True, help="Use MiniMax as the LLM backend (requires MINIMAX_API_KEY)")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, use_minimax):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -315,6 +322,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        use_minimax=use_minimax,
     )
 
 
