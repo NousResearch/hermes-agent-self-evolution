@@ -104,11 +104,21 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name: Optional[str] = None,
+    pred_trace=None,
+) -> float | dict:
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    DSPy GEPA 3.x requires metrics to accept five arguments:
+    ``(gold, pred, trace, pred_name, pred_trace)``. Normal evaluation and
+    MIPROv2 still call this as a simple score function, so the extra GEPA
+    arguments stay optional. When GEPA asks for predictor-level feedback
+    (``pred_name`` is set), return score+feedback so reflection has something
+    actionable to optimize against.
     """
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
@@ -116,7 +126,9 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     task = getattr(example, "task_input", "") or ""
 
     if not agent_output.strip():
-        return 0.0
+        score = 0.0
+        feedback = "Output was empty; produce a concrete response for the task."
+        return {"score": score, "feedback": feedback} if pred_name is not None else score
 
     # Quick heuristic scoring (for speed during optimization)
     # Full LLM-as-judge scoring is expensive — use it selectively
@@ -129,11 +141,26 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     # Simple keyword overlap as a fast proxy
     expected_words = set(expected_lower.split())
     output_words = set(output_lower.split())
+    overlap = 0.0
     if expected_words:
         overlap = len(expected_words & output_words) / len(expected_words)
         score = 0.3 + (0.7 * overlap)
 
-    return min(1.0, max(0.0, score))
+    score = min(1.0, max(0.0, score))
+
+    if pred_name is not None:
+        missing_terms = sorted(expected_words - output_words)[:8]
+        feedback_parts = [
+            f"Score: {score:.2f} for task: {task[:160]}",
+            f"Expected behavior: {expected[:240]}",
+        ]
+        if missing_terms:
+            feedback_parts.append("Missing or underrepresented expected terms: " + ", ".join(missing_terms))
+        else:
+            feedback_parts.append("Output covered the expected keyword signal; preserve this behavior while improving clarity and procedure adherence.")
+        return {"score": score, "feedback": "\n".join(feedback_parts)}
+
+    return score
 
 
 def _parse_score(value) -> float:
