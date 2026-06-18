@@ -104,36 +104,49 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
-    """DSPy-compatible metric function for skill optimization.
+def skill_fitness_metric(example, prediction, trace=None, pred_name=None, pred_trace=None):
+    """Fitness metric compatible with both GEPA and MIPROv2.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    Returns dspy.Prediction(score=float, feedback=str) which:
+    - GEPA reads for reflective trace-aware mutation (uses feedback)
+    - MIPROv2 extracts as a float via __float__() (ignores feedback)
+
+    Uses LLM-as-judge via the currently configured dspy.LM for meaningful
+    evaluation. Falls back to keyword overlap if the LLM call fails.
     """
-    # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
 
     if not agent_output.strip():
-        return 0.0
+        return dspy.Prediction(score=0.0, feedback="Agent produced empty output.")
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
-
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
-    output_lower = agent_output.lower()
-
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
-    if expected_words:
-        overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
-
-    return min(1.0, max(0.0, score))
+    # Primary: LLM-as-judge using whatever model is currently configured
+    try:
+        judge = dspy.ChainOfThought(
+            "task_input, expected_behavior, agent_output -> score: float, feedback: str"
+        )
+        result = judge(
+            task_input=task,
+            expected_behavior=expected,
+            agent_output=agent_output,
+        )
+        score = _parse_score(result.score)
+        feedback = str(getattr(result, "feedback", ""))
+        return dspy.Prediction(score=score, feedback=feedback)
+    except Exception:
+        # Fallback: keyword overlap (no LLM cost, works offline)
+        expected_words = set(expected.lower().split())
+        output_words = set(agent_output.lower().split())
+        if expected_words:
+            overlap = len(expected_words & output_words) / len(expected_words)
+            score = min(1.0, max(0.0, 0.3 + 0.7 * overlap))
+        else:
+            score = 0.5
+        return dspy.Prediction(
+            score=score,
+            feedback=f"Keyword overlap fallback: {score:.2f}",
+        )
 
 
 def _parse_score(value) -> float:
