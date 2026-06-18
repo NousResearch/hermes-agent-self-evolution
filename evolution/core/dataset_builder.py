@@ -135,14 +135,56 @@ class SyntheticDatasetBuilder:
         # Parse the generated test cases
         try:
             cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
+        except json.JSONDecodeError as e:
+            # Try to find the outermost JSON array using bracket counting
             import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+
+            def find_outermost_json_array(s: str) -> str | None:
+                """Find the outermost [...] array in s, ignoring nested brackets and brackets inside strings."""
+                depth = 0
+                start = None
+                in_string = False
+                escape_next = False
+                for i, ch in enumerate(s):
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if ch == '\\':
+                        escape_next = True
+                        continue
+                    if ch == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    if in_string:
+                        continue
+                    if ch == '[':
+                        if depth == 0:
+                            start = i
+                        depth += 1
+                    elif ch == ']':
+                        depth -= 1
+                        if depth == 0 and start is not None:
+                            return s[start:i + 1]
+                return None
+
+            # Strategy 1: try outermost array via bracket counting
+            match_str = find_outermost_json_array(result.test_cases)
+            if match_str:
+                for attempt in [
+                    match_str,
+                    re.sub(r'^```json\s*', '', match_str, flags=re.MULTILINE).strip(),
+                    re.sub(r'^```json\s*', '', match_str, flags=re.MULTILINE).strip().rstrip(',').rstrip('}'),
+                ]:
+                    try:
+                        cases_raw = json.loads(attempt)
+                        break
+                    except json.JSONDecodeError:
+                        continue
+                else:
+                    cases_raw = None
+
+            if not cases_raw:
+                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:500]}")
 
         examples = [
             EvalExample(
