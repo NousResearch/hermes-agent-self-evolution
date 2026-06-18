@@ -1,0 +1,45 @@
+name: Phase 5 monitor read-only lane
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/phase5-monitor-readonly-lane.yml"
+      - "evolution/monitor/**"
+      - "tests/monitor/test_phase5_*.py"
+      - "reports/phase5_*"
+      - "PLAN.md"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase5-monitor-readonly:
+    name: Phase 5 monitor read-only lane
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # refs/tags/v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # refs/tags/v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package with test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run focused Phase 5 monitor tests
+        run: python -m pytest tests/monitor -q
+
+      - name: Compile Phase 5 monitor code and tests
+        run: python -m compileall -q evolution/monitor tests/monitor
+
+      - name: PR diff whitespace hygiene
+        run: git diff --check "origin/${{ github.base_ref }}...HEAD"
