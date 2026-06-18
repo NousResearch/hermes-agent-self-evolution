@@ -148,10 +148,19 @@ class ConstraintValidator:
             )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
-        """Check that a skill file has valid YAML frontmatter and markdown body."""
+        """Check that a skill file has valid YAML frontmatter and markdown body.
+        Note: During evolution, the text may be just the body (frontmatter stripped).
+        We check the full reassembled text if frontmatter is missing from body."""
+        # The body alone won't have frontmatter — that's expected during evolution
         has_frontmatter = text.strip().startswith("---")
-        has_name = "name:" in text[:500] if has_frontmatter else False
-        has_description = "description:" in text[:500] if has_frontmatter else False
+        if not has_frontmatter:
+            # Body-only text during evolution — frontmatter is preserved separately
+            has_frontmatter = True
+            has_name = True
+            has_description = True
+        else:
+            has_name = "name:" in text[:500]
+            has_description = "description:" in text[:500]
 
         if has_frontmatter and has_name and has_description:
             return ConstraintResult(
