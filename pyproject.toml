@@ -30,6 +30,12 @@ dev = [
 darwinian = [
     "darwinian-evolver",
 ]
+# local: run the code evolver against any OpenAI-compatible local LLM
+# (Ollama, llama.cpp, LM Studio, etc.) — no cloud API keys needed
+local = []
+
+[project.scripts]
+hermes-evolve-code = "evolution.code.evolve_code:main"
 
 [project.urls]
 Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"
