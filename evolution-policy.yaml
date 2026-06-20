@@ -1,0 +1,87 @@
+version: 1
+
+owner_profile: babbage
+state_file: /home/w0lf/.hermes/skill-evolution-state.json
+
+cadence:
+  cron: "0 3 * * *"
+  run_days: ["Mon", "Thu"]
+  max_runs_per_week: 2
+  min_days_between_same_target: 21
+
+models:
+  eval: openai-codex/gpt-5.4-mini
+  optimizer: openai-codex/gpt-5.4-mini
+  fallback_eval: openai-codex/gpt-5.4-mini
+  fallback_optimizer: openai-codex/gpt-5.4-mini
+
+budget:
+  iterations: 2
+  timeout_seconds: 1700
+
+evaluation:
+  source: auto
+  golden_root: /home/w0lf/dev/hermes-agent-self-evolution/datasets/golden/skills
+
+environment:
+  env_files:
+    - /home/w0lf/.hermes/.env
+  keys:
+    - OPENAI_API_KEY
+    - OPENROUTER_API_KEY
+    - ANTHROPIC_API_KEY
+    - ANTHROPIC_TOKEN
+  alias_keys:
+    ANTHROPIC_API_KEY: ANTHROPIC_TOKEN
+
+profiles:
+  babbage:
+    root: /home/w0lf/.hermes
+    title: Chief of Staff
+    domain: coordination
+    enabled: true
+    manual_only: false
+    domains: [coordination]
+  lovelace:
+    root: /home/w0lf/.hermes/profiles/lovelace
+    title: Research / Strategy
+    domain: research
+    enabled: false
+    manual_only: true
+    domains: [research]
+  turing:
+    root: /home/w0lf/.hermes/profiles/turing
+    title: Chief Technology Officer
+    domain: code
+    enabled: false
+    manual_only: true
+    domains: [code]
+
+skills:
+  coordination:
+    - plan
+    - writing-plans
+    - goal-planning
+    - kanban-orchestrator
+  code:
+    - systematic-debugging
+    - test-driven-development
+    - github-code-review
+    - github-pr-workflow
+    - github-issues
+    - subagent-driven-development
+  personal:
+    - plan
+    - writing-plans
+
+gates:
+  require_positive_improvement: true
+  min_improvement: 0.02
+  max_growth_pct: 20
+  run_tests: false
+  auto_apply: false
+
+reporting:
+  report_on_run: true
+  report_on_failure: true
+  report_on_skip: false

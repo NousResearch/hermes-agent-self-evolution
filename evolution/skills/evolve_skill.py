@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, cast
 
 import click
 import dspy
@@ -20,6 +20,7 @@ from rich.table import Table
 
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
+from evolution.core.dspy_lm import make_dspy_lm
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
@@ -33,13 +34,44 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def _uses_explicit_gepa_budget_model(model: str) -> bool:
+    """Return True for backends that need bounded GEPA budgets in cron.
+
+    GEPA's hosted-model auto presets can expand a small iteration knob into
+    hundreds of metric calls. That is too large for slow local models and for
+    Hermes Codex OAuth cron runs, where the policy timeout is the hard budget.
+    """
+    return model.startswith(("ollama/", "ollama_chat/", "openai-codex/"))
+
+
+def _gepa_budget_kwargs(iterations: int, eval_model: str, optimizer_model: str) -> dict:
+    """Map the CLI iteration knob to GEPA budget settings."""
+    if _uses_explicit_gepa_budget_model(eval_model) or _uses_explicit_gepa_budget_model(optimizer_model):
+        return {"max_full_evals": max(1, iterations)}
+    return {"auto": "light" if iterations <= 5 else ("medium" if iterations <= 10 else "heavy")}
+
+
+def _score_holdout_example(program, example: dspy.Example, lm: dspy.BaseLM | None) -> float:
+    """Score one holdout example, treating model format failures as zero."""
+    try:
+        with dspy.context(lm=lm):
+            prediction = program(task_input=example.task_input)
+            return float(skill_fitness_metric(example, prediction))
+    except Exception as exc:
+        console.print(
+            f"[yellow]⚠ Holdout scoring failed; assigning 0.0 "
+            f"({type(exc).__name__}: {str(exc)[:160]})[/yellow]"
+        )
+        return 0.0
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
     eval_source: str = "synthetic",
     dataset_path: Optional[str] = None,
-    optimizer_model: str = "openai/gpt-4.1",
-    eval_model: str = "openai/gpt-4.1-mini",
+    optimizer_model: str = "openai-codex/gpt-5.4-mini",
+    eval_model: str = "openai-codex/gpt-5.4-mini",
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
@@ -118,7 +150,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -137,7 +169,7 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = make_dspy_lm(eval_model, num_retries=8, timeout=120)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -152,10 +184,17 @@ def evolve(
 
     start_time = time.time()
 
+    # Map iterations to GEPA budget. Hosted models use GEPA presets; local
+    # models need explicit bounded budgets or nightly cron can time out.
+    gepa_budget = _gepa_budget_kwargs(iterations, eval_model, optimizer_model)
+
     try:
+        # GEPA needs a reflection LM for proposing mutations
+        reflection_lm = cast(dspy.LM, make_dspy_lm(optimizer_model, num_retries=8, timeout=120))
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            **gepa_budget,
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -179,13 +218,27 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # GEPA evolves the Signature's instruction text which contains the skill.
+    # Extract it from the optimized predictor's signature.
+    try:
+        # ChainOfThought wraps a Predict sub-module: predictor.predict.signature
+        evolved_instructions = optimized_module.predictor.predict.signature.instructions
+        # Strip the prefix we added ("Complete the task by following these skill instructions:\n\n")
+        prefix = "Complete the task by following these skill instructions:\n\n"
+        if evolved_instructions.startswith(prefix):
+            evolved_body = evolved_instructions[len(prefix):]
+        else:
+            # GEPA rewrote the entire instruction — use it as the new skill body
+            evolved_body = evolved_instructions
+    except AttributeError:
+        # Fallback: if structure changed, use the original
+        console.print("[yellow]⚠ Could not extract evolved text from optimizer, using original[/yellow]")
+        evolved_body = optimized_module.skill_text
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -211,19 +264,13 @@ def evolve(
     baseline_scores = []
     evolved_scores = []
     for ex in holdout_examples:
-        # Score baseline
-        with dspy.context(lm=lm):
-            baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
-            baseline_scores.append(baseline_score)
-
-            evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
-            evolved_scores.append(evolved_score)
+        baseline_scores.append(_score_holdout_example(baseline_module, ex, lm))
+        evolved_scores.append(_score_holdout_example(optimized_module, ex, lm))
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
+    material_diff = evolved_full != skill["raw"]
 
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
@@ -247,6 +294,7 @@ def evolve(
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
+    table.add_row("Material Diff", "", "yes" if material_diff else "no", "")
 
     console.print()
     console.print(table)
@@ -279,14 +327,17 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "material_diff": material_diff,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if improvement > 0 and material_diff:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif not material_diff:
+        console.print("\n[yellow]⚠ Evolution produced no material skill diff — not a deployable candidate[/yellow]")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
@@ -298,8 +349,8 @@ def evolve(
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
+@click.option("--optimizer-model", default="openai-codex/gpt-5.4-mini", help="Model for GEPA reflections")
+@click.option("--eval-model", default="openai-codex/gpt-5.4-mini", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")

@@ -21,15 +21,16 @@ class EvolutionConfig:
     population_size: int = 5
 
     # LLM configuration
-    optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
-    eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
-    judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    optimizer_model: str = "openai-codex/gpt-5.4-mini"  # Model for GEPA reflections
+    eval_model: str = "openai-codex/gpt-5.4-mini"  # Model for LLM-as-judge scoring
+    judge_model: str = "openai-codex/gpt-5.4-mini"  # Model for dataset generation
 
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
+    max_prompt_shrink: float = 0.45  # Reject aggressive compression by default
 
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate

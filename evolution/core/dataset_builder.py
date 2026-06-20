@@ -6,15 +6,16 @@ B) SessionDB mining — extract real usage patterns and score with LLM-as-judge
 C) Golden sets — hand-curated JSONL files
 """
 
+import ast
 import json
 import random
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
-
 import dspy
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.dspy_lm import make_dspy_lm
 
 
 @dataclass
@@ -86,6 +87,79 @@ class EvalDataset:
         ]
 
 
+def _parse_generated_test_cases(raw: str) -> list[dict]:
+    """Parse LLM-generated test cases from JSON-ish output.
+
+    Strong hosted models usually return valid JSON. Smaller/local models often
+    return a Python-literal list with single quotes even when asked for JSON.
+    Accept both forms so provider fallback does not fail before evaluation.
+    """
+    import re
+
+    match = re.search(r'\[.*\]', raw, re.DOTALL)
+    candidates = [raw]
+    if match:
+        candidates.append(match.group())
+
+    errors: list[str] = []
+    for candidate in candidates:
+        cleaned = re.sub(r',\s*([}\]])', r'\1', candidate)  # trailing commas
+        cleaned = re.sub(r'(?<!\\)\n', r'\\n', cleaned)  # unescaped newlines in strings
+        for text in (candidate, cleaned):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError as exc:
+                errors.append(str(exc))
+            else:
+                if isinstance(parsed, list):
+                    return parsed
+                errors.append(f"expected list, got {type(parsed).__name__}")
+
+            try:
+                parsed = ast.literal_eval(text)
+            except (ValueError, SyntaxError) as exc:
+                errors.append(str(exc))
+            else:
+                if isinstance(parsed, list):
+                    return parsed
+                errors.append(f"expected list, got {type(parsed).__name__}")
+
+    if not match:
+        raise ValueError(f"Could not find JSON array in LLM output: {raw[:200]}")
+    raise ValueError(f"Could not parse test cases (even after cleanup): {'; '.join(errors[-3:])}\nRaw: {raw[:500]}")
+
+
+def _case_to_eval_example(case: dict) -> EvalExample | None:
+    """Normalize common model-generated field aliases into EvalExample."""
+    if not isinstance(case, dict):
+        return None
+    task_input = (
+        case.get("task_input")
+        or case.get("input")
+        or case.get("task")
+        or case.get("prompt")
+        or case.get("scenario")
+        or ""
+    )
+    expected_behavior = (
+        case.get("expected_behavior")
+        or case.get("expected_outcome")
+        or case.get("expected")
+        or case.get("rubric")
+        or case.get("success_criteria")
+        or ""
+    )
+    if not task_input or not expected_behavior:
+        return None
+    return EvalExample(
+        task_input=str(task_input),
+        expected_behavior=str(expected_behavior),
+        difficulty=str(case.get("difficulty", "medium")),
+        category=str(case.get("category", "general")),
+        source="synthetic",
+    )
+
+
 class SyntheticDatasetBuilder:
     """Generate evaluation datasets using a strong LLM.
 
@@ -123,7 +197,7 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        lm = make_dspy_lm(self.config.judge_model, num_retries=8, timeout=120)
 
         with dspy.context(lm=lm):
             result = self.generator(
@@ -132,29 +206,11 @@ class SyntheticDatasetBuilder:
                 num_cases=n,
             )
 
-        # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+        # Parse the generated test cases (models sometimes produce slightly broken JSON)
+        raw = result.test_cases
+        cases_raw = _parse_generated_test_cases(raw)
 
-        examples = [
-            EvalExample(
-                task_input=c.get("task_input", ""),
-                expected_behavior=c.get("expected_behavior", ""),
-                difficulty=c.get("difficulty", "medium"),
-                category=c.get("category", "general"),
-                source="synthetic",
-            )
-            for c in cases_raw
-            if c.get("task_input") and c.get("expected_behavior")
-        ]
+        examples = [ex for c in cases_raw if (ex := _case_to_eval_example(c))]
 
         # Shuffle and split
         random.shuffle(examples)

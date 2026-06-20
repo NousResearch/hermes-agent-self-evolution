@@ -14,10 +14,18 @@ venv/
 datasets/**/*.jsonl
 datasets/**/*.json
 !datasets/.gitkeep
+!datasets/golden/
+!datasets/golden/**/
+!datasets/golden/**/*.jsonl
 
 # Evolution snapshots
 snapshots/
+output/
+logs/
 *.pkl
+
+# Local Hermes planning artifacts
+.hermes/
 
 # IDE
 .idea/
