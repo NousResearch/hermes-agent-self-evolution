@@ -16,7 +16,7 @@ Works on any agent framework that emits `SKILL.md` markdown files. [Hermes Agent
 
 We ran the campaign so you don't have to guess:
 
-- **Tool code, with a failing test** → the loop repairs **~60% of real bugs** to a fix that matches the upstream commit (given the failing test — the production case). *It works.*
+- **Tool code, with a failing test** → the loop repairs **~60–74% of real bugs** to a fix that matches the upstream commit (given the failing test — the production case) — and *not* just one-liners: ~0.69 on large fixes (>20 LOC, median 45). *It works.*
 - **Skill / tool-description / prompt *text*, on a capable agent** → **no measurable behavior change**, in either direction, because the model infers the tool's job from its name and routes past the text. *Here the gate's job is to stop you shipping noise, not to find a win.*
 - The same rigor that ships the code fixes is what **discovered** that null — and a leakage check that demoted our own headline. Most frameworks would have reported a noisy "winner." Full result, confidence intervals, and validity threats: **[the findings](reports/asymmetry_findings.md)**.
 
@@ -406,8 +406,9 @@ an **asymmetry**:
 
 > Self-evolution got deploy-grade traction under a **conjunction** — an **executable
 > oracle**, real headroom, and code repair from failing-test feedback:
-> **deploy-reachable 0.60 [Wilson 0.39–0.78] on N=20 real bugs**, clearing a
-> pre-registered *futility floor* (0.10). A leakage check shows the test's expected
+> **deploy-reachable ~0.60–0.74 across two runs** (0.60 [0.39–0.78] at N=20; 0.74
+> [0.60–0.84] at N=46), clearing a pre-registered *futility floor* (0.10), and *not*
+> just on trivial bugs (~0.69 on large >20-LOC fixes). A leakage check shows the test's expected
 > values are load-bearing (withhold them and 11/12 successes fall to 3/12), so this is
 > **test-feedback repair, not autonomous re-derivation** — though a fuzzed differential
 > found the fixes it could meaningfully check (4 of them) all *generalize* to fresh

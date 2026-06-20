@@ -1,0 +1,45 @@
+{
+  "n_organisms": 46,
+  "overall_deploy_reachable": 34,
+  "fix_loc_median": 45,
+  "by_fix_loc": [
+    {
+      "bin": "<=5 LOC",
+      "n": 5,
+      "deploy_reachable": 5,
+      "rate": 1.0
+    },
+    {
+      "bin": "6-20 LOC",
+      "n": 6,
+      "deploy_reachable": 5,
+      "rate": 0.833
+    },
+    {
+      "bin": ">20 LOC",
+      "n": 35,
+      "deploy_reachable": 24,
+      "rate": 0.686
+    }
+  ],
+  "by_tool_size": [
+    {
+      "bin": "<8k chars",
+      "n": 4,
+      "deploy_reachable": 4,
+      "rate": 1.0
+    },
+    {
+      "bin": "8-25k",
+      "n": 16,
+      "deploy_reachable": 13,
+      "rate": 0.812
+    },
+    {
+      "bin": ">25k",
+      "n": 26,
+      "deploy_reachable": 17,
+      "rate": 0.654
+    }
+  ]
+}

@@ -83,6 +83,29 @@ sections:
           precision); 0.60 is a different, threshold-dependent estimand, not a de-biased
           0.68.
       - paragraph: >-
+          <b>A larger run corroborates it, and it is not just one-liners.</b> A second
+          campaign (fresh harvest, same protocol, stopped at N=46 on a $12 cap) gave
+          deploy-reachable <b>34/46 = 0.74, Wilson [0.60, 0.84]</b> &#8212; consistent
+          with N=20 and tightening the lower bound to 0.60. The honest read across both
+          runs is a rate of <b>~0.60-0.74</b> (ICC swung to 0.63 vs 0.33, so seed
+          correlation is variable). Binning the 46 by the upstream fix's size answers
+          "does it only fix trivial bugs?" &#8212; it does not:
+      - table:
+          header: ["Upstream-fix size", "deploy-reachable", "Tool size", "deploy-reachable"]
+          col_widths: [1.7, 1.5, 1.6, 1.7]
+          highlight_row: 0
+          rows:
+            - ["<=5 LOC", "5/5 = 1.00", "<8k chars", "4/4 = 1.00"]
+            - ["6-20 LOC", "5/6 = 0.83", "8-25k", "13/16 = 0.81"]
+            - [">20 LOC", "24/35 = 0.69", ">25k", "17/26 = 0.65"]
+      - paragraph: >-
+          The median upstream fix is <b>45 LOC</b> and 35 of 46 organisms are large
+          fixes (>20 LOC), repaired at <b>0.69</b> &#8212; so the rate is carried by
+          substantial bugs and degrades gracefully with complexity, not off a cliff at
+          triviality. Caveat: the easy bins are tiny (5/5, 4/4 &#8212; the trend is
+          solid, the exact small-bin rates are noisy), and this is still test-feedback
+          repair.
+      - paragraph: >-
           <b>Leakage check &#8212; the expected values are load-bearing (run).</b> The
           repair loop feeds the proposer the failing test's full output, which for
           assertion failures includes the expected values, and the gate verifies an

@@ -2,19 +2,21 @@
 
 ## Vision
 
-A standalone optimization pipeline that systematically improves an agent's performance by evolving skills, prompts, tool descriptions, and agent configurations using automated optimization loops. Lives in its own repo (`jramos/agent-self-evolution`), operates ON a target agent's skill repo — not part of it. Originally built for Hermes Agent; now works for any agent framework that emits `<skill>/SKILL.md` files (Claude Code, Hermes, custom local layouts).
+A standalone pipeline that decides, rigorously, whether a proposed change to an agent — a skill, prompt, tool description, or piece of tool code — actually makes it better, and ships only the ones that do. A **noise-aware deploy gate** plus a **real-agent validation loop** are the durable product; reflective evolutionary search (DSPy + GEPA) is one optional source of candidate changes feeding the gate. Lives in its own repo (`jramos/agent-self-evolution`), operates ON a target agent's repo — not part of it. Originally built for Hermes Agent; now works for any agent framework that emits `<skill>/SKILL.md` files (Claude Code, Hermes, custom local layouts).
 
-Three complementary engines, unified under one workflow:
+> **Where this landed (current — the founding plan below is partly superseded; see [the findings report](reports/asymmetry_findings.md) and Forward Roadmap items 11–12).** The campaign behind this plan found that on a *capable* agent, evolving artifact *text* (skills, tool descriptions, prompt sections) does **not** measurably change behavior in either direction — so for those surfaces the pipeline is **regression-catching, not improvement-finding**, and the deploy gate (not the evolver) is the asset that holds up. The one surface with a real improvement gradient is **tool-code repair from failing-test feedback** (~0.60–0.74 on real bugs, and not only easy ones — ~0.69 on large >20-LOC fixes), honestly scoped as *test-feedback repair*, not autonomous re-derivation. Read the original tiers/phases below as the founding intent; the gate is the headline.
+
+Three engines were planned; what actually carried the value is noted inline:
 
 | Engine | What It Optimizes | License | Integration |
 |--------|------------------|---------|-------------|
-| **DSPy + GEPA** | Skills, prompts, instructions, tool descriptions | MIT | Native Python, primary engine |
-| **Darwinian Evolver** | Code files, algorithms, tool implementations | AGPL v3 | External CLI only |
+| **DSPy + GEPA** | Skills, prompts, instructions, tool descriptions | MIT | Native Python, candidate generator (decoupled from capable-agent behavior — see "Where this landed") |
+| **Iterative test-feedback repair** | Tool implementation code | MIT | Whole-file repair in an isolated worktree, gated by the deploy gate — *this is what shipped for code*. A head-to-head (item 12) tested the planned Darwinian Evolver's population search vs plain best-of-N resampling on the loop's failures: population search was **strictly dominated by best-of-N** (4/23 vs 6/23) — not justified on this corpus, tested not assumed |
 | **DSPy MIPROv2** | Few-shot examples, instruction text | MIT | Native Python, fallback optimizer |
 
-GEPA is the star — it's integrated into DSPy, reads execution traces to understand WHY things fail (not just that they fail), and works with as few as 3 examples. It outperforms both RL and previous DSPy optimizers.
+GEPA is a strong candidate *generator* — integrated into DSPy, it reads execution traces to understand WHY things fail (not just that they fail) and works with as few as 3 examples. But the campaign's durable result is that the **deploy gate** that adjudicates candidates, not the evolver, is the asset that holds up: on a capable agent, evolving artifact text doesn't move behavior (see "Where this landed").
 
-**Important: No GPU training required.** Everything in this plan operates via API calls only. DSPy+GEPA and MIPROv2 optimize the *text* of prompts, instructions, and few-shot examples — they mutate and evaluate strings, not model weights. The Darwinian Evolver evolves code files (also text). The only DSPy component that trains weights (`BootstrapFinetune`) is explicitly excluded from this plan. All evaluation runs through batch_runner making standard LLM API calls.
+**Important: No GPU training required.** Everything in this plan operates via API calls only. DSPy+GEPA and MIPROv2 optimize the *text* of prompts, instructions, and few-shot examples — they mutate and evaluate strings, not model weights. The code path repairs tool files (also text). The only DSPy component that trains weights (`BootstrapFinetune`) is explicitly excluded from this plan. All evaluation runs through batch_runner making standard LLM API calls.
 
 ---
 
@@ -39,12 +41,13 @@ GEPA is the star — it's integrated into DSPy, reads execution traces to unders
 - **Risk:** Must be careful not to break prompt caching — only optimize offline, deploy as new versions
 - **Example:** Evolve the "tool usage guidelines" section to reduce unnecessary tool calls
 
-### Tier 4: Code Evolution (High Value, Highest Risk)
+### Tier 4: Code Repair (the one improvement gradient — shipped)
 - **What:** Tool implementation code, helper functions
-- **How:** Darwinian Evolver with GitBasedOrganism, test via pytest + batch_runner
-- **Why it works:** Some tool implementations have subtle bugs or inefficiencies that evolutionary search can find
-- **Risk:** Code changes can break things — requires strong test suites as guardrails
-- **Example:** Evolve `file_tools.py` patch matching to handle more edge cases
+- **How (shipped):** iterative **test-feedback repair** — an LLM proposes a whole-file fix from the failing test's output, in a throwaway git worktree with an isolated venv, accepted only when it passes the gate (surface freeze, file scope, held-out split, baseline-diff regression floor). This is a single-proposer iterative loop, *not* the planned Darwinian-evolver population search — which a head-to-head (item 12) showed is **strictly dominated by plain best-of-N resampling** on the loop's failures, so it is not justified here.
+- **Why it works:** a deterministic test is a concrete, executable oracle with no agent between the artifact and the verdict — the one place artifact quality is *not* decoupled from behavior.
+- **Result:** deploy-reachable ~0.60–0.74 on real harvested bugs (see Forward Roadmap item 12), honestly scoped as test-feedback repair, not autonomous re-derivation.
+- **Risk:** code changes can break things — the gate's anti-gaming checks (held-out split, freeze) are the guardrail.
+- **Example:** repair `file_tools.py` traversal handling to match the upstream fix.
 
 ---
 
@@ -71,7 +74,7 @@ GEPA is the star — it's integrated into DSPy, reads execution traces to unders
 │  4. RUN OPTIMIZER                           │
 │     - Primary: dspy.GEPA (reflective evolution)│
 │     - Fallback: dspy.MIPROv2 (bayesian opt)  │
-│     - Code: Darwinian Evolver (external CLI)  │
+│     - Code: test-feedback repair (gated)     │
 │                                             │
 │  5. EVALUATE & COMPARE                      │
 │     - Run optimized version on held-out test  │
@@ -157,8 +160,8 @@ hermes-agent-self-evolution/             # Standalone repo
 │   │
 │   ├── tools/                          # Phase 2: Tool description evolution
 │   ├── prompts/                        # Phase 3: System prompt evolution
-│   ├── code/                           # Phase 4: Code evolution (Darwinian Evolver)
-│   └── monitor/                        # Phase 5: Continuous loop
+│   ├── code/                           # Phase 4: Code repair (test-feedback, gated)
+│   └── monitor/                        # Phase 5: Propose-only triage sentinel
 │
 ├── datasets/                           # Generated eval datasets (gitignored, local)
 │   ├── skills/
@@ -194,11 +197,12 @@ python -m evolution.prompts.evolve_prompt_section \
     --section MEMORY_GUIDANCE \
     --iterations 5
 
-# Phase 4: Evolve tool code (uses Darwinian Evolver CLI)
-python -m evolution.code.evolve_tool_code \
-    --tool file_tools \
-    --bug-issue 742 \
-    --iterations 10
+# Phase 4: Repair a broken tool from its failing test, gated (shipped)
+python -m evolution.code.evolve_code \
+    --repo ~/.hermes/hermes-agent \
+    --tool tools/file_tools.py \
+    --visible-test tests/tools/test_file_tools_a.py \
+    --holdout-test tests/tools/test_file_tools_b.py
 
 # All commands output a PR branch + summary against hermes-agent. Human merges.
 ```
@@ -252,8 +256,8 @@ If a phase doesn't produce meaningful improvements (evolved variants aren't bett
 | **Phase 1** | Skill evolution | 3-4 weeks | Nothing — starts here | ≥1 skill measurably improved, no benchmark regression |
 | **Phase 2** | Tool descriptions | 2-3 weeks | Phase 1 infra (GEPA runner, eval framework) | Tool selection accuracy improved, no benchmark regression |
 | **Phase 3** | System prompt | 2-3 weeks | Phase 1-2 infra + validated benchmark gating | Behavioral tests pass, benchmarks hold or improve |
-| **Phase 4** | Code evolution | 3-4 weeks | Phases 1-3 + strong eval pipeline | Bugs fixed, tests pass, benchmarks hold |
-| **Phase 5** | Continuous loop | 2 weeks | All above working | Automated pipeline runs unattended |
+| **Phase 4** | Code repair (test-feedback, gated) | shipped | the deploy gate + worktree isolation | Oracle-matching fix on real bugs (~0.60–0.74) |
+| **Phase 5** | Continuous loop (propose-only sentinel) | shipped | Phase 4 + the sentinel | Ranked real-bug queue; human triggers any repair |
 
 **Total: ~13-17 weeks if all phases prove valuable.** But we may stop at Phase 1 or 2 if the returns diminish — no obligation to do all five.
 
@@ -557,7 +561,20 @@ The system prompt is assembled in `run_agent.py` / `agent/prompt_builder.py` fro
 
 9. **Benchmark gating again not built in (same as Phases 1–2).** The built-in deploy gate is paired-bootstrap CI plus the dual-condition rule on the holdout; `--benchmark-cmd` remains the external-benchmark hook. TBLite / YC-Bench wiring is left to the user's `--benchmark-cmd`.
 
-### Phase 4: Code Evolution via Darwinian Evolver
+### Phase 4: Code Repair (iterative test-feedback, gated)
+
+> **Status — a single-proposer test-feedback loop shipped; the Darwinian Evolver was
+> never run.** The week-by-week Darwinian-Evolver plan in this subsection is
+> **unbuilt** — what actually shipped (`evolution/code/`) is iterative test-feedback
+> repair: a capable proposer rewrites the whole file from the failing test's output, in
+> a throwaway worktree, accepted only through the deploy gate (surface freeze, file
+> scope, held-out split, regression floor). That loop works (deploy-reachable
+> ~0.60–0.74). Now settled by experiment: whether the population-based evolutionary search
+> the authors intended would beat this loop on the ~30% of bugs it fails — that
+> head-to-head has now been **run** (item 12): population search was strictly dominated by plain best-of-N resampling (4/23 vs 6/23), so "the evolver
+> is overkill here" is a tested result, not an assumption. For the authoritative current status (the leakage
+> reframe, the difficulty curve) see **Forward Roadmap item 12** and
+> [the findings report](reports/asymmetry_findings.md). The original plan is kept below as founding intent.
 
 **Goal:** Evolve tool implementation code for better performance and fewer bugs.
 
@@ -797,8 +814,10 @@ See the **Constraints & Guardrails** section above for the full enforcement list
 ### Licensing
 - DSPy: MIT ✓ (can import and integrate freely)
 - GEPA: MIT ✓ (integrated into DSPy, also standalone `uv pip install gepa`)
-- Darwinian Evolver: AGPL v3 ⚠️ (external CLI only, no Python imports)
-- All Hermes-native code: MIT ✓
+- ~~Darwinian Evolver: AGPL v3 ⚠️~~ — **not used.** Code evolution shipped as
+  test-feedback repair (no AGPL dependency), so this risk never materialized; the
+  whole repo stays MIT.
+- All code: MIT ✓
 
 ---
 
@@ -1157,16 +1176,32 @@ suspicion into a measured, both-directions certificate.
     model; the cross-version differential is parasitic on absent supply; a higher-churn
     repo is a pivot off the validated Hermes substrate, not a save.
 
-    **Frontiers mapped → redirect (panel-ranked).** With artifact-quality decoupled,
-    general no-oracle repair dead/narrow, and the dep-regression supply absent, the
-    durable wins are code re-derivation (~60% on real bugs) + the shipped sentinel.
-    Next options: (1) **bank the body of work** — headline the *asymmetry* (code
-    re-derivation works on executable-oracle bugs; artifact-quality is inert on capable
-    agents) — and operate the sentinel→loop as a standing capability; (2) **push N +
-    map the difficulty boundary** on the GREEN (harvest more bugs via the sentinel,
-    stratify) — the only remaining signal-buying build; (3) the **$10 MCP-description
-    probe** for closure on the last artifact surface. Item-10 CL-parallelism (serves
-    the decoupled path) and clade selection (no substrate) are skipped.
+    **Frontiers mapped → redirect (panel-ranked); options (1) and (2) SHIPPED.** With
+    artifact-quality decoupled, general no-oracle repair dead/narrow, and the
+    dep-regression supply absent, the durable wins are test-feedback code repair
+    (~0.60–0.74 on real bugs) + the shipped sentinel.
+    - (1) **Bank the body of work — SHIPPED.** The *asymmetry* is banked as a findings
+      report + a paper-style PDF rendered through a sibling renderer that **fails
+      closed** if a prose number drifts from its source JSON, with committed source
+      snapshots so it reproduces from version control (`reports/asymmetry_*`). The
+      sentinel is operationalized (runbook + `$0` scan wrapper writing a stable
+      `latest` pointer + an opt-in scheduled scan; `--attempt-top` now *requires*
+      `--max-cost-usd`). A 4-expert panel + two spend-backed self-checks hardened it.
+    - (2) **Push N + difficulty boundary — SHIPPED.** A 2nd campaign (fresh harvest,
+      same protocol, `$12`-capped at N=46) gives deploy-reachable **0.74 [0.60, 0.84]**,
+      corroborating N=20's 0.60 (honest range **~0.60–0.74**; ICC swung 0.33→0.63). The
+      difficulty curve answers "only easy bugs?" → **no**: by fix-LOC {≤5: 1.00, 6–20:
+      0.83, >20: **0.69**}, median fix 45 LOC, 35/46 large fixes — graceful degradation,
+      not a triviality cliff. No 2nd convention-repo exists locally, so true external
+      validity is unbuilt.
+    - **Positioning reframe (shipped).** The README now leads with the **deploy gate**
+      as the product (the evolver is one candidate source), so the decoupling null
+      reads as the gate working, not a failure; a "use the gate without evolving
+      anything" section surfaces the standalone CLIs.
+    - **Remaining open bets (need explicit go-aheads):** (3) the **$10 MCP-description
+      probe** (last untested artifact surface), and **true external validity** (a 2nd
+      corpus — real setup effort). Item-10 CL-parallelism (serves the decoupled path)
+      and clade selection (no substrate) are skipped.
 
 12. **Code-evolution pilot, gated on a measured signal** (`evolution/code/`,
     empty stub). Before any Darwinian loop: an A/A coefficient-of-variation
@@ -1222,6 +1257,56 @@ suspicion into a measured, both-directions certificate.
     improvement-finding direction, distinct from the capable-agent artifact-quality
     decoupling.**
 
+    **Head-to-head RUN — evolutionary search is not justified (tested, not inferred).**
+    Earlier framing conflated two things: "the multi-round loop IS justified" means
+    *iterating a single proposer with test feedback* beats one-shot (tested, true); it
+    is **not** evidence about the **Darwinian Evolver's population-based search**
+    (population + fitness-guided selection on partial credit + recombination), which had
+    never been run. So we ran it — an evolutionary proxy vs. plain **best-of-N**
+    resampling at equal candidate budget, on the **23 organisms the single-proposer loop
+    fails** (the regime where exploration should help), same oracle gate
+    (`reports/asymmetry_evolution_proxy.json`). Result: **evolutionary 4/23 [0.07, 0.37]
+    vs best-of-N 6/23 [0.13, 0.47]** — best-of-N **strictly dominated** (recovered every
+    bug evolution did *plus 2 more*; evolution recovered none best-of-N missed). On
+    `skill_usage` the evolutionary selection converged to a fix passing all bug-tests but
+    failing the oracle gate — a local optimum best-of-N's diversity avoided. So the
+    population/selection machinery adds **no advantage** over simple resampling and is
+    not justified on this corpus — now **proven by head-to-head, not asserted**. (N=23,
+    CIs overlap, so "best-of-N *beats* evolution" isn't significant; "evolution shows no
+    advantage" is.) Genuine cheap lever surfaced: **more independent samples** (best-of-N
+    = 9 vs the loop's 3 seeds) recover ~26% of the loop's failures — a loop tweak (more
+    seeds), not the evolver. *Method note:* the first proxy run was **voided** by dspy
+    response-caching silently collapsing each population/best-of-N into one repeated
+    sample (caught via an implausibly low $0.98 cost + a direct probe); re-run with
+    `cache=False` + unique per-draw tags + a draws-vs-calls guard.
+
+    **Self-improvement intent — double-walled (verification + supply, supply
+    confirmed at scale).** The original Phase-4 intent (an agent improves its own
+    tools/usage) is blocked on two independent walls. *Verification:* a self-directed
+    loop where the agent authors both the test and the fix has no external oracle —
+    the gate's anti-gaming core (held-out split) is operator-supplied and the gate
+    rejects `holdout == visible` as a tautology, so self-authored-test + self-authored
+    fix removes the very checks that make a green test trustworthy (the agent grades
+    its own homework; the leakage result shows the test's expected values do ~2/3 of
+    the work). *Supply:* the reproducible-tool-bug feed a self-hardening loop needs is
+    structurally ~0. First mis-judged on a sparse Hermes `state.db` (6 sessions → 0;
+    an unrepresentative-sample over-claim, retracted), then measured on a large local
+    agent-session corpus (**836 sessions, 41,376 tool calls**): of ~3,000
+    tracebacks-in-tool-results, **71% were a file-read returning text that merely
+    contains an error string** (logs/test-output/transcripts), **24% were shell runs
+    of code/tests crashing** (the normal dev loop, fixed in-session), and **~0% were a
+    tool itself throwing a bug**; human corrections were abundant (**14.8%** of turns)
+    but target the agent's work/plan — the artifact-quality axis already shown
+    decoupled on capable agents. So scale yields volume but not the right fuel:
+    agents fix their own crashes in-loop and are corrected on their work, not on
+    reproducible tool internals. **Conclusion:** self-improvement is not reachable on
+    this substrate; the durable asset is the deploy gate (an adversarial verifier for
+    machine-authored patches), and the mapped boundary — *self-improvement is gated by
+    independent verification and a supply of verifiable failures, both structurally
+    scarce for a capable agent* — is the honest finding. Revisit only with a new
+    substrate (fleet telemetry; a weaker tier where artifacts couple; a novel-contract
+    MCP surface).
+
     **Loop shipped, then de-risked, then reframed to a measurement campaign.** The
     iterative test-feedback repair loop shipped (`evolution/code/`: `evolve_code`,
     isolated git-worktree+venv, a gate with surface-freeze, file-scope, a held-out
@@ -1251,16 +1336,25 @@ suspicion into a measured, both-directions certificate.
     on diverse, non-trivial tools (approval, browser_camofox, checkpoint_manager,
     cronjob_tools, discord_tool, env_passthrough, file_operations, file_tools, …),
     distinct from and harder than the Tier-A self-contained set — so the gradient
-    generalizes. The loop re-derives a correct (oracle-matching) fix for ~60% of real
-    bugs on a majority of seeds. A `max_tokens=8000` truncation artifact was caught and
-    fixed (whole-file rewrites of larger tools silently truncated → false failures;
-    raised to 32000 + a too-large exclusion). Cost tracking was a no-op until the
-    litellm cost callback was wired into the campaign (now real: N=20 cost ≈ $3.10, the
-    --max-cost-usd ceiling enforced). N=50 is available to tighten further but the GREEN
-    is robust at N=20; gates on a fresh go-ahead. The novel-bug-repair **product** (held-out split +
-    a live feed + solving held-out independence) is **deferred**; an oracle-gate honest
-    limitation — test-match catches broken covered behavior but not pure
-    input-hardcoding — is noted for the fuzzed-differential follow-up.
+    generalizes. A `max_tokens=8000` truncation artifact was caught and fixed
+    (whole-file rewrites of larger tools silently truncated → false failures; raised to
+    32000 + a too-large exclusion). Cost tracking was a no-op until the litellm cost
+    callback was wired in (now real: the --max-cost-usd ceiling is enforced).
+
+    **Corroborated + reframed (post-banking).** A larger run (N=46, $12-capped) gives
+    deploy-reachable **0.74 [0.60, 0.84]**, tightening the lower bound to 0.60 — honest
+    rate **~0.60–0.74** across both runs (ICC swung 0.33→0.63, so no single effective-N
+    is trustworthy). A **difficulty curve** shows repair holds on substantial bugs
+    (0.69 on >20-LOC fixes, median fix 45 LOC), not just one-liners. **The headline is
+    `test-feedback repair`, NOT autonomous re-derivation:** a leakage check (re-run with
+    the test's *expected values* withheld) drops 11/12 successes → 3/12, so 0.60–0.74 is
+    the deployable rate (the failing test is always present in production) and ~0.25 is
+    the autonomy floor — which *sharpens* the asymmetry (the test's concrete values are
+    the gradient the behavioral arm lacks). A **fuzzed differential** cleared the 4
+    control fixes it could meaningfully test (4/4 generalize on fresh inputs, 0 overfit)
+    but is thin (4 of 20). All banked in `reports/asymmetry_*`. The novel-bug-repair
+    **product** (held-out split + a live feed + solving held-out independence) remains
+    **deferred**.
 
 13. **Turn-level tool-sequence evaluation** (the salvage from item 4's
     deferral). Item 4's single-call miner died because Claude agentic turns are

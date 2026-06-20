@@ -10,8 +10,10 @@ kept in.
 - **Invest** where a **ground-truth executable oracle** stands between the artifact
   and the verdict, the baseline has **real headroom**, and the task is a code repair
   driven by **failing-test feedback**. That regime produced a deploy-grade gradient —
-  though a leakage check (below) shows the gradient is the test's *expected values*,
-  so this is **test-feedback repair, not autonomous re-derivation**.
+  **~0.60–0.74** across two runs, and crucially *not* just on trivial bugs (~0.69 on
+  large >20-LOC fixes, median fix 45 LOC). A leakage check (below) shows the gradient
+  is the test's *expected values*, so this is **test-feedback repair, not autonomous
+  re-derivation**.
 - **Don't** spend on improving artifact *quality* (skills / tool descriptions /
   prompt sections) for a **capable agent** on tools whose behavior it can infer from
   their name — we measured no effect there, in either direction. Revisit only on a
@@ -58,6 +60,30 @@ not a success bar: deploy-reachable would have to collapse to 4/20 before it fai
 so clearing it certifies "not catastrophic," not "validated deployment rate." The
 honest headline is the point estimate **0.60 [0.39, 0.78] on one repository, one
 proposer model** — promising, not settled.
+
+**A larger run corroborates it (N=46).** A second campaign (fresh harvest, same
+protocol, stopped at N=46 when it hit a $12 cost cap) gave deploy-reachable
+**34/46 = 0.74, Wilson [0.60, 0.84]** — consistent with N=20 and tightening the
+lower bound to 0.60, comfortably above the futility floor. The honest read across
+both runs is a test-feedback-repair rate of **~0.60–0.74**, not a single number
+(and ICC swung to 0.63 here vs 0.33 at N=20 — seed correlation is genuinely variable,
+so don't over-trust any one effective-N).
+
+**It is not just fixing one-liners (the difficulty curve).** Binning the N=46
+organisms by the upstream fix's size answers the obvious worry — does it only repair
+trivial bugs? It does not:
+
+| Upstream-fix size | deploy-reachable | | Tool size | deploy-reachable |
+|---|---|---|---|---|
+| ≤5 LOC | 5/5 = 1.00 | | <8k chars | 4/4 = 1.00 |
+| 6–20 LOC | 5/6 = 0.83 | | 8–25k | 13/16 = 0.81 |
+| >20 LOC | **24/35 = 0.69** | | >25k | **17/26 = 0.65** |
+
+The median upstream fix is **45 LOC** and **35 of 46 organisms are large fixes**
+(>20 LOC) — repaired at **0.69**. So the headline rate is carried by *substantial*
+bugs, and repair degrades **gracefully** with complexity (1.0 → 0.69), not off a cliff
+at triviality. Caveat: the easy bins are tiny (5/5, 4/4 — the monotone *trend* is
+solid, the exact small-bin rates are noisy), and this is still test-feedback repair.
 
 **The number is fragile at the knee.** The per-seed distribution is bimodal —
 {0 correct: 1 organism, 1: 7, 2: 2, 3: 10} — so 10 organisms are unanimous successes,
@@ -200,6 +226,8 @@ shipped propose-only triage sentinel — which is exactly the production regime 
 | Per-organism rows + per-seed flags (re-derives 12/20) | `reports/asymmetry_campaign_ledger.jsonl` (committed manifest) | 33 candidates → 20 organisms |
 | Leakage check: control 11/12, no-leak (values withheld) 3/12 | `reports/asymmetry_leakage_check.json` (per-organism A/B) | 12 deploy-reachable × 3 seeds × 2 arms |
 | Fuzzed differential: 4 meaningfully-testable fixes, 4/4 generalize (0 divergences) | `reports/asymmetry_fuzz_differential.json` (per-case oracle-vs-repaired) | 11 control fixes × fresh inputs |
+| Larger run: deploy-reachable 34/46 = 0.74 [0.60, 0.84], ICC 0.63 | `reports/asymmetry_campaign_report_n46.json` + `_campaign_ledger_n46.jsonl` | 46 organisms × 3 seeds (capped at $12) |
+| Difficulty curve: ≤5 LOC 1.00, 6–20 0.83, >20 LOC 0.69 (median fix 45 LOC) | `reports/asymmetry_difficulty_curve.json` | 46 organisms binned by fix/tool size |
 | Pooled per-seed 0.68 (for-contrast, dishonest) | same summary | 60 seeds |
 | Judge saturation ≥0.95: 15/338, 0 with LB>0 — *but the source flags itself data-starved (Wilson upper 20–49%), not settled* | `reports/saturation_calibration_findings.md` | 338 paired-vector runs |
 | Capable-agent decoupling (both directions; canary 1.00 vs 0.00) | `PLAN.md` "Campaign conclusion — capable-agent artifact decoupling" | A/A floor 0/7 (n=7) |

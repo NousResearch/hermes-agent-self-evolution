@@ -1,0 +1,315 @@
+{
+  "what": "Head-to-head on the single-proposer loop's failures: evolutionary search (population + partial-credit selection + mutate-the-best) vs best-of-N independent resampling, equal candidate budget, same oracle gate. Validity-guarded (cache=False + unique per-draw tags + draws-vs-calls check) after a first run was voided by dspy response-caching.",
+  "n_loop_failures": 23,
+  "evolutionary_recovered": 4,
+  "best_of_n_recovered": 6,
+  "evolutionary_wilson": [
+    0.07,
+    0.371
+  ],
+  "best_of_n_wilson": [
+    0.125,
+    0.465
+  ],
+  "strict_dominance": "best-of-N recovered a superset of evolution's recoveries (evo-only=0, bon-only=2)",
+  "bon_only": [
+    "tools/skill_usage.py",
+    "tools/mcp_oauth.py"
+  ],
+  "evo_only": [],
+  "conclusion": "Evolutionary selection added no advantage over simple resampling and was strictly dominated by it; on skill_usage it converged to a bug-test-passing but gate-failing local optimum that best-of-N's diversity avoided. 'More samples' (best-of-N=9 vs the loop's 3 seeds) recovers ~26% of failures -- a cheap lever for the loop, not the evolver. N=23, CIs overlap, so 'best-of-N beats evolution' is not significant; 'evolution shows no advantage' is.",
+  "proxy_cost_usd": 10.59,
+  "rows": [
+    {
+      "tool": "tools/approval.py",
+      "fix": "7f1b2b4569",
+      "n_bug_tests": 3,
+      "orig": 1,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        0,
+        1,
+        3
+      ],
+      "draws": 18
+    },
+    {
+      "tool": "tools/file_operations.py",
+      "fix": "64ad7dec0d",
+      "n_bug_tests": 1,
+      "orig": 1,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/process_registry.py",
+      "fix": "7ce6b504a2",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/skills_ast_audit.py",
+      "fix": "4254f7dd17",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/skills_sync.py",
+      "fix": "f040710d04",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/browser_camofox.py",
+      "fix": "305a702e09",
+      "n_bug_tests": 1,
+      "orig": 1,
+      "evo_recovered": true,
+      "bon_recovered": true,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 4
+    },
+    {
+      "tool": "tools/checkpoint_manager.py",
+      "fix": "a0fedfbb1b",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        0,
+        0,
+        0
+      ],
+      "draws": 18
+    },
+    {
+      "tool": "tools/cronjob_tools.py",
+      "fix": "663ee14865",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/discord_tool.py",
+      "fix": "81987f0350",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        0,
+        0,
+        0
+      ],
+      "draws": 18
+    },
+    {
+      "tool": "tools/file_operations.py",
+      "fix": "6713274a42",
+      "n_bug_tests": 2,
+      "orig": 1,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        0,
+        2
+      ],
+      "draws": 15
+    },
+    {
+      "tool": "tools/fuzzy_match.py",
+      "fix": "5e6427a42c",
+      "n_bug_tests": 7,
+      "orig": 1,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        6,
+        6,
+        6
+      ],
+      "draws": 18
+    },
+    {
+      "tool": "tools/memory_tool.py",
+      "fix": "00bd24e27c",
+      "n_bug_tests": 16,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        12,
+        14,
+        15
+      ],
+      "draws": 18
+    },
+    {
+      "tool": "tools/process_registry.py",
+      "fix": "d5416284f1",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/skills_guard.py",
+      "fix": "93660643a6",
+      "n_bug_tests": 2,
+      "orig": 1,
+      "evo_recovered": true,
+      "bon_recovered": true,
+      "evo_fitness_traj": [
+        2
+      ],
+      "draws": 10
+    },
+    {
+      "tool": "tools/approval.py",
+      "fix": "976d8e27ad",
+      "n_bug_tests": 12,
+      "orig": 1,
+      "evo_recovered": true,
+      "bon_recovered": true,
+      "evo_fitness_traj": [
+        11,
+        12
+      ],
+      "draws": 7
+    },
+    {
+      "tool": "tools/credential_files.py",
+      "fix": "b1756084a3",
+      "n_bug_tests": 1,
+      "orig": 1,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        0,
+        1
+      ],
+      "draws": 15
+    },
+    {
+      "tool": "tools/kanban_tools.py",
+      "fix": "86279160b0",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/registry.py",
+      "fix": "5a1e2a307a",
+      "n_bug_tests": 1,
+      "orig": 1,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/skill_usage.py",
+      "fix": "abcaf05229",
+      "n_bug_tests": 7,
+      "orig": 1,
+      "evo_recovered": false,
+      "bon_recovered": true,
+      "evo_fitness_traj": [
+        7
+      ],
+      "draws": 9
+    },
+    {
+      "tool": "tools/skills_sync.py",
+      "fix": "3a97fb3d47",
+      "n_bug_tests": 2,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        2
+      ],
+      "draws": 12
+    },
+    {
+      "tool": "tools/vision_tools.py",
+      "fix": "50bb4fe010",
+      "n_bug_tests": 1,
+      "orig": 0,
+      "evo_recovered": false,
+      "bon_recovered": false,
+      "evo_fitness_traj": [
+        0,
+        0,
+        0
+      ],
+      "draws": 18
+    },
+    {
+      "tool": "tools/mcp_oauth.py",
+      "fix": "7d36e8346b",
+      "n_bug_tests": 1,
+      "orig": 1,
+      "evo_recovered": false,
+      "bon_recovered": true,
+      "evo_fitness_traj": [
+        1
+      ],
+      "draws": 4
+    },
+    {
+      "tool": "tools/process_registry.py",
+      "fix": "20b759cd02",
+      "n_bug_tests": 4,
+      "orig": 1,
+      "evo_recovered": true,
+      "bon_recovered": true,
+      "evo_fitness_traj": [
+        4
+      ],
+      "draws": 6
+    }
+  ]
+}
