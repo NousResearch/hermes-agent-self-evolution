@@ -31,6 +31,7 @@ orchestration/
 │   │   ├── ml_systems_engineer.md
 │   │   ├── statistics_eval_expert.md
 │   │   ├── agent_frameworks_expert.md
+│   │   ├── decision_theory_metrology_expert.md
 │   │   └── red_team_skeptic.md
 │   └── research/
 │       └── literature_scout.md

@@ -7,7 +7,7 @@ Code Workflow/Agent tools, or manual copy-paste into separate sessions).
 ## Stages
 
 ```
-context pack ──► [4 domain experts, parallel, blind] ──► proposals
+context pack ──► [5 domain experts, parallel, blind] ──► proposals
 proposals ──► [red-team skeptic] ──► verdicts (KILL / CUT DOWN / ADVANCE)
 verdicts ──► [orchestrator pressure-test vs codebase] ──► verified set
 verified set ──► [synthesis] ──► ranked roadmap, each item with kill experiment
@@ -63,6 +63,6 @@ generator — defects invisible at item granularity.
 
 ## Cost notes (observed)
 
-- One panel round (4 experts + skeptic, sonnet-class): ~$1-3, ~5-10 min wall.
+- One panel round (5 experts + skeptic, sonnet-class): ~$1-3, ~5-10 min wall.
 - Research fan-out (5 scouts + verification): ~$2-5, ~10-20 min wall.
 - Orchestrator verification: cheapest stage, highest value — do not skip.
