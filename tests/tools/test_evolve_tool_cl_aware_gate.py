@@ -554,6 +554,14 @@ def test_cl_primary_decision_persists_to_gate_decision_json(
 
     assert isinstance(payload["validator_agent_model"], str)
 
+    # Phase-1 honesty flag: the decision self-discloses how each verdict arm
+    # was drawn, so the archive can later calibrate the winner's-curse bias.
+    assert payload["evolved_cl_draw_provenance"] in (
+        "cache_hit_of_search_draw",
+        "fresh_gate_draw",
+    )
+    assert payload["baseline_cl_pairing"] == "preflight_unpaired"
+
 
 def test_synthetic_only_decision_unchanged_in_gate_decision_json(
     temp_manifest: Path, tmp_path: Path,

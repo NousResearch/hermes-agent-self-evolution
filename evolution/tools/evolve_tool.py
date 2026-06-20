@@ -931,6 +931,7 @@ def evolve(
             evolved_cl_report = None
             evolved_cl_per_example: Optional[list[float]] = None
             evolved_cl_errored_task_ids: list[str] = []
+            evolved_cl_was_cached: bool = False
             cl_eval_cost_before: float = 0.0
             cl_eval_cost_usd: Optional[float] = None
             cl_constraint: Optional[ConstraintResult] = None
@@ -941,6 +942,9 @@ def evolve(
                     "(weak_signal band → CL-primary gate)"
                 )
                 cl_eval_cost_before = COST_LEDGER.summary().get("total_usd", 0.0)
+                # Probe BEFORE force_run: a cache hit means the verdict reuses
+                # the search-phase draw that selected this winner (winner's curse).
+                evolved_cl_was_cached = closed_loop_cache.is_cached(evolved_description)
                 try:
                     evolved_cl_report = closed_loop_cache.force_run(evolved_description)
                 except Exception as exc:  # ValidatorError or downstream
@@ -1163,6 +1167,11 @@ def evolve(
                     preflight_cl_score=preflight_cl_score,
                     closed_loop_agent_model=closed_loop_agent_model,
                     noise_floor_passes=cl_noise_floor_passes,
+                    evolved_cl_draw_provenance=(
+                        "cache_hit_of_search_draw"
+                        if evolved_cl_was_cached
+                        else "fresh_gate_draw"
+                    ),
                 )
 
             if not use_cl_primary and preflight_band is None:

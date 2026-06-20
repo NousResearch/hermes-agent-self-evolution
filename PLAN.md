@@ -1117,6 +1117,47 @@ suspicion into a measured, both-directions certificate.
    an overfitting detector (capable tiers saturate). Its weak-tier-improvement
    framing is funded **iff item 7 finds a mid-band tier.** *Effort M.*
 
+    **Status — diagnosis confirmed; the verdict-changing fix is RESCOPED and
+    deferred; a $0 honesty flag shipped instead.** The selection bias is real and
+    is the common path: in `trainset`/`both` closed-loop mode the cache is
+    `gate_mode="always"`, so every candidate is scored during search and the
+    winner's gate-time `force_run` is a guaranteed cache hit — the deploy verdict
+    reuses the very draw that *selected* the winner (winner's curse), against a
+    stale, unpaired preflight baseline. **But three findings reshaped the fix:**
+    - **As first scoped (a single `reps=1` fresh draw + the integer
+      `sum(evolved) − sum(baseline)` rule) it is a net regression, not a
+      hardening.** On a small suite the single-draw gain has SD ≈ 1–1.4 tasks
+      against a `required_gain` of 1–2 — it trades a ≤1-task bias for ≥1-task
+      variance. Worse, freshening only the evolved arm while keeping the frozen
+      preflight baseline gives two independent dice (unlucky-low baseline +
+      lucky-high evolved), which makes a true-null candidate deploy with
+      probability up to ~0.99 conditional on an unlucky baseline — *strictly
+      easier to game* than today. A correct build must read **both** arms from
+      one paired draw, run **reps ≥ 3** (or escalate only near the threshold),
+      and replace the integer-sum threshold with a **paired bootstrap-CI rule**
+      (`lower_bound > 0`, reusing `stats.py`/`campaign_report.py`). The
+      noise-floor `floor(Σflip)+1` term is the wrong statistic for a two-arm
+      signed gain and is *inert* on the only real sidecar; the CI rule subsumes
+      it.
+    - **The gate is a verified cold path.** Forward telemetry shows **0 of 69
+      `saturation_ledger.jsonl` rows in the `weak_signal` band** (42 healthy, 27
+      no_headroom), and the archive holds **2 CL-primary deploys ever** (both
+      hand-constructed regression-recovery demos, both `evolved_cl_eval_cost_usd
+      = 0.0` — confirming the cache-hit mechanism on both). Spending a
+      verdict-changing second draw to de-bias a gate that fires ~never is
+      premature; building it correctly is gated on the path warming up.
+    - **The disciplined first step is to record the bias, not remove it.** You
+      cannot calibrate cached-vs-fresh without first labelling which draws were
+      cached. **Shipped:** a $0 self-disclosure flag — every CL-primary decision
+      now records `evolved_cl_draw_provenance` (`cache_hit_of_search_draw` vs
+      `fresh_gate_draw`, probed before `force_run` via a read-only
+      `ClosedLoopFeedbackController.is_cached`) and `baseline_cl_pairing`
+      (`preflight_unpaired`). No verdict changes; the archive becomes
+      self-disclosing and the prerequisite for any future calibration exists.
+      The corrected fresh-draw build (paired both-arms + reps ≥ 3 + bootstrap-CI)
+      is specced and deferred until the path produces enough organic
+      `weak_signal` firings to calibrate against.
+
 10. **Closed-loop parallelism behind an A/A fidelity gate.** Splice happens
     once per phase and each rep is tempdir-isolated, so the real risks are
     cost-ledger races and ceiling overshoot, not splice corruption.

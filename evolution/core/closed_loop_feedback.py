@@ -230,6 +230,18 @@ class ClosedLoopFeedbackCache:
             self._iters_since_last_run = self.min_iters
             return report
 
+    def is_cached(self, candidate_text: str) -> bool:
+        """Report whether ``candidate_text`` already has a cached report.
+
+        Read-only; used at gate time to record draw provenance — a cached hit
+        means the deploy verdict reuses the search-phase draw that *selected*
+        the candidate (winner's curse), which must be probed BEFORE calling
+        ``force_run`` (force_run populates the cache on a miss, so afterward the
+        answer is always True).
+        """
+        with self._lock:
+            return self._key(candidate_text) in self._cache
+
     def get_task_verdict(
         self, candidate_text: str, task_id: str
     ) -> Optional[TaskResult]:

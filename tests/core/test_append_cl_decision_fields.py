@@ -44,6 +44,8 @@ class TestAppendClDecisionFields:
             "evolved_cl_eval_cost_usd",
             "band_trigger_score",
             "validator_agent_model",
+            "evolved_cl_draw_provenance",
+            "baseline_cl_pairing",
         }
         # Default call supplies no noise floor → legacy behavior recorded.
         assert payload["cl_noise_floor_passes"] == 0.0
@@ -52,11 +54,26 @@ class TestAppendClDecisionFields:
         assert payload["evolved_cl_eval_cost_usd"] == 0.0123
         assert payload["band_trigger_score"] == {"holdout": 0.7, "closed_loop": 0.4}
         assert payload["validator_agent_model"] == "openai/gpt-4.1-mini"
+        # Provenance defaults: caller didn't specify the draw source, baseline
+        # is always the stale preflight draw on the current (legacy) path.
+        assert payload["evolved_cl_draw_provenance"] == "unknown"
+        assert payload["baseline_cl_pairing"] == "preflight_unpaired"
         sanity = payload["synthetic_sanity_check"]
         assert sanity["tolerance"] == CL_PRIMARY_SYNTH_TOLERANCE
         assert sanity["baseline_mean"] == 0.60
         assert sanity["evolved_mean"] == 0.65
         assert sanity["passed"] is True
+
+    def test_draw_provenance_recorded_when_supplied(self):
+        # The gate records whether the evolved verdict draw was a cache hit of
+        # the search draw that selected the winner (winner's curse) or fresh.
+        hit_payload: dict = {}
+        _call(hit_payload, evolved_cl_draw_provenance="cache_hit_of_search_draw")
+        assert hit_payload["evolved_cl_draw_provenance"] == "cache_hit_of_search_draw"
+
+        fresh_payload: dict = {}
+        _call(fresh_payload, evolved_cl_draw_provenance="fresh_gate_draw")
+        assert fresh_payload["evolved_cl_draw_provenance"] == "fresh_gate_draw"
 
     def test_errored_tasks_is_empty_list(self):
         payload: dict = {}

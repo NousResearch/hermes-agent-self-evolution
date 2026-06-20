@@ -162,12 +162,22 @@ def append_cl_decision_fields(
     preflight_cl_score: Optional[float],
     closed_loop_agent_model: str,
     noise_floor_passes: float = 0.0,
+    evolved_cl_draw_provenance: str = "unknown",
+    baseline_cl_pairing: str = "preflight_unpaired",
 ) -> None:
     """Append the closed-loop deploy-gate decision fields to ``decision_payload``.
 
     ``noise_floor_passes`` (default 0.0 → legacy behavior) inflates the required
     gain by the suite's A/A floor when noise-aware gating is on; recorded so the
     decision record shows why the bar moved.
+
+    ``evolved_cl_draw_provenance`` / ``baseline_cl_pairing`` record HOW the two
+    arms of the verdict were drawn, so the archive is self-disclosing about a
+    known bias: today the evolved arm is ``cache_hit_of_search_draw`` (the draw
+    that *selected* the winner — winner's curse) and the baseline arm is
+    ``preflight_unpaired`` (a separate, stale draw, not paired with the evolved
+    one). Recording these is the prerequisite for ever calibrating whether a
+    fresh paired draw is worth its cost; it does not change any verdict.
     """
     decision_payload["baseline_closed_loop_per_example"] = cached_baseline_cl_per_example
     decision_payload["evolved_closed_loop_per_example"] = evolved_cl_per_example
@@ -192,6 +202,8 @@ def append_cl_decision_fields(
         "closed_loop": preflight_cl_score,
     }
     decision_payload["validator_agent_model"] = closed_loop_agent_model
+    decision_payload["evolved_cl_draw_provenance"] = evolved_cl_draw_provenance
+    decision_payload["baseline_cl_pairing"] = baseline_cl_pairing
 
 
 # `default` is calibrated against the obsidian deploy (+24.2% growth,

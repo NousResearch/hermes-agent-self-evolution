@@ -631,3 +631,38 @@ class TestForceRun:
             "(_iters_since_last_run should be min_iters+1 >= min_iters). "
             "force_run reset to 0 would leave it at 1 < 3 (min_iters), causing False."
         )
+
+
+class TestIsCached:
+    """`is_cached` is the read-only probe the gate uses to record whether the
+    deploy verdict reuses the search-phase draw that selected the winner."""
+
+    def test_is_cached_false_before_run_true_after(self, tmp_path):
+        suite = _build_suite(tmp_path)
+        report = _build_report()
+        validator = MagicMock()
+        validator.validate.return_value = report
+        cache = ClosedLoopFeedbackCache(
+            validator=validator, suite=suite, artifact_name="t",
+            baseline_artifact_text="b", gate_mode="sampled",
+        )
+
+        assert cache.is_cached("cand") is False
+        cache.force_run("cand")
+        assert cache.is_cached("cand") is True
+        # Probing must not itself fire the validator.
+        assert validator.validate.call_count == 1
+
+    def test_is_cached_is_per_candidate(self, tmp_path):
+        suite = _build_suite(tmp_path)
+        report = _build_report()
+        validator = MagicMock()
+        validator.validate.return_value = report
+        cache = ClosedLoopFeedbackCache(
+            validator=validator, suite=suite, artifact_name="t",
+            baseline_artifact_text="b", gate_mode="sampled",
+        )
+
+        cache.force_run("cand-a")
+        assert cache.is_cached("cand-a") is True
+        assert cache.is_cached("cand-b") is False
