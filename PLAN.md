@@ -901,6 +901,31 @@ exists. Durable wins from the campaign: a real skill-delivery bug fixed (the
 candidate skill never reached the agent), and the decoupling thesis turned from
 suspicion into a measured, both-directions certificate.
 
+### The missing qualifier found — coupling on non-inferable tools (proxy)
+
+The "novel MCP tool" surface above is now probed (proxy: novel, non-name-inferable
+confusable tools registered in a sandbox Hermes, descriptions harness-controlled —
+no MCP transport). **The decoupling has a qualifier: artifact text is decoupled
+only when the agent can infer the tool from its name.** On non-inferable tools the
+description *fully drives* selection — a clear description routes correctly (~1.0),
+a misdirecting one flips the agent to the wrong tool **100%** of the time (vs 1/7,
+within-noise, for name-inferable `write_file`). Same rig, opposite result; the
+difference is name-inferability. This is the first artifact→behavior coupling found.
+
+**But exploiting it exposed a circular-evaluation limit.** Running the real
+`evolve_tool` to repair a broken description: its synthetic eval is *generated from
+the description under test*, so a lying baseline contaminated it — the optimizer
+polished the lie, the gate deployed it, and live routing got **worse** (0.54 vs a
+0.71 broken baseline; true fix = 1.00). Feeding the same proposer an
+**artifact-independent** behavioral eval (hand-authored, encoding true intent)
+produced the correct repair (live 8/10 → 10/10). The eval is the determining
+factor: *self-referential evaluation cannot certify a contract it was generated
+from* — the eval-side analogue of the self-improvement verification wall. Full
+writeup + caveats: [the MCP-description findings report](reports/mcp_description_findings.md).
+**Build implication:** a real MCP-description evolver must gate on a live-behavioral,
+artifact-independent oracle (the closed-loop suite), not a synthetic eval generated
+from the artifact, and needs enough reps to clear the noise floor.
+
 ### Wave 1 — Measurement & free wins
 
 1. **Mine the gate-decision archive for item statistics.** 336 of 350
@@ -1239,10 +1264,16 @@ suspicion into a measured, both-directions certificate.
       as the product (the evolver is one candidate source), so the decoupling null
       reads as the gate working, not a failure; a "use the gate without evolving
       anything" section surfaces the standalone CLIs.
-    - **Remaining open bets (need explicit go-aheads):** (3) the **$10 MCP-description
-      probe** (last untested artifact surface), and **true external validity** (a 2nd
-      corpus — real setup effort). Item-10 CL-parallelism (serves the decoupled path)
-      and clade selection (no substrate) are skipped.
+    - **MCP-description probe — DONE (proxy).** The last untested artifact surface is
+      resolved: on non-name-inferable tools the description fully drives selection
+      (coupling GREEN), and the repair exposed a circular-eval limit (synthetic eval
+      generated from the artifact can deploy an anti-fix; an artifact-independent
+      behavioral eval repairs correctly). See the "missing qualifier" subsection under
+      the campaign conclusion + [the findings report](reports/mcp_description_findings.md).
+    - **Remaining open bets (need explicit go-aheads):** **true external validity** for
+      code-repair (a 2nd corpus — real setup effort), and the **real MCP transport**
+      build (now justified by the proxy GREEN, but must gate on a live-behavioral,
+      artifact-independent oracle). Item-10 CL-parallelism and clade selection skipped.
 
 12. **Code-evolution pilot, gated on a measured signal** (`evolution/code/`,
     empty stub). Before any Darwinian loop: an A/A coefficient-of-variation
