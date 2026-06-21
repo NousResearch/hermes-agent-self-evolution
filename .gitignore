@@ -14,6 +14,7 @@ venv/
 datasets/**/*.jsonl
 datasets/**/*.json
 !datasets/.gitkeep
+output/
 
 # Evolution snapshots
 snapshots/

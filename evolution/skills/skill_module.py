@@ -55,20 +55,14 @@ def load_skill(skill_path: Path) -> dict:
     }
 
 
-def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
-    """Find a skill by name in the hermes-agent skills directory.
-
-    Searches recursively for a SKILL.md in a directory matching the skill name.
-    """
-    skills_dir = hermes_agent_path / "skills"
+def _search_skills_dir(skill_name: str, skills_dir: Path) -> Optional[Path]:
+    """Search a single skills directory for a skill by name."""
     if not skills_dir.exists():
         return None
-
     # Direct match: skills/<category>/<skill_name>/SKILL.md
     for skill_md in skills_dir.rglob("SKILL.md"):
         if skill_md.parent.name == skill_name:
             return skill_md
-
     # Fuzzy match: check the name field in frontmatter
     for skill_md in skills_dir.rglob("SKILL.md"):
         try:
@@ -77,6 +71,34 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
                 return skill_md
         except Exception:
             continue
+    return None
+
+
+def _user_skills_dir() -> Path:
+    """Return ~/.hermes/skills if it exists."""
+    p = Path.home() / ".hermes" / "skills"
+    return p if p.exists() else None
+
+
+def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
+    """Find a skill by name, searching both the repo and user skills directories.
+
+    Priority:
+    1. hermes-agent repo skills/ directory
+    2. ~/.hermes/skills/ (user's personal skills)
+    """
+    # 1. Search the repo skills directory
+    repo_skills = hermes_agent_path / "skills"
+    result = _search_skills_dir(skill_name, repo_skills)
+    if result:
+        return result
+
+    # 2. Search the user's personal skills directory (~/.hermes/skills/)
+    user_skills = _user_skills_dir()
+    if user_skills:
+        result = _search_skills_dir(skill_name, user_skills)
+        if result:
+            return result
 
     return None
 

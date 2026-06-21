@@ -38,8 +38,8 @@ def evolve(
     iterations: int = 10,
     eval_source: str = "synthetic",
     dataset_path: Optional[str] = None,
-    optimizer_model: str = "openai/gpt-4.1",
-    eval_model: str = "openai/gpt-4.1-mini",
+    optimizer_model: str = "anthropic/claude-opus-4-8",
+    eval_model: str = "anthropic/claude-haiku-4-5-20251001",
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
@@ -64,7 +64,12 @@ def evolve(
         sys.exit(1)
 
     skill = load_skill(skill_path)
-    console.print(f"  Loaded: {skill_path.relative_to(config.hermes_agent_path)}")
+    # Display path relative to config's skills dir, or absolute if outside
+    try:
+        display_path = skill_path.relative_to(config.hermes_agent_path)
+    except ValueError:
+        display_path = skill_path
+    console.print(f"  Loaded: {display_path}")
     console.print(f"  Name: {skill['name']}")
     console.print(f"  Size: {len(skill['raw']):,} chars")
     console.print(f"  Description: {skill['description'][:80]}...")
@@ -118,7 +123,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -185,7 +190,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -196,11 +201,16 @@ def evolve(
 
     if not all_pass:
         console.print("[red]✗ Evolved skill FAILED constraints — not deploying[/red]")
-        # Still save for inspection
-        output_path = Path("output") / skill_name / "evolved_FAILED.md"
+        # Still save for inspection/recovery. Use a timestamp so failures don't overwrite each other.
+        failed_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path("output") / skill_name / f"evolved_FAILED_{failed_timestamp}.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(evolved_full)
+        # Backward-compatible latest failure pointer.
+        latest_failed_path = Path("output") / skill_name / "evolved_FAILED.md"
+        latest_failed_path.write_text(evolved_full)
         console.print(f"  Saved failed variant to {output_path}")
+        console.print(f"  Latest failed variant also saved to {latest_failed_path}")
         return
 
     # ── 8. Evaluate on holdout set ──────────────────────────────────────
@@ -298,8 +308,8 @@ def evolve(
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
+@click.option("--optimizer-model", default="anthropic/claude-opus-4-8", help="Model for GEPA reflections")
+@click.option("--eval-model", default="anthropic/claude-haiku-4-5-20251001", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")

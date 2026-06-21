@@ -9,7 +9,7 @@ already use.
 Supported sources:
   - Claude Code (~/.claude/history.jsonl) — user inputs only
   - GitHub Copilot (~/.copilot/session-state/*/events.jsonl) — full conversations
-  - Hermes Agent (~/.hermes/sessions/*.json) — user + assistant + tool context
+  - Hermes Agent ($HERMES_HOME/state.db or ~/.hermes/state.db) — canonical SQLite session store
 
 Usage as standalone CLI:
     python -m evolution.core.external_importers \\
@@ -23,10 +23,11 @@ Usage from evolve_skill.py:
 """
 
 import json
+import os
 import re
 import random
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import click
 import dspy
@@ -73,6 +74,19 @@ SECRET_PATTERNS = re.compile(
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 
 MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
+
+
+def _is_machine_generated_user_message(text: str) -> bool:
+    """Return True for synthetic system notices stored as user messages."""
+    stripped = (text or "").lstrip().lower()
+    synthetic_prefixes = (
+        "[system note:",
+        "[important: background process",
+        "[note: model was just switched",
+        "[context compaction",
+        "[system:",
+    )
+    return stripped.startswith(synthetic_prefixes)
 
 
 def _contains_secret(text: str) -> bool:
@@ -151,6 +165,73 @@ def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
     return len(overlap) >= 2
 
 
+def _hermes_home() -> Path:
+    """Return the active Hermes home directory, respecting profiles/env overrides."""
+    return Path(os.getenv("HERMES_HOME", str(Path.home() / ".hermes"))).expanduser()
+
+
+# ── Importer Helpers ────────────────────────────────────────────────────────
+
+
+def _message_get(msg: Any, key: str, default: Any = "") -> Any:
+    """Return key from dict-like rows, sqlite3.Row, or object attributes."""
+    if isinstance(msg, dict):
+        return msg.get(key, default)
+    try:
+        return msg[key]
+    except (KeyError, IndexError, TypeError):
+        return getattr(msg, key, default)
+
+
+def _extract_pairs_from_messages(
+    session_messages: list, out: list[dict], limit: int = 0,
+) -> None:
+    """Pair user messages with the next assistant response.
+
+    Walks a session's messages chronologically. For each user message,
+    finds the assistant response that immediately follows (ignoring any
+    tool or system messages in between), and appends a pair dict to out.
+
+    Stops early when limit is reached.
+    """
+    for i, msg in enumerate(session_messages):
+        if limit and len(out) >= limit:
+            return
+        role = _message_get(msg, "role")
+        if role != "user":
+            continue
+        user_text = _message_get(msg, "content")
+        if not user_text or len(user_text) < 10:
+            continue
+        if _is_machine_generated_user_message(user_text):
+            continue
+        if _contains_secret(user_text):
+            continue
+
+        # Find the next assistant response
+        assistant_text = ""
+        for j in range(i + 1, len(session_messages)):
+            row_j = session_messages[j]
+            j_role = _message_get(row_j, "role")
+            if j_role == "assistant":
+                j_content = _message_get(row_j, "content")
+                if j_content:
+                    assistant_text = j_content
+                    break
+            elif j_role == "user":
+                break  # hit next user turn — no assistant response
+
+        if assistant_text and _contains_secret(assistant_text):
+            continue
+
+        out.append({
+            "source": "hermes",
+            "task_input": user_text,
+            "assistant_response": assistant_text,
+            "session_id": _message_get(msg, "session_id", ""),
+        })
+
+
 # ── Importers ─────────────────────────────────────────────────────────────
 
 
@@ -189,6 +270,8 @@ class ClaudeCodeImporter:
 
                 text = entry.get("display", "")
                 if not text or len(text) < 10:
+                    continue
+                if _is_machine_generated_user_message(text):
                     continue
                 if _contains_secret(text):
                     continue
@@ -346,8 +429,13 @@ class HermesSessionImporter:
     SESSION_DIR = Path.home() / ".hermes" / "sessions"
 
     @staticmethod
+    def state_db_path() -> Path:
+        """Return the active Hermes SQLite session DB path."""
+        return _hermes_home() / "state.db"
+
+    @staticmethod
     def extract_messages(limit: int = 0) -> list[dict]:
-        """Read user/assistant pairs from Hermes session files.
+        """Read user/assistant pairs from Hermes session JSON files.
 
         Args:
             limit: Maximum messages to return (0 = no limit).
@@ -356,64 +444,95 @@ class HermesSessionImporter:
             List of dicts with keys: source, task_input, assistant_response,
             session_id.
         """
-        if not HermesSessionImporter.SESSION_DIR.exists():
+        session_dir = HermesSessionImporter.SESSION_DIR
+        if not session_dir.exists():
             return []
 
         messages = []
-        session_files = sorted(
-            HermesSessionImporter.SESSION_DIR.glob("*.json"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,  # newest first
-        )
-
-        for session_file in session_files:
+        for json_file in sorted(session_dir.glob("*.json")):
             try:
-                data = json.loads(session_file.read_text())
+                data = json.loads(json_file.read_text())
             except (json.JSONDecodeError, OSError):
                 continue
 
-            msg_list = data.get("messages", [])
-            if not msg_list:
+            session_msgs = data.get("messages", [])
+            if not isinstance(session_msgs, list):
                 continue
 
-            session_id = data.get("session_id", session_file.stem)
-
-            # Walk messages: pair each user message with the next assistant
-            # response (skipping tool messages in between).
-            for i, msg in enumerate(msg_list):
-                if msg.get("role") != "user":
-                    continue
-                user_text = msg.get("content", "")
-                if not user_text or len(user_text) < 10:
-                    continue
-                if _contains_secret(user_text):
-                    continue
-
-                # Find the next assistant response
-                assistant_text = ""
-                for j in range(i + 1, len(msg_list)):
-                    if msg_list[j].get("role") == "assistant":
-                        content = msg_list[j].get("content", "")
-                        if content:
-                            assistant_text = content
-                            break
-                    elif msg_list[j].get("role") == "user":
-                        break  # next user turn, no assistant response found
-
-                if assistant_text and _contains_secret(assistant_text):
-                    continue
-
-                messages.append({
-                    "source": "hermes",
-                    "task_input": user_text,
-                    "assistant_response": assistant_text,
-                    "session_id": session_id,
-                })
-
-                if limit and len(messages) >= limit:
-                    return messages
+            _extract_pairs_from_messages(session_msgs, messages, limit)
+            if limit and len(messages) >= limit:
+                messages = messages[:limit]
+                break
 
         return messages
+
+    @staticmethod
+    def extract_messages_from_db(limit: int = 0) -> list[dict]:
+        """Read user/assistant pairs from the Hermes SQLite session store.
+
+        Fallback for installations using state.db instead of session JSON files.
+
+        Args:
+            limit: Maximum messages to return (0 = no limit).
+
+        Returns:
+            List of dicts with keys: source, task_input, assistant_response,
+            session_id.
+        """
+        import sqlite3
+
+        db_path = HermesSessionImporter.state_db_path()
+        if not db_path.exists():
+            return []
+
+        messages = []
+
+        try:
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+        except sqlite3.Error:
+            return []
+
+        try:
+            rows = conn.execute("""
+                SELECT
+                    m.id AS message_id,
+                    m.role,
+                    m.content,
+                    m.timestamp,
+                    m.session_id,
+                    s.title AS session_title
+                FROM messages m
+                JOIN sessions s ON m.session_id = s.id
+                WHERE m.role IN ('user', 'assistant')
+                  AND m.content IS NOT NULL
+                  AND m.content != ''
+                ORDER BY m.timestamp DESC, m.id DESC
+            """)
+
+            all_rows = list(rows)
+            all_rows.sort(key=lambda r: (r["session_id"], r["timestamp"], r["message_id"]))
+
+            current_session = None
+            session_messages = []
+            for row in all_rows:
+                sid = row["session_id"]
+                if sid != current_session:
+                    _extract_pairs_from_messages(session_messages, messages, limit)
+                    if limit and len(messages) >= limit:
+                        return messages
+                    current_session = sid
+                    session_messages = [row]
+                else:
+                    session_messages.append(row)
+
+            _extract_pairs_from_messages(session_messages, messages, limit)
+            return messages
+
+        except sqlite3.Error:
+            return []
+        finally:
+            conn.close()
 
 
 # ── Relevance Filtering ───────────────────────────────────────────────────
@@ -467,7 +586,12 @@ class RelevanceFilter:
         skill_desc = skill_text[:800]
 
         # Stage 0: drop messages missing required fields
-        messages = [m for m in messages if m.get("task_input") and m.get("source")]
+        messages = [
+            m for m in messages
+            if m.get("task_input")
+            and m.get("source")
+            and not _is_machine_generated_user_message(m.get("task_input", ""))
+        ]
 
         # Stage 1: cheap heuristic pre-filter
         candidates = [
@@ -490,7 +614,11 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
+        parse_failures = 0
+        error_samples = []
+        parse_samples = []
         lm = dspy.LM(self.model)
+        max_initial_failures = 5
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))
@@ -508,6 +636,9 @@ class RelevanceFilter:
                     scoring = _parse_scoring_json(result.scoring)
                     if scoring is None:
                         errors += 1
+                        parse_failures += 1
+                        if len(parse_samples) < 3:
+                            parse_samples.append(str(result.scoring)[:300])
                         progress.update(task, advance=1)
                         continue
 
@@ -524,10 +655,19 @@ class RelevanceFilter:
                                 **validated,
                             ))
 
-                except Exception:
+                except Exception as e:
                     errors += 1
+                    if len(error_samples) < 3:
+                        error_samples.append(f"{type(e).__name__}: {e}")
 
                 progress.update(task, advance=1)
+
+                if not examples and errors >= max_initial_failures:
+                    console.print(
+                        "  [yellow]Stopping LLM relevance scoring early after "
+                        f"{errors} failures; falling back to heuristic sessiondb examples[/yellow]"
+                    )
+                    break
 
                 if len(examples) >= max_examples:
                     break
@@ -539,22 +679,103 @@ class RelevanceFilter:
                 f"  [yellow]LLM scoring: {errors}/{total_scored} failed "
                 f"({errors / max(1, total_scored) * 100:.0f}% error rate)[/yellow]"
             )
+            if parse_failures:
+                console.print(f"  [yellow]Parse failures: {parse_failures}[/yellow]")
+            for sample in error_samples:
+                console.print(f"  [dim]Scoring error sample: {sample}[/dim]")
+            for sample in parse_samples:
+                console.print(f"  [dim]Parse failure sample: {sample}[/dim]")
+
+        if not examples:
+            fallback = _fallback_examples_from_messages(
+                messages, skill_name, skill_text, max_examples=max_examples,
+            )
+            if fallback:
+                console.print(
+                    f"  [yellow]Using {len(fallback)} heuristic sessiondb examples "
+                    "because LLM relevance scoring produced none[/yellow]"
+                )
+                return fallback
 
         return examples
+
+
+def _fallback_examples_from_messages(
+    messages: list[dict], skill_name: str, skill_text: str, max_examples: int,
+) -> list[EvalExample]:
+    """Build eval examples directly from relevant real conversations.
+
+    This is a fallback for when LLM relevance/metadata scoring is unavailable
+    or returns unparsable output. It still uses real session history: task_input
+    comes from the user's actual message and expected_behavior is derived from
+    the assistant response observed in that conversation.
+    """
+    heuristic_matches = [
+        m for m in messages
+        if _is_relevant_to_skill(m.get("task_input", ""), skill_name, skill_text)
+    ]
+    if not heuristic_matches:
+        return []
+
+    examples = []
+    seen_tasks = set()
+    for msg in heuristic_matches[:max_examples * 2]:
+        task_input = (msg.get("task_input") or "").strip()
+        task_key = re.sub(r"\s+", " ", task_input.lower())[:500]
+        if task_key in seen_tasks:
+            continue
+        seen_tasks.add(task_key)
+        assistant_response = (msg.get("assistant_response") or "").strip()
+        if not task_input:
+            continue
+
+        if assistant_response:
+            expected_behavior = (
+                "Use the skill's procedure to address the user's request. "
+                "Match the successful behavior demonstrated in the real session: "
+                f"{assistant_response[:1200]}"
+            )
+        else:
+            expected_behavior = (
+                "Use the skill's procedure to address the user's request with a "
+                "specific, actionable response. Do not ask for a golden dataset; "
+                "infer the needed behavior from the skill and the user's task."
+            )
+
+        validated = _validate_eval_example(
+            task_input=task_input,
+            expected_behavior=expected_behavior,
+            difficulty="medium",
+            category=f"sessiondb:{msg.get('source', 'unknown')}",
+        )
+        if validated:
+            examples.append(EvalExample(
+                source=msg.get("source", "sessiondb"),
+                **validated,
+            ))
+            if len(examples) >= max_examples:
+                break
+
+    return examples
 
 
 def _parse_scoring_json(text: str) -> Optional[dict]:
     """Extract a JSON object from LLM scoring output.
 
     Strategy:
-      1. Try direct json.loads (handles clean LLM output)
-      2. Fall back to regex extraction (handles text-wrapped or fenced JSON)
+      1. Accept dict outputs directly
+      2. Try direct json.loads (handles clean LLM output)
+      3. Try Python literal parsing for dict-like outputs
+      4. Fall back to regex extraction (handles text-wrapped or fenced JSON)
 
     Returns:
         Parsed dict or None if no valid JSON found.
     """
     if not text:
         return None
+    if isinstance(text, dict):
+        return text
+    text = str(text)
 
     # Fast path: LLM returned clean JSON
     try:
@@ -562,6 +783,15 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
         if isinstance(result, dict):
             return result
     except json.JSONDecodeError:
+        pass
+
+    # Some model adapters return Python-ish dict strings with True/False.
+    try:
+        import ast
+        result = ast.literal_eval(text)
+        if isinstance(result, dict):
+            return result
+    except (ValueError, SyntaxError):
         pass
 
     # Slow path: find balanced {...} block using brace counting.
