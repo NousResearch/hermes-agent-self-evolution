@@ -95,6 +95,14 @@ class ClaudeCodeAgentRunner:
                 "CLAUDE_CODE_OAUTH_TOKEN": os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
                 **ctx.extra_env,
             }
+            # Candidate skill delivery: a fresh-HOME `claude -p` does NOT discover
+            # personal ~/.claude/skills; skills are delivered as a plugin via
+            # --plugin-dir (verified). Wrap the installer's skills_src dir in a
+            # minimal plugin and enable the Skill tool so the agent can invoke it.
+            allowed_tools = list(self.allowed_tools)
+            plugin_dir = self._stage_skill_plugin(home, ctx.skills_src)
+            if plugin_dir is not None and "Skill" not in allowed_tools:
+                allowed_tools.append("Skill")
             claude_argv = [
                 self.claude_command, "-p", ctx.user_message,
                 "--output-format", "stream-json", "--verbose",
@@ -103,8 +111,10 @@ class ClaudeCodeAgentRunner:
                 "--strict-mcp-config",
                 "--permission-mode", "bypassPermissions",
                 "--add-dir", str(ctx.fixture_dir),
-                "--allowedTools", ",".join(self.allowed_tools),
+                "--allowedTools", ",".join(allowed_tools),
             ]
+            if plugin_dir is not None:
+                claude_argv += ["--plugin-dir", str(plugin_dir)]
             if self.append_prompt_file is not None:
                 claude_argv += ["--append-system-prompt-file", str(self.append_prompt_file)]
             argv = self._wrap_in_sandbox(
@@ -144,6 +154,33 @@ class ClaudeCodeAgentRunner:
         if state is not None:
             raise CostCeilingExceeded(*state)
         return result
+
+    def _stage_skill_plugin(self, home: Path, skills_src: Optional[Path]) -> Optional[Path]:
+        """Wrap the installer's ``skills/`` dir as a Claude Code plugin so a
+        fresh-HOME ``claude -p`` discovers the candidate skill via --plugin-dir.
+
+        Returns the plugin dir (under HOME, a sandbox write-root), or None when
+        no skill is being tested. The personal ``~/.claude/skills`` path is NOT
+        discovered headlessly; a plugin (``.claude-plugin/plugin.json`` + a
+        ``skills/`` tree) is. The skill is then invocable as
+        ``cl-candidate:<skill_name>``.
+        """
+        if skills_src is None or not Path(skills_src).is_dir():
+            return None
+        plugin_dir = home / "_cl_candidate_plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps(
+                {
+                    "name": "cl-candidate",
+                    "description": "Closed-loop candidate skill under evaluation.",
+                    "version": "0.0.1",
+                }
+            )
+            + "\n"
+        )
+        shutil.copytree(skills_src, plugin_dir / "skills", dirs_exist_ok=True)
+        return plugin_dir
 
     def _wrap_in_sandbox(self, claude_argv: list[str], *, write_roots: list[Path]) -> list[str]:
         """Prepend an OS sandbox that denies writes outside ``write_roots`` + temp.

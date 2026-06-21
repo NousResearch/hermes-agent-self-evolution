@@ -33,6 +33,33 @@ def test_append_prompt_file_none_stays_none():
     assert ClaudeCodeAgentRunner(append_prompt_file=None).append_prompt_file is None
 
 
+def test_stage_skill_plugin_wraps_skills_src_as_plugin(tmp_path):
+    # A fresh-HOME `claude -p` discovers skills only via --plugin-dir (not the
+    # personal ~/.claude/skills path). The runner must wrap the installer's
+    # skills/ dir into a valid plugin so the candidate skill is delivered.
+    import json
+
+    skills_src = tmp_path / "skills"
+    (skills_src / "my-skill").mkdir(parents=True)
+    (skills_src / "my-skill" / "SKILL.md").write_text("---\nname: my-skill\n---\nbody")
+    home = tmp_path / "home"
+    home.mkdir()
+
+    runner = ClaudeCodeAgentRunner()
+    plugin_dir = runner._stage_skill_plugin(home, skills_src)
+
+    assert plugin_dir is not None
+    manifest = json.loads((plugin_dir / ".claude-plugin" / "plugin.json").read_text())
+    assert manifest["name"] == "cl-candidate"  # skill invocable as cl-candidate:my-skill
+    assert (plugin_dir / "skills" / "my-skill" / "SKILL.md").is_file()
+
+
+def test_stage_skill_plugin_none_without_skills_src(tmp_path):
+    runner = ClaudeCodeAgentRunner()
+    assert runner._stage_skill_plugin(tmp_path, None) is None
+    assert runner._stage_skill_plugin(tmp_path, tmp_path / "does-not-exist") is None
+
+
 def test_parse_extracts_tool_calls_cost_tokens():
     r = _parse_stream_json(STREAM, duration_seconds=2.0)
     assert r.error is None
