@@ -66,6 +66,44 @@ python -m evolution.skills.evolve_skill \
 | **[DSPy](https://github.com/stanfordnlp/dspy) + [GEPA](https://github.com/gepa-ai/gepa)** | Reflective prompt evolution — reads execution traces, proposes targeted mutations | MIT |
 | **[Darwinian Evolver](https://github.com/imbue-ai/darwinian_evolver)** | Code evolution with Git-based organisms | AGPL v3 (external CLI only) |
 
+## Phase 4 Verified Patch Search
+
+`hermes-evolve-code` keeps mutation and admission separate. A local model or
+Darwinian Evolver can run as an external proposer, but it receives only public
+checks and failure residues. The verifier applies each unified diff in a
+disposable repository copy, collapses candidates with equivalent visible
+behaviour, and admits only the smallest candidate that improves sealed score
+and still passes the full suite.
+
+The proposer reads one public JSON context object from stdin and writes one
+proposal per line:
+
+```json
+{"patch":"<git unified diff>","operator":"repair-null-path","rationale":"..."}
+```
+
+Example verifier invocation:
+
+```bash
+hermes-evolve-code \
+  --repo ../hermes-agent \
+  --task-id file-tools-null-path \
+  --proposer-command "python local_patch_proposer.py" \
+  --visible "reproduction::{python} tests/repro_null_path.py" \
+  --sealed "held-out::{python} /secure/evals/null_path_holdout.py {repo}" \
+  --full-suite "suite::{python} -m pytest -q" \
+  --allow "tools/file_tools.py" \
+  --run-dir ../phase4-runs/null-path \
+  --cycles 2 --budget 4 --compare-frozen
+```
+
+Each run writes content-addressed patches and an append-only
+`admission_manifest.jsonl` containing parent lineage, visible and sealed result
+digests, patch size, deterministic action traces, rejection reasons, and replay
+status. The stable repository is never patched by the search process. This is
+process isolation, not a sandbox for hostile code; use a container or VM for
+untrusted candidates.
+
 ## Guardrails
 
 Every evolved variant must pass:

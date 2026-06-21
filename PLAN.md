@@ -583,6 +583,20 @@ Actual Python source code in `tools/*.py` files. This is the highest-risk tier â
 - Darwinian Evolver runs as external CLI only (AGPL v3)
 - All PRs require human review â€” no auto-merge for code changes
 
+**Verifier/search contract:**
+- Mutation engines run out of process and receive public task context only.
+- Candidate patches execute in disposable repository copies; the stable tree is
+  never the evaluation workspace.
+- Visible-equivalent candidates are deduplicated before sealed evaluation and
+  the smallest patch wins deterministic ties.
+- Sealed-score improvement and the full suite are both mandatory admission
+  gates; a syntax/AST/keyword/LLM score is never sufficient by itself.
+- Accepted operator tags and public failure residues may guide later proposal
+  rounds, but cannot change sealed checks or admission thresholds.
+- Every candidate is persisted as a content-addressed patch plus an append-only
+  admission record with lineage, trace digest, outcome digests, and replay
+  evidence.
+
 ### Phase 5: Continuous Self-Improvement Loop
 
 **Goal:** The agent automatically identifies its weakest areas and improves them over time.
