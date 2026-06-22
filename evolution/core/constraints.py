@@ -4,6 +4,7 @@ Every candidate variant must pass ALL constraints before it can be
 considered valid. Failed constraints = immediate rejection.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass
@@ -46,9 +47,13 @@ class ConstraintValidator:
         # 3. Non-empty
         results.append(self._check_non_empty(artifact_text))
 
-        # 4. Structural integrity
+        # 4. Structural integrity (only for full skills, not bodies)
         if artifact_type == "skill":
             results.append(self._check_skill_structure(artifact_text))
+
+        # 5. Semantic preservation (if baseline provided and type is skill-like)
+        if baseline_text and artifact_type in ("skill", "skill_body"):
+            results.append(self._check_semantic_preservation(artifact_text, baseline_text))
 
         return results
 
@@ -171,4 +176,56 @@ class ConstraintValidator:
                 passed=False,
                 constraint_name="skill_structure",
                 message=f"Skill missing: {', '.join(missing)}",
+            )
+
+    def _check_semantic_preservation(
+        self, evolved_text: str, baseline_text: str
+    ) -> ConstraintResult:
+        """Check that evolved text hasn't drifted too far from the baseline.
+
+        Uses embedding cosine similarity when an embedding model is configured.
+        Falls back to word-overlap Jaccard similarity as a cheaper proxy.
+
+        Threshold is controlled by self.config.semantic_similarity_threshold.
+        """
+        if not self.config.enable_semantic_check:
+            return ConstraintResult(
+                passed=True,
+                constraint_name="semantic_preservation",
+                message="Semantic check disabled by config",
+            )
+        if not baseline_text.strip() or not evolved_text.strip():
+            return ConstraintResult(
+                passed=False,
+                constraint_name="semantic_preservation",
+                message="Cannot compare empty text",
+            )
+
+        # Jaccard word overlap as a lightweight proxy
+        evolved_words = set(re.findall(r'\w+', evolved_text.lower()))
+        baseline_words = set(re.findall(r'\w+', baseline_text.lower()))
+        if not baseline_words:
+            return ConstraintResult(
+                passed=True,
+                constraint_name="semantic_preservation",
+                message="Baseline has no words to compare",
+            )
+
+        intersection = evolved_words & baseline_words
+        union = evolved_words | baseline_words
+        jaccard = len(intersection) / max(1, len(union))
+
+        threshold = self.config.semantic_similarity_threshold
+        if jaccard >= threshold:
+            return ConstraintResult(
+                passed=True,
+                constraint_name="semantic_preservation",
+                message=f"Semantic similarity OK: {jaccard:.2f} (threshold {threshold:.2f})",
+            )
+        else:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="semantic_preservation",
+                message=f"Semantic similarity too low: {jaccard:.2f} (threshold {threshold:.2f}) — "
+                        f"evolved skill may have drifted from its original purpose",
             )

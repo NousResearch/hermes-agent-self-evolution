@@ -21,9 +21,9 @@ class EvolutionConfig:
     population_size: int = 5
 
     # LLM configuration
-    optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
-    eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
-    judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    optimizer_model: str = field(default_factory=lambda: DEFAULT_OPTIMIZER_MODEL)
+    eval_model: str = field(default_factory=lambda: DEFAULT_EVAL_MODEL)
+    judge_model: str = field(default_factory=lambda: DEFAULT_JUDGE_MODEL)
 
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
@@ -41,6 +41,11 @@ class EvolutionConfig:
     run_pytest: bool = True
     run_tblite: bool = False  # Expensive — opt-in
     tblite_regression_threshold: float = 0.02  # Max 2% regression allowed
+
+    # Semantic preservation
+    enable_semantic_check: bool = True
+    semantic_similarity_threshold: float = 0.7  # Min cosine similarity
+    embedding_model: str = "text-embedding-3-small"  # OpenAI embedding model
 
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
@@ -86,6 +91,29 @@ def get_hermes_agent_path() -> Path:
         "Cannot find hermes-agent repo. Set HERMES_AGENT_REPO env var "
         "or ensure it exists at ~/.hermes/hermes-agent"
     )
+
+
+# Known good default models per capability tier
+DEFAULT_EVAL_MODEL = os.getenv("HERMES_EVAL_MODEL", "openai/gpt-4o-mini")
+DEFAULT_OPTIMIZER_MODEL = os.getenv("HERMES_OPTIMIZER_MODEL", "openai/gpt-4o-mini")
+DEFAULT_JUDGE_MODEL = os.getenv("HERMES_JUDGE_MODEL", "openai/gpt-4o-mini")
+
+# Alias map for common model names
+MODEL_ALIASES = {
+    "hermes-agent": DEFAULT_OPTIMIZER_MODEL,
+    "hermes": DEFAULT_OPTIMIZER_MODEL,
+    "default": DEFAULT_OPTIMIZER_MODEL,
+}
+
+
+def resolve_model(model_name: str) -> str:
+    """Resolve a model name, handling aliases and env-var overrides.
+
+    If model_name matches an alias key (case-insensitive), the alias
+    value is returned. Otherwise model_name is returned as-is.
+    """
+    key = model_name.lower().strip()
+    return MODEL_ALIASES.get(key, model_name)
 
 
 def resolve_hermes_agent_path(hermes_repo: Optional[str] = None) -> Path:

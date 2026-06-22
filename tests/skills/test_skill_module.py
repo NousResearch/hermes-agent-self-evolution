@@ -1,8 +1,13 @@
-"""Tests for skill module loading and parsing."""
+"""Tests for skill module loading, parsing, and DSPy module."""
 
+import dspy
 import pytest
 from pathlib import Path
-from evolution.skills.skill_module import load_skill, reassemble_skill
+from evolution.skills.skill_module import (
+    SkillModule,
+    load_skill,
+    reassemble_skill,
+)
 
 
 SAMPLE_SKILL = """---
@@ -27,6 +32,20 @@ Use this when you need to test things.
 ## Pitfalls
 - Don't forget to check edge cases
 """
+
+TEST_SKILL_BODY = """# My Skill
+
+## When to Use
+When you need to do something.
+
+## Procedure
+1. Do step one
+2. Do step two"""
+
+TEST_SKILL_BODY_NEW = """# New Skill
+
+## Procedure
+1. Do new stuff"""
 
 
 class TestLoadSkill:
@@ -90,3 +109,59 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModule:
+    """Tests for the SkillModule DSPy wrapper."""
+
+    def test_skill_text_property_returns_embedded_text(self):
+        """skill_text property returns the body embedded in signature instructions."""
+        module = SkillModule(TEST_SKILL_BODY)
+        assert module.skill_text == TEST_SKILL_BODY
+
+    def test_skill_text_roundtrip_after_set(self):
+        """Setting skill_text rebuilds the predictor with new instructions."""
+        module = SkillModule(TEST_SKILL_BODY)
+        module.skill_text = TEST_SKILL_BODY_NEW
+        assert module.skill_text == TEST_SKILL_BODY_NEW
+
+    def test_named_predictors_exposes_inner_predictor(self):
+        """The module exposes a predictor via named_predictors() for GEPA."""
+        module = SkillModule(TEST_SKILL_BODY)
+        predictors = list(module.named_predictors())
+        assert len(predictors) >= 1
+        name, pred = predictors[0]
+        assert "predict" in name
+        assert pred.signature.instructions != ""
+
+    def test_forward_returns_prediction_with_output(self, monkeypatch):
+        """forward() produces a Prediction with an output field."""
+
+        def mock_forward(self_chain, task_input):
+            return dspy.Prediction(output="mock response for: " + task_input)
+
+        monkeypatch.setattr(dspy.ChainOfThought, "forward", mock_forward)
+
+        module = SkillModule(TEST_SKILL_BODY)
+        result = module(task_input="do something")
+        assert isinstance(result, dspy.Prediction)
+        assert hasattr(result, "output")
+        assert "mock response" in result.output
+
+    def test_deepcopy_preserves_instructions(self):
+        """deepcopy creates an independent module with same instructions."""
+        module = SkillModule(TEST_SKILL_BODY)
+        module2 = module.deepcopy()
+        assert module2.skill_text == TEST_SKILL_BODY
+
+    def test_deepcopy_mutations_are_independent(self):
+        """Mutating deepcopy's instructions leaves original unchanged."""
+        module = SkillModule(TEST_SKILL_BODY)
+        module2 = module.deepcopy()
+        for _name, pred in module2.named_predictors():
+            pred.signature = pred.signature.with_instructions(
+                f"Complete the task following these instructions.\n\n{TEST_SKILL_BODY_NEW}"
+            )
+            break
+        assert module2.skill_text == TEST_SKILL_BODY_NEW
+        assert module.skill_text == TEST_SKILL_BODY
