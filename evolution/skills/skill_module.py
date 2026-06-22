@@ -1,15 +1,19 @@
 """Wraps a SKILL.md file as a DSPy module for optimization.
 
 The key abstraction: a skill file becomes a parameterized DSPy module
-where the skill text is the optimizable parameter. GEPA can then
-mutate the skill text and evaluate the results.
+where the skill text is embedded as the Signature instructions (docstring).
+This is what GEPA actually optimizes — it mutates the predictor's signature
+instructions in-place. After optimization, the evolved skill text is
+extracted from the optimized module's predictor signature.
 """
 
-import re
 from pathlib import Path
 from typing import Optional
 
 import dspy
+
+
+INSTRUCTIONS_PREFIX = "Complete the task following these instructions."
 
 
 def load_skill(skill_path: Path) -> dict:
@@ -25,7 +29,17 @@ def load_skill(skill_path: Path) -> dict:
             "description": str,
         }
     """
-    raw = skill_path.read_text()
+    """Load and return a text file's contents.
+
+    Uses utf-8 encoding with 'surrogateescape' error handling.
+    """
+    try:
+        raw = skill_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        # Fallback for files written with system encoding (e.g. cp1252 on Windows)
+        import locale
+        sys_enc = locale.getpreferredencoding()
+        raw = skill_path.read_text(encoding=sys_enc)
 
     # Parse YAML frontmatter
     frontmatter = ""
@@ -81,37 +95,86 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
     return None
 
 
-class SkillModule(dspy.Module):
-    """A DSPy module that wraps a skill file for optimization.
+def _make_instructions(skill_text: str) -> str:
+    """Build signature instructions string embedding skill text."""
+    return f"{INSTRUCTIONS_PREFIX}\n\n{skill_text}"
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+
+def _extract_skill_text(instructions: str) -> str:
+    """Extract original skill text from signature instructions (strip prefix).
+
+    GEPA may mutate the prefix line (e.g. prepend "NEW:" or other labels),
+    so detection of the prefix is lenient: we remove only the first line
+    when it fits the expected pattern. The skill body text is returned
+    with its original trailing content preserved.
     """
+    lines = instructions.split("\n", 1)
+    if len(lines) >= 2:
+        body = lines[1]
+        # Remove the leading newline that separates prefix from body
+        if body.startswith("\n"):
+            body = body[1:]
+        return body
+    return instructions
 
-    class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
 
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
-        task_input: str = dspy.InputField(desc="The task to complete")
-        output: str = dspy.OutputField(desc="Your response following the skill instructions")
+def _build_predictor(skill_text: str) -> dspy.ChainOfThought:
+    """Create a ChainOfThought predictor with skill text embedded as instructions."""
+    doc = _make_instructions(skill_text)
+    signature = type("_EvolvingSkill", (dspy.Signature,), {
+        "__doc__": doc,
+        "task_input": dspy.InputField(),
+        "output": dspy.OutputField(),
+    })
+    return dspy.ChainOfThought(signature)
+
+
+class SkillModule(dspy.Module):
+    """A DSPy module that wraps a skill file for GEPA optimization.
+
+    Skill text is embedded as the predictor's signature instructions (docstring),
+    which is what GEPA actually mutates during optimization. After GEPA compile,
+    the evolved skill text is read back from the optimized module's predictor
+    signature instructions.
+
+    This module MUST compile a fresh predictor each forward pass (handled by the
+    property setter) since the skill text may change after each GEPA mutation.
+    """
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        self._skill_text = skill_text
+        self.predictor = _build_predictor(skill_text)
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
+
+    @property
+    def skill_text(self) -> str:
+        """Return the current (possibly evolved) skill text from signature instructions.
+
+        After GEPA optimization mutates the predictor's signature instructions,
+        this property extracts the skill body from the instructions by stripping
+        the fixed prefix.
+        """
+        try:
+            # GEPA mutates the inner Predict's signature via with_instructions()
+            # Access via named_predictors() to get the innermost predictor
+            for _name, pred in self.named_predictors():
+                instructions = pred.signature.instructions
+                return _extract_skill_text(instructions)
+            # Fallback to the ChainOfThought's predictor attribute
+            instructions = self.predictor.predict.signature.instructions
+            return _extract_skill_text(instructions)
+        except Exception:
+            return self._skill_text
+
+    @skill_text.setter
+    def skill_text(self, value: str):
+        """Rebuild the predictor with new skill text."""
+        self._skill_text = value
+        self.predictor = _build_predictor(value)
 
 
 def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
