@@ -247,6 +247,56 @@ class TestMaybeBuildClosedLoopCacheSkill:
         )
         assert cache._validator.runner.timeout_seconds == 300
 
+    def test_default_backend_is_hermes_runner(self, fake_skill_path):
+        from evolution.validation.hermes_runner import HermesAgentRunner
+
+        cache = _maybe_build_closed_loop_cache_skill(
+            skill_name="systematic_debugging",
+            skill_path=fake_skill_path,
+            baseline_skill_body="body",
+            suite_path=_SUITE_FIXTURE,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+        )
+        assert isinstance(cache._validator.runner, HermesAgentRunner)
+
+    def test_claude_backend_uses_claude_runner(self, fake_skill_path):
+        # agent_backend="claude" swaps in the Claude Code runner (delivers the
+        # candidate skill as a plugin to `claude -p`); installer + cache unchanged.
+        from evolution.validation.claude_runner import ClaudeCodeAgentRunner
+
+        cache = _maybe_build_closed_loop_cache_skill(
+            skill_name="systematic_debugging",
+            skill_path=fake_skill_path,
+            baseline_skill_body="body",
+            suite_path=_SUITE_FIXTURE,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+            agent_backend="claude",
+            agent_model="opus",
+            agent_timeout_seconds=420,
+        )
+        assert isinstance(cache._validator.runner, ClaudeCodeAgentRunner)
+        assert cache._validator.runner.model == "opus"
+        assert cache._validator.runner.timeout_seconds == 420
+
+    def test_claude_backend_defaults_model_when_unset(self, fake_skill_path):
+        # Unlike Hermes (model=None → config default), the Claude runner has its
+        # own "sonnet" default; passing None must NOT clobber it.
+        cache = _maybe_build_closed_loop_cache_skill(
+            skill_name="systematic_debugging",
+            skill_path=fake_skill_path,
+            baseline_skill_body="body",
+            suite_path=_SUITE_FIXTURE,
+            saturation_threshold=0.95,
+            min_iters=3,
+            window_size=8,
+            agent_backend="claude",
+        )
+        assert cache._validator.runner.model == "sonnet"
+
     def test_agent_timeout_none_keeps_runner_default(self, fake_skill_path):
         # No override → runner uses its DEFAULT_TASK_TIMEOUT_SECONDS (120s).
         from evolution.validation.hermes_runner import DEFAULT_TASK_TIMEOUT_SECONDS

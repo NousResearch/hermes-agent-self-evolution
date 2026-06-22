@@ -531,6 +531,7 @@ def _maybe_build_closed_loop_cache_skill(
     min_iters: int,
     window_size: int,
     gate_mode: str = "sampled",
+    agent_backend: str = "hermes",
     agent_model: Optional[str] = None,
     agent_timeout_seconds: Optional[int] = None,
     suite_override: "Optional[TaskSuite]" = None,
@@ -546,7 +547,10 @@ def _maybe_build_closed_loop_cache_skill(
         writable copy of the baseline skill (decoupled from the user's
         real HERMES_HOME / plugin cache)
       - SkillFileInstaller pointing at that workdir
-      - ClosedLoopValidator + HermesAgentRunner
+      - ClosedLoopValidator + the backend's runner (Hermes `hermes -z`, or a
+        sandboxed Claude Code `claude -p` with the candidate skill delivered as
+        a plugin). Only the runner is backend-specific; the installer, validator,
+        and feedback cache are shared.
       - ClosedLoopFeedbackCache wired with write_text_artifact (skill bodies
         are raw text, not MCP manifests) and .md suffix
     """
@@ -559,7 +563,6 @@ def _maybe_build_closed_loop_cache_skill(
         write_text_artifact,
     )
     from evolution.validation.artifact_installer import SkillFileInstaller
-    from evolution.validation.hermes_runner import HermesAgentRunner
     from evolution.validation.task import TaskSuite
     from evolution.validation.validator import ClosedLoopValidator
 
@@ -569,10 +572,24 @@ def _maybe_build_closed_loop_cache_skill(
         skill_name=skill_name,
         workdir=workdir,
     )
-    runner_kwargs: dict = {"model": agent_model}
-    if agent_timeout_seconds is not None:
-        runner_kwargs["timeout_seconds"] = agent_timeout_seconds
-    runner = HermesAgentRunner(**runner_kwargs)
+    if agent_backend == "claude":
+        from evolution.validation.claude_runner import ClaudeCodeAgentRunner
+
+        # ClaudeCodeAgentRunner defaults model="sonnet"; only override when the
+        # caller set one (passing None would clobber the default).
+        claude_kwargs: dict = {}
+        if agent_model:
+            claude_kwargs["model"] = agent_model
+        if agent_timeout_seconds is not None:
+            claude_kwargs["timeout_seconds"] = agent_timeout_seconds
+        runner = ClaudeCodeAgentRunner(**claude_kwargs)
+    else:
+        from evolution.validation.hermes_runner import HermesAgentRunner
+
+        runner_kwargs: dict = {"model": agent_model}
+        if agent_timeout_seconds is not None:
+            runner_kwargs["timeout_seconds"] = agent_timeout_seconds
+        runner = HermesAgentRunner(**runner_kwargs)
     validator = ClosedLoopValidator(installer=installer, runner=runner)
     # suite_override (the --compile-floor holdout split) scopes baseline/evolved/
     # floor scoring to the same held-out tasks; default reads the whole suite.
@@ -677,6 +694,7 @@ def evolve(
     closed_loop_min_iters: int = 3,
     closed_loop_window_size: int = 8,
     closed_loop_mode: str = "feedback",
+    closed_loop_agent_backend: str = "hermes",
     closed_loop_in_valset: bool = False,
     closed_loop_agent_model: Optional[str] = None,
     closed_loop_task_timeout_seconds: Optional[int] = None,
@@ -970,6 +988,7 @@ def evolve(
                 min_iters=closed_loop_min_iters,
                 window_size=closed_loop_window_size,
                 gate_mode=_cache_gate_mode,
+                agent_backend=closed_loop_agent_backend,
                 agent_model=closed_loop_agent_model,
                 agent_timeout_seconds=closed_loop_task_timeout_seconds,
                 suite_override=cl_holdout_suite,
@@ -992,6 +1011,7 @@ def evolve(
                     min_iters=closed_loop_min_iters,
                     window_size=closed_loop_window_size,
                     gate_mode=_cache_gate_mode,
+                    agent_backend=closed_loop_agent_backend,
                     agent_model=closed_loop_agent_model,
                     agent_timeout_seconds=closed_loop_task_timeout_seconds,
                     suite_override=cl_train_suite,
@@ -2308,6 +2328,17 @@ def evolve(
          "your config.",
 )
 @click.option(
+    "--closed-loop-agent-backend",
+    "closed_loop_agent_backend",
+    default="hermes",
+    type=click.Choice(["hermes", "claude"]),
+    help="Which agent runs closed-loop validation. 'hermes' drives `hermes -z` "
+         "(default). 'claude' drives a sandboxed Claude Code `claude -p` with the "
+         "candidate skill delivered as a plugin — use this to evolve a skill "
+         "against the Claude Code agent. With 'claude', --closed-loop-agent-model "
+         "takes a Claude model alias (e.g. sonnet, opus).",
+)
+@click.option(
     "--closed-loop-task-timeout-seconds",
     "closed_loop_task_timeout_seconds",
     default=None,
@@ -2347,6 +2378,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          closed_loop_mode,
          closed_loop_in_valset,
          closed_loop_agent_model,
+         closed_loop_agent_backend,
          closed_loop_task_timeout_seconds,
          noise_aware_gate):
     """Evolve an agent skill using DSPy + GEPA optimization."""
@@ -2398,6 +2430,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             closed_loop_mode=closed_loop_mode,
             closed_loop_in_valset=closed_loop_in_valset,
             closed_loop_agent_model=closed_loop_agent_model,
+            closed_loop_agent_backend=closed_loop_agent_backend,
             closed_loop_task_timeout_seconds=closed_loop_task_timeout_seconds,
             noise_aware_gate=noise_aware_gate,
             create_pr_flag=create_pr_flag,
