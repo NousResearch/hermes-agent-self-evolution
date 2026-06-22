@@ -926,6 +926,31 @@ writeup + caveats: [the MCP-description findings report](reports/mcp_description
 artifact-independent oracle (the closed-loop suite), not a synthetic eval generated
 from the artifact, and needs enough reps to clear the noise floor.
 
+### Extended to thick skills — convention coupling is GREEN (closed-loop, Sonnet)
+
+The non-inferable-coupling qualifier extends from tool descriptions to **thick skill
+bodies**. Closed-loop on the real `codebase-summary` skill (a 314-line SOP): lesion
+its non-inferable output convention (write to `.sop/summary/` with seven exact
+filenames) out of the body only — frontmatter/description held byte-identical so
+skill *selection* is unconfounded — and deliver INTACT vs LESIONED to a sandboxed
+`claude -p` (Sonnet) via the `--plugin-dir` adapter. A zero-LM, artifact-independent
+oracle (kept outside the fixture so the lesioned agent can't read the convention out
+of it) scores convention adherence.
+
+Result: **5/5 diverse repos discriminative — LESIONED 0.00, INTACT 1.00, A/A flip
+0.00.** The skill fired in *both* arms (not a delivery artifact); under LESIONED the
+agent reproduced only ~2/7 of the names anywhere and the path never (not an oracle
+artifact). This is the **skill-body analogue of the tool-description coupling**
+above: artifact text drives a capable agent exactly where it carries a signal the
+agent cannot infer. **Honest scope:** the *convention / instruction-following* axis
+(the expected-green one) — not documentation quality, not reasoning/methodology
+(where the decoupling prior still holds), and a maximal lesion. Full writeup:
+[the skill-body coupling findings report](reports/skill_body_coupling_findings.md).
+**Next (G2):** this reopens skill-evolution as a product on the convention surface —
+the open test is whether the real `evolve_skill` GEPA loop + noise-aware gate can
+recover a degraded skill back toward the convention and deploy it (the closed
+self-improvement loop delivering measurable gain on a real surface).
+
 ### Wave 1 — Measurement & free wins
 
 1. **Mine the gate-decision archive for item statistics.** 336 of 350
