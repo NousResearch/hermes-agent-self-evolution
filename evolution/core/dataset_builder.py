@@ -133,6 +133,7 @@ class SyntheticDatasetBuilder:
             )
 
         # Parse the generated test cases
+        import ast
         try:
             cases_raw = json.loads(result.test_cases)
         except json.JSONDecodeError:
@@ -140,7 +141,14 @@ class SyntheticDatasetBuilder:
             import re
             match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
             if match:
-                cases_raw = json.loads(match.group())
+                try:
+                    cases_raw = json.loads(match.group())
+                except json.JSONDecodeError:
+                    # Fallback: try Python literal eval (handles single quotes)
+                    try:
+                        cases_raw = ast.literal_eval(match.group())
+                    except (ValueError, SyntaxError):
+                        raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
             else:
                 raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
 
