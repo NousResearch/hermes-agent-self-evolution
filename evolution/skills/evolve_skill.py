@@ -5,12 +5,14 @@ Usage:
     python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
 """
 
+import difflib
 import json
 import sys
 import time
+from dataclasses import asdict
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 import click
 import dspy
@@ -18,6 +20,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from evolution.core.candidate_bundle import (
+    create_candidate_bundle,
+    write_bundle_json,
+    write_bundle_text,
+    write_decision,
+)
 from evolution.core.config import EvolutionConfig, get_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
@@ -32,6 +40,143 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+
+def write_skill_candidate_bundle(
+    *,
+    skill_name: str,
+    baseline_skill: str,
+    evolved_skill: str,
+    metrics: dict,
+    constraint_results: list,
+    seed_skill: str | None = None,
+    decision_summary: str | None = None,
+) -> Path:
+    """Write a Phase 1 result using the local candidate bundle contract."""
+
+    bundle = create_candidate_bundle(
+        phase="Phase 1: Skill Evolution",
+        target=skill_name,
+        run_id=datetime.now().strftime("%Y%m%d_%H%M%S_%f_phase1"),
+    )
+    sanitized_metrics = _sanitize_skill_candidate_metrics(metrics)
+    write_bundle_text(bundle, "candidates/baseline_skill.md", baseline_skill)
+    write_bundle_text(bundle, "candidates/evolved_skill.md", evolved_skill)
+    if seed_skill is not None:
+        write_bundle_text(bundle, "candidates/seed_skill.md", seed_skill)
+    diff_text = _skill_diff(baseline_skill, evolved_skill)
+    write_bundle_text(bundle, "candidates/candidate.patch", diff_text)
+    write_bundle_json(bundle, "eval/metrics.json", sanitized_metrics)
+    write_bundle_json(
+        bundle,
+        "eval/constraint_results.json",
+        [asdict(result) for result in constraint_results],
+    )
+    write_bundle_text(bundle, "reports/report.md", _render_skill_candidate_report(skill_name, sanitized_metrics, diff_text))
+    write_bundle_text(bundle, "reports/verification.log", _render_skill_verification_log(constraint_results, sanitized_metrics))
+    write_bundle_text(bundle, "reports/rollback.md", _render_skill_rollback_note(skill_name))
+    decision_status = _decision_status_for_skill_candidate(
+        diff_text=diff_text,
+        improvement=float(sanitized_metrics.get("improvement", 0.0) or 0.0),
+        constraints_passed=bool(sanitized_metrics.get("constraints_passed", False)),
+    )
+    write_decision(
+        bundle,
+        status=decision_status,
+        summary=decision_summary
+        or "Phase 1 skill candidate generated locally; active skills and GitHub PRs were not modified.",
+        metrics=sanitized_metrics,
+        artifacts={
+            "baseline": "candidates/baseline_skill.md",
+            "evolved": "candidates/evolved_skill.md",
+            "patch": "candidates/candidate.patch",
+            "metrics": "eval/metrics.json",
+            "constraints": "eval/constraint_results.json",
+            "report": "reports/report.md",
+            "rollback": "reports/rollback.md",
+        },
+    )
+    return bundle.root
+
+
+def _sanitize_skill_candidate_metrics(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    sanitized = dict(metrics)
+    if sanitized.get("seed_skill_path"):
+        sanitized["seed_skill_path"] = "[redacted-seed-skill-path]"
+    return sanitized
+
+
+def _decision_status_for_skill_candidate(*, diff_text: str, improvement: float, constraints_passed: bool) -> str:
+    if not diff_text.strip() or diff_text.startswith("No candidate skill changes."):
+        return "NO_DIFF_NO_GO"
+    if not constraints_passed:
+        return "REGRESSION_NO_GO"
+    if improvement > 0:
+        return "PASS_CANDIDATE_ONLY"
+    return "INCONCLUSIVE"
+
+
+def _skill_diff(baseline_skill: str, evolved_skill: str) -> str:
+    if baseline_skill == evolved_skill:
+        return "No candidate skill changes.\n"
+    return "".join(
+        difflib.unified_diff(
+            baseline_skill.splitlines(keepends=True),
+            evolved_skill.splitlines(keepends=True),
+            fromfile="baseline_skill.md",
+            tofile="evolved_skill.md",
+        )
+    )
+
+
+def _render_skill_candidate_report(skill_name: str, metrics: Mapping[str, object], diff_text: str) -> str:
+    return "\n".join(
+        [
+            f"# Phase 1 Skill Candidate Bundle — {skill_name}",
+            "",
+            "Status: candidate-only; active Hermes skills were not modified.",
+            "",
+            "## Metrics",
+            "",
+            f"- baseline_score: `{metrics.get('baseline_score')}`",
+            f"- evolved_score: `{metrics.get('evolved_score')}`",
+            f"- improvement: `{metrics.get('improvement')}`",
+            f"- constraints_passed: `{metrics.get('constraints_passed')}`",
+            "",
+            "## Diff",
+            "",
+            "```diff",
+            diff_text.rstrip(),
+            "```",
+            "",
+        ]
+    )
+
+
+def _render_skill_verification_log(constraint_results: list, metrics: Mapping[str, object]) -> str:
+    lines = ["Phase 1 skill candidate verification", "", "Constraints:"]
+    for result in constraint_results:
+        status = "PASS" if result.passed else "FAIL"
+        lines.append(f"- {status} {result.constraint_name}: {result.message}")
+    lines.extend(
+        [
+            "",
+            f"constraints_passed={metrics.get('constraints_passed')}",
+            f"holdout_examples={metrics.get('holdout_examples')}",
+            f"holdout_total_examples={metrics.get('holdout_total_examples')}",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _render_skill_rollback_note(skill_name: str) -> str:
+    return (
+        f"# Rollback note — {skill_name}\n\n"
+        "No active skill file was modified by this candidate-only run. "
+        "If a human later applies `candidates/candidate.patch`, rollback by "
+        "restoring the prior active SKILL.md from `candidates/baseline_skill.md` "
+        "or by reverting the local apply commit.\n"
+    )
 
 
 def evolve(
@@ -240,11 +385,37 @@ def evolve(
 
     if not all_pass:
         console.print("[red]✗ Evolved skill FAILED constraints — not deploying[/red]")
-        # Still save for inspection
-        output_path = Path("output") / skill_name / "evolved_FAILED.md"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(evolved_full)
-        console.print(f"  Saved failed variant to {output_path}")
+        metrics = {
+            "skill_name": skill_name,
+            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "iterations": iterations,
+            "optimizer_model": optimizer_model,
+            "eval_model": eval_model,
+            "baseline_score": None,
+            "evolved_score": None,
+            "improvement": 0.0,
+            "baseline_size": len(optimization_seed["body"]),
+            "active_baseline_size": len(skill["body"]),
+            "seed_skill_path": str(Path(seed_skill_path).expanduser()) if seed_skill_path else None,
+            "seed_size": len(seed_skill["body"]) if seed_skill else None,
+            "evolved_size": len(evolved_body),
+            "train_examples": len(dataset.train),
+            "val_examples": len(dataset.val),
+            "holdout_examples": 0,
+            "holdout_total_examples": len(dataset.holdout),
+            "elapsed_seconds": elapsed,
+            "constraints_passed": False,
+        }
+        bundle_dir = write_skill_candidate_bundle(
+            skill_name=skill_name,
+            baseline_skill=skill["raw"],
+            evolved_skill=evolved_full,
+            seed_skill=seed_skill["raw"] if seed_skill else None,
+            metrics=metrics,
+            constraint_results=evolved_constraints,
+            decision_summary="Phase 1 skill candidate failed constraints; no active skill or GitHub PR mutation performed.",
+        )
+        console.print(f"  Saved failed candidate bundle to {bundle_dir}")
         return
 
     # ── 8. Evaluate on holdout set ──────────────────────────────────────
@@ -298,20 +469,8 @@ def evolve(
     console.print()
     console.print(table)
 
-    # ── 10. Save output ─────────────────────────────────────────────────
+    # ── 10. Save local candidate bundle ─────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = Path("output") / skill_name / timestamp
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save evolved skill
-    (output_dir / "evolved_skill.md").write_text(evolved_full)
-
-    # Save baseline for comparison
-    (output_dir / "baseline_skill.md").write_text(skill["raw"])
-    if seed_skill:
-        (output_dir / "seed_skill.md").write_text(seed_skill["raw"])
-
-    # Save metrics
     metrics = {
         "skill_name": skill_name,
         "timestamp": timestamp,
@@ -333,17 +492,23 @@ def evolve(
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
     }
-    (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    output_dir = write_skill_candidate_bundle(
+        skill_name=skill_name,
+        baseline_skill=skill["raw"],
+        evolved_skill=evolved_full,
+        seed_skill=seed_skill["raw"] if seed_skill else None,
+        metrics=metrics,
+        constraint_results=evolved_constraints,
+    )
 
-    console.print(f"\n  Output saved to {output_dir}/")
+    console.print(f"\n  Candidate bundle saved to {output_dir}/")
 
     if improvement > 0:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
-        console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+        console.print(f"  Review the patch: {output_dir}/candidates/candidate.patch")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
-
 
 @click.command()
 @click.option("--skill", required=True, help="Name of the skill to evolve")

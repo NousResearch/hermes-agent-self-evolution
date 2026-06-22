@@ -22,6 +22,12 @@ from typing import Mapping, Sequence
 import click
 from rich.console import Console
 
+from evolution.core.candidate_bundle import (
+    create_candidate_bundle,
+    write_bundle_json,
+    write_bundle_text,
+    write_decision,
+)
 from evolution.core.config import get_hermes_agent_path
 from evolution.tools.tool_description_eval import (
     DEFAULT_MAX_PARAMETER_DESCRIPTION_CHARS,
@@ -321,26 +327,53 @@ def run_candidate_generation(
     eval_cases = tuple(cases) if cases is not None else default_tool_selection_cases()
     candidates = generate_candidate_descriptions(records, eval_cases)
 
-    target_dir = Path(output_dir) if output_dir else Path("output") / "tool-description" / datetime.now().strftime("%Y%m%d_%H%M%S_phase2d")
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    inventory_path = target_dir / "inventory.json"
-    candidates_path = target_dir / "candidate_descriptions.json"
-    report_path = target_dir / "candidate_only_report.json"
-    diff_path = target_dir / "candidate.diff"
-
-    inventory_path.write_text(json.dumps([asdict(record) for record in records], indent=2, sort_keys=True) + "\n")
-    candidates_path.write_text(
-        json.dumps(
-            [asdict(candidate) | {"description_delta": candidate.description_delta} for candidate in candidates],
-            indent=2,
-            sort_keys=True,
+    standard_bundle = None
+    if output_dir:
+        target_dir = Path(output_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        inventory_path = target_dir / "inventory.json"
+        candidates_path = target_dir / "candidate_descriptions.json"
+        report_path = target_dir / "candidate_only_report.json"
+        diff_path = target_dir / "candidate.diff"
+        gate_path = target_dir / "cross_tool_regression.json"
+        artifact_refs = {
+            "inventory": str(inventory_path),
+            "candidates": str(candidates_path),
+            "diff": str(diff_path),
+            "cross_tool_gate": str(gate_path),
+        }
+    else:
+        standard_bundle = create_candidate_bundle(
+            phase="Phase 2: Tool Description Evolution",
+            target="tool-description",
+            run_id=datetime.now().strftime("%Y%m%d_%H%M%S_%f_phase2d"),
         )
-        + "\n"
-    )
+        target_dir = standard_bundle.root
+        inventory_path = target_dir / "inputs" / "inventory.json"
+        candidates_path = target_dir / "candidates" / "candidate_descriptions.json"
+        report_path = target_dir / "reports" / "candidate_only_report.json"
+        diff_path = target_dir / "candidates" / "candidate.patch"
+        gate_path = target_dir / "eval" / "cross_tool_regression.json"
+        artifact_refs = {
+            "inventory": "inputs/inventory.json",
+            "candidates": "candidates/candidate_descriptions.json",
+            "patch": "candidates/candidate.patch",
+            "report": "reports/candidate_only_report.json",
+            "cross_tool_gate": "eval/cross_tool_regression.json",
+        }
+
+    inventory_payload = [asdict(record) for record in records]
+    candidates_payload = [asdict(candidate) | {"description_delta": candidate.description_delta} for candidate in candidates]
+    if standard_bundle:
+        write_bundle_json(standard_bundle, "inputs/inventory.json", inventory_payload)
+        write_bundle_json(standard_bundle, "candidates/candidate_descriptions.json", candidates_payload)
+    else:
+        inventory_path.write_text(json.dumps(inventory_payload, indent=2, sort_keys=True) + "\n")
+        candidates_path.write_text(json.dumps(candidates_payload, indent=2, sort_keys=True) + "\n")
 
     report = build_candidate_only_report(candidates, eval_cases)
     phase2d_gate = evaluate_cross_tool_gate(candidates_from_inventory(records), candidates, eval_cases)
+    diff_text = _candidate_diff(candidates)
     report.update(
         {
             "phase": "2D",
@@ -352,15 +385,30 @@ def run_candidate_generation(
                 records=records,
                 import_warnings=import_warnings,
             ),
-            "artifacts": {
-                "inventory": str(inventory_path),
-                "candidates": str(candidates_path),
-                "diff": str(diff_path),
-            },
+            "artifacts": artifact_refs,
         }
     )
-    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    diff_path.write_text(_candidate_diff(candidates))
+    gate_payload = phase2d_gate.to_dict()
+    if standard_bundle:
+        write_bundle_json(standard_bundle, "reports/candidate_only_report.json", report)
+        write_bundle_json(standard_bundle, "eval/cross_tool_regression.json", gate_payload)
+        write_bundle_text(standard_bundle, "candidates/candidate.patch", diff_text)
+        decision_status = _decision_status_for_tool_candidate(phase2d_gate.passed, diff_text)
+        write_decision(
+            standard_bundle,
+            status=decision_status,
+            summary="Phase 2 tool-description candidate generated locally; no active schema or GitHub PR mutation performed.",
+            metrics={
+                "selection_accuracy": report["metrics"].get("selection_accuracy"),
+                "wrong_tool_avoidance": report["metrics"].get("wrong_tool_avoidance"),
+                "phase2d_gate_passed": phase2d_gate.passed,
+            },
+            artifacts=artifact_refs,
+        )
+    else:
+        report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+        gate_path.write_text(json.dumps(gate_payload, indent=2, sort_keys=True) + "\n")
+        diff_path.write_text(diff_text)
 
     return CandidateGenerationResult(
         output_dir=target_dir,
@@ -371,6 +419,14 @@ def run_candidate_generation(
         phase2d_gate_passed=phase2d_gate.passed,
         phase2d_failed_checks=phase2d_gate.failed_checks,
     )
+
+
+def _decision_status_for_tool_candidate(gate_passed: bool, diff_text: str) -> str:
+    if not diff_text.strip() or diff_text.startswith("No candidate description changes."):
+        return "NO_DIFF_NO_GO"
+    if gate_passed:
+        return "PASS_CANDIDATE_ONLY"
+    return "REGRESSION_NO_GO"
 
 
 def _candidate_description_for_tool(

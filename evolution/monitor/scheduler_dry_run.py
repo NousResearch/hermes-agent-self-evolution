@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from evolution.core.candidate_bundle import ALLOWED_DECISION_STATUSES, SCHEMA_VERSION as CANDIDATE_BUNDLE_SCHEMA_VERSION
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PHASE5_OUTPUT_ROOT = REPO_ROOT / "output" / "phase5-continuous-loop"
 REPORT_JSON_NAME = "scheduler_dry_run_report.json"
@@ -35,6 +37,7 @@ _REQUIRED_BEFORE_REAL_SCHEDULER = [
 def build_scheduler_dry_run_report(
     auto_triage_report: Mapping[str, Any],
     *,
+    candidate_bundle_decisions: Iterable[Mapping[str, Any]] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic no-side-effect scheduler dry-run report.
@@ -47,10 +50,16 @@ def build_scheduler_dry_run_report(
 
     _reject_private_or_raw_identifiers(auto_triage_report)
     _validate_auto_triage_report(auto_triage_report)
+    bundle_decisions = [_validate_candidate_bundle_decision(decision) for decision in (candidate_bundle_decisions or [])]
 
     generated_at = generated_at or datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     ranked_targets = list(auto_triage_report["ranked_targets"])
     dry_run_actions = [_dry_run_action(target, index) for index, target in enumerate(ranked_targets, start=1)]
+    candidate_bundle_queue = [
+        _candidate_bundle_queue_item(target, index, bundle_decisions)
+        for index, target in enumerate(ranked_targets, start=1)
+    ]
+    candidate_bundle_queue_summary = _candidate_bundle_queue_summary(candidate_bundle_queue, bundle_decisions)
     status = "DRY_RUN_REVIEW_REQUIRED" if dry_run_actions else "DRY_RUN_NOOP"
     recommended_next_step = _REVIEW_RECOMMENDATION if dry_run_actions else _NOOP_RECOMMENDATION
     top_metric_id = ranked_targets[0]["metric_id"] if ranked_targets else None
@@ -107,6 +116,16 @@ def build_scheduler_dry_run_report(
             "review_required": bool(dry_run_actions),
         },
         "dry_run_actions": dry_run_actions,
+        "local_candidate_bundle_contract": {
+            "schema_version": CANDIDATE_BUNDLE_SCHEMA_VERSION,
+            "decision_json_consumed": bool(bundle_decisions),
+            "decision_json_required_before_apply": True,
+            "runner_execution_started": False,
+            "active_apply_ready": False,
+            "github_publication_performed": False,
+        },
+        "candidate_bundle_queue_summary": candidate_bundle_queue_summary,
+        "candidate_bundle_queue": candidate_bundle_queue,
         "recommended_next_step": recommended_next_step,
     }
     _reject_private_or_raw_identifiers(report)
@@ -117,12 +136,17 @@ def write_scheduler_dry_run_report(
     auto_triage_report: Mapping[str, Any],
     *,
     output_dir: Path,
+    candidate_bundle_decisions: Iterable[Mapping[str, Any]] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     """Write JSON and Markdown scheduler dry-run artifacts under Phase 5 output root."""
 
     output_dir = _validate_output_dir(output_dir)
-    report = build_scheduler_dry_run_report(auto_triage_report, generated_at=generated_at)
+    report = build_scheduler_dry_run_report(
+        auto_triage_report,
+        candidate_bundle_decisions=candidate_bundle_decisions,
+        generated_at=generated_at,
+    )
     report["artifacts"] = {
         "report_json": REPORT_JSON_NAME,
         "report_markdown": REPORT_MARKDOWN_NAME,
@@ -242,6 +266,155 @@ def _dry_run_action(target: Mapping[str, Any], index: int) -> dict[str, Any]:
     }
 
 
+def _candidate_bundle_queue_item(
+    target: Mapping[str, Any],
+    index: int,
+    decisions: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    profile = _candidate_bundle_profile(target)
+    decision = _matching_candidate_bundle_decision(target, profile, decisions)
+    if decision is None:
+        decision_fields = {
+            "decision_state": "MISSING_DECISION",
+            "decision_status": None,
+            "decision_run_id": None,
+            "decision_apply_ready": False,
+            "decision_github_pr_created": False,
+            "would_create_local_bundle": False,
+        }
+    else:
+        decision_fields = {
+            "decision_state": "DECISION_AVAILABLE",
+            "decision_status": decision["status"],
+            "decision_run_id": decision["run_id"],
+            "decision_apply_ready": False,
+            "decision_github_pr_created": False,
+            "would_create_local_bundle": False,
+        }
+    return {
+        "queue_id": f"candidate-bundle-target-{index:03d}",
+        "target_rank": target["rank"],
+        "target_metric_id": target["metric_id"].strip(),
+        "component": target["component"].strip(),
+        **profile,
+        **decision_fields,
+        "would_start_runner": False,
+        "requires_human_review_before_apply": True,
+    }
+
+
+def _candidate_bundle_queue_summary(
+    queue: list[Mapping[str, Any]],
+    decisions: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    matched = sum(1 for item in queue if item["decision_state"] == "DECISION_AVAILABLE")
+    return {
+        "queue_count": len(queue),
+        "decision_count": len(decisions),
+        "matched_decision_count": matched,
+        "missing_decision_count": len(queue) - matched,
+        "runner_execution_started": False,
+        "active_apply_ready": False,
+        "github_publication_performed": False,
+    }
+
+
+def _candidate_bundle_profile(target: Mapping[str, Any]) -> dict[str, str]:
+    component = target["component"].strip()
+    metric_id = target["metric_id"].strip()
+    if component == "tool_descriptions":
+        return {
+            "candidate_bundle_phase": "Phase 2: Tool Description Evolution",
+            "candidate_bundle_target": "tool-description",
+            "runner_hint": "python -m evolution.tools.evolve_tool_descriptions",
+        }
+    if component == "skill_usage":
+        return {
+            "candidate_bundle_phase": "Phase 1: Skill Evolution",
+            "candidate_bundle_target": "skill-usage",
+            "runner_hint": "python -m evolution.skills.evolve_skill",
+        }
+    if component == "system_prompts":
+        return {
+            "candidate_bundle_phase": "Phase 3: System Prompt Evolution",
+            "candidate_bundle_target": "system-prompts",
+            "runner_hint": "phase3-system-prompt-candidate-runner-not-enabled-in-scheduler-dry-run",
+        }
+    if component in {"tool_code", "tool_implementation", "tool_implementation_code"}:
+        return {
+            "candidate_bundle_phase": "Phase 4: Tool Implementation Evolution",
+            "candidate_bundle_target": "tool-implementation",
+            "runner_hint": "phase4-code-candidate-runner-not-enabled-in-scheduler-dry-run",
+        }
+    return {
+        "candidate_bundle_phase": "Phase 5: Continuous Self-Improvement Loop",
+        "candidate_bundle_target": _safe_target_slug(metric_id),
+        "runner_hint": "manual-local-candidate-bundle-runner-selection-required",
+    }
+
+
+def _matching_candidate_bundle_decision(
+    target: Mapping[str, Any],
+    profile: Mapping[str, str],
+    decisions: list[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    accepted_target = _strict_match_text(profile["candidate_bundle_target"])
+    accepted_phase = _strict_match_text(profile["candidate_bundle_phase"])
+    for decision in decisions:
+        decision_target = _strict_match_text(str(decision["target"]))
+        decision_phase = _strict_match_text(str(decision["phase"]))
+        if decision_target == accepted_target and decision_phase == accepted_phase:
+            return decision
+    return None
+
+
+def _validate_candidate_bundle_decision(decision: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(decision, Mapping):
+        raise ValueError("candidate bundle decision must be an object")
+    _reject_private_or_raw_identifiers(decision)
+    if decision.get("schema_version") != CANDIDATE_BUNDLE_SCHEMA_VERSION:
+        raise ValueError("candidate bundle decision schema_version must be hse-local-candidate-bundle-v1")
+    if decision.get("status") not in ALLOWED_DECISION_STATUSES:
+        raise ValueError("candidate bundle decision status is not recognized")
+    for key in ("phase", "target", "run_id"):
+        if not isinstance(decision.get(key), str) or not decision[key].strip():
+            raise ValueError(f"candidate bundle decision {key} must be a non-empty string")
+    if decision.get("candidate_only") is not True or decision.get("apply_ready") is not False:
+        raise ValueError("candidate bundle decision must be candidate-only")
+    github = decision.get("github")
+    if not isinstance(github, Mapping):
+        raise ValueError("candidate bundle decision must contain GitHub side-effect fields")
+    if any(github.get(key) is not False for key in ("pr_created", "push_performed", "merge_performed")):
+        raise ValueError("candidate bundle decision must not contain GitHub side effects")
+    safety = decision.get("safety_invariants")
+    if not isinstance(safety, Mapping):
+        raise ValueError("candidate bundle decision must contain safety_invariants")
+    required_false = [
+        "active_runtime_mutation",
+        "active_skill_modified",
+        "active_tool_schema_modified",
+        "active_prompt_modified",
+        "credentials_accessed",
+        "external_publication_performed",
+        "deployment_performed",
+    ]
+    if any(safety.get(key) is not False for key in required_false):
+        raise ValueError("candidate bundle decision must be candidate-only")
+    return dict(decision)
+
+
+def _safe_target_slug(value: str) -> str:
+    chars = [char.lower() if char.isalnum() else "-" for char in value.strip()]
+    slug = "".join(chars).strip("-")
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug or "phase5-target"
+
+
+def _strict_match_text(value: str) -> str:
+    return value.strip()
+
+
 def _render_markdown(report: Mapping[str, Any]) -> str:
     lines = [
         "# Phase 5 Scheduler Dry-Run",
@@ -269,6 +442,16 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
                 f"{action['action_id']}: `{action['target_metric_id']}` "
                 f"priority_score={action['priority_score']}, "
                 "would_create_cron_job=false, would_start_optimizer=false"
+            )
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Local Candidate Bundle Queue", ""])
+    if report.get("candidate_bundle_queue"):
+        for item in report["candidate_bundle_queue"]:
+            lines.append(
+                f"{item['queue_id']}: `{item['target_metric_id']}` -> "
+                f"{item['candidate_bundle_phase']} / `{item['candidate_bundle_target']}`, "
+                f"decision_state={item['decision_state']}, would_start_runner=false"
             )
     else:
         lines.append("- none")
@@ -330,15 +513,26 @@ def _all_strings(value: object) -> Iterable[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Write a read-only Phase 5 scheduler dry-run report.")
     parser.add_argument("--auto-triage-report-json", required=True, type=Path)
+    parser.add_argument(
+        "--candidate-bundle-decision-json",
+        action="append",
+        default=[],
+        type=Path,
+        help="Optional local candidate bundle decision.json to consume in the dry-run queue.",
+    )
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--generated-at", default=None)
     args = parser.parse_args(argv)
 
     try:
         auto_triage_report = json.loads(args.auto_triage_report_json.read_text())
+        candidate_bundle_decisions = [
+            json.loads(path.read_text()) for path in args.candidate_bundle_decision_json
+        ]
         write_scheduler_dry_run_report(
             auto_triage_report,
             output_dir=args.output_dir,
+            candidate_bundle_decisions=candidate_bundle_decisions,
             generated_at=args.generated_at,
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:

@@ -20,7 +20,8 @@ Read current skill/prompt/tool ──► Generate eval dataset
                                    Constraint gates (tests, size limits, benchmarks)
                                         │
                                         ▼
-                                   Best variant ──► PR against hermes-agent
+                                   Best variant ──► Local candidate bundle
+                                                     (GitHub PR deferred)
 ```
 
 GEPA reads execution traces to understand *why* things fail (not just that they failed), then proposes targeted improvements. ICLR 2026 Oral, MIT licensed.
@@ -73,7 +74,47 @@ Every evolved variant must pass:
 2. **Size limits** — Skills ≤15KB, tool descriptions ≤500 chars
 3. **Caching compatibility** — No mid-conversation changes
 4. **Semantic preservation** — Must not drift from original purpose
-5. **PR review** — All changes go through human review, never direct commit
+5. **Local candidate bundle first** — Candidates are written under `~/.hermes/evolution/runs/<run-id>/` with `candidate_only=true`, `apply_ready=false`, and GitHub publication deferred. Human review is required before any active apply, push, PR, or merge.
+
+## Local Candidate Bundle Contract
+
+Default Phase 1 skill runs and Phase 2 tool-description runs now write local-first candidate bundles instead of repo-local `output/` artifacts:
+
+```text
+~/.hermes/evolution/runs/<run-id>/
+├── inputs/
+│   └── target_manifest.json
+├── candidates/
+│   ├── candidate.patch
+│   └── <candidate artifacts>
+├── eval/
+│   ├── metrics.json
+│   └── <gate artifacts>
+├── reports/
+│   ├── report.md
+│   ├── verification.log
+│   └── rollback.md
+└── decision.json
+```
+
+The run root can be overridden for tests or isolated operator runs:
+
+```bash
+export HSE_RUNS_ROOT=/tmp/hse-runs
+```
+
+Allowed `decision.json` statuses are:
+
+```text
+PASS_CANDIDATE_ONLY
+NO_DIFF_NO_GO
+REGRESSION_NO_GO
+INCONCLUSIVE
+BLOCKED_ENV
+NEEDS_HUMAN_SCOPE_REVIEW
+```
+
+Every bundle decision must keep `candidate_only=true`, `apply_ready=false`, `github.pr_created=false`, `github.push_performed=false`, and `github.merge_performed=false`. GitHub PR publication is a later explicit track, not part of candidate generation.
 
 ## Phase 2 Candidate-Only Report Contract
 
@@ -81,15 +122,22 @@ Phase 2 tool-description work currently emits review artifacts only. It does **n
 
 ```bash
 python -m evolution.tools.evolve_tool_descriptions \
+    --hermes-repo ~/.hermes/hermes-agent
+# writes ~/.hermes/evolution/runs/<run-id>/...
+
+# Optional legacy/custom output root for isolated tests:
+python -m evolution.tools.evolve_tool_descriptions \
     --hermes-repo ~/.hermes/hermes-agent \
-    --output-dir output/tool-description/<run-name>
+    --output-dir /tmp/hse-tool-description-run
 ```
 
-Each run writes:
-- `inventory.json` — read-only Hermes tool inventory snapshot.
-- `candidate_descriptions.json` — generated candidate descriptions plus normalized parameter descriptions.
-- `candidate.diff` — baseline-vs-candidate description diff.
-- `candidate_only_report.json` — canonical Phase 2 report intended for review, smoke checks, and CI/automation gates.
+Each default run writes the bundle layout:
+- `inputs/inventory.json` — read-only Hermes tool inventory snapshot.
+- `candidates/candidate_descriptions.json` — generated candidate descriptions plus normalized parameter descriptions.
+- `candidates/candidate.patch` — baseline-vs-candidate description diff.
+- `eval/cross_tool_regression.json` — formal Phase 2D gate payload.
+- `reports/candidate_only_report.json` — canonical Phase 2 report intended for review, smoke checks, and CI/automation gates.
+- `decision.json` — local candidate-only decision with GitHub/apply side effects false.
 
 `candidate_only_report.json` has these top-level contract fields:
 
@@ -121,9 +169,9 @@ Candidate-quality warnings and environment/import warnings must stay separate:
 Run the lightweight schema smoke check before wiring reports into downstream automation:
 
 ```bash
-python -m evolution.tools.report_contract output/tool-description/<run-name>/candidate_only_report.json
+python -m evolution.tools.report_contract ~/.hermes/evolution/runs/<run-id>/reports/candidate_only_report.json
 # or, after package install:
-hse-validate-tool-report output/tool-description/<run-name>/candidate_only_report.json
+hse-validate-tool-report ~/.hermes/evolution/runs/<run-id>/reports/candidate_only_report.json
 ```
 
 Phase 2E automation readiness is covered by `.github/workflows/phase2-tool-description-gate.yml`. The workflow runs the focused Phase 2 tool-description tests, builds a deterministic synthetic inventory from the 45-case default golden set, runs the candidate-only Phase 2D generator, validates `candidate_only_report.json`, runs the SessionDB holdout review smoke, and asserts `phase2d_gate.passed == true`, `min_case_count == 45`, and `apply_ready == false`. Negative tests also prove that the generator CLI exits non-zero on failed gates while structurally valid failed-gate reports remain readable by the report-contract smoke checker.
@@ -277,10 +325,26 @@ The Phase 5 scheduler dry-run report contract is documented in `reports/phase5_s
 ```bash
 python -m evolution.monitor.scheduler_dry_run \
     --auto-triage-report-json output/phase5-continuous-loop/<triage-run>/auto_triage_report.json \
+    --candidate-bundle-decision-json ~/.hermes/evolution/runs/<run-id>/decision.json \
     --output-dir output/phase5-continuous-loop/<scheduler-dry-run>
 ```
 
-It writes `scheduler_dry_run_report.json` and `.md` under the Phase 5 output root only. It converts ranked auto-triage targets into manual-review dry-run actions and keeps cron jobs, benchmark cron, notifications, optimizer execution, and automated PR updates disabled.
+It writes `scheduler_dry_run_report.json` and `.md` under the Phase 5 output root only. It converts ranked auto-triage targets into manual-review dry-run actions, emits a local candidate bundle queue, optionally consumes existing local bundle `decision.json` files, and keeps cron jobs, benchmark cron, notifications, optimizer execution, runner execution, active apply, and automated PR updates disabled.
+
+## Phase 5 Supervised Candidate Runner
+
+The Phase 5 supervised candidate runner contract is documented in `reports/phase5_supervised_candidate_runner_contract.md`. The explicit-approval CLI is:
+
+```bash
+python -m evolution.monitor.supervised_candidate_runner \
+    --scheduler-report-json output/phase5-continuous-loop/<scheduler-dry-run>/scheduler_dry_run_report.json \
+    --approved-queue-id candidate-bundle-target-001 \
+    --approval-token APPROVE_LOCAL_CANDIDATE_RUNNER \
+    --candidate-bundle-decision-json ~/.hermes/evolution/runs/<run-id>/decision.json \
+    --output-dir output/phase5-continuous-loop/<supervised-runner>
+```
+
+It writes `supervised_candidate_runner_report.json` and `.md` under the Phase 5 output root only. It handles exactly one approved scheduler queue target and re-consumes an existing local bundle `decision.json`. Inline command execution is deliberately disabled in this safety slice; run any approved local runner as a separate reviewed command, then pass its resulting `decision.json`. Active apply, GitHub publication, cron creation, deployment, and external notification remain disabled.
 
 ## Full Plan
 

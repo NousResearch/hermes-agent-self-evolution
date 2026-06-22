@@ -177,6 +177,26 @@ def test_candidate_generation_normalizes_overlong_parameter_descriptions_before_
     )
 
 
+def test_run_candidate_generation_default_output_uses_local_candidate_bundle(tmp_path, monkeypatch):
+    monkeypatch.setenv("HSE_RUNS_ROOT", str(tmp_path / "runs"))
+    inventory_path = tmp_path / "inventory.json"
+    inventory_path.write_text(json.dumps({"tools": [record.__dict__ for record in _minimal_inventory_records()]}))
+
+    result = run_candidate_generation(inventory_json=inventory_path, cases=[])
+
+    assert result.output_dir.parent == tmp_path / "runs"
+    assert result.inventory_path == result.output_dir / "inputs" / "inventory.json"
+    assert result.candidates_path == result.output_dir / "candidates" / "candidate_descriptions.json"
+    assert result.diff_path == result.output_dir / "candidates" / "candidate.patch"
+    assert result.report_path == result.output_dir / "reports" / "candidate_only_report.json"
+    decision = json.loads((result.output_dir / "decision.json").read_text())
+    assert decision["schema_version"] == "hse-local-candidate-bundle-v1"
+    assert decision["candidate_only"] is True
+    assert decision["apply_ready"] is False
+    assert decision["github"]["pr_created"] is False
+    assert decision["artifacts"]["patch"] == "candidates/candidate.patch"
+
+
 def test_run_candidate_generation_records_inventory_import_warnings_as_metadata_not_quality_warnings(
     tmp_path,
     monkeypatch,

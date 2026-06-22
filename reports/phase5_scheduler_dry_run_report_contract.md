@@ -64,6 +64,20 @@ Real scheduler enablement requires all of the following before any future non-dr
 
 Each dry-run action records the target metric, component, priority score, manual-review-only cadence, required approval, and explicit false flags for cron creation, benchmark cron enablement, optimizer start, external notification, and external PR update.
 
+## Local candidate bundle queue
+
+The scheduler dry-run also emits a local candidate bundle queue that maps ranked auto-triage targets to the local bundle contract:
+
+- `local_candidate_bundle_contract.schema_version`: `hse-local-candidate-bundle-v1`
+- `decision_json_required_before_apply=true`
+- `runner_execution_started=false`
+- `active_apply_ready=false`
+- `github_publication_performed=false`
+
+Optional `--candidate-bundle-decision-json <path>` inputs let the dry-run consume existing local bundle `decision.json` files. Consumed decisions must be candidate-only, keep `apply_ready=false`, record no GitHub PR/push/merge side effects, and match a ranked queue item by both phase and exact canonical candidate bundle target. Broad metric/component aliases do not count as a match. The dry-run only records whether a decision is already available for a ranked target; it does not start runners, create local bundles, apply candidates, or publish to GitHub.
+
+Queue entries include the target metric/component, mapped candidate bundle phase/target, runner hint, decision state (`DECISION_AVAILABLE` or `MISSING_DECISION`), decision status/run id when available, and `requires_human_review_before_apply=true`.
+
 ## Output boundary
 
 The CLI writes only under `output/phase5-continuous-loop/<run-id>/` and produces:

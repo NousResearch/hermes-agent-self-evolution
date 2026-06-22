@@ -112,6 +112,37 @@ def _sample_auto_triage_report() -> dict:
     }
 
 
+def _sample_candidate_bundle_decision() -> dict:
+    return {
+        "schema_version": "hse-local-candidate-bundle-v1",
+        "status": "PASS_CANDIDATE_ONLY",
+        "summary": "Phase 2 candidate generated locally for tool-selection triage.",
+        "phase": "Phase 2: Tool Description Evolution",
+        "target": "tool-description",
+        "run_id": "pytest-phase2-tool-description-run",
+        "generated_at": "2026-06-05T02:30:00Z",
+        "candidate_only": True,
+        "apply_ready": False,
+        "github": {
+            "pr_created": False,
+            "push_performed": False,
+            "merge_performed": False,
+            "publication_deferred": True,
+        },
+        "safety_invariants": {
+            "active_runtime_mutation": False,
+            "active_skill_modified": False,
+            "active_tool_schema_modified": False,
+            "active_prompt_modified": False,
+            "credentials_accessed": False,
+            "external_publication_performed": False,
+            "deployment_performed": False,
+        },
+        "metrics": {"selection_accuracy": 0.78},
+        "artifacts": {"patch": "candidates/candidate.patch"},
+    }
+
+
 def _assert_privacy_safe(value: object) -> None:
     text = json.dumps(value, sort_keys=True)
     forbidden_fragments = [
@@ -215,6 +246,122 @@ def test_build_scheduler_dry_run_report_is_read_only_and_plans_no_side_effect_ac
     }
     assert report["recommended_next_step"] == "human_review_required_before_scheduler_enablement"
     _assert_privacy_safe(report)
+
+
+def test_scheduler_dry_run_builds_local_candidate_bundle_queue_and_consumes_decisions():
+    from evolution.monitor.scheduler_dry_run import build_scheduler_dry_run_report
+
+    report = build_scheduler_dry_run_report(
+        _sample_auto_triage_report(),
+        candidate_bundle_decisions=[_sample_candidate_bundle_decision()],
+        generated_at="2026-06-05T02:00:00Z",
+    )
+
+    assert report["local_candidate_bundle_contract"] == {
+        "schema_version": "hse-local-candidate-bundle-v1",
+        "decision_json_consumed": True,
+        "decision_json_required_before_apply": True,
+        "runner_execution_started": False,
+        "active_apply_ready": False,
+        "github_publication_performed": False,
+    }
+    assert report["candidate_bundle_queue_summary"] == {
+        "queue_count": 3,
+        "decision_count": 1,
+        "matched_decision_count": 1,
+        "missing_decision_count": 2,
+        "runner_execution_started": False,
+        "active_apply_ready": False,
+        "github_publication_performed": False,
+    }
+    queue = report["candidate_bundle_queue"]
+    assert [item["target_metric_id"] for item in queue] == [
+        "tool_selection_accuracy",
+        "skill_loading_failure_rate",
+        "prompt_contract_warning_rate",
+    ]
+    assert queue[0] == {
+        "queue_id": "candidate-bundle-target-001",
+        "target_rank": 1,
+        "target_metric_id": "tool_selection_accuracy",
+        "component": "tool_descriptions",
+        "candidate_bundle_phase": "Phase 2: Tool Description Evolution",
+        "candidate_bundle_target": "tool-description",
+        "runner_hint": "python -m evolution.tools.evolve_tool_descriptions",
+        "decision_state": "DECISION_AVAILABLE",
+        "decision_status": "PASS_CANDIDATE_ONLY",
+        "decision_run_id": "pytest-phase2-tool-description-run",
+        "decision_apply_ready": False,
+        "decision_github_pr_created": False,
+        "would_start_runner": False,
+        "would_create_local_bundle": False,
+        "requires_human_review_before_apply": True,
+    }
+    assert queue[1]["candidate_bundle_phase"] == "Phase 1: Skill Evolution"
+    assert queue[1]["candidate_bundle_target"] == "skill-usage"
+    assert queue[1]["decision_state"] == "MISSING_DECISION"
+    assert queue[1]["would_create_local_bundle"] is False
+    assert queue[1]["would_start_runner"] is False
+    _assert_privacy_safe(report)
+
+
+def test_scheduler_dry_run_does_not_match_same_phase_wrong_target_decision():
+    from evolution.monitor.scheduler_dry_run import build_scheduler_dry_run_report
+
+    for decision_target in (
+        "unrelated-phase-2-target",
+        "tool_descriptions",
+        "tool_selection_accuracy",
+        "tool_description",
+        "Tool-Description",
+    ):
+        decision = _sample_candidate_bundle_decision()
+        decision["phase"] = "Phase 2: Tool Description Evolution"
+        decision["target"] = decision_target
+
+        report = build_scheduler_dry_run_report(
+            _sample_auto_triage_report(),
+            candidate_bundle_decisions=[decision],
+            generated_at="2026-06-05T02:00:00Z",
+        )
+
+        queue = report["candidate_bundle_queue"]
+        assert queue[0]["target_metric_id"] == "tool_selection_accuracy"
+        assert queue[0]["decision_state"] == "MISSING_DECISION"
+        assert report["candidate_bundle_queue_summary"]["matched_decision_count"] == 0
+        assert report["candidate_bundle_queue_summary"]["missing_decision_count"] == 3
+
+    phase_alias_decision = _sample_candidate_bundle_decision()
+    phase_alias_decision["phase"] = "Phase 2 Tool Description Evolution"
+    report = build_scheduler_dry_run_report(
+        _sample_auto_triage_report(),
+        candidate_bundle_decisions=[phase_alias_decision],
+        generated_at="2026-06-05T02:00:00Z",
+    )
+    assert report["candidate_bundle_queue"][0]["decision_state"] == "MISSING_DECISION"
+    assert report["candidate_bundle_queue_summary"]["matched_decision_count"] == 0
+
+
+def test_scheduler_dry_run_rejects_unsafe_candidate_bundle_decisions():
+    from evolution.monitor.scheduler_dry_run import build_scheduler_dry_run_report
+
+    decision = _sample_candidate_bundle_decision()
+    decision["apply_ready"] = True
+    with pytest.raises(ValueError, match="candidate bundle decision must be candidate-only"):
+        build_scheduler_dry_run_report(
+            _sample_auto_triage_report(),
+            candidate_bundle_decisions=[decision],
+            generated_at="2026-06-05T02:00:00Z",
+        )
+
+    decision = _sample_candidate_bundle_decision()
+    decision["github"]["pr_created"] = True
+    with pytest.raises(ValueError, match="candidate bundle decision must not contain GitHub side effects"):
+        build_scheduler_dry_run_report(
+            _sample_auto_triage_report(),
+            candidate_bundle_decisions=[decision],
+            generated_at="2026-06-05T02:00:00Z",
+        )
 
 
 def test_scheduler_dry_run_rejects_private_identifiers_and_non_readonly_triage_reports():
@@ -363,6 +510,48 @@ def test_cli_writes_scheduler_dry_run_json_and_markdown_under_phase5_output_root
     _assert_privacy_safe(markdown)
 
 
+def test_cli_consumes_candidate_bundle_decision_json_without_starting_runner(tmp_path):
+    triage_path = tmp_path / "auto_triage_report.json"
+    decision_path = tmp_path / "decision.json"
+    triage_path.write_text(json.dumps(_sample_auto_triage_report(), indent=2, sort_keys=True) + "\n")
+    decision_path.write_text(json.dumps(_sample_candidate_bundle_decision(), indent=2, sort_keys=True) + "\n")
+    output_dir = OUTPUT_ROOT / "pytest-scheduler-dry-run-candidate-bundle-decision"
+    shutil.rmtree(output_dir, ignore_errors=True)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "evolution.monitor.scheduler_dry_run",
+            "--auto-triage-report-json",
+            str(triage_path),
+            "--candidate-bundle-decision-json",
+            str(decision_path),
+            "--output-dir",
+            str(output_dir),
+            "--generated-at",
+            "2026-06-05T02:00:00Z",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    report = json.loads((output_dir / "scheduler_dry_run_report.json").read_text())
+    assert report["local_candidate_bundle_contract"]["decision_json_consumed"] is True
+    assert report["candidate_bundle_queue_summary"]["matched_decision_count"] == 1
+    assert report["candidate_bundle_queue"][0]["decision_state"] == "DECISION_AVAILABLE"
+    assert report["candidate_bundle_queue"][0]["would_start_runner"] is False
+    markdown = (output_dir / "scheduler_dry_run_report.md").read_text()
+    assert "## Local Candidate Bundle Queue" in markdown
+    assert "decision_state=DECISION_AVAILABLE" in markdown
+    _assert_privacy_safe(report)
+    _assert_privacy_safe(markdown)
+
+
 def test_cli_rejects_scheduler_dry_run_output_dir_outside_phase5_output_root(tmp_path):
     triage_path = tmp_path / "auto_triage_report.json"
     triage_path.write_text(json.dumps(_sample_auto_triage_report(), indent=2, sort_keys=True) + "\n")
@@ -444,11 +633,16 @@ def test_phase5_scheduler_dry_run_contract_is_documented_and_in_ci():
     assert "benchmark_cron_enabled=false" in contract
     assert "scheduler_or_cron_side_effects_performed=false" in contract
     assert "human_review_required_before_scheduler_enablement" in contract
+    assert "Local candidate bundle queue" in contract
+    assert "hse-local-candidate-bundle-v1" in contract
     assert "No raw session data, local private paths, or credentials" in contract
 
     readme = README_MD.read_text()
     plan = PLAN_MD.read_text()
     assert "Phase 5 scheduler dry-run report contract" in readme
     assert "evolution.monitor.scheduler_dry_run" in readme
+    assert "--candidate-bundle-decision-json" in readme
+    assert "local candidate bundle queue" in readme
     assert "read-only scheduler dry-run" in plan
+    assert "local candidate bundle queue" in plan
     assert "no cron jobs are created" in plan

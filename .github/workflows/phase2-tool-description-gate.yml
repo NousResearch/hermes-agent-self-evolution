@@ -95,6 +95,7 @@ jobs:
             tests/monitor/test_phase5_performance_monitor.py \
             tests/monitor/test_phase5_auto_triage.py \
             tests/monitor/test_phase5_scheduler_dry_run.py \
+            tests/monitor/test_phase5_supervised_candidate_runner.py \
             -q
 
       - name: Run Phase 4 code-evolution report contract smoke
