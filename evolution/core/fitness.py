@@ -4,6 +4,8 @@ Uses LLM-as-judge with rubrics to score agent outputs.
 Supports length penalties and multi-dimensional scoring.
 """
 
+import re
+
 import dspy
 from dataclasses import dataclass
 from typing import Optional
@@ -104,36 +106,119 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
-    """DSPy-compatible metric function for skill optimization.
+def _words(text: str) -> set:
+    """Lowercase tokenization stripping punctuation for overlap matching."""
+    return set(re.findall(r'\w+', text.lower()))
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+
+# Cache for LLM judge results to avoid re-scoring same (task, output) pairs
+_judge_cache: dict[str, float] = {}
+_judge_cache_max_entries = 500
+
+
+def _judge_cache_key(task_input: str, agent_output: str) -> str:
+    import hashlib
+    raw = f"{task_input}||{agent_output}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name: Optional[str] = None,
+    pred_trace=None,
+    judge: Optional[LLMJudge] = None,
+) -> float:
+    """DSPy-compatible metric function for GEPA skill optimization.
+
+    Dual-mode:
+    - If a judge is provided: use LLM-as-judge with rubric scoring (cached).
+    - Fallback: keyword overlap + instruction-following heuristics.
+
+    The judge mode is preferred for accuracy; heuristic mode is faster
+    and works without API calls.
     """
-    # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
+    skill_text = getattr(example, "skill_text", "") or ""
 
     if not agent_output.strip():
         return 0.0
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
+    # LLM-as-judge mode
+    if judge is not None:
+        cache_key = _judge_cache_key(task, agent_output)
+        if cache_key in _judge_cache:
+            return _judge_cache[cache_key]
 
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
-    output_lower = agent_output.lower()
+        score_result = judge.score(
+            task_input=task,
+            expected_behavior=expected,
+            agent_output=agent_output,
+            skill_text=skill_text,
+        )
+        result = score_result.composite
 
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
+        # Store in cache (evict oldest if full)
+        if len(_judge_cache) >= _judge_cache_max_entries:
+            _judge_cache.clear()
+        _judge_cache[cache_key] = result
+        return result
+
+    # ── Heuristic fallback (original logic) ──
+    score = 0.0
+    output_words = _words(agent_output)
+
+    # 1. Non-empty base (0-0.15)
+    score += 0.15
+
+    # 2. Keyword overlap with expected behavior (0-0.4)
+    expected_words = _words(expected)
     if expected_words:
         overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
+        score += 0.4 * overlap
+    else:
+        score += 0.15
 
-    return min(1.0, max(0.0, score))
+    # 3. Task relevance (0-0.15)
+    task_words = _words(task)
+    if task_words:
+        overlap = len(task_words & output_words) / len(task_words)
+        score += 0.15 * overlap
+
+    # 4. Procedure following (0-0.2)
+    if skill_text.strip():
+        skill_lower = skill_text.lower()
+        step_keywords = set()
+        for match in re.finditer(r'(?:^|\n)\s*(?:\d+\.|[-*])\s+(.+?)(?:\n|$)', skill_lower):
+            line = match.group(1).strip()
+            words = [w for w in re.findall(r'\b[a-z]{3,}\b', line)][:3]
+            step_keywords.update(words)
+        if step_keywords:
+            overlap = len(step_keywords & output_words) / len(step_keywords)
+            score += 0.2 * overlap
+    else:
+        score += 0.1
+
+    # 5. Length normalization penalty
+    word_count = len(output_words)
+    if word_count < 5:
+        score -= 0.15
+    elif word_count < 10:
+        score -= 0.05
+    elif word_count > 500:
+        score -= 0.1
+    elif word_count > 300:
+        score -= 0.05
+
+    return max(0.0, min(1.0, score))
+
+
+def reset_judge_cache():
+    """Clear the LLM judge result cache. Used in tests."""
+    _judge_cache.clear()
 
 
 def _parse_score(value) -> float:
