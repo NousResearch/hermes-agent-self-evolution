@@ -91,6 +91,17 @@ uv run python -m evolution.skills.evolve_skill \
 
 The closed-loop validator invokes `hermes -z` directly, so it uses the same provider config Hermes itself uses. Optimization and validation see the same model.
 
+The same closed-loop path also runs against **Claude Code** with `--closed-loop-agent-backend claude`: each candidate skill is delivered as a plugin to a sandboxed `claude -p`, so you can evolve a skill against the agent you actually use. Pick the validation model with `--closed-loop-agent-model` (a Claude alias, e.g. `sonnet`):
+
+```bash
+uv run python -m evolution.skills.evolve_skill \
+    --skill codebase-summary \
+    --closed-loop-during-evolution evolution/validation/suites/your_suite.jsonl \
+    --closed-loop-agent-backend claude --closed-loop-agent-model sonnet
+```
+
+When the behavioral suite *is* the ground truth for the change — e.g. a pass/fail convention the synthetic judge can't observe — add `--closed-loop-gate-primary` to make that suite the **deploy gate** directly. It forces the closed-loop gate regardless of the synthetic saturation band and won't let a synthetic-judge regression veto a verified behavioral win (requires `--closed-loop-during-evolution`).
+
 ### Run without Hermes Agent
 
 Set any standard provider env var and run — the framework falls back to env-var auto-detection in priority order (`ANTHROPIC_API_KEY` → `OPENROUTER_API_KEY` → `OPENAI_API_KEY` → others). When neither Hermes nor an env var is configured, the framework exits with an actionable message listing what was tried.
