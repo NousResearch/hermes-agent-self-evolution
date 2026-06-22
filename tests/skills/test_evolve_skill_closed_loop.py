@@ -18,6 +18,7 @@ from evolution.core.behavioral_example import build_behavioral_examples
 from evolution.skills.evolve_skill import (
     _load_behavioral_examples_from_suite,
     _maybe_build_closed_loop_cache_skill,
+    _should_use_cl_primary,
 )
 from evolution.skills.skill_module import SkillModule
 from evolution.validation.task import TaskSuite
@@ -296,6 +297,43 @@ class TestMaybeBuildClosedLoopCacheSkill:
             agent_backend="claude",
         )
         assert cache._validator.runner.model == "sonnet"
+
+
+class TestShouldUseClPrimary:
+    """The deploy gate routes to the closed-loop behavioral oracle when this is
+    True (else it gates on the synthetic-judge holdout)."""
+
+    def test_weak_signal_band_uses_cl_primary(self):
+        assert _should_use_cl_primary(
+            gate_primary=False, band="weak_signal",
+            cl_per_example=[0.0, 1.0], has_cache=True) is True
+
+    def test_other_band_without_flag_does_not(self):
+        assert _should_use_cl_primary(
+            gate_primary=False, band="no_headroom",
+            cl_per_example=[0.0, 0.0], has_cache=True) is False
+
+    def test_gate_primary_forces_cl_primary_off_band(self):
+        # The new flag: force the behavioral gate even when the band is not
+        # weak_signal (e.g. a binary convention oracle stuck at 0.0).
+        assert _should_use_cl_primary(
+            gate_primary=True, band="no_headroom",
+            cl_per_example=[0.0, 0.0], has_cache=True) is True
+
+    def test_gate_primary_needs_cl_vector(self):
+        # Forcing the flag without a baseline CL vector (no pre-flight CL) must
+        # NOT silently route to a gate that has no data — falls back to False.
+        assert _should_use_cl_primary(
+            gate_primary=True, band="healthy",
+            cl_per_example=None, has_cache=True) is False
+        assert _should_use_cl_primary(
+            gate_primary=True, band="healthy",
+            cl_per_example=[], has_cache=True) is False
+
+    def test_gate_primary_needs_cache(self):
+        assert _should_use_cl_primary(
+            gate_primary=True, band="weak_signal",
+            cl_per_example=[1.0], has_cache=False) is False
 
     def test_agent_timeout_none_keeps_runner_default(self, fake_skill_path):
         # No override → runner uses its DEFAULT_TASK_TIMEOUT_SECONDS (120s).

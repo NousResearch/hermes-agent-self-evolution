@@ -521,6 +521,31 @@ def _emit_patch(baseline_text: str, evolved_text: str, path: Path) -> str:
     return "".join(diff_lines)
 
 
+def _should_use_cl_primary(
+    *,
+    gate_primary: bool,
+    band: Optional[str],
+    cl_per_example: Optional[list[float]],
+    has_cache: bool,
+) -> bool:
+    """Decide whether the deploy gate scores on the closed-loop behavioral oracle
+    rather than the synthetic-judge holdout.
+
+    Default: only in the ``weak_signal`` band (synthetic saturated, CL has a
+    gradient). ``gate_primary`` (``--closed-loop-gate-primary``) forces it
+    regardless of band — for surfaces where the behavioral oracle is the ground
+    truth and the synthetic band is irrelevant (e.g. a binary convention oracle
+    that can never land in the weak_signal window). Either way the CL baseline
+    vector must exist (the pre-flight computed it) and a cache must be present.
+    """
+    return (
+        (gate_primary or band == "weak_signal")
+        and cl_per_example is not None
+        and len(cl_per_example) > 0
+        and has_cache
+    )
+
+
 def _maybe_build_closed_loop_cache_skill(
     *,
     skill_name: str,
@@ -695,6 +720,7 @@ def evolve(
     closed_loop_window_size: int = 8,
     closed_loop_mode: str = "feedback",
     closed_loop_agent_backend: str = "hermes",
+    closed_loop_gate_primary: bool = False,
     closed_loop_in_valset: bool = False,
     closed_loop_agent_model: Optional[str] = None,
     closed_loop_task_timeout_seconds: Optional[int] = None,
@@ -876,8 +902,10 @@ def evolve(
 
             # A 1-2 example holdout has stdev ~0.2 — the bootstrap CI swamps any
             # real lift signal. Raise eval_dataset_size or holdout_ratio rather
-            # than override min_holdout_size.
-            if len(dataset.holdout) < config.min_holdout_size:
+            # than override min_holdout_size. Skipped under --closed-loop-gate-primary:
+            # the deploy decision then scores on the behavioral oracle, not this
+            # synthetic holdout, so its size doesn't bound the gate's power.
+            if len(dataset.holdout) < config.min_holdout_size and not closed_loop_gate_primary:
                 console.print(
                     f"[red]✗ Holdout has only {len(dataset.holdout)} examples; need ≥{config.min_holdout_size} "
                     f"to gate on improvement signal. Increase eval_dataset_size or holdout_ratio.[/red]"
@@ -1074,7 +1102,9 @@ def evolve(
                 )
                 if sat_report.band != "healthy":
                     render_saturation_panel(sat_report, console=console)
-                    if not force_saturation_check:
+                    # --closed-loop-gate-primary gates on the behavioral oracle, so a
+                    # non-healthy synthetic band is expected and must not block the run.
+                    if not force_saturation_check and not closed_loop_gate_primary:
                         if is_non_interactive():
                             console.print(
                                 "[yellow]Non-interactive context; refusing to "
@@ -1299,11 +1329,11 @@ def evolve(
                 create_pr=create_pr_flag,
             )
 
-            use_cl_primary = (
-                preflight_band == "weak_signal"
-                and cached_baseline_cl_per_example is not None
-                and len(cached_baseline_cl_per_example) > 0
-                and closed_loop_cache is not None
+            use_cl_primary = _should_use_cl_primary(
+                gate_primary=closed_loop_gate_primary,
+                band=preflight_band,
+                cl_per_example=cached_baseline_cl_per_example,
+                has_cache=closed_loop_cache is not None,
             )
 
             # Noise floor (opt-in) for the CL-primary gain bar: the expected
@@ -1424,7 +1454,14 @@ def evolve(
                     baseline_cl_passes=baseline_cl_passes,
                     evolved_cl_passes=evolved_cl_passes,
                     baseline_synth_mean=avg_baseline,
-                    evolved_synth_mean=avg_evolved,
+                    # Under --closed-loop-gate-primary the behavioral oracle is the
+                    # gate; a synthetic-judge regression must not veto a real CL win,
+                    # so neutralize the synth Δ (pass the baseline mean — same trick
+                    # the floor gate below uses). In the weak_signal band the synth
+                    # floor still guards against a quality collapse.
+                    evolved_synth_mean=(
+                        avg_baseline if closed_loop_gate_primary else avg_evolved
+                    ),
                     growth_pct=growth_pct,
                     noise_floor_passes=cl_noise_floor_passes,
                 )
@@ -2339,6 +2376,18 @@ def evolve(
          "takes a Claude model alias (e.g. sonnet, opus).",
 )
 @click.option(
+    "--closed-loop-gate-primary",
+    "closed_loop_gate_primary",
+    is_flag=True,
+    default=False,
+    help="Make the closed-loop behavioral oracle the DEPLOY GATE (not just GEPA "
+         "feedback). Forces the CL-primary gate regardless of the saturation band, "
+         "skips the synthetic-holdout-size guard, and proceeds past a non-healthy "
+         "synthetic band — for surfaces where the behavioral suite is ground truth "
+         "(e.g. a pass/fail convention oracle that can't land in the weak_signal "
+         "window). Requires --closed-loop-during-evolution.",
+)
+@click.option(
     "--closed-loop-task-timeout-seconds",
     "closed_loop_task_timeout_seconds",
     default=None,
@@ -2379,9 +2428,15 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
          closed_loop_in_valset,
          closed_loop_agent_model,
          closed_loop_agent_backend,
+         closed_loop_gate_primary,
          closed_loop_task_timeout_seconds,
          noise_aware_gate):
     """Evolve an agent skill using DSPy + GEPA optimization."""
+    if closed_loop_gate_primary and not closed_loop_suite_path:
+        raise click.UsageError(
+            "--closed-loop-gate-primary requires --closed-loop-during-evolution "
+            "(the behavioral suite that becomes the deploy gate)."
+        )
     try:
         evolve(
             skill_name=skill,
@@ -2431,6 +2486,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, reflecti
             closed_loop_in_valset=closed_loop_in_valset,
             closed_loop_agent_model=closed_loop_agent_model,
             closed_loop_agent_backend=closed_loop_agent_backend,
+            closed_loop_gate_primary=closed_loop_gate_primary,
             closed_loop_task_timeout_seconds=closed_loop_task_timeout_seconds,
             noise_aware_gate=noise_aware_gate,
             create_pr_flag=create_pr_flag,
