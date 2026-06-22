@@ -97,6 +97,41 @@ LESIONED skill back toward the convention and deploy the recovered skill — i.e
 the closed self-improvement loop delivering measurable behavior gain on a real,
 non-inferable surface.
 
+## G2 — the loop + the real gate close end-to-end (GREEN)
+
+Does the loop actually *deliver* — propose a fix, verify it behaviorally, ship only
+if better? Demonstrated on this surface, gating with the **shipped** rule
+(`_check_cl_primary_gate`, the exact function `evolve_skill`'s CL-primary path calls)
+fed the artifact-independent oracle's per-task verdicts:
+
+| candidate | closed-loop | real gate decision |
+|---|---:|---|
+| lesioned (baseline) | 0/5 | reference |
+| recovered (proposer's fix) | 5/5 | **DEPLOY** (CL +5, required 1) |
+| noop (cosmetic edit) | 0/5 | **REJECT** (CL +0, required 1) |
+| intact (positive control) | 5/5 | **DEPLOY** |
+
+60 runs, $16.83, zero errors, zero variance. The loop closed: degraded skill →
+behavioral oracle → a reflection proposer recovered the convention (0/5 → 5/5) → the
+real noise-aware gate deployed the verified fix and rejected the no-op. The synthetic
+dimension was neutralized, so the decision was purely behavioral — **non-circular**
+(no synthetic-from-artifact eval in the loop, avoiding the Stage-3 contamination twin).
+
+**Honest scope.** The proposer was given the oracle's behavioral expectation (the
+closed-loop test *is* the spec a real loop optimizes toward), so this is **spec-driven
+recovery + gate correctness**, not autonomous discovery of the arbitrary convention
+(non-inferable, per the result above). The star is the gate making correct
+ship/no-ship calls on real behavioral data using the shipped rule.
+
+**Architectural finding.** `evolve_skill`'s deploy gate is synthetic-eval-primary; its
+non-circular CL-primary gate fires only in the `weak_signal` band (CL ∈ 0.15–0.95).
+A binary behavioral surface (specify the convention → 1.0, or not → 0.0) can't land
+in-band, so the full CLI would gate circularly on the synthetic judge. G2 therefore
+drove the real gate rule directly on the oracle. Productizing it = a
+`--closed-loop-gate-primary` mode (gate on the behavioral oracle, bypassing the
+weak_signal requirement) — the gap the "gate is the asset" thesis implies. The Claude
+closed-loop backend itself shipped: `--closed-loop-agent-backend {hermes,claude}`.
+
 ## Reproduce
 
 ```
@@ -104,6 +139,9 @@ uv run python spikes/codebase_summary_coupling/make_skills.py   # derive + verif
 uv run python spikes/codebase_summary_coupling/probe.py --gate check   # free: oracle/arms/suite
 source ~/.zshrc && uv run python spikes/codebase_summary_coupling/probe.py --gate smoke --reps 3 --max-cost-usd 8
 source ~/.zshrc && uv run python spikes/codebase_summary_coupling/probe.py --gate full --reps 4 --n 5 --max-cost-usd 60
+# G2 — loop + real gate:
+uv run python spikes/codebase_summary_coupling/g2_gate.py --mode check          # proposer + gate logic (≈$0.05)
+source ~/.zshrc && uv run python spikes/codebase_summary_coupling/g2_gate.py --mode run --reps 3 --max-cost-usd 20
 ```
 
 Spike (gitignored, local): `spikes/codebase_summary_coupling/`.
