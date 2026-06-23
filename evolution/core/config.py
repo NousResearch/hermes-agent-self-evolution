@@ -25,11 +25,22 @@ class EvolutionConfig:
     eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
 
-    # Constraints
-    max_skill_size: int = 15_000  # 15KB default
+    # Constraints — size is class-aware (see resolve_skill_soft_cap) and graduated.
+    # Rationale: a single flat cap over-penalizes persistent reference/runbook
+    # skills (which legitimately encode many endpoints, parameters and pitfalls,
+    # and are meant to survive context compression) purely for size; and the old
+    # penalty ramp (which started at 90% of the cap) even docked skills that were
+    # already *under* the cap. New policy:
+    #   - soft target: no length penalty at/below it (class-aware)
+    #   - hard ceiling: rejection above it (bounds genuine bloat)
+    #   - graduated penalty linearly between soft and ceiling (no pre-cap cliff)
+    max_skill_size: int = 15_000  # soft target for default (generative/prompt) skills
+    max_skill_size_reference: int = 22_000  # soft target for persistent reference/runbook skills
+    max_skill_hard_ceiling: int = 30_000  # absolute rejection ceiling for any skill
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
-    max_prompt_growth: float = 0.2  # 20% max growth over baseline
+    max_prompt_growth: float = 0.2  # 20% max growth over baseline (per-mutation, default skills)
+    max_prompt_growth_reference: float = 0.6  # reference skills may restructure more aggressively
 
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate
@@ -45,6 +56,47 @@ class EvolutionConfig:
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
     create_pr: bool = True
+
+
+# --- Class-aware size policy ----------------------------------------------
+
+# Signals (in frontmatter/body) that a skill is a persistent reference/runbook
+# rather than a generative/prompt skill. Such skills legitimately encode many
+# endpoints, parameters, and pitfalls and are meant to "survive compression",
+# so they get a larger soft target before any length penalty applies.
+_REFERENCE_TAGS = ("reference", "runbook", "workflow", "persistent", "operations", "pipeline")
+_REFERENCE_PHRASES = ("survives context compression", "persistent", "master reference", "every api endpoint")
+
+
+def is_reference_skill(skill_text: str) -> bool:
+    """Heuristically classify a skill as a persistent reference/runbook.
+
+    Looks at the frontmatter tags and the description/opening for the documented
+    markers of a reference skill. Conservative: defaults to False (the tighter
+    default cap) when no clear signal is present.
+    """
+    if not skill_text:
+        return False
+    head = skill_text[:1500].lower()
+    if any(tag in head for tag in _REFERENCE_TAGS):
+        return True
+    if any(phrase in head for phrase in _REFERENCE_PHRASES):
+        return True
+    return False
+
+
+def resolve_skill_soft_cap(skill_text: str, config: "EvolutionConfig") -> int:
+    """Return the no-penalty soft size target for this skill's class."""
+    return config.max_skill_size_reference if is_reference_skill(skill_text) else config.max_skill_size
+
+
+def length_penalty_for(size: int, soft_cap: int, hard_ceiling: int, max_penalty: float = 0.3) -> float:
+    """Graduated length penalty: 0 at/below soft_cap, ramping linearly to
+    max_penalty at hard_ceiling, then clamped. No penalty before the cap."""
+    if size <= soft_cap or hard_ceiling <= soft_cap:
+        return 0.0
+    over = (size - soft_cap) / (hard_ceiling - soft_cap)
+    return min(max_penalty, max(0.0, over) * max_penalty)
 
 
 def _discover_hermes_agent_path() -> Optional[Path]:

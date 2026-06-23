@@ -8,7 +8,7 @@ import dspy
 from dataclasses import dataclass
 from typing import Optional
 
-from evolution.core.config import EvolutionConfig
+from evolution.core.config import EvolutionConfig, length_penalty_for
 
 
 @dataclass
@@ -87,13 +87,14 @@ class LLMJudge:
         procedure_following = _parse_score(result.procedure_following)
         conciseness = _parse_score(result.conciseness)
 
-        # Length penalty
+        # Length penalty — graduated: 0 at/below the soft cap (max_size), ramping
+        # linearly to 0.3 at the hard ceiling. No pre-cap cliff (the old ramp
+        # started at 90% and docked skills that were still under the cap).
         length_penalty = 0.0
         if artifact_size is not None and max_size is not None:
-            ratio = artifact_size / max_size
-            if ratio > 0.9:
-                # Penalty ramps from 0 at 90% to 0.3 at 100%+
-                length_penalty = min(0.3, (ratio - 0.9) * 3.0)
+            length_penalty = length_penalty_for(
+                artifact_size, max_size, self.config.max_skill_hard_ceiling
+            )
 
         return FitnessScore(
             correctness=correctness,
