@@ -2,7 +2,12 @@
 
 import pytest
 from evolution.core.constraints import ConstraintValidator
-from evolution.core.config import EvolutionConfig
+from evolution.core.config import (
+    EvolutionConfig,
+    is_reference_skill,
+    resolve_skill_soft_cap,
+    length_penalty_for,
+)
 
 
 @pytest.fixture
@@ -16,10 +21,44 @@ class TestSizeConstraints:
         result = validator._check_size("x" * 1000, "skill")
         assert result.passed
 
-    def test_skill_over_limit(self, validator):
+    def test_skill_over_soft_target_passes_with_penalty(self, validator):
+        # 20k > default soft target (15k) but < hard ceiling (30k): the class-aware
+        # policy treats this as a graduated-penalty pass, not a hard rejection.
         result = validator._check_size("x" * 20_000, "skill")
+        assert result.passed
+        assert "soft target" in result.message
+
+    def test_skill_over_hard_ceiling_fails(self, validator):
+        result = validator._check_size("x" * 35_000, "skill")
         assert not result.passed
-        assert "exceeded" in result.message
+        assert "ceiling" in result.message
+
+
+class TestClassAwareSizePolicy:
+    def test_reference_skill_detection(self):
+        ref = "---\ntags: [workflow]\ndescription: persistent master reference, survives context compression\n---\nbody"
+        gen = "---\nname: writer\ndescription: write a blog post on a topic\n---\nbody"
+        assert is_reference_skill(ref)
+        assert not is_reference_skill(gen)
+
+    def test_reference_skill_gets_larger_soft_cap(self):
+        cfg = EvolutionConfig()
+        ref = "tags: [runbook] survives context compression"
+        gen = "write a marketing post"
+        assert resolve_skill_soft_cap(ref, cfg) == cfg.max_skill_size_reference
+        assert resolve_skill_soft_cap(gen, cfg) == cfg.max_skill_size
+
+    def test_graduated_penalty_no_cliff_below_cap(self):
+        cfg = EvolutionConfig()
+        soft, hard = cfg.max_skill_size, cfg.max_skill_hard_ceiling
+        # No penalty at/below the soft cap (old ramp wrongly docked 90-100%).
+        assert length_penalty_for(soft, soft, hard) == 0.0
+        assert length_penalty_for(int(soft * 0.95), soft, hard) == 0.0
+        # Ramps up between soft and ceiling, clamped at 0.3 beyond.
+        mid = length_penalty_for((soft + hard) // 2, soft, hard)
+        assert 0.0 < mid < 0.3
+        assert length_penalty_for(hard, soft, hard) == pytest.approx(0.3)
+        assert length_penalty_for(hard * 2, soft, hard) == 0.3
 
     def test_tool_description_under_limit(self, validator):
         result = validator._check_size("Search files by content", "tool_description")

@@ -9,7 +9,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 
-from evolution.core.config import EvolutionConfig
+from evolution.core.config import EvolutionConfig, resolve_skill_soft_cap
 
 
 @dataclass
@@ -95,7 +95,27 @@ class ConstraintValidator:
     def _check_size(self, text: str, artifact_type: str) -> ConstraintResult:
         size = len(text)
         if artifact_type == "skill":
-            limit = self.config.max_skill_size
+            # Class-aware: soft target is informational (graduated length penalty
+            # applies above it); only the hard ceiling is a hard rejection.
+            soft = resolve_skill_soft_cap(text, self.config)
+            hard = self.config.max_skill_hard_ceiling
+            if size > hard:
+                return ConstraintResult(
+                    passed=False,
+                    constraint_name="size_limit",
+                    message=f"Size exceeds hard ceiling: {size}/{hard} chars ({size - hard} over) — slim required",
+                )
+            if size <= soft:
+                return ConstraintResult(
+                    passed=True,
+                    constraint_name="size_limit",
+                    message=f"Size OK: {size}/{soft} (soft target)",
+                )
+            return ConstraintResult(
+                passed=True,
+                constraint_name="size_limit",
+                message=f"Over soft target — graduated penalty applies: {size} chars (soft {soft}, ceiling {hard})",
+            )
         elif artifact_type == "tool_description":
             limit = self.config.max_tool_desc_size
         elif artifact_type == "param_description":
