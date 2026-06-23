@@ -951,6 +951,34 @@ the open test is whether the real `evolve_skill` GEPA loop + noise-aware gate ca
 recover a degraded skill back toward the convention and deploy it (the closed
 self-improvement loop delivering measurable gain on a real surface).
 
+### The hard axis — reasoning-methodology coupling is NULL-saturated on capable Claude
+
+The complementary, higher-value question: does a skill's *methodology* (HOW to reason —
+root-causing, edge-case enumeration; not conventions, not answers) improve a capable
+agent's task **outcomes**? Tested as a coupling probe (GOLD vs WEAK methodology skill)
+on a rig built against the three walls: hard-debugging tasks with a **hidden, leak-proof,
+held-out zero-LM oracle** (materialized only post-agent → no answer-leakage), a
+**floor-inert** suite (not "suite-states-the-win"), byte-identical frontmatter, and a
+per-model **Gate-A headroom gate** that kills before any contrast spend.
+
+Result: **NULL-saturated on both Opus and Sonnet** — 8/8 tasks solved at 1.00 unaided
+(40/40 runs each, all held-out edge cases), **0/8 in the 0.20–0.70 headroom band**, $7.24
+total. There is no reasoning headroom for a methodology skill to move. Structural reason:
+a methodology skill only helps where the agent *can* solve a task but *fails on process*;
+capable agents have **internalized** that process, so the tasks where it would help are
+the ones they already ace, and the tasks they fail need capability/knowledge (which
+methodology can't supply). This extends the gpt-5-mini saturation null to the top Claude
+models. Honest scope: standard algorithmic-debugging only; a harder class *might* show a
+band, but tasks hard enough to fail Opus likely fail for knowledge reasons (the
+process-vs-knowledge confound), so chasing them risks an uninterpretable null. Full
+writeup: [reasoning-quality saturation findings](reports/reasoning_quality_saturation_findings.md).
+
+**Net:** skill evolution's honest product surface is **convention/instruction
+installation** (non-inferable → couples, above), **not reasoning improvement**
+(internalized → saturated, here). The asymmetry is the campaign's through-line: artifact
+text drives a capable agent where it carries a signal the agent lacks, and is inert where
+the agent already has it.
+
 ### Wave 1 — Measurement & free wins
 
 1. **Mine the gate-decision archive for item statistics.** 336 of 350
