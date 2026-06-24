@@ -1,0 +1,108 @@
+{
+  "rows": [
+    {
+      "tool": "tools/browser_camofox.py",
+      "fix": "fd5df5fe8e",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    },
+    {
+      "tool": "tools/checkpoint_manager.py",
+      "fix": "2245879af0",
+      "armB_dr": true,
+      "stratum": "state",
+      "contract_source": "",
+      "notes": "_touch_project(store, working_dir)->None: filesystem side-effect, vacuous return"
+    },
+    {
+      "tool": "tools/discord_tool.py",
+      "fix": "8b32a9d0f1",
+      "armB_dr": true,
+      "stratum": "pure-contract",
+      "contract_source": "_ACTION_MANIFEST / _ACTIONS dispatch-table consistency: every declared action must resolve to a handler (fix added _delete_message + registered it); checkable from the manifest, no test value",
+      "notes": "BORDERLINE: manifest self-consistency, not a rich external semantic spec"
+    },
+    {
+      "tool": "tools/env_passthrough.py",
+      "fix": "ba4357d13b",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    },
+    {
+      "tool": "tools/file_tools.py",
+      "fix": "5faea3f618",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    },
+    {
+      "tool": "tools/kanban_tools.py",
+      "fix": "31fe229039",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    },
+    {
+      "tool": "tools/mixture_of_agents_tool.py",
+      "fix": "707f3ff41f",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    },
+    {
+      "tool": "tools/patch_parser.py",
+      "fix": "5e743559e0",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    },
+    {
+      "tool": "tools/registry.py",
+      "fix": "4b2a1a4337",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    },
+    {
+      "tool": "tools/schema_sanitizer.py",
+      "fix": "aae1615977",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    },
+    {
+      "tool": "tools/send_message_tool.py",
+      "fix": "41d2c758c3",
+      "armB_dr": true,
+      "stratum": "state",
+      "contract_source": "",
+      "notes": "_handle_send + SEND_MESSAGE_SCHEMA: network IO dominant"
+    },
+    {
+      "tool": "tools/skill_manager_tool.py",
+      "fix": "b10e38e392",
+      "armB_dr": false,
+      "stratum": "pure-input",
+      "contract_source": "",
+      "notes": "armB_dr False (reference-dependent; measured)"
+    }
+  ],
+  "ratio": {
+    "pure_contract": 1,
+    "pure_input": 9,
+    "non_state_total": 10,
+    "state_excluded": 2
+  },
+  "errors": [],
+  "conclusion": "pure-contract (PBT-addressable) slice = 1/10 non-state (12 total); Bet #3 (PBT probe) cancelled at $0 \u2014 the oracle-manufacture surface on this corpus is ~empty (the one candidate, discord, is a borderline manifest-consistency invariant, not a rich semantic spec). Confirms the panel's ~1/12 prediction."
+}

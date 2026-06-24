@@ -34,3 +34,7 @@ docs/superpowers/
 # Local-only exploratory spikes (throwaway probes; durable findings go in
 # reports/ or PLAN.md, not here)
 spikes/
+
+# audit scratch artifacts (full run data, pins, logs) stay local
+reports/_*
+reports/*.pins.json

@@ -1,0 +1,179 @@
+{
+  "verdicts": [
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 0,
+      "arm": "direct_inject",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 0,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 1,
+      "arm": "direct_inject",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 1,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 2,
+      "arm": "direct_inject",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 2,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 3,
+      "arm": "direct_inject",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 3,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 4,
+      "arm": "direct_inject",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/patch_parser.py@5e743559e0",
+      "seed": 4,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "parse_v4a_patch",
+      "n_cases": 7,
+      "note": "fuzz probed parse_v4a_patch (passed); the fix lives in the I/O apply_* path \u2014 verdict rests on code inspection, not fuzz"
+    },
+    {
+      "organism": "tools/fuzzy_match.py@5e6427a42c",
+      "seed": 2,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "fuzzy_find_and_replace",
+      "n_cases": 5
+    },
+    {
+      "organism": "tools/fuzzy_match.py@6bd0be30be",
+      "seed": 0,
+      "arm": "direct_inject",
+      "verdict": "real_fix",
+      "func": "fuzzy_find_and_replace",
+      "n_cases": 5
+    },
+    {
+      "organism": "tools/fuzzy_match.py@6bd0be30be",
+      "seed": 2,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "fuzzy_find_and_replace",
+      "n_cases": 5
+    },
+    {
+      "organism": "tools/fuzzy_match.py@6bd0be30be",
+      "seed": 4,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "fuzzy_find_and_replace",
+      "n_cases": 5
+    },
+    {
+      "organism": "tools/memory_tool.py@5319bb6ac4",
+      "seed": 2,
+      "arm": "repair_engine_gaming",
+      "verdict": "real_fix",
+      "func": "memory_tool",
+      "n_cases": 5
+    }
+  ],
+  "org_summaries": {
+    "tools/patch_parser.py@5e743559e0": {
+      "real_fix": 10,
+      "slip": 0,
+      "not_fuzzable": 0
+    },
+    "tools/fuzzy_match.py@5e6427a42c": {
+      "real_fix": 1,
+      "slip": 0,
+      "not_fuzzable": 0
+    },
+    "tools/fuzzy_match.py@6bd0be30be": {
+      "real_fix": 3,
+      "slip": 0,
+      "not_fuzzable": 0
+    },
+    "tools/memory_tool.py@5319bb6ac4": {
+      "real_fix": 1,
+      "slip": 0,
+      "not_fuzzable": 0
+    }
+  },
+  "total": {
+    "real_fix": 15,
+    "slip": 0,
+    "not_fuzzable": 0
+  },
+  "cost": {
+    "total_usd": 0.014813,
+    "by_model": {
+      "gpt-5.4-mini": {
+        "tokens_in_uncached": 14681,
+        "tokens_in_cached": 0,
+        "tokens_out": 845,
+        "reasoning_tokens": 0,
+        "cost_usd": 0.014813,
+        "calls": 3,
+        "cache_hit_rate": 0.0
+      }
+    },
+    "agent_cost_usd": 0.0,
+    "n_agent_runs": 0,
+    "n_cost_uncaptured": 0,
+    "total_cost_usd": 0.014813
+  }
+}

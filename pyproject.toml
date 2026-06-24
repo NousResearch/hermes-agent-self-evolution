@@ -63,3 +63,6 @@ include = ["evolution*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+markers = [
+    "slow: requires local integration resources (e.g. a source-repo clone); deselect with -m 'not slow'",
+]

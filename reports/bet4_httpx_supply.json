@@ -1,0 +1,220 @@
+{
+  "repo": "encode/httpx",
+  "n_candidates_stratified": 42,
+  "n_checked": 35,
+  "n_valid": 0,
+  "verdict": "KILL (<5)",
+  "valid_organisms": [],
+  "checks": [
+    {
+      "tool": "httpx/_client.py",
+      "fix": "371b6e946c",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_auth.py",
+      "fix": "87f39f12c9",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_models.py",
+      "fix": "fd60b1815c",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_api.py",
+      "fix": "feb404f86b",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_config.py",
+      "fix": "1805ee0d22",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_content.py",
+      "fix": "9fd6f0ca66",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_decoders.py",
+      "fix": "47f4a96ffa",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_exceptions.py",
+      "fix": "371b6e946c",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_main.py",
+      "fix": "4c307488cd",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_multipart.py",
+      "fix": "371b6e946c",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_status_codes.py",
+      "fix": "6e55ca1af9",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_utils.py",
+      "fix": "7b19cd5f4b",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_client.py",
+      "fix": "87f39f12c9",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_auth.py",
+      "fix": "59914c7690",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_models.py",
+      "fix": "28cbe77676",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_config.py",
+      "fix": "e9cabc8e1d",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_content.py",
+      "fix": "2318fd822c",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_decoders.py",
+      "fix": "392dbe45f0",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_exceptions.py",
+      "fix": "16e2830624",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_main.py",
+      "fix": "61188feeae",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_multipart.py",
+      "fix": "fd60b1815c",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_status_codes.py",
+      "fix": "35f09d1394",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_utils.py",
+      "fix": "41597adffa",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_client.py",
+      "fix": "16e2830624",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_auth.py",
+      "fix": "8327e13454",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_models.py",
+      "fix": "6e6ece66c6",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_config.py",
+      "fix": "8e36f2bc68",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_content.py",
+      "fix": "a8dd079be7",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_decoders.py",
+      "fix": "371b6e946c",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_exceptions.py",
+      "fix": "1a6e254f72",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_main.py",
+      "fix": "ee9250d60b",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_multipart.py",
+      "fix": "b97c0594a5",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_utils.py",
+      "fix": "8e36f2bc68",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_client.py",
+      "fix": "3350d7e683",
+      "valid": false,
+      "bug_tests": []
+    },
+    {
+      "tool": "httpx/_auth.py",
+      "fix": "1b4e7fbb48",
+      "valid": false,
+      "bug_tests": []
+    }
+  ]
+}
