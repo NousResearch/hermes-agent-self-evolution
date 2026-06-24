@@ -58,6 +58,7 @@ class AgentRunResult:
     agent_cost_usd: Optional[float] = None
     agent_cost_source: AgentCostSource = "uncaptured"
     agent_tokens: AgentTokens = field(default_factory=dict)
+    full_text: Optional[str] = None  # untruncated final agent message; None unless captured
 
 
 @dataclass(frozen=True)

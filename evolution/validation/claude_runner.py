@@ -312,4 +312,5 @@ def _parse_stream_json(
         agent_cost_usd=agent_cost,
         agent_cost_source=source,  # type: ignore[arg-type]
         agent_tokens=tokens,
+        full_text=final_text,
     )
