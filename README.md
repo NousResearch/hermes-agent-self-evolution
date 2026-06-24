@@ -12,13 +12,17 @@ Works on any agent framework that emits `SKILL.md` markdown files. [Hermes Agent
 
 > **Already running Hermes Agent?** No env vars to set. If `~/.hermes/config.yaml` exists, `uv run python -m evolution.skills.evolve_skill --skill <name>` picks up your provider, model, and credentials automatically. On startup the framework runs a tiny ~$0.0001 credential probe; if anything's stale you get a Rich-formatted error panel with the exact recovery command (e.g. `hermes auth add anthropic`) instead of a Python traceback. Jump to [Run with Hermes Agent](#run-with-hermes-agent), or read [docs/model_resolution.md](docs/model_resolution.md) for the full provider mapping.
 
-### Where evolution pays off — and where the gate just saves you a wasted run
+### Where text moves a capable agent — three regimes, measured
 
-We ran the campaign so you don't have to guess:
+Skill / prompt / tool-description text changes a capable agent's behavior **exactly where it carries a signal the model can't already infer**. The campaign resolves that into three regimes:
 
-- **Tool code, with a failing test** → the loop repairs **~60–74% of real bugs** to a fix that matches the upstream commit (given the failing test — the production case) — and *not* just one-liners: ~0.69 on large fixes (>20 LOC, median 45). *It works.*
-- **Skill / tool-description / prompt *text*, on a capable agent** → **no measurable behavior change**, in either direction, because the model infers the tool's job from its name and routes past the text. *Here the gate's job is to stop you shipping noise, not to find a win.*
-- The same rigor that ships the code fixes is what **discovered** that null — and a leakage check that demoted our own headline. Most frameworks would have reported a noisy "winner." Full result, confidence intervals, and validity threats: **[the findings](reports/asymmetry_findings.md)**.
+**1. GREEN — non-inferable signal (it works; proven).** Where the text supplies something the agent can't guess from the task — an operating convention, a project-specific wrapper — evolution + the gate deliver. A `CLAUDE.md` region drove a capable agent's adherence to a counter-default repo wrapper (`bin/check`, never `pytest`) from **0% → 100%**, held-out, judge-free oracle (n=10); a vague seed *evolved* to 1.0 on unseen wrappers. (Same regime as code repair: given a failing test, the loop fixes **~60–74% of real bugs** to the upstream fix — ~0.69 even on >20 LOC.) **This is the product:** install the missing signal; the dual gate certifies it didn't regress.
+
+**2. NULL — binary-correctness reasoning (the cliff; measured).** Where a task is pass/fail and the agent is already competent, there's no room. On two genuinely different substrates a capable agent **bracketed the headroom band from both sides**: it *aced* algorithmic debugging (8/8, rate 1.00) and *uniformly failed* a 13-requirement spec-conjunction (rate 0.00) — never landing in the 0.20–0.70 band where a methodology skill could take hold. The pre-flight detects this and refuses the run instead of shipping noise. *(Caveat: "the model routes past the text" holds **only** for name-inferable tool selection — not skills/prompts, which the agent reads and follows.)*
+
+**3. FRONTIER — open-ended generative quality (the open question).** Every test above used a *pass/fail* metric, which forces the cliff. The regime where "a better prompt yields better output" is most plausible — open-ended writing, analysis, design, review — we have **not** resolved, because the only metric for it (an LLM judge) **saturates** and can't see the gradient even if it's there. Building a *trustworthy* continuous-quality metric (e.g. ensembles of independent cheap checks calibrated on a small labeled seed) to test this is the active frontier.
+
+**The honest pitch:** improve where there's a non-inferable signal to install, refuse where the agent's already competent, keep the quality frontier open and under investigation — and the gate tells you which regime you're in. Evolution earns no magic on its own: on our corpus GEPA is matched by plain best-of-N resampling, so the value is the **signal + the gate**, not the search. Full evidence and the regime map: **[headroom experiments](reports/asymmetry_headroom_experiments_findings.md)** and **[the consolidated findings](reports/asymmetry_findings.md)**.
 
 ## How It Works
 
