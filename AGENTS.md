@@ -285,8 +285,8 @@ PR description template (loose, but the existing PRs follow it):
 | 1 | Skill files (`SKILL.md`) | ✅ implemented (`evolution/skills/`) |
 | 2 | Tool descriptions | ✅ implemented (`evolution/tools/`) — MCP-JSON and Hermes-Python-AST adapters; one target tool per run |
 | 3 | System prompt sections | ✅ implemented (`evolution/prompts/`) — Hermes `prompt_builder.py` + Claude Code `CLAUDE.md` backends behind `PromptBackend`; purely-behavioral closed-loop deploy gate |
-| 4 | Tool implementation code | 🔲 stub (`evolution/code/`); needs `[darwinian]` extra |
-| 5 | Continuous improvement loop | 🔲 stub (`evolution/monitor/`) |
+| 4 | Tool implementation code | ✅ implemented (`evolution/code/`) — iterative test-feedback repair (DSPy) in a throwaway worktree, behind the held-out + surface-freeze gate. No Darwinian/population-search engine: it was tested and strictly dominated by best-of-N (4/23 vs 6/23) |
+| 5 | Continuous improvement loop | ✅ implemented (`evolution/monitor/`) — propose-only triage sentinel: scan + ranked queue, human-gated attempts |
 
 Open questions deferred to future PRs (per `PLAN.md` deviation notes):
 - GEPA Pareto-frontier checkpointing (so a `TimeoutError` mid-run doesn't lose all candidates)
