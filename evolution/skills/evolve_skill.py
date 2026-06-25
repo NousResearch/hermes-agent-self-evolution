@@ -23,6 +23,7 @@ from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset,
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
+from evolution.core.significance import compare as assess_significance
 from evolution.skills.skill_module import (
     SkillModule,
     extract_evolved_skill_text,
@@ -232,6 +233,11 @@ def evolve(
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
 
+    # Is the improvement real, or noise on a small holdout set? (PLAN.md step 5)
+    # Pure-local, zero-cost: a paired permutation test + bootstrap CI over the
+    # per-example scores we already computed — no extra model calls.
+    sig = assess_significance(baseline_scores, evolved_scores)
+
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
     table.add_column("Metric", style="bold")
@@ -257,6 +263,21 @@ def evolve(
 
     console.print()
     console.print(table)
+
+    # Statistical significance verdict (does the holdout improvement hold up?)
+    sig_color = "green" if sig.accepted else "yellow"
+    console.print()
+    console.print(Panel(
+        f"[bold]p-value:[/bold] {sig.p_value:.3f} (α={sig.alpha})    "
+        f"[bold]{int(round(sig.confidence * 100))}% CI:[/bold] "
+        f"[{sig.ci_low:+.3f}, {sig.ci_high:+.3f}]    "
+        f"[bold]win rate:[/bold] {int(round(sig.win_rate * sig.n))}/{sig.n}\n"
+        f"[{sig_color}]{sig.verdict}[/{sig_color}]",
+        title="Statistical Significance",
+        border_style=sig_color,
+    ))
+    for note in sig.notes:
+        console.print(f"  [dim]note: {note}[/dim]")
 
     # ── 10. Save output ─────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -286,16 +307,20 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "significance": sig.to_dict(),
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
-        console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
+    if sig.accepted:
+        console.print(f"\n[bold green]✓ Statistically significant improvement — {sig.verdict}[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif improvement > 0:
+        console.print(f"\n[yellow]⚠ Improvement is not conclusive — {sig.verdict}[/yellow]")
+        console.print("  Likely noise on a small holdout set. Try: more eval examples, more iterations, or a different optimizer model.")
     else:
-        console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
+        console.print(f"\n[yellow]⚠ Evolution did not improve the skill — {sig.verdict}[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
 
 
