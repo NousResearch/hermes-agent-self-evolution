@@ -25,8 +25,9 @@ from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
-    load_skill,
+    extract_evolved_skill_text,
     find_skill,
+    load_skill,
     reassemble_skill,
 )
 
@@ -38,8 +39,8 @@ def evolve(
     iterations: int = 10,
     eval_source: str = "synthetic",
     dataset_path: Optional[str] = None,
-    optimizer_model: str = "openai/gpt-4.1",
-    eval_model: str = "openai/gpt-4.1-mini",
+    optimizer_model: str = "openrouter/openai/gpt-4.1",
+    eval_model: str = "openrouter/z-ai/glm-5.2",
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
@@ -140,6 +141,11 @@ def evolve(
     lm = dspy.LM(eval_model)
     dspy.configure(lm=lm)
 
+    # Set up LLM-as-judge model for the metric function
+    from evolution.core.fitness import set_metric_model
+    set_metric_model(eval_model)
+    console.print(f"  Judge model: {eval_model}")
+
     # Create the baseline skill module
     baseline_module = SkillModule(skill["body"])
 
@@ -155,7 +161,8 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_metric_calls=iterations * 15,  # ~15 metric calls per iteration
+            reflection_lm=dspy.LM(config.optimizer_model, temperature=1.0, max_tokens=32000),
         )
 
         optimized_module = optimizer.compile(
@@ -164,8 +171,10 @@ def evolve(
             valset=valset,
         )
     except Exception as e:
-        # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
-        console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
+        # Fall back to MIPROv2 if GEPA fails at runtime
+        import traceback
+        console.print(f"[yellow]GEPA failed ({e}), falling back to MIPROv2[/yellow]")
+        console.print(f"[dim]{''.join(traceback.format_exception(type(e), e, e.__traceback__)[:3])}[/dim]")
         optimizer = dspy.MIPROv2(
             metric=skill_fitness_metric,
             auto="light",
@@ -180,12 +189,12 @@ def evolve(
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
     # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    evolved_body = extract_evolved_skill_text(optimized_module, fallback=skill["body"])
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -214,12 +223,10 @@ def evolve(
         # Score baseline
         with dspy.context(lm=lm):
             baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
-            baseline_scores.append(baseline_score)
+            baseline_scores.append(skill_fitness_metric(ex, baseline_pred))
 
             evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
-            evolved_scores.append(evolved_score)
+            evolved_scores.append(skill_fitness_metric(ex, evolved_pred))
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
@@ -298,8 +305,8 @@ def evolve(
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
+@click.option("--optimizer-model", default="openrouter/openai/gpt-4.1", help="Model for GEPA reflections")
+@click.option("--eval-model", default="openrouter/z-ai/glm-5.2", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
