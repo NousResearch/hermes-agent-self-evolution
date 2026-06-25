@@ -17,7 +17,7 @@ Reference of the major modules in `evolution/`. Each entry: what it owns, the pu
 3. Validate baseline static constraints (warn-only — never blocks the run).
 4. Configure DSPy LM + `LMTimingCallback`; build judge + GEPA-shaped metric.
 5. Run GEPA (or MIPROv2 fallback) via `_build_optimizer_and_compile`.
-5b. Knee-point Pareto selection across `optimized_module.detailed_results.candidates` (skipped on MIPROv2 fallback — no `detailed_results`).
+5b. Candidate selection from `optimized_module.detailed_results.candidates`: the default `val-best` path deploys GEPA's val-argmax; `--knee-point-strategy smallest` walks the ε-band via `select_knee_point` (skipped on MIPROv2 fallback — no `detailed_results`).
 6. Reassemble evolved frontmatter + body.
 7. Static constraints on evolved artifact — short-circuit reject before holdout if any fail.
 8. `dspy.Evaluate` baseline + evolved against holdout (≈ 2 × |holdout| judge calls).
@@ -55,9 +55,9 @@ Reference of the major modules in `evolution/`. Each entry: what it owns, the pu
 - `safety_margin` (default 0.10) tightens the prompt's stated target relative to the validator's bar to compensate for observed ~8-9% LM overshoot. Default lands at +10pp prompt vs +20pp validator.
 - Soft enforcement: if the LM overshoots, log `WARNING` but pass the proposal through — hard truncation would corrupt mid-sentence and could lose the very change that helped.
 
-## evolution/skills/knee_point.py — Pareto-frontier knee-point selection
+## evolution/skills/knee_point.py — ε-band candidate selector (opt-in)
 
-**Owns:** picking the most parsimonious candidate within ε of the best valset score.
+**Owns:** the ε-band walk behind `--knee-point-strategy smallest` — picking the most parsimonious candidate within ε of the best valset score. The default `val-best` path bypasses this and deploys GEPA's val-argmax; calibration found the band walk re-picks argmax at small N ([reports/calibration_findings.md](../reports/calibration_findings.md)).
 
 **Public surface:**
 - `select_knee_point(candidates, val_aggregate_scores, n_val, static_validator, gepa_default_idx, epsilon=None) -> CandidatePick`
@@ -314,7 +314,7 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 - `BudgetAwareToolProposer(target_tool_name, manifest, target_description, baseline_chars, max_growth=0.2, safety_margin=0.10)` — subclasses `BudgetAwareProposer` for budget infrastructure but installs a tool-specific reflection template (sentinel-preservation hard constraint, sentinel-preserving BEFORE/AFTER one-shot, budget framed against the description not the full manifest).
 - `extract_and_rebuild(candidate, manifest, target_name) -> str` — pure function: parse the sentinel-delimited region, re-render the full manifest with that description plugged in. Testable without LM mocks.
 
-**Implementation note (load-bearing):** on `SentinelParseError`, `__call__` logs `WARNING`, increments `self.sentinel_failures`, and **re-raises**. GEPA's `reflective_mutation.py` catches the exception and skips the iteration. Returning a baseline-unchanged candidate would instead create a phantom duplicate-score entry that pollutes the knee-point Pareto pool.
+**Implementation note (load-bearing):** on `SentinelParseError`, `__call__` logs `WARNING`, increments `self.sentinel_failures`, and **re-raises**. GEPA's `reflective_mutation.py` catches the exception and skips the iteration. Returning a baseline-unchanged candidate would instead create a phantom duplicate-score entry that pollutes the candidate pool GEPA selects from.
 
 ## evolution/tools/tool_judge.py — tool-flavored LLM judge + fitness metric
 
@@ -345,7 +345,7 @@ Score is **never** modified by `pred_trace` enrichment — GEPA enforces score e
 3. Validate baseline static constraints (warn-only).
 4. Configure DSPy LM + `LMTimingCallback`; build `ToolJudge` + tool fitness metric.
 5. Run GEPA with `BudgetAwareToolProposer` as `instruction_proposer`.
-5b. Knee-point Pareto selection — `text_extractor` measures description length, not full rendered-manifest length, so parsimony tracks the artifact the user actually evolves.
+5b. Candidate selection: the tool path deploys GEPA's val-argmax (`details.best_idx`); the `text_extractor` measures description length, not full rendered-manifest length, so the recorded parsimony telemetry tracks the artifact the user actually evolves.
 6. Reassemble evolved manifest (`ToolManifest.replace_description`).
 7. Static constraints on the evolved description — short-circuit reject before holdout if any fail.
 8. `dspy.Evaluate` baseline + evolved against holdout.

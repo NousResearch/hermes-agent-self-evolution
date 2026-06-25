@@ -200,8 +200,8 @@ Both backends feed the **same** agnostic GEPA + `ClosedLoopValidator` + `score_t
 
 When growth is below the free threshold, the gate degrades to "no-regression only" (mean ≥ 0) — the optimizer doesn't need to justify a shorter artifact.
 
-### 5. Knee-point Pareto selection
-`select_knee_point()` (`evolution/skills/knee_point.py:48`) consumes `DspyGEPAResult.candidates` + `val_aggregate_scores`. It builds a band of all candidates within ε = 1/n_val of the best valset score, then picks the most parsimonious (smallest body) candidate that still passes static constraints. Default ε is "one valset example's worth of disagreement" — honest about valset resolution rather than pretending we have ε=0.02 precision on N=6.
+### 5. Candidate selection (static-validation, optional parsimony)
+`select_knee_point()` (`evolution/skills/knee_point.py:48`) consumes `DspyGEPAResult.candidates` + `val_aggregate_scores`. The default `val-best` path returns GEPA's argmax candidate after static-validating it (size/structure), falling back to GEPA's next choice if it fails — calibration found the ε-band walk re-picks argmax at this scale, so the default skips it ([reports/calibration_findings.md](../reports/calibration_findings.md)). The opt-in `--knee-point-strategy smallest` walks the ε = 1/n_val band by ascending body size for explicit compression at iso-quality.
 
 ### 6. Two-stage deploy gate (static then quality)
 `ConstraintValidator.validate_static()` is called first — size/non-empty/structure — so a malformed artifact short-circuits before spending judge calls on the holdout. Only after static passes does the holdout run, then `validate_growth_with_quality()` consumes the bootstrap result.

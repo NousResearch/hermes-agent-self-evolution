@@ -108,7 +108,7 @@ sequenceDiagram
 
 Skippable with `--no-saturation-check`. The probe's `baseline_per_example` is stashed and reused at Phase D's holdout comparison (the baseline isn't re-scored at run end), so net cost is ~zero when the run proceeds. On an abort, GEPA never starts — the user is left with a clear panel explaining why and what to try next. See `components.md` (`saturation_check.py`) for the four-band classifier and `data_models.md` (`SaturationReport`) for the report shape.
 
-### Phase C — Optimize: GEPA loop, then knee-point pick
+### Phase C — Optimize: GEPA loop, then candidate selection
 
 ```mermaid
 sequenceDiagram
@@ -143,7 +143,7 @@ sequenceDiagram
     CLI->>SM: optimized_module = SkillModule(knee_pick.skill_text)
 ```
 
-The GEPA loop is unrolled to show what each iteration touches. Knee-point picks the most parsimonious candidate within ε=1/n_val of the best valset score, falling back to GEPA's default only if every band candidate fails static.
+The GEPA loop is unrolled to show what each iteration touches. On the default `val-best` path the deployed candidate is simply GEPA's val-argmax (`detailed_results.best_idx`) — calibration found the ε-band walk re-picks argmax at this scale, so the default skips it. The `select_knee_point` step drawn above is the `--knee-point-strategy smallest` opt-in: it walks the ε=1/n_val band by ascending body size for compression-focused runs, static-validating each candidate and falling back to GEPA's pick if all fail.
 
 ### Phase D — Validate, gate, persist
 
@@ -348,7 +348,7 @@ All tests use mocks for LM calls — no real API keys required. The `_skill_sour
 
 ## Workflow 9: Evolve a tool description (deploy path)
 
-The tool-pipeline analog of Workflow 1. Same shape — load artifact → build dataset → wrap as `dspy.Module` → GEPA → knee → static → holdout → paired bootstrap → gate — with three substitutions: the artifact is a manifest tool description (not a SKILL.md), the dataset is the three-bucket tool-selection generator (target_correct / confusable_neighbor / regression_detection), and the module is `ToolModule` rendering a sentinel-wrapped manifest.
+The tool-pipeline analog of Workflow 1. Same shape — load artifact → build dataset → wrap as `dspy.Module` → GEPA → val-argmax pick → static → holdout → paired bootstrap → gate — with three substitutions: the artifact is a manifest tool description (not a SKILL.md), the dataset is the three-bucket tool-selection generator (target_correct / confusable_neighbor / regression_detection), and the module is `ToolModule` rendering a sentinel-wrapped manifest.
 
 ```bash
 python -m evolution.tools.evolve_tool \
@@ -366,7 +366,6 @@ sequenceDiagram
     participant TM as ToolModule
     participant GEPA as dspy.GEPA
     participant Prop as BudgetAwareToolProposer
-    participant Knee as select_knee_point
     participant Val as ConstraintValidator
     participant Eval as dspy.Evaluate
     participant Boot as paired_bootstrap
@@ -381,8 +380,7 @@ sequenceDiagram
     CLI->>GEPA: compile(baseline, trainset, valset, instruction_proposer=BudgetAwareToolProposer)
     GEPA->>Prop: mutate sentinel-delimited region only
     GEPA-->>CLI: optimized_module with detailed_results
-    CLI->>Knee: select_knee_point(candidates, val_scores, n_val, validator, text_extractor=description_from_predictor)
-    Knee-->>CLI: CandidatePick (parsimony measured on description, not full manifest)
+    CLI->>CLI: deploy candidate = details.candidates[details.best_idx] (GEPA val-argmax)
     CLI->>Val: validate_static(evolved_description, "tool_description")
     Val-->>CLI: pass
     CLI->>Eval: evaluate baseline + evolved on holdout

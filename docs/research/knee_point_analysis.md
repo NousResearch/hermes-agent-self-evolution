@@ -1,4 +1,4 @@
-> **Superseded.** Historical analysis from 2026-05-03. The knee-point ε-band selector was empirically dropped as a no-op for the val-best path in May 2026 (10/10 mode agreement across 5 ε modes on a regenerated calibration corpus). The selector survives only for the `--knee-point-strategy smallest` opt-in path. See [`reports/calibration_findings.md`](../../reports/calibration_findings.md) for current status.
+> **Status: design context.** This is the literature recon behind the framework's small-N candidate-selection design. The ε-band *selector* it analyzes was later calibrated to a **no-op on the default `val-best` path** — 10/10 ε-mode agreement on a regenerated calibration corpus ([`reports/calibration_findings.md`](../../reports/calibration_findings.md)) — so the default now defers to GEPA's val-argmax, and the ε-band survives only behind the opt-in `--knee-point-strategy smallest` for compression. The small-N selection problem surveyed below is real; the framework's answer to it is the paired-bootstrap **deploy gate**, not the selector.
 
 # Knee-point Pareto Selection: Analysis
 
