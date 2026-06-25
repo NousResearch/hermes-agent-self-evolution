@@ -1,0 +1,264 @@
+# Editorial content for the Phase 4 validation report (synthesis / findings format).
+# Rendered by generate_findings_report.py, which verifies every number in the
+# provenance block against its committed source JSON and refuses to emit the PDF
+# on any mismatch:
+#   python generate_findings_report.py --prose reports/phase4_prose.yaml \
+#       --out reports/phase4_validation_report.pdf
+
+meta:
+  title: "Agent Self-Evolution"
+  subtitle: "Phase 4 Validation Report<br/>Tool implementation code via iterative test-feedback repair"
+  organization: ""
+  repository: "github.com/jramos/agent-self-evolution"
+
+# Verified against the committed source JSONs before the PDF renders. Each check may
+# name its own source; the top-level source is the default for checks that omit one.
+provenance:
+  source: "reports/asymmetry_campaign_report.json"
+  checks:
+    # Primary campaign (N=20)
+    - {path: "n_organisms", expect: 20}
+    - {path: "deploy_reachable.k", expect: 12}
+    - {path: "deploy_reachable.n", expect: 20}
+    - {path: "deploy_reachable.fraction", expect: 0.60, tol: 0.005}
+    - {path: "deploy_reachable.wilson.0", expect: 0.387, tol: 0.01}
+    - {path: "deploy_reachable.wilson.1", expect: 0.781, tol: 0.01}
+    - {path: "icc", expect: 0.326, tol: 0.01}
+    - {path: "verdict", expect: "GREEN"}
+    - {path: "cost_summary.total_usd", expect: 3.10, tol: 0.02}
+    # Corroborating campaign (N=46)
+    - {source: "reports/asymmetry_campaign_report_n46.json", path: "n_organisms", expect: 46}
+    - {source: "reports/asymmetry_campaign_report_n46.json", path: "deploy_reachable.k", expect: 34}
+    - {source: "reports/asymmetry_campaign_report_n46.json", path: "deploy_reachable.wilson.0", expect: 0.597, tol: 0.01}
+    - {source: "reports/asymmetry_campaign_report_n46.json", path: "deploy_reachable.wilson.1", expect: 0.844, tol: 0.01}
+    - {source: "reports/asymmetry_campaign_report_n46.json", path: "icc", expect: 0.630, tol: 0.01}
+    - {source: "reports/asymmetry_campaign_report_n46.json", path: "verdict", expect: "GREEN"}
+    - {source: "reports/asymmetry_campaign_report_n46.json", path: "cost_summary.total_usd", expect: 12.01, tol: 0.02}
+    # Difficulty curve (by upstream-fix size)
+    - {source: "reports/asymmetry_difficulty_curve.json", path: "fix_loc_median", expect: 45}
+    - {source: "reports/asymmetry_difficulty_curve.json", path: "by_fix_loc.0.rate", expect: 1.0}
+    - {source: "reports/asymmetry_difficulty_curve.json", path: "by_fix_loc.2.rate", expect: 0.686, tol: 0.005}
+    # Leakage check (expected values withheld)
+    - {source: "reports/asymmetry_leakage_check.json", path: "armA_dr", expect: 11}
+    - {source: "reports/asymmetry_leakage_check.json", path: "armB_dr", expect: 3}
+    - {source: "reports/asymmetry_leakage_check.json", path: "n", expect: 12}
+    # Gate-gaming adjudication (no slip on real bugs)
+    - {source: "reports/asymmetry_gate_gaming_adjudicated.json", path: "total.real_fix", expect: 15}
+    - {source: "reports/asymmetry_gate_gaming_adjudicated.json", path: "total.slip", expect: 0}
+    # Search is not the asset: darwinian evolver vs best-of-N at equal budget
+    - {source: "reports/darwinian_evolver_evaluation.json", path: "summary.arm1.robust_recovered", expect: 8}
+    - {source: "reports/darwinian_evolver_evaluation.json", path: "summary.arm3.robust_recovered", expect: 6}
+    - {source: "reports/darwinian_evolver_evaluation.json", path: "summary.recovery_2x2_evo_vs_bon.evo_only", expect: 0}
+
+sections:
+  - header: "Executive Summary"
+    blocks:
+      - paragraph: >-
+          Agent Self-Evolution is a standalone, API-only optimization pipeline that
+          improves the artifacts an agent runs on and ships only the changes that prove
+          out behind a noise-aware deploy gate. Phases 1&#8211;3 validated the gate as a
+          mechanism on the instructions layer (skill files, tool descriptions, and
+          system-prompt sections). Phase 4 turns to the <b>tool implementation code</b>
+          itself &#8212; the one surface with a real, deploy-grade gradient on a capable
+          agent &#8212; and asks a sharper question: can the loop repair a genuinely
+          broken tool when it is handed the failing test as feedback?
+      - paragraph: >-
+          The answer is yes, with an honest boundary. On real historical bugs harvested
+          from an active repository&#8217;s git stream &#8212; each carrying its upstream
+          fix commit as a <b>ground-truth executable oracle</b> &#8212; the loop produced
+          a gate-passing, oracle-matching fix for <b>12 of 20</b> bugs (deploy-reachable
+          <b>0.60</b>, Wilson 95% CI [0.39, 0.78]), corroborated by a second campaign at
+          <b>34 of 46</b> (0.74, [0.60, 0.84]). Both clear a pre-registered futility floor
+          of 0.10 (verdict GREEN). A leakage check shows the test&#8217;s expected values
+          are load-bearing, so this is <b>test-feedback repair, not autonomous
+          re-derivation</b>. The result is the product thesis: spend where a concrete
+          executable test and real headroom exist; the gate certifies the fix didn&#8217;t
+          regress.
+      - table:
+          header: ["Key Result", "Value"]
+          col_widths: [3.9, 2.6]
+          highlight_row: 0
+          highlight_color: "#e8f5e9"
+          rows:
+            - ["Deploy-reachable (primary, N=20)", "12 / 20 = 0.60   [0.39, 0.78]"]
+            - ["Deploy-reachable (corroborating, N=46)", "34 / 46 = 0.74   [0.60, 0.84]"]
+            - ["Clears pre-registered futility floor (0.10)?", "yes &#8212; verdict GREEN"]
+            - ["Decision basis", "executable oracle (fix-commit tests + behavioral match)"]
+            - ["Cost (N=20 / N=46)", "$3.10 / $12.01"]
+
+  - header: "Background"
+    blocks:
+      - paragraph: >-
+          An agent&#8217;s behavior is governed by three layers. Phases 1&#8211;3 evolved
+          the middle one (instructions). Phase 4 reaches the bottom one &#8212; the Python
+          that implements each tool &#8212; because that is where text edits stop being
+          redundant on a capable model and a real gradient appears.
+      - table:
+          header: ["Layer", "What It Is", "How Phase 4 Improves It"]
+          col_widths: [1.3, 2.7, 2.5]
+          highlight_row: 2
+          highlight_color: "#e8f5e9"
+          rows:
+            - ["Model Weights", "The underlying LLM (Claude, GPT, etc.)", "Out of scope (RL training)"]
+            - ["Instructions", "Skills, system prompts, tool descriptions", "Phases 1&#8211;3 (gate validated)"]
+            - ["Tool Code", "Python implementations of each tool", "Phase 4: repair from a failing test"]
+      - paragraph: >-
+          The campaign resolves the broader question &#8212; <i>does evolving an
+          artifact change a capable agent&#8217;s behavior?</i> &#8212; into three regimes.
+          <b>GREEN</b>: where the signal is non-inferable and there is an executable
+          oracle (code repair), there is a real gradient. <b>NULL</b>: where a task is
+          binary-correct and the agent is already competent, there is no headroom, and the
+          pre-flight refuses the run. <b>FRONTIER</b>: open-ended generative quality, where
+          the judge saturates and an execution oracle has nothing targeted to bind to.
+          Phase 4 lives squarely in the GREEN regime.
+
+  - header: "Approach: Iterative Test-Feedback Repair"
+    blocks:
+      - paragraph: >-
+          Real historical tool bugs are harvested from an active repository&#8217;s git
+          stream, each carrying its upstream fix commit as a <b>ground-truth oracle</b>.
+          The loop checks out the buggy parent in a throwaway worktree with an isolated
+          venv, feeds the proposer the failing test&#8217;s output, and asks for a
+          whole-file repair. A repair counts only if it passes the full fix-commit test
+          set and behaviorally matches the upstream fix. The unit of analysis is the
+          organism (one bug); a bug is <b>deploy-reachable</b> when a majority of three
+          independent seeds produce an oracle-matching fix.
+      - paragraph: >-
+          The headline finding about engines is deflationary, and it matters: <b>the value
+          is the signal and the gate, not the search.</b> Plain best-of-N resampling
+          matches GEPA on this corpus, and a real population-based evolutionary search
+          (the imbue <font face="Courier">darwinian_evolver</font>) was tested at equal
+          budget and <b>strictly dominated by best-of-N</b> &#8212; 6 of 23 bugs recovered
+          versus 8 of 23, recovering nothing best-of-N missed.
+      - table:
+          header: ["Engine", "What it does", "Verdict"]
+          col_widths: [1.9, 2.7, 1.9]
+          rows:
+            - ["DSPy + GEPA", "Reflective prompt evolution from traces", "Validated for Phases 1&#8211;3"]
+            - ["Best-of-N resampling", "Sample K repairs, keep any that pass the gate", "Matches GEPA here"]
+            - ["Darwinian evolver (imbue)", "Population-based evolutionary search", "Tested, rejected (6/23 vs 8/23)"]
+            - ["Test-feedback repair", "Whole-file repair from the failing test, gated", "Phase 4 &#8212; the shipped engine"]
+
+  - header: "Experiment"
+    blocks:
+      - table:
+          header: ["Parameter", "Value"]
+          col_widths: [2.3, 4.2]
+          rows:
+            - ["Proposer LM", "gpt-5.4-mini class"]
+            - ["Unit of analysis", "one real historical bug (organism)"]
+            - ["Seeds per organism", "3"]
+            - ["Deploy-reachable rule", "majority of 3 seeds produce an oracle-matching fix"]
+            - ["Bug corpus", "one active repository&#8217;s git stream (hermes-agent)"]
+            - ["Oracle", "upstream fix commit&#8217;s full test set + behavioral match"]
+            - ["Gate", "held-out split, surface freeze, file scope, baseline-diff floor"]
+            - ["Campaign size / cost", "N=20 ($3.10) and N=46 ($12.01)"]
+      - paragraph: >-
+          The two campaigns are independent harvests under the same protocol; the second
+          ran to N=46 on a $12 cap. Binning the 46 by the upstream fix&#8217;s size answers
+          &#8220;does it only fix one-liners?&#8221; &#8212; it does not.
+
+  - header: "Results"
+    blocks:
+      - table:
+          header: ["Estimand (organism-level)", "N=20", "N=46"]
+          col_widths: [3.1, 1.7, 1.7]
+          highlight_row: 0
+          highlight_color: "#e8f5e9"
+          rows:
+            - ["Deploy-reachable", "12 / 20 = 0.60", "34 / 46 = 0.74"]
+            - ["Wilson 95% CI", "[0.39, 0.78]", "[0.60, 0.84]"]
+            - ["ICC", "0.326", "0.630"]
+            - ["Clears futility floor (0.10)?", "yes (GREEN)", "yes (GREEN)"]
+            - ["Cost", "$3.10", "$12.01"]
+      - subhead: "It is not just trivial bugs"
+      - table:
+          header: ["Upstream-fix size", "deploy-reachable", "Tool size", "deploy-reachable"]
+          col_widths: [1.7, 1.5, 1.6, 1.7]
+          rows:
+            - ["&lt;=5 LOC", "5/5 = 1.00", "&lt;8k chars", "4/4 = 1.00"]
+            - ["6&#8211;20 LOC", "5/6 = 0.83", "8&#8211;25k", "13/16 = 0.81"]
+            - ["&gt;20 LOC", "24/35 = 0.69", "&gt;25k", "17/26 = 0.65"]
+      - paragraph: >-
+          The median upstream fix is <b>45 LOC</b> and 35 of 46 organisms are large fixes
+          (&gt;20 LOC), repaired at <b>0.69</b> &#8212; the rate is carried by substantial
+          bugs and degrades gracefully with complexity, not off a cliff at triviality. The
+          easy bins are tiny (5/5, 4/4), so the trend is solid but the exact small-bin
+          rates are noisy.
+      - subhead: "The expected values are load-bearing (leakage check)"
+      - table:
+          header: ["Feedback regime", "Deploy-reachable (of 12)"]
+          col_widths: [3.9, 2.6]
+          rows:
+            - ["Full traceback (control)", "11 / 12 &#8212; reproduces the headline"]
+            - ["No-leak (expected values withheld)", "3 / 12"]
+      - paragraph: >-
+          Re-running the 12 deploy-reachable organisms with the failing test&#8217;s
+          expected values withheld collapses the rate from ~0.92 to <b>3/12 (~0.25)</b>.
+          So <b>0.60 is test-feedback repair leaning on the test&#8217;s assertions, not
+          autonomous re-derivation</b>: in production the failing test is always present,
+          so 0.60&#8211;0.74 is the deployable rate and ~0.25 is the autonomy floor. A
+          fuzzed differential probed whether the answer-informed fixes generalize: of the
+          control successes, the <b>4</b> meaningfully testable on fresh inputs (never in
+          the tests) <b>matched the oracle on every input, 0 divergences</b> &#8212;
+          evidence they generalize rather than hard-code, though a thin slice.
+      - subhead: "Read the verdict honestly"
+      - paragraph: >-
+          The 0.10 line is a futility floor, not a success bar &#8212; deploy-reachable
+          would have to collapse to 4/20 before it failed. The honest headline is the
+          point estimate <b>0.60 [0.39, 0.78] on one repository, one proposer model</b>:
+          promising, not settled. The per-seed distribution is bimodal (10 unanimous
+          successes, 8 clear failures), so 0.60 hinges on the 2 organisms sitting exactly
+          at 2/3, each one seed-flip from moving the verdict. The corroborating N=46 run
+          tightens the lower bound, but ICC swung (0.326 vs 0.630), so seed correlation
+          &#8212; and the precision that rests on it &#8212; is itself variable.
+
+  - header: "Safety and Guardrails"
+    blocks:
+      - paragraph: >-
+          A green test can lie. The deploy gate is built to resist the specific ways an
+          LLM-authored patch games one, and every repair runs in a throwaway worktree that
+          never touches the real repository.
+      - table:
+          header: ["Guardrail", "What it prevents", "Status"]
+          col_widths: [2.1, 3.3, 1.1]
+          rows:
+            - ["Held-out split", "a fix that passes only the test it was shown", "enforced"]
+            - ["Surface freeze", "new functions / signatures smuggled in", "enforced"]
+            - ["File scope", "edits leaking outside the one tool file", "enforced"]
+            - ["Baseline-diff floor", "new failures vs. the upstream fix", "enforced"]
+            - ["Worktree isolation", "mutating the real repository", "enforced"]
+            - ["Human PR review", "auto-deploy without a human", "required"]
+      - paragraph: >-
+          An adversarial gate-gaming audit fuzzed candidate fixes that passed the gate to
+          see whether any merely hard-coded the test inputs. Across the adjudicated cases
+          it found <b>15 real fixes and 0 confirmed slips</b> on the oracle-rich bugs:
+          where the oracle carries diverse test inputs, the gate forces generality. The
+          honest caveat is that thin-oracle bugs are gameable in principle &#8212; trust
+          tracks oracle richness, which is exactly what the gate measures.
+
+  - header: "Roadmap"
+    blocks:
+      - table:
+          header: ["Phase", "Target", "Engine", "Timeline", "Status"]
+          col_widths: [0.9, 1.7, 1.9, 1.0, 1.0]
+          highlight_row: 3
+          highlight_color: "#e8f5e9"
+          rows:
+            - ["Phase 1", "Skill files (SKILL.md)", "DSPy + GEPA", "3-4 weeks", "Validated &#10003;"]
+            - ["Phase 2", "Tool descriptions", "DSPy + GEPA", "2-3 weeks", "Validated &#10003;"]
+            - ["Phase 3", "System prompt sections", "DSPy + GEPA", "2-3 weeks", "Validated &#10003;"]
+            - ["Phase 4", "Tool implementation code", "Iterative test-feedback repair", "3-4 weeks", "Validated &#10003;"]
+            - ["Phase 5", "Continuous improvement", "Propose-only triage sentinel", "2 weeks", "Shipped &#10003;"]
+      - paragraph: >-
+          Phase 4 establishes the first surface where self-evolution earns deploy-grade
+          traction on a capable agent &#8212; tool code, fed a failing test, behind a gate
+          that resists a lying green. Phase 5 builds the propose-only front-end that finds
+          such bugs in a repository&#8217;s git stream.
+
+  - header: "Immediate Next Steps"
+    blocks:
+      - bullets:
+          - "<b>Independent held-out product.</b> Only 3 of 8 pilot bugs had tests input-diverse enough for a truly independent held-out; build the diverse-test product so the gate&#8217;s anti-gaming claim rests on independence, not the oracle sidestep."
+          - "<b>Second corpus and proposer.</b> The headline is one repository, one mini-class model; a second of each de-confounds oracle-presence from headroom and task type."
+          - "<b>Broaden oracle-bearing supply.</b> The clean (bug, failing test, upstream fix) supply is the binding constraint &#8212; widen it (see Phase 5) so the loop has more real work to do."

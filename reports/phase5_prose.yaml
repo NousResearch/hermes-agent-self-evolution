@@ -1,0 +1,197 @@
+# Editorial content for the Phase 5 validation report (synthesis / findings format).
+# Rendered by generate_findings_report.py, which verifies every number in the
+# provenance block against its committed source JSON and refuses to emit the PDF
+# on any mismatch:
+#   python generate_findings_report.py --prose reports/phase5_prose.yaml \
+#       --out reports/phase5_validation_report.pdf
+
+meta:
+  title: "Agent Self-Evolution"
+  subtitle: "Phase 5 Validation Report<br/>Continuous improvement loop via a propose-only triage sentinel"
+  organization: ""
+  repository: "github.com/jramos/agent-self-evolution"
+
+# The mechanism is qualitative; the one machine-checkable claim is the cross-repo
+# supply probe, pinned here so the central caveat cannot drift from its source.
+provenance:
+  source: "reports/bet4_httpx_supply.json"
+  checks:
+    - {path: "repo", expect: "encode/httpx"}
+    - {path: "n_checked", expect: 35}
+    - {path: "n_valid", expect: 0}
+    - {path: "verdict", expect: "KILL (<5)"}
+
+sections:
+  - header: "Executive Summary"
+    blocks:
+      - paragraph: >-
+          Phase 4 proved the repair loop can fix a real broken tool when it is handed the
+          failing test. Phase 5 ships the <b>supply side</b>: a propose-only triage
+          sentinel that scans a target repository&#8217;s recent git stream for bugs the
+          validated loop <i>could</i> fix, ranks them, and writes a queue. It is the
+          front-end that closes the continuous-improvement loop &#8212; detection feeding
+          repair &#8212; while keeping every consequential decision in human hands.
+      - paragraph: >-
+          The sentinel is shipped and operational. The scan is <b>free</b> (pure git, no
+          LLM) and safe to schedule; the attempt step reuses the Phase 4 worktree &#8594;
+          repair &#8594; oracle-gate pipeline <b>verbatim</b>, is <b>cost-capped</b>, and
+          is triggered only by a human. It <b>never edits the target repository, never
+          opens a pull request, and never deploys</b> &#8212; it surfaces candidates and
+          the gate&#8217;s verdict; a person decides what, if anything, to ship. The
+          honest binding constraint is supply, not mechanism: reproducible bugs are scarce
+          in a single repository&#8217;s history (see Caveats), so the sentinel&#8217;s
+          job is to surface and safely gate the rare real candidate.
+      - table:
+          header: ["Key Result", "Value"]
+          col_widths: [2.5, 4.0]
+          highlight_row: 0
+          highlight_color: "#e8f5e9"
+          rows:
+            - ["Triage sentinel", "shipped &#8212; propose-only front-end to the repair loop"]
+            - ["Scan cost", "$0 (pure git, no LLM) &#8212; safe to schedule"]
+            - ["Attempt step", "human-triggered, cost-capped, never auto-PR"]
+            - ["Repair + gate reused", "the Phase 4 loop, verbatim"]
+            - ["Binding constraint", "supply of reproducible bugs (see Caveats)"]
+
+  - header: "Background"
+    blocks:
+      - paragraph: >-
+          The code-evolution loop has two halves. Phase 4 is the <b>consumer</b>: given a
+          bug with a failing test, repair it and gate the fix. Phase 5 is the
+          <b>producer</b>: find bugs in a repository&#8217;s git stream that look like work
+          the consumer could do. Splitting them this way is deliberate &#8212;
+          self-improvement is gated at the deployment step by a human, not at detection, so
+          the producer is allowed to run cheaply and often while the consumer (which
+          spends, and whose output could ship) stays a deliberate, supervised action.
+
+  - header: "Approach: Scan, then Attempt"
+    blocks:
+      - paragraph: >-
+          The sentinel is two steps, exactly one of which costs money. The scan ranks
+          candidates and writes a queue; the attempt runs the validated repair loop on the
+          top K. Ranking is git-only and intentionally cheap &#8212; dependency-regressions
+          first, then most recent &#8212; so a high rank means &#8220;look at this
+          first,&#8221; not &#8220;this will repair.&#8221;
+      - table:
+          header: ["Step", "Command", "Cost", "Who triggers"]
+          col_widths: [1.7, 2.5, 0.9, 1.4]
+          rows:
+            - ["Scan (rank &#8594; queue)", "monitor --repo &lt;repo&gt;", "$0", "safe to schedule"]
+            - ["Attempt (repair top K)", "&#8230; --attempt-top K --max-cost-usd C", "spends", "manual, gated"]
+      - paragraph: >-
+          Each attempted candidate is annotated with a verdict; the loop records whether it
+          <i>could</i> produce an oracle-matching fix, never a deploy.
+      - table:
+          header: ["Verdict", "Meaning"]
+          col_widths: [2.6, 3.9]
+          rows:
+            - ["attempted (+ deploy_reachable)", "loop ran; majority of seeds gave an oracle-matching fix"]
+            - ["not_valid", "parent doesn&#8217;t cleanly fail what the fix passes"]
+            - ["source_missing / too_large", "skipped before repair (source gone, or too big to rewrite)"]
+            - ["cost_ceiling", "the cost cap was hit; remaining candidates not attempted"]
+
+  - header: "Operation"
+    blocks:
+      - table:
+          header: ["Parameter", "Value"]
+          col_widths: [2.3, 4.2]
+          rows:
+            - ["Input", "a target repo&#8217;s git stream (default: last 90 days)"]
+            - ["Scan output", "triage_queue.json (machine-readable) + triage_report.md (ranked)"]
+            - ["Ranking", "dependency_regression &gt; bug_fix, then most recent"]
+            - ["Attempt cap", "--max-cost-usd required whenever --attempt-top &gt; 0"]
+            - ["Repair + gate", "the Phase 4 loop (worktree &#8594; repair &#8594; oracle gate), unchanged"]
+      - paragraph: >-
+          The scan can be scheduled (a $0 weekly refresh); the spend step never can. The
+          wrapper and launchd template are written to enforce scan-only scheduling &#8212;
+          a copy-paste that added <font face="Courier">--attempt-top</font> would turn a
+          free job into unsupervised spend, so the design refuses it.
+
+  - header: "Results"
+    blocks:
+      - paragraph: >-
+          The mechanism is validated end-to-end. The scan is deterministic and free,
+          producing a ranked, jq-aggregable queue plus a human-readable report with a
+          ready-to-run attempt command. The attempt step reuses the Phase 4 repair loop and
+          deploy gate without modification, so its repair quality is exactly the validated
+          0.60&#8211;0.74 deploy-reachable rate, and its verdict taxonomy behaves as
+          designed &#8212; rejecting <font face="Courier">not_valid</font> candidates whose
+          parent doesn&#8217;t cleanly fail, and accepting only oracle-matching fixes. The
+          result is a working continuous-improvement front-end: detection is automated and
+          cheap; repair is validated and gated; deployment stays human.
+
+  - header: "Safety and Guardrails"
+    blocks:
+      - paragraph: >-
+          Phase 5&#8217;s safety story is its defining feature: the producer is
+          <b>propose-only</b>. Every guarantee below is structural, enforced by the CLI and
+          the scheduling templates, not by convention.
+      - table:
+          header: ["Guarantee", "Status"]
+          col_widths: [4.4, 2.1]
+          rows:
+            - ["Never edits the target repository", "enforced"]
+            - ["Never opens a PR or deploys a fix", "enforced"]
+            - ["Scan never spends (pure git, no LLM)", "enforced"]
+            - ["Attempt refuses to run uncapped", "enforced (--max-cost-usd required)"]
+            - ["Scheduled jobs scan only", "enforced (wrapper + template)"]
+
+  - header: "Caveats and Limitations"
+    blocks:
+      - paragraph: >-
+          The mechanism works; the open question is how much real work exists for it. The
+          supply of <i>reproducible</i> bugs &#8212; a buggy parent, an upstream-fix
+          oracle, and a red&#8594;green test &#8212; is structurally scarce, and this
+          bounds how far an autonomous loop can go.
+      - table:
+          header: ["Supply probe", "Result"]
+          col_widths: [3.6, 2.9]
+          highlight_row: 1
+          highlight_color: "#fff8e1"
+          rows:
+            - ["Hermes, one year of history", "0 clean tool-local dependency regressions"]
+            - ["Cross-repo port (encode/httpx)", "0 / 35 valid organisms &#8212; KILL"]
+            - ["dependency_regression label", "noisy &#8212; fires on any manifest touch"]
+      - paragraph: >-
+          Two things follow. First, the <font face="Courier">dependency_regression</font>
+          rank is a hint, not a guarantee: it fires when a fix commit also touched a
+          dependency manifest, and a year-long analysis of one active repo found <b>zero</b>
+          clean, tool-local dependency-version regressions &#8212; the manifest-touching
+          commits were broad migrations or feature additions. Second, the clean
+          oracle-bearing supply is a property of hermes-agent&#8217;s tool-registry
+          architecture (isolated single-file tools, name-matched tests), not a general
+          feature of mature Python repos: a port to <font face="Courier">encode/httpx</font>
+          found abundant bug-fix-shaped commits but <b>0 of 35</b> reproduced as a
+          single-tool red&#8594;green organism (pre-registered verdict: KILL). This is the
+          <b>double wall</b> &#8212; independent verification and bug supply &#8212; that
+          bounds autonomous continuous improvement. The sentinel&#8217;s value is to
+          surface and safely gate the rare real candidate, not to manufacture a stream of
+          them; a portable supply would need SWE-bench-grade harvesting (issue&#8594;PR
+          linkage + per-commit environments), which the project composes with rather than
+          rebuilds.
+
+  - header: "Roadmap"
+    blocks:
+      - table:
+          header: ["Phase", "Target", "Engine", "Timeline", "Status"]
+          col_widths: [0.9, 1.7, 1.9, 1.0, 1.0]
+          highlight_row: 4
+          highlight_color: "#e8f5e9"
+          rows:
+            - ["Phase 1", "Skill files (SKILL.md)", "DSPy + GEPA", "3-4 weeks", "Validated &#10003;"]
+            - ["Phase 2", "Tool descriptions", "DSPy + GEPA", "2-3 weeks", "Validated &#10003;"]
+            - ["Phase 3", "System prompt sections", "DSPy + GEPA", "2-3 weeks", "Validated &#10003;"]
+            - ["Phase 4", "Tool implementation code", "Iterative test-feedback repair", "3-4 weeks", "Validated &#10003;"]
+            - ["Phase 5", "Continuous improvement", "Propose-only triage sentinel", "2 weeks", "Shipped &#10003;"]
+      - paragraph: >-
+          With Phase 5 the loop is end-to-end: detect (free, scheduled) &#8594; repair
+          (validated, cost-capped) &#8594; gate (resists a lying green) &#8594; human
+          deploy. The framework can now find its own work; how much work there is remains
+          a supply question, stated plainly above.
+
+  - header: "Immediate Next Steps"
+    blocks:
+      - bullets:
+          - "<b>Broaden the supply.</b> Adopt an external fail&#8594;pass feed (e.g. SWE-smith&#8217;s per-repo environments) so the sentinel ranks a real backlog, instead of manufacturing one from a single repo&#8217;s thin stream."
+          - "<b>Worktree-based difficulty ranking.</b> Today&#8217;s rank is git-only; a cheap worktree probe could estimate repair difficulty so the top of the queue predicts &#8220;will repair,&#8221; not just &#8220;look first.&#8221;"
+          - "<b>The untested artifact surface.</b> Novel MCP tool descriptions are the one instructions surface not yet measured; enrolling them would extend the sentinel beyond code."

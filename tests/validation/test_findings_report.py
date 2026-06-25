@@ -101,12 +101,41 @@ class TestProvenance:
     def test_no_provenance_block_is_allowed(self):
         assert check_provenance({"sections": []}) == []
 
+    def test_per_check_source_override(self, tmp_path: Path):
+        # A synthesis report pins numbers across several JSONs: the top-level source is
+        # the default, and any check may name its own.
+        (tmp_path / "a.json").write_text(json.dumps({"k": 1}))
+        (tmp_path / "b.json").write_text(json.dumps({"k": 2}))
+        prose = {"provenance": {"source": "a.json", "checks": [
+            {"path": "k", "expect": 1},
+            {"source": "b.json", "path": "k", "expect": 2},
+        ]}}
+        assert check_provenance(prose, base_dir=tmp_path) == []
+        bad = {"provenance": {"source": "a.json", "checks": [
+            {"source": "b.json", "path": "k", "expect": 99},
+        ]}}
+        fails = check_provenance(bad, base_dir=tmp_path)
+        assert len(fails) == 1 and fails[0]["source"] == "b.json"
+
+    def test_check_without_any_source_raises(self, tmp_path: Path):
+        prose = {"provenance": {"checks": [{"path": "k", "expect": 1}]}}
+        with pytest.raises(ValueError, match="no source"):
+            check_provenance(prose, base_dir=tmp_path)
+
 
 class TestBankedArtifact:
     """Guards the real committed findings report against drift from its source."""
 
     def test_prose_matches_committed_source(self):
         prose = yaml.safe_load((REPO_ROOT / "reports" / "asymmetry_prose.yaml").read_text())
+        assert check_provenance(prose, base_dir=REPO_ROOT) == []
+
+    def test_phase4_prose_matches_sources(self):
+        prose = yaml.safe_load((REPO_ROOT / "reports" / "phase4_prose.yaml").read_text())
+        assert check_provenance(prose, base_dir=REPO_ROOT) == []
+
+    def test_phase5_prose_matches_sources(self):
+        prose = yaml.safe_load((REPO_ROOT / "reports" / "phase5_prose.yaml").read_text())
         assert check_provenance(prose, base_dir=REPO_ROOT) == []
 
     def test_ledger_re_derives_deploy_reachable(self):

@@ -64,8 +64,8 @@ Full usage guide for every target (tools, prompts, session-history evals, tuning
 | **Phase 1** | Skill files (`SKILL.md`) | DSPy + GEPA | ✅ [Mechanism validated](reports/phase1_validation_report.pdf) |
 | **Phase 2** | Tool descriptions + dual-signal deploy gate | DSPy + GEPA | ✅ [Mechanism validated](reports/phase2_validation_report.pdf) |
 | **Phase 3** | System prompt sections (Hermes + Claude Code) | DSPy + GEPA | ✅ [Mechanism validated](reports/phase3_validation_report.pdf) |
-| **Phase 4** | Tool implementation code | Iterative test-feedback repair | ✅ [Validated](reports/asymmetry_findings.md) |
-| **Phase 5** | Continuous improvement loop | Propose-only triage sentinel | ✅ [Sentinel shipped](docs/operating_the_sentinel.md) |
+| **Phase 4** | Tool implementation code | Iterative test-feedback repair | ✅ [Validated](reports/phase4_validation_report.pdf) |
+| **Phase 5** | Continuous improvement loop | Propose-only triage sentinel | ✅ [Sentinel shipped](reports/phase5_validation_report.pdf) |
 
 Phases 1–3 are validated as a working *mechanism* (the pipeline runs end-to-end and the gate catches regressions); on a *capable* agent, evolving these artifacts mostly catches regressions rather than finding improvements — see [Findings](#findings) for where evolution actually pays off.
 

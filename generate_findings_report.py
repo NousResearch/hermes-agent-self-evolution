@@ -59,19 +59,35 @@ def _resolve(obj: Any, dotted: str) -> Any:
 
 
 def check_provenance(prose: dict, *, base_dir: Path = REPO_ROOT) -> list[dict]:
-    """Verify each ``provenance.checks`` entry against the source JSON.
+    """Verify each ``provenance.checks`` entry against its source JSON.
 
-    Returns a list of mismatches (empty == all good). Numeric checks honor an
-    optional per-check ``tol``; everything else is compared for exact equality.
-    A prose with no ``provenance`` block is allowed and returns no failures.
+    The default source is the top-level ``provenance.source``; an individual check
+    may name its own ``source`` to verify against a different JSON, so one synthesis
+    report can pin numbers drawn from several result files (each referenced JSON is
+    read once). Returns a list of mismatches (empty == all good). Numeric checks
+    honor an optional per-check ``tol``; everything else is compared for exact
+    equality. A prose with no ``provenance`` block is allowed and returns no failures.
     """
     prov = prose.get("provenance")
     if not prov:
         return []
-    src = json.loads((Path(base_dir) / prov["source"]).read_text())
+    default_source = prov.get("source")
+    cache: dict[str, Any] = {}
+
+    def _src(rel: str) -> Any:
+        if rel not in cache:
+            cache[rel] = json.loads((Path(base_dir) / rel).read_text())
+        return cache[rel]
+
     failures: list[dict] = []
     for chk in prov["checks"]:
-        actual = _resolve(src, chk["path"])
+        source = chk.get("source", default_source)
+        if source is None:
+            raise ValueError(
+                f"provenance check {chk['path']!r} has no source and there is no "
+                "top-level provenance.source default"
+            )
+        actual = _resolve(_src(source), chk["path"])
         expect = chk["expect"]
         tol = chk.get("tol")
         if tol is not None:
@@ -79,7 +95,8 @@ def check_provenance(prose: dict, *, base_dir: Path = REPO_ROOT) -> list[dict]:
         else:
             ok = actual == expect
         if not ok:
-            failures.append({"path": chk["path"], "expect": expect, "actual": actual})
+            failures.append({"source": source, "path": chk["path"],
+                             "expect": expect, "actual": actual})
     return failures
 
 
@@ -88,8 +105,12 @@ def _table_block(block: dict, styles) -> Any:
     ncol = len(t["header"])
     widths = ([w * inch for w in t["col_widths"]] if "col_widths" in t
               else [USABLE_WIDTH / ncol] * ncol)
-    return _highlight_table(t["header"], t["rows"], widths, styles,
-                            highlight_row=t.get("highlight_row"))
+    # Forward an explicit highlight color only when the prose sets one, so the
+    # default (yellow) is preserved; phase reports pass the series green (#e8f5e9).
+    kwargs: dict[str, Any] = {"highlight_row": t.get("highlight_row")}
+    if "highlight_color" in t:
+        kwargs["highlight_color"] = t["highlight_color"]
+    return _highlight_table(t["header"], t["rows"], widths, styles, **kwargs)
 
 
 def _render_sections(sections: list[dict], styles) -> list:
