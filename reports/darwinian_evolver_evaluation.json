@@ -1,0 +1,688 @@
+{
+  "summary": {
+    "arm1": {
+      "robust_recovered": 8,
+      "n": 23,
+      "rate": 0.34782608695652173,
+      "wilson95": [
+        0.18811054636982238,
+        0.5511002309310836
+      ],
+      "total_calls": 612
+    },
+    "arm2": {
+      "robust_recovered": 6,
+      "n": 23,
+      "rate": 0.2608695652173913,
+      "wilson95": [
+        0.1254844588924897,
+        0.4647039054375056
+      ],
+      "total_calls": 746
+    },
+    "arm3": {
+      "robust_recovered": 6,
+      "n": 23,
+      "rate": 0.2608695652173913,
+      "wilson95": [
+        0.1254844588924897,
+        0.4647039054375056
+      ],
+      "total_calls": 763
+    },
+    "recovery_2x2_evo_vs_bon": {
+      "evo_arm": "3",
+      "both": 6,
+      "evo_only": 0,
+      "bon_only": 2,
+      "neither": 15
+    }
+  },
+  "report": [
+    {
+      "tool": "tools/approval.py",
+      "fix": "7f1b2b4569",
+      "n_bug_tests": 3,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 35,
+        "2": 33,
+        "3": 30
+      }
+    },
+    {
+      "tool": "tools/file_operations.py",
+      "fix": "64ad7dec0d",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          true
+        ],
+        "2": [
+          true,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 31,
+        "2": 34,
+        "3": 32
+      }
+    },
+    {
+      "tool": "tools/process_registry.py",
+      "fix": "7ce6b504a2",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 31,
+        "2": 33,
+        "3": 29
+      }
+    },
+    {
+      "tool": "tools/skills_ast_audit.py",
+      "fix": "4254f7dd17",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 29,
+        "2": 32,
+        "3": 29
+      }
+    },
+    {
+      "tool": "tools/skills_sync.py",
+      "fix": "f040710d04",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 29,
+        "2": 30,
+        "3": 30
+      }
+    },
+    {
+      "tool": "tools/browser_camofox.py",
+      "fix": "305a702e09",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          true,
+          true,
+          true
+        ],
+        "2": [
+          true,
+          true,
+          true
+        ],
+        "3": [
+          true,
+          true,
+          true
+        ]
+      },
+      "calls": {
+        "1": 5,
+        "2": 36,
+        "3": 37
+      }
+    },
+    {
+      "tool": "tools/checkpoint_manager.py",
+      "fix": "a0fedfbb1b",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 32,
+        "2": 32,
+        "3": 33
+      }
+    },
+    {
+      "tool": "tools/cronjob_tools.py",
+      "fix": "663ee14865",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          true,
+          true,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          true
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 22,
+        "2": 30,
+        "3": 28
+      }
+    },
+    {
+      "tool": "tools/discord_tool.py",
+      "fix": "81987f0350",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 38,
+        "2": 34,
+        "3": 34
+      }
+    },
+    {
+      "tool": "tools/file_operations.py",
+      "fix": "6713274a42",
+      "n_bug_tests": 2,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          true,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 36,
+        "2": 32,
+        "3": 37
+      }
+    },
+    {
+      "tool": "tools/fuzzy_match.py",
+      "fix": "5e6427a42c",
+      "n_bug_tests": 7,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 34,
+        "2": 30,
+        "3": 32
+      }
+    },
+    {
+      "tool": "tools/memory_tool.py",
+      "fix": "00bd24e27c",
+      "n_bug_tests": 16,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 32,
+        "2": 29,
+        "3": 28
+      }
+    },
+    {
+      "tool": "tools/process_registry.py",
+      "fix": "d5416284f1",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 30,
+        "2": 30,
+        "3": 31
+      }
+    },
+    {
+      "tool": "tools/skills_guard.py",
+      "fix": "93660643a6",
+      "n_bug_tests": 2,
+      "seeds": {
+        "1": [
+          false,
+          true,
+          true
+        ],
+        "2": [
+          true,
+          true,
+          true
+        ],
+        "3": [
+          false,
+          true,
+          true
+        ]
+      },
+      "calls": {
+        "1": 19,
+        "2": 32,
+        "3": 36
+      }
+    },
+    {
+      "tool": "tools/approval.py",
+      "fix": "976d8e27ad",
+      "n_bug_tests": 12,
+      "seeds": {
+        "1": [
+          true,
+          true,
+          true
+        ],
+        "2": [
+          true,
+          true,
+          true
+        ],
+        "3": [
+          true,
+          false,
+          true
+        ]
+      },
+      "calls": {
+        "1": 18,
+        "2": 33,
+        "3": 32
+      }
+    },
+    {
+      "tool": "tools/credential_files.py",
+      "fix": "b1756084a3",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 35,
+        "2": 29,
+        "3": 28
+      }
+    },
+    {
+      "tool": "tools/kanban_tools.py",
+      "fix": "86279160b0",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 42,
+        "2": 42,
+        "3": 42
+      }
+    },
+    {
+      "tool": "tools/registry.py",
+      "fix": "5a1e2a307a",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          true,
+          true,
+          true
+        ],
+        "2": [
+          false,
+          true,
+          true
+        ],
+        "3": [
+          false,
+          false,
+          true
+        ]
+      },
+      "calls": {
+        "1": 11,
+        "2": 34,
+        "3": 35
+      }
+    },
+    {
+      "tool": "tools/skill_usage.py",
+      "fix": "abcaf05229",
+      "n_bug_tests": 7,
+      "seeds": {
+        "1": [
+          true,
+          false,
+          true
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          true,
+          true
+        ]
+      },
+      "calls": {
+        "1": 25,
+        "2": 31,
+        "3": 39
+      }
+    },
+    {
+      "tool": "tools/skills_sync.py",
+      "fix": "3a97fb3d47",
+      "n_bug_tests": 2,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 29,
+        "2": 29,
+        "3": 30
+      }
+    },
+    {
+      "tool": "tools/vision_tools.py",
+      "fix": "50bb4fe010",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          false,
+          false,
+          false
+        ],
+        "2": [
+          false,
+          false,
+          false
+        ],
+        "3": [
+          false,
+          false,
+          false
+        ]
+      },
+      "calls": {
+        "1": 37,
+        "2": 32,
+        "3": 35
+      }
+    },
+    {
+      "tool": "tools/mcp_oauth.py",
+      "fix": "7d36e8346b",
+      "n_bug_tests": 1,
+      "seeds": {
+        "1": [
+          true,
+          true,
+          true
+        ],
+        "2": [
+          true,
+          true,
+          true
+        ],
+        "3": [
+          true,
+          true,
+          true
+        ]
+      },
+      "calls": {
+        "1": 4,
+        "2": 34,
+        "3": 40
+      }
+    },
+    {
+      "tool": "tools/process_registry.py",
+      "fix": "20b759cd02",
+      "n_bug_tests": 4,
+      "seeds": {
+        "1": [
+          true,
+          true,
+          true
+        ],
+        "2": [
+          true,
+          true,
+          true
+        ],
+        "3": [
+          true,
+          true,
+          true
+        ]
+      },
+      "calls": {
+        "1": 8,
+        "2": 35,
+        "3": 36
+      }
+    }
+  ],
+  "aborted": false,
+  "cost": {
+    "total_usd": 65.208142,
+    "by_model": {
+      "gpt-5.4-mini": {
+        "tokens_in_uncached": 2482710,
+        "tokens_in_cached": 15864320,
+        "tokens_out": 13812508,
+        "reasoning_tokens": 0,
+        "cost_usd": 65.208142,
+        "calls": 2121,
+        "cache_hit_rate": 0.8646805504760171
+      }
+    },
+    "agent_cost_usd": 0.0,
+    "n_agent_runs": 0,
+    "n_cost_uncaptured": 0,
+    "total_cost_usd": 65.208142
+  },
+  "B": 9,
+  "budget": {
+    "num_parents": 3,
+    "num_iters": 3
+  }
+}

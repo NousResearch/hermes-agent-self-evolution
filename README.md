@@ -2,11 +2,11 @@
 
 [![tests](https://github.com/jramos/agent-self-evolution/actions/workflows/tests.yml/badge.svg)](https://github.com/jramos/agent-self-evolution/actions/workflows/tests.yml)
 
-**A rigorous deploy gate for machine-proposed agent changes.**
+**Automated evolution for the skills, prompts, and tool code your agent runs on.**
 
-Agent Self-Evolution answers one question honestly: *did this change actually make the agent better?* Point it at a proposed change to a skill, tool description, system prompt, or piece of tool code, and it adjudicates — with a noise-aware deploy gate, a real-agent behavioral validation loop, and (for code) an executable-test oracle — shipping the change only when it's demonstrably better and refusing the ones that aren't. It can also *generate* candidate changes via reflective evolutionary search (DSPy + GEPA), but the gate is the point: the evolver is just one source of candidates feeding it.
+Agent Self-Evolution proposes better versions of the artifacts your agent depends on — skills, tool descriptions, system prompts, tool implementations — and ships only the ones that prove out against the real agent. A noise-aware deploy gate, a closed-loop behavioral suite, and an executable-test oracle for code separate genuine gains from lucky ones, so your agent improves without ever shipping a regression. No GPU, no training — everything runs via API calls at ~$1–5 per run.
 
-**No GPU training required** — everything runs via API calls, ~$1–5 per run. Works on any agent framework that emits `SKILL.md` files: [Hermes Agent](https://github.com/NousResearch/hermes-agent) is the original target; Claude Code and any other `<dir>/<skill>/SKILL.md` layout are supported via a pluggable skill-source abstraction.
+**Works on any agent framework that emits `SKILL.md` files** — [Hermes Agent](https://github.com/NousResearch/hermes-agent) is the original target; Claude Code and any other `<dir>/<skill>/SKILL.md` layout are supported via a pluggable skill-source abstraction.
 
 ## How It Works
 
@@ -98,9 +98,9 @@ Skill / prompt / tool-description text changes a capable agent's behavior **only
 - **NULL — binary-correctness reasoning (a measured cliff).** Where a task is pass/fail and the agent is already competent, there's no room: capable agents bracketed the headroom band from both sides (aced debugging at 1.00; uniformly failed a 13-requirement conjunction at 0.00). The pre-flight detects this and refuses the run.
 - **FRONTIER — open-ended generative quality (open).** The regime where "a better prompt yields better output" is most plausible (writing, analysis, review) resists measurement: the LLM judge saturates, and an execution oracle needs a *targeted* task while open-ended quality is intrinsically un-targeted ([reports/frontier_quality_findings.md](reports/frontier_quality_findings.md)).
 
-Two consequences worth stating plainly. Evolution earns no magic on its own — on this corpus GEPA is matched by plain best-of-N resampling, and a population/genetic search was tested and **strictly dominated by best-of-N** (4/23 vs 6/23), so the value is the **signal + the gate, not the search**. And self-evolution reached deploy-grade traction only under a conjunction — an executable oracle, real headroom, and code repair from failing-test feedback (deploy-reachable **~0.60–0.74**, clearing a pre-registered futility floor) — which a leakage check confirms is *test-feedback repair, not autonomous re-derivation*.
+Two consequences worth stating plainly. Evolution earns no magic on its own — on this corpus GEPA is matched by plain best-of-N resampling, and a population-based evolutionary search (the actual [imbue `darwinian_evolver`](https://github.com/imbue-ai/darwinian_evolver)) was tested at equal budget and **strictly dominated by best-of-N** (6/23 vs 8/23, recovering nothing best-of-N missed), so the value is the **signal + the gate, not the search**. And self-evolution reached deploy-grade traction only under a conjunction — an executable oracle, real headroom, and code repair from failing-test feedback (deploy-reachable **~0.60–0.74**, clearing a pre-registered futility floor) — which a leakage check confirms is *test-feedback repair, not autonomous re-derivation*.
 
-Full evidence, CIs, and validity threats: **[headroom experiments](reports/asymmetry_headroom_experiments_findings.md)** · **[consolidated findings](reports/asymmetry_findings.md)** ([PDF](reports/asymmetry_report.pdf)) · **[frontier-quality](reports/frontier_quality_findings.md)**.
+Full evidence, CIs, and validity threats: **[headroom experiments](reports/asymmetry_headroom_experiments_findings.md)** · **[consolidated findings](reports/asymmetry_findings.md)** ([PDF](reports/asymmetry_report.pdf)) · **[frontier-quality](reports/frontier_quality_findings.md)** · **[evolver vs best-of-N](reports/darwinian_evolver_evaluation.md)**.
 
 ## Engines
 
