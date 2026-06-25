@@ -104,13 +104,15 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None, pred_name: str = "", pred_trace=None):
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    GEPA requires 5 args: (gold, pred, trace, pred_name, pred_trace).
+    MIPROv2 and other optimizers call with 3 (example, prediction, trace).
+
+    Returns (score, feedback_dict) for GEPA's reflective analysis.
+    The feedback dict has key 'feedback' with natural-language critique.
     """
-    # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
@@ -118,22 +120,73 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     if not agent_output.strip():
         return 0.0
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
+    # Use LLM-as-judge for real quality scoring.
+    # GEPA's reflection_lm generates its own feedback from trajectories —
+    # the metric only needs to return an accurate float score.
+    try:
+        judge = dspy.ChainOfThought(_JudgeSignature)
+        lm = _get_judge_lm()  # Reuse single LM instance (avoids fd leak)
+        with dspy.context(lm=lm):
+            result = judge(
+                task_input=task,
+                expected_behavior=expected,
+                agent_output=agent_output[:4000],  # Truncate to keep token cost manageable
+            )
 
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
-    output_lower = agent_output.lower()
+        correctness = _parse_score(result.correctness)
+        procedure = _parse_score(result.procedure_following)
+        conciseness = _parse_score(result.conciseness)
 
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
-    if expected_words:
-        overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
+        # Weighted composite (same weights as FitnessScore)
+        score = 0.5 * correctness + 0.3 * procedure + 0.2 * conciseness
 
-    return min(1.0, max(0.0, score))
+        return min(1.0, max(0.0, score))
+    except Exception:
+        # Fallback: simple heuristic if judge fails
+        expected_words = set(expected.lower().split())
+        output_words = set(agent_output.lower().split())
+        overlap = len(expected_words & output_words) / max(1, len(expected_words))
+        return min(1.0, max(0.0, 0.3 + 0.7 * overlap))
+
+
+class _JudgeSignature(dspy.Signature):
+    """Evaluate a Slack draft against the expected behavior rubric.
+
+    Score three dimensions (0.0 to 1.0 each):
+    1. correctness: Does the draft address what was asked?
+    2. procedure_following: Does it follow the Slack style rules (direct, first-person, no hyphens, proper @mentions, appropriate length)?
+    3. conciseness: Is it appropriately concise without padding?
+
+    Provide specific, actionable feedback on what to improve.
+    """
+    task_input: str = dspy.InputField(desc="The task the user gave")
+    expected_behavior: str = dspy.InputField(desc="Rubric describing what a good draft looks like")
+    agent_output: str = dspy.InputField(desc="The agent's draft")
+    correctness: float = dspy.OutputField(desc="Score 0.0-1.0")
+    procedure_following: float = dspy.OutputField(desc="Score 0.0-1.0")
+    conciseness: float = dspy.OutputField(desc="Score 0.0-1.0")
+    feedback: str = dspy.OutputField(desc="Specific, actionable feedback")
+
+
+# Module-level config for the metric model — set by evolve_skill before optimization
+_METRIC_MODEL = None
+_JUDGE_LM = None  # Cached LM instance to avoid fd leak
+
+def _get_metric_model() -> str:
+    return _METRIC_MODEL or "openrouter/anthropic/claude-opus-4.8"
+
+def _get_judge_lm():
+    """Return a cached LM instance to avoid creating new connections per call."""
+    global _JUDGE_LM
+    if _JUDGE_LM is None:
+        _JUDGE_LM = dspy.LM(_get_metric_model(), temperature=0.0, max_tokens=4096)
+    return _JUDGE_LM
+
+def set_metric_model(model: str):
+    """Set the model used for LLM-as-judge scoring during optimization."""
+    global _METRIC_MODEL, _JUDGE_LM
+    _METRIC_MODEL = model
+    _JUDGE_LM = None  # Reset cache so next call creates a new LM with updated model
 
 
 def _parse_score(value) -> float:
