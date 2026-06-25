@@ -4,6 +4,7 @@ Every candidate variant must pass ALL constraints before it can be
 considered valid. Failed constraints = immediate rejection.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass
@@ -49,6 +50,9 @@ class ConstraintValidator:
         # 4. Structural integrity
         if artifact_type == "skill":
             results.append(self._check_skill_structure(artifact_text))
+
+        # 5. Secret redaction — no leaked tokens/keys in evolved text
+        results.append(self._check_no_secrets(artifact_text))
 
         return results
 
@@ -172,3 +176,44 @@ class ConstraintValidator:
                 constraint_name="skill_structure",
                 message=f"Skill missing: {', '.join(missing)}",
             )
+
+    # Patterns that indicate leaked secrets/credentials
+    _SECRET_PATTERNS = [
+        # BWS access tokens (0. prefix, base64)
+        (re.compile(r"0\.[a-f0-9\-]{36}\.[A-Za-z0-9+/=]{20,}"), "BWS access token"),
+        # Slack tokens (xoxp-, xoxb-, xapp-)
+        (re.compile(r"xox[bprsa]-[A-Za-z0-9-]{10,}"), "Slack token"),
+        # OpenRouter keys (sk-or-v1-)
+        (re.compile(r"sk-or-v1-[A-Za-z0-9]{20,}"), "OpenRouter API key"),
+        # OpenAI keys (sk-proj-, sk-)
+        (re.compile(r"sk-(?:proj-)?[A-Za-z0-9]{20,}"), "OpenAI API key"),
+        # Anthropic keys
+        (re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}"), "Anthropic API key"),
+        # Generic hex/base64 tokens (40+ chars, looks like a credential)
+        (re.compile(r"(?:token|key|secret|password|api_key)\s*[:=]\s*['\"]?[A-Za-z0-9+/=_-]{40,}['\"]?", re.IGNORECASE), "Generic credential"),
+        # GitHub PATs (ghp_, gho_, ghs_, ghu_)
+        (re.compile(r"gh[pous]_[A-Za-z0-9]{36}"), "GitHub token"),
+        # TODOIST_API_TOKEN (UUID format after =)
+        (re.compile(r"(?:TODOIST_API_TOKEN|todoist.*token)\s*[:=]\s*['\"]?[a-f0-9]{32}['\"]?", re.IGNORECASE), "Todoist API token"),
+    ]
+
+    def _check_no_secrets(self, text: str) -> ConstraintResult:
+        """Check that no secrets/credentials are present in the evolved text."""
+        found = []
+        for pattern, label in self._SECRET_PATTERNS:
+            matches = pattern.findall(text)
+            if matches:
+                found.append(f"{label} ({len(matches)} match(es))")
+
+        if not found:
+            return ConstraintResult(
+                passed=True,
+                constraint_name="no_secrets",
+                message="No secrets detected",
+            )
+        return ConstraintResult(
+            passed=False,
+            constraint_name="no_secrets",
+            message=f"Secrets detected: {', '.join(found)}",
+            details="Evolved artifact contains credential patterns. Reject to prevent secret leakage.",
+        )

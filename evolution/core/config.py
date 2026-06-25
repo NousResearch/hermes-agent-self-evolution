@@ -20,13 +20,16 @@ class EvolutionConfig:
     iterations: int = 10
     population_size: int = 5
 
-    # LLM configuration
-    optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
-    eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
-    judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    # LLM configuration — all via OpenRouter (single API key, ZDR)
+    # Reflection model should be the strongest available — it reads trajectories
+    # and proposes prompt mutations. Task/eval model can be cheaper.
+    # Decagon production study proved gpt-4.1 reflection works well.
+    optimizer_model: str = "openrouter/openai/gpt-4.1"  # Reflection — strong, cost-effective
+    eval_model: str = "openrouter/z-ai/glm-5.2"  # Task model — cost-effective
+    judge_model: str = "openrouter/z-ai/glm-5.2"  # LLM-as-judge — consistent with task model
 
     # Constraints
-    max_skill_size: int = 15_000  # 15KB default
+    max_skill_size: int = 16_000  # 16KB — allows minor growth from optimization
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
