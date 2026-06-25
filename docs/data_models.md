@@ -699,3 +699,136 @@ You are reviewing a pull request. For each changed file:
 ```
 
 This dict is consumed verbatim by `validate_growth_with_quality()` and serialized into `gate_decision.json` under `bootstrap`. Calibration scripts depend on these key names.
+
+## Tier-4/5 artifacts (code repair + sentinel)
+
+The code-repair (Tier 4) and triage-sentinel (Tier 5) paths write their own on-disk artifacts, distinct from the GEPA `gate_decision.json` above. Write locations: `output/code/<tool-stem>/<ts>/` (single-tool repair), `output/code_campaign/<ts>/` (measurement campaign), `output/monitor/<ts>/` (sentinel); the noise/discrimination sidecars sit next to their suite as `<suite>.jsonl.noise.json` / `.discrimination.json`.
+
+### Code-path `gate_decision.json` (`artifact_type == "code"`)
+
+Written by `evolution/code/evolve_code.py`. Unlike the GEPA variants (bootstrap CI, knee-point, synthetic dataset) this gate is **deterministic-test / oracle** based — no judge, no bootstrap.
+
+```json
+{
+  "schema_version": "1",
+  "artifact_type": "code",
+  "decision_signal": "deterministic_test",
+  "decision": "deploy",
+  "reason": "visible+held-out pass, surface frozen, regression floor green",
+  "target_tool": "tools/foo.py",
+  "visible_test": "tests/tools/test_foo_a.py",
+  "holdout_test": "tests/tools/test_foo_b.py",
+  "repair":  {"fixed": true, "fixed_round": 1, "rounds_used": 1},
+  "guards": {
+    "repair_passed_visible": true,
+    "freeze_ok": true, "freeze_violations": [],
+    "changed_files": ["tools/foo.py"], "file_scope_ok": true,
+    "holdout": {"passed": true, "exit_code": 0, "duration_seconds": 0.35},
+    "floor": {"ran": ["tests/tools"], "new_failures": [], "base_failure_count": 0,
+              "repaired_failure_count": 0, "duration_seconds": 1.2, "is_full_suite": false}
+  },
+  "run_inputs": {},
+  "full_suite": {}
+}
+```
+
+`decision_signal` is `deterministic_test` (held-out-split model) or `oracle_match` (campaign/measurement model). `holdout` / `holdout_test` / `visible_test` belong to the held-out gate; the **oracle** variant instead carries `test` (the full fix-commit test file), `bug_tests` (list), `oracle_failure_count`, `guards.bug_tests_passed`, and a `guards.oracle_match` block (`new_vs_oracle`, `oracle_failure_count`) — there `guards.floor` is often `null` because oracle-match over the full file *is* the regression check. `full_suite` is the optional `--benchmark-cmd` block (and may add `downgraded_from: "deploy"` if it demoted a pass).
+
+### `repair_trace.json`
+
+Per-round repair record for human review (`evolution/code/trace.py`). No per-hunk attribution.
+
+```json
+{
+  "tool": "tools/foo.py",
+  "visible_test": "tests/tools/test_foo_a.py",
+  "holdout_test": "tests/tools/test_foo_b.py",
+  "fixed": true, "fixed_round": 1, "rounds_used": 1,
+  "rounds": [
+    {"round": 1, "proposed": true, "freeze_violations": [], "test_passed": true, "output_tail": "PASSED"}
+  ],
+  "final_diff": "--- live_baseline\n+++ deployed\n@@ ... @@\n-    return 0\n+    return a + b"
+}
+```
+
+### `campaign_ledger.jsonl` + `campaign_report.json`
+
+The campaign ledger is append-only/resumable; one line per organism (or skip reason). `deploy_reachable` is a majority of seeds.
+
+```jsonl
+{"status": "organism", "tool": "tools/approval.py", "fix_sha": "7f1b2b45…", "seeds": [true, false, false], "deploy_reachable": false}
+{"fix_sha": "934fbe3c…", "tool": "tools/ansi_strip.py", "status": "source_missing"}
+```
+
+Skip `status` ∈ `source_missing` / `too_large` / `worktree_failed` / `not_valid`. `campaign_report.json` reduces the ledger to cluster-honest, **organism-level** estimands (`campaign_report.py`):
+
+```json
+{
+  "n_organisms": 20,
+  "deploy_reachable": {"k": 12, "n": 20, "fraction": 0.60,
+                        "wilson": [0.387, 0.781],
+                        "cluster_bootstrap": {"mean": 0.602, "ci_low": 0.40, "ci_high": 0.80, "p_below_kill": 0.0}},
+  "icc": 0.326, "design_effect": 1.65, "effective_n": 36.3,
+  "pooled_per_seed_rate_FOR_CONTRAST": {"k": 41, "n": 60, "rate": 0.683, "wilson_DISHONEST": [0.558, 0.787]},
+  "kill_line": 0.10, "verdict": "GREEN", "aborted_on_cost": false,
+  "cost_summary": {}
+}
+```
+
+The `_FOR_CONTRAST` / `_DISHONEST` key suffixes are intentional — the pooled per-seed rate ignores seed correlation (ICC) and overstates precision, so it is recorded only for contrast, never as the headline. `cost_summary` has the same `total_usd` + `by_model{…}` shape as `metrics.json`. (Real instances: `reports/asymmetry_campaign_report.json` and `_n46.json`.)
+
+### `triage_queue.json` + `triage_report.md`
+
+Sentinel scan output (`evolution/monitor/queue.py`); `--attempt-top` annotates rows in place via `attempt.py`.
+
+```json
+{
+  "schema_version": "1", "repo": "/path/to/repo", "since_days": 90,
+  "n_candidates": 2, "by_kind": {"dependency_regression": 1, "bug_fix": 1},
+  "candidates": [
+    {"rank": 1, "kind": "dependency_regression", "tool": "tools/foo.py", "test": "tests/tools/test_foo.py",
+     "fix_sha": "7f1b2b45…", "parent_sha": "6855d177…", "committed_at": "2026-05-23T02:59:13-07:00", "score": 2.0,
+     "attempt": {"status": "attempted", "correct_seeds": 2, "seeds": 3, "deploy_reachable": true}}
+  ],
+  "cost_summary": {}
+}
+```
+
+`attempt.status` ∈ `attempted` / `cost_ceiling` / `source_missing` / `too_large` / `worktree_failed` / `not_valid` (the `correct_seeds`/`seeds`/`deploy_reachable` fields appear only for `attempted`); `cost_summary` is present only when `--attempt-top` ran. `triage_report.md` renders a ranked markdown table (`#`, `kind`, `tool`, short `fix` sha, `committed` date) plus the propose-only disclaimer and the ready-to-run attempt command.
+
+### `lineage.json` + `dossier.md` (GEPA runs)
+
+`lineage.json` (`evolution/core/lineage.py`) persists a GEPA run's candidate ancestry so the deployed diff is reviewable; absent on the MIPROv2 fallback (no `parents`).
+
+```json
+{
+  "schema_version": "1", "deployed_idx": 2, "best_idx": 1, "n_candidates": 3,
+  "seed_text": "…", "live_baseline_text": "…",
+  "selection": {"method": "knee_point"}, "suite_sha256": "…",
+  "candidates": [
+    {"idx": 2, "parents": [0], "val_aggregate": 0.65, "val_subscores": [0.7, 0.6],
+     "discovery_eval_count": 8, "text": "…", "is_best": false, "is_deployed": true}
+  ]
+}
+```
+
+`deployed_idx` is explicit because the knee-point selector may pick a candidate other than GEPA's `best_idx`; `seed_text` vs `live_baseline_text` separates pre-GEPA drift from search changes. `dossier.md` (`evolution/core/dossier.py`) renders that lineage as a maintainer-local review: selection rationale (val_aggregate vs seed, candidate position, discovery count, lineage depth), an optional pre-GEPA-drift diff (when `seed_text != live_baseline_text`), and the live-baseline → deployed diff. Local artifact only — never a PR body, no per-hunk attribution.
+
+### Suite sidecars: `<suite>.jsonl.noise.json` / `.discrimination.json`
+
+Written next to a suite by `evolution/validation/noise_calibration.py` and `suite_discrimination.py`.
+
+```json
+// <suite>.jsonl.noise.json — A/A noise floor
+{"spurious_strict_win_rate": 0.0, "spurious_regression_rate": 0.25, "mean_per_task_flip": 0.15,
+ "per_task_flip": {"task_a": 0.2}, "runs": 4, "reps": 1, "suite_sha256": "…", "agent_model": "gpt-5-mini",
+ "aborted": false, "n_scored": 8, "n_abstained": 0, "scored_fraction": 1.0, "is_degenerate": false}
+
+// <suite>.jsonl.discrimination.json — per-task discrimination labels
+{"labels": {"task_1": "discriminative"}, "baseline_rates": {"task_1": 0.3}, "ceiling_rates": {"task_1": 0.8},
+ "flips": {"task_1": 0.05}, "summary": {"discriminative": 1}, "reps": 2, "suite_sha256": "…",
+ "agent_model": "sonnet", "recommendation": "…",
+ "per_task": {"task_1": {"baseline_rate": 0.3, "ceiling_rate": 0.8, "flip": 0.05, "label": "discriminative"}}}
+```
+
+`is_degenerate` is `true` when `scored_fraction < 0.5` — an all-abstain probe measures nothing and must not be read as a perfectly-stable suite. Discrimination labels: `too_easy` / `discriminative` / `unfillable` / `noise_limited` / `baseline_fails`.

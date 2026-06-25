@@ -751,6 +751,91 @@ The runner records each `claude -p` invocation's `total_cost_usd` against the sh
 
 **Where the headroom is.** As with the Hermes backend, generic disciplines saturate. The convention suite targets project-specific commands the base agent cannot guess (custom `bin/check` / `bin/run` / `bin/fmt` / `bin/lint` wrappers) — inert in the base prompt by construction, yet temptable toward the default tool — which is where an evolved CLAUDE.md region has room to move the behavior.
 
+## Workflow 14: Repair a tool from a failing test (Tier 4)
+
+The non-GEPA path. Instead of evolving artifact *text* scored by a judge, this repairs tool *code* from a failing test, scored by an **executable oracle**. The data flow is harvest (or a hand-supplied tool + tests) → throwaway worktree → repair loop → code deploy gate. The repair never touches the user's checkout (it mutates a detached worktree with an isolated editable venv, guarded by an authoritative-import check) and the gate resists the specific ways a green test lies (surface freeze, file scope, a held-out split the proposer never saw, a baseline-diff regression floor).
+
+```bash
+python -m evolution.code.evolve_code \
+    --repo ~/.hermes/hermes-agent \
+    --tool tools/foo.py \
+    --visible-test tests/tools/test_foo_a.py \
+    --holdout-test tests/tools/test_foo_b.py
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as evolve_code
+    participant W as WorktreeEnv
+    participant Eng as RepairEngine
+    participant P as proposer LM
+    participant F as freeze_check
+    participant G as run_code_gate
+
+    CLI->>W: create(repo, base_ref) — detached worktree + editable venv
+    W->>W: assert_authoritative(tools) — package resolves only from worktree (else abort)
+    CLI->>Eng: repair(env, tool, visible_test)
+    loop up to --repair-rounds
+        Eng->>W: run_test(visible) — capture failing output
+        Eng->>P: propose(module_path, current_src, failing_output)
+        P-->>Eng: whole-file rewrite
+        Eng->>F: freeze_violations(base_src, proposed) — surface + ≥80% retain
+        Eng->>W: write_tool(proposed) + run_test(visible)
+        alt test passes AND surface frozen
+            Eng->>Eng: accept round (fixed)
+        else
+            Eng->>Eng: feed violations + failing output back
+        end
+    end
+    Eng-->>CLI: RepairResult(fixed, rounds)
+    CLI->>G: run_code_gate(env, tool, visible, holdout, floor_paths)
+    G->>W: freeze → file scope → run_test(holdout) → regression floor (repaired vs base)
+    G-->>CLI: CodeGateResult(deploy | reject)
+    alt deploy
+        CLI->>CLI: write gate_decision.json + repair_trace.json (+ optional draft PR)
+    end
+```
+
+The **held-out test must differ from the visible test** — that frozen split the proposer never saw is the anti-gaming core (a fix that hard-codes the visible test's expected value fails it). The **measurement campaign** (`python -m evolution.code.campaign`) swaps this held-out split for the upstream fix-commit's full test set plus an oracle match, harvests many organisms, and aggregates them cluster-honestly with a Wilson futility-stop — see `campaign_report.json` and the code-path `gate_decision.json` in [data_models.md](data_models.md).
+
+## Workflow 15: Triage sentinel — scan, then optionally attempt (Tier 5)
+
+The propose-only supply-side front-end to Workflow 14. It scans a target repo's recent git stream for repair candidates, ranks them, and writes a queue; on demand it runs the validated repair loop on the top-K (cost-capped, human-triggered). It never edits the repo, evolves code, or opens a PR.
+
+```bash
+# Scan ($0, pure git, no LLM) — safe to schedule
+python -m evolution.monitor --repo /path/to/repo --since-days 90
+# Attempt the top candidates (the only step that spends; cost-capped, human-gated)
+python -m evolution.monitor --repo /path/to/repo --attempt-top 3 --max-cost-usd 5.0
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as monitor
+    participant S as sentinel.scan
+    participant Q as queue
+    participant A as attempt
+    participant RL as repair loop (Workflow 14)
+
+    CLI->>S: scan(repo, since_days) — git-only, no LLM
+    S->>S: classify each candidate (dependency_regression | bug_fix) + rank
+    S-->>CLI: list[RepairCandidate]
+    CLI->>Q: build_queue + write_queue → triage_queue.json + triage_report.md
+    alt --attempt-top K > 0  (requires --max-cost-usd)
+        CLI->>A: attempt_candidates(top K, max_cost_usd)
+        loop each candidate until cost ceiling
+            A->>RL: worktree → repair → oracle gate (Workflow 14, verbatim)
+            RL-->>A: deploy_reachable verdict
+            A->>Q: annotate row — attempt{status, correct_seeds, deploy_reachable}
+        end
+    end
+    Note over CLI,Q: never opens a PR — a human reads the queue and decides what to deploy
+```
+
+The scan is free and schedulable; the attempt is the only step that spends and **requires `--max-cost-usd`** (the CLI refuses to run the loop uncapped), and the wrapper + launchd template enforce scan-only scheduling. See [operating_the_sentinel.md](operating_the_sentinel.md) for the verdict taxonomy and the dependency-regression caveat, and the `triage_queue.json` schema in [data_models.md](data_models.md).
+
 ## Failure-mode summary
 
 | Trigger | Outcome | Where to look |

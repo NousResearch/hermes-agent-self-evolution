@@ -250,6 +250,45 @@ The harness mutates the user's hermes-agent install in place. Defenses:
 - `fcntl.flock` sentinel in the parent dir prevents concurrent harness runs from corrupting each other's restore.
 - `sha256` verification after every task — a YOLO-mode agent that rewrites the spliced file mid-suite (`terminal(echo > file_tools.py)`) is caught before later tasks silently run a corrupt baseline.
 
+## CLI: `python -m evolution.code.evolve_code` (Tier 4: tool-code repair)
+
+Repairs one broken tool from a failing test in a throwaway worktree, behind the code deploy gate. Not GEPA — a whole-file repair loop scored by an executable oracle.
+
+### Required flags
+
+- `--repo <path>` — target git repo root.
+- `--tool <repo-rel path>` — source file to repair (e.g. `tools/foo.py`).
+- `--visible-test <repo-rel path>` — failing test fed to the repair loop.
+- `--holdout-test <repo-rel path>` — a test the proposer never sees; **must differ from `--visible-test`** (a config sanity check rejects equal splits) and must pass at deploy.
+
+### Optional flags
+
+- `--base-ref <ref>` — git ref to repair from (default: `origin/<pr-base-branch>` with `--create-pr`, else `HEAD`).
+- `--repair-rounds <n>` — max propose→test→feedback rounds (default 5).
+- `--proposer-model <model>` — override the proposer LM (else resolved from Hermes config).
+- `--floor-path <path>` (repeatable) — regression-floor test path(s) (default `tests/tools`).
+- `--min-retain-ratio <f>` — reject a rewrite shrinking below this fraction (default 0.8).
+- `--benchmark-cmd <cmd>` — full-suite floor run once at deploy (receives `WORKTREE_PATH`, `EVOLVED_PATH`, `RUN_DIR`, `TARGET_NAME`, `ARTIFACT_TYPE`).
+- `--create-pr` / `--pr-base-branch` / `--pr-draft` — open an opt-in **draft** human-review PR on deploy (never auto-merges).
+- `--output-dir <path>` — default `output/code/<tool-stem>/<timestamp>`.
+
+Outputs `gate_decision.json` + `repair_trace.json` (rounds + final diff). **Measurement campaign:** `python -m evolution.code.campaign --repo <r> --max-organisms N [--seeds 3] [--max-cost-usd C]` harvests organisms and runs the loop at scale with a Wilson futility-stop, writing `campaign_ledger.jsonl` + `campaign_report.json`.
+
+## CLI: `python -m evolution.monitor` (Tier 5: propose-only triage sentinel)
+
+Scans a repo's recent git stream for repair candidates, ranks them, and writes a queue. Propose-only: never edits the repo, evolves code, or opens a PR.
+
+### Flags
+
+- `--repo <path>` — target repo to scan (required).
+- `--since-days <n>` — scan the fix-stream this many days back (default 90).
+- `--max-per-tool <n>` — cap candidates per tool (default 5); `--top <n>` — rows shown in the report (default 20).
+- `--attempt-top <K>` — run the validated repair loop on the top K and annotate the queue (default 0 = scan only).
+- `--max-cost-usd <cap>` — **required whenever `--attempt-top > 0`** (the CLI refuses to spend uncapped).
+- `--proposer-model`, `--output-dir` (default `output/monitor/<timestamp>`).
+
+Two-step model: the **scan** is free (pure git, no LLM, safe to schedule); the **attempt** is the only step that spends and stays manual. Outputs `triage_queue.json` + `triage_report.md`. See [`operating_the_sentinel.md`](operating_the_sentinel.md).
+
 ## Python API: `evolve()`
 
 ```python

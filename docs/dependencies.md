@@ -81,7 +81,7 @@ Terminal UI. Two surfaces:
 
 ### `reportlab>=4.0`
 
-Used only by `generate_report.py` (top-level, not part of `evolution/`) to render `reports/phase1_validation_report.pdf` from `reports/phase1_prose.yaml` plus the per-run `output/<skill>/<ts>/{gate_decision.json,metrics.json,run.log}` artifacts. Not exercised by the optimization pipeline.
+Used only by the two top-level report renderers (not part of `evolution/`). `generate_report.py` renders `reports/phase{1,2,3}_validation_report.pdf` from a `*_prose.yaml` plus the per-run `output/<skill>/<ts>/{gate_decision.json,metrics.json,run.log}` artifacts. `generate_findings_report.py` renders the cross-run synthesis reports (`reports/asymmetry_report.pdf`, `reports/phase{4,5}_validation_report.pdf`) from a self-contained prose YAML, verifying each number against its source JSON before emitting. Neither is exercised by the optimization pipeline.
 
 ### `numpy>=1.24`
 
@@ -89,7 +89,7 @@ Used by `evolution/core/stats.py:paired_bootstrap` for the resample matrix and p
 
 ### `pyyaml>=6.0`
 
-Used only by `generate_report.py` to load `reports/<phase>_prose.yaml` (editorial content for the validation report). Not exercised by the optimization pipeline. Was previously a transitive dep through dspy/litellm; promoted to a direct dep when the report became data-driven.
+Used only by the report renderers (`generate_report.py`, `generate_findings_report.py`) to load `reports/<name>_prose.yaml` (editorial content + the findings reports' provenance blocks). Not exercised by the optimization pipeline. Was previously a transitive dep through dspy/litellm; promoted to a direct dep when the report became data-driven.
 
 ## Dev dependency group — `pytest>=7.0`, `pytest-asyncio>=0.21`
 
@@ -109,7 +109,7 @@ uv pip install "agent-self-evolution[miprov2]"
 
 If missing, the fallback raises `ImportError` (re-raised with the GEPA failure preserved as `__cause__` so the user sees both).
 
-> Tier 4 (code-evolution) will introduce a `darwinian-evolver` dependency when that tier is built. Not declared in `pyproject.toml` until the package is published and `evolution/code/` actually imports it.
+> Tier 4 (code repair) is built and needs **no extra engine dependency** — it reuses the DSPy/litellm proposer stack for whole-file rewrites. The population-search `darwinian-evolver` was evaluated and dominated by plain best-of-N at equal budget, so it was not adopted (see `reports/darwinian_evolver_evaluation.md`); the former `[darwinian]` extra has been removed.
 
 ## Implicit dependencies (not in pyproject.toml)
 

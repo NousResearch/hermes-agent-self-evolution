@@ -23,7 +23,7 @@ Project-specific context for AI coding assistants. Read this first when picking 
 
 `[meta:project-overview]` Cross-ref: [docs/codebase_info.md](docs/codebase_info.md), [docs/architecture.md](docs/architecture.md), [README.md](README.md)
 
-`agent-self-evolution` evolves three kinds of agent artifacts via DSPy + GEPA (a reflective prompt optimizer): **skill files** (`SKILL.md` bodies wrapped as `dspy.Module`), **tool descriptions** (the `description` field on tools in an MCP-shape manifest, or in Hermes-style `*_SCHEMA` Python files), and **system-prompt sections** (a named constant in Hermes `prompt_builder.py`, or a sentinel-delimited region of a Claude Code `CLAUDE.md`). The pipeline is API calls only — no GPU training. GEPA mutates the instruction text using execution-trace feedback, candidates are scored (an LLM-as-judge for skills/tools; a purely behavioral closed-loop verdict for prompt sections), and the winner clears a deploy gate on a held-out split before being accepted.
+`agent-self-evolution` evolves three kinds of agent *text* artifacts via DSPy + GEPA (a reflective prompt optimizer) — and, on a separate path, repairs tool *code* (Tier 4) and triages repair candidates (Tier 5; see "What's planned vs. what exists"). The three text artifacts: **skill files** (`SKILL.md` bodies wrapped as `dspy.Module`), **tool descriptions** (the `description` field on tools in an MCP-shape manifest, or in Hermes-style `*_SCHEMA` Python files), and **system-prompt sections** (a named constant in Hermes `prompt_builder.py`, or a sentinel-delimited region of a Claude Code `CLAUDE.md`). The pipeline is API calls only — no GPU training. GEPA mutates the instruction text using execution-trace feedback, candidates are scored (an LLM-as-judge for skills/tools; a purely behavioral closed-loop verdict for prompt sections), and the winner clears a deploy gate on a held-out split before being accepted.
 
 A separate **closed-loop validation** surface (`evolution/validation/`) runs a real agent — `hermes -z`, or `claude -p` for the Claude Code backend — through a JSONL task suite with baseline vs evolved artifacts spliced into the live install (or, for Claude, injected statelessly via `--append-system-prompt-file`), scores actual tool-call behavior, and compares with a two-condition decision rule. The harness ships as a standalone CLI, a reflection-LM feedback enricher during the GEPA loop, and a score channel that contributes to GEPA's minibatch acceptance (so behavioral wins can break judge ties on saturated baselines).
 
@@ -31,7 +31,7 @@ Framework-agnostic at the optimizer layer: any agent that emits `SKILL.md` files
 
 For *why this differs from raw DSPy + GEPA* (the small-N selection layer, the paired-bootstrap deploy gate, the composite judge fitness) see [docs/framework_advantages.md](docs/framework_advantages.md).
 
-Tiers 1-3 are implemented: skill files in `evolution/skills/`, tool descriptions in `evolution/tools/`, system-prompt sections in `evolution/prompts/` (Hermes + Claude Code backends). Tiers 4-5 (code, continuous loop) exist as empty package stubs. See `PLAN.md` for each phase's "Deviations from plan" subsection.
+All five tiers are implemented. Tiers 1-3 evolve artifact *text* via GEPA: skill files in `evolution/skills/`, tool descriptions in `evolution/tools/`, system-prompt sections in `evolution/prompts/` (Hermes + Claude Code backends). **Tier 4** (`evolution/code/`) repairs tool *code* from a failing test — harvest a real bug → throwaway git worktree → iterative repair → executable-oracle + surface-freeze gate. **Tier 5** (`evolution/monitor/`) is a propose-only triage sentinel that scans a repo's git stream for repair candidates (never auto-evolves or opens a PR). See `PLAN.md` for each phase's "Deviations from plan" subsection.
 
 ## Repo layout at a glance
 
@@ -45,8 +45,8 @@ agent-self-evolution/
 │   ├── tools/           # Tier 2 — tool-description evolution
 │   ├── validation/      # closed-loop validation against a real agent (hermes -z / claude -p)
 │   ├── prompts/         # Tier 3 — system-prompt-section evolution (Hermes + Claude backends)
-│   ├── code/            # Tier 4 stub
-│   └── monitor/         # Tier 5 stub
+│   ├── code/            # Tier 4 — tool-code repair (harvest/worktree/repair/gate)
+│   └── monitor/         # Tier 5 — propose-only triage sentinel (scan/queue/attempt)
 ├── tests/
 │   ├── core/            # mirrors evolution/core/
 │   ├── skills/          # mirrors evolution/skills/
@@ -166,7 +166,7 @@ Inferred from the existing source — follow these unless you have a specific re
 
 `[meta:test-workflow]` Cross-ref: [docs/interfaces.md](docs/interfaces.md), [docs/workflows.md Workflow 8](docs/workflows.md)
 
-- Run all tests: `uv run pytest tests/ -q` from the repo root (CI runs this on Python 3.10–3.13). Currently ~1390 tests.
+- Run all tests: `uv run pytest tests/ -q` from the repo root (CI runs this on Python 3.10–3.13). Currently ~1,614 tests.
 - All tests use mocks/fixtures for LM + agent calls — no API keys, no live `hermes`/`claude` required (the Claude runner tests parse captured stream-json; the sandbox/refusal paths are unit-tested without spawning a subprocess).
 - Live runs (not the test suite) need `OPENAI_API_KEY` (reflection/judge LMs); the Claude backend additionally needs `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) and macOS `sandbox-exec` for containment.
 - The `_skill_source_env` autouse fixture (defined per-module, e.g., `tests/core/test_constraints.py:9`) sets `SKILL_SOURCES_HERMES_REPO` to a `tmp_path` fake repo so discovery doesn't pick up real `~/.hermes` / `~/.claude` installs. Add this fixture to any new test that touches `EvolutionConfig`.
@@ -244,7 +244,7 @@ Per-run dir: `output/<skill>/<YYYYMMDD_HHMMSS>/`. Contents vary by outcome:
 
 `[meta:gotchas]`
 
-- **Empty `evolution/{code,monitor}/`** — these are stubs anchoring the planned tier 4-5 work. `evolution/prompts/` is now implemented (Tier 3). See [docs/codebase_info.md](docs/codebase_info.md) status table.
+- **`evolution/{code,monitor}/` are shipped, not stubs** (Tier 4 code repair, Tier 5 sentinel). The code path is unusual: it mutates a *throwaway git worktree* (never the user's checkout, guarded by an authoritative-import check) and gates on an executable oracle, not an LLM judge. See [docs/components.md](docs/components.md) (`evolution/code/`, `evolution/monitor/`).
 - **The Claude backend uses `sandbox-exec`, NOT the Claude Code `sandbox` *setting*** — the setting only confines Bash, so the native Write/Edit tools escape it (verified). Containment is a kernel-level `sandbox-exec` write-restrict profile around the `claude -p` subprocess; the runner *refuses to run* (`SandboxUnavailableError`) when OS sandboxing is unavailable rather than running an agent unconfined.
 - **`claude -p` reports `$0` cost on subscription/OAuth auth** — the runner falls back to a litellm token-pricing estimate (`computed`) so spend still meters against `--max-cost-usd`; a true `$0`-with-no-tokens run is flagged `uncaptured`, not silently free.
 - **Prompt-section validation uses the installer's throwaway file, never the user's real artifact** — for Claude, candidates are injected via a workdir `--append-system-prompt-file`; only `--apply` writes the real `CLAUDE.md`. `install_candidate` (validation) and `deploy` (`--apply`) target different files and must not be merged.
@@ -286,7 +286,7 @@ PR description template (loose, but the existing PRs follow it):
 | 1 | Skill files (`SKILL.md`) | ✅ implemented (`evolution/skills/`) |
 | 2 | Tool descriptions | ✅ implemented (`evolution/tools/`) — MCP-JSON and Hermes-Python-AST adapters; one target tool per run |
 | 3 | System prompt sections | ✅ implemented (`evolution/prompts/`) — Hermes `prompt_builder.py` + Claude Code `CLAUDE.md` backends behind `PromptBackend`; purely-behavioral closed-loop deploy gate |
-| 4 | Tool implementation code | ✅ implemented (`evolution/code/`) — iterative test-feedback repair (DSPy) in a throwaway worktree, behind the held-out + surface-freeze gate. No Darwinian/population-search engine: it was tested and strictly dominated by best-of-N (4/23 vs 6/23) |
+| 4 | Tool implementation code | ✅ implemented (`evolution/code/`) — iterative test-feedback repair (DSPy) in a throwaway worktree, behind the held-out + surface-freeze gate. No Darwinian/population-search engine: it was tested and strictly dominated by best-of-N (evolver 6/23 vs best-of-N 8/23, recovering nothing best-of-N missed) |
 | 5 | Continuous improvement loop | ✅ implemented (`evolution/monitor/`) — propose-only triage sentinel: scan + ranked queue, human-gated attempts |
 
 Open questions deferred to future PRs (per `PLAN.md` deviation notes):

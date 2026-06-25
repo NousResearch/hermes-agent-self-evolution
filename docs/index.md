@@ -1,12 +1,12 @@
 # Knowledge Base Index
 
-This directory is a structured documentation set for **`agent-self-evolution`** — a Python framework that uses DSPy + GEPA to evolve agent SKILL.md files and tool descriptions through reflective prompt optimization, with a paired-bootstrap deploy gate as the final shipping bar and an orthogonal closed-loop validation surface that runs the real agent against a JSONL task suite.
+This directory is a structured documentation set for **`agent-self-evolution`** — a Python framework that improves the artifacts an agent runs on and ships only the changes that prove out. It evolves *text* surfaces — skill files, tool descriptions, and system-prompt sections — via DSPy + GEPA behind a paired-bootstrap / closed-loop deploy gate, and repairs *code* surfaces — tool implementations — via iterative test-feedback repair behind an executable-oracle gate. A propose-only triage sentinel finds repair candidates in a target repo's git stream, and an orthogonal closed-loop validation surface runs the real agent against a JSONL task suite.
 
 ## How to use this knowledge base (for AI assistants)
 
 **Start here every time.** This file is the entry point — it describes which documents to consult for which kinds of question. Load it into context first; the other docs are loaded on demand.
 
-The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and architecturally dense — most of the substance is in *why* things are shaped a certain way, not *what* they are. The docs prioritize that "why."
+The codebase is mid-sized (~19K LOC of source + 100 test files / ~1,600 tests) and architecturally dense — most of the substance is in *why* things are shaped a certain way, not *what* they are. The docs prioritize that "why."
 
 ### Question routing table
 
@@ -17,6 +17,10 @@ The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and 
 | **How a tool-description run works end-to-end** | `workflows.md` (Workflow 9) → `components.md` (`evolve_tool.py`) |
 | **How a prompt-section run works end-to-end** | `workflows.md` (Workflow 12) → `components.md` (`evolve_prompt_section.py`) |
 | **How a Claude CLAUDE.md convention run works** | `workflows.md` (Workflow 13) → `components.md` (Claude Code backend) |
+| **How a code-repair run works (Tier 4)** | `workflows.md` (Workflow 14) → `components.md` (`evolution/code/`) |
+| **How the triage sentinel works (Tier 5)** | `workflows.md` (Workflow 15) → `operating_the_sentinel.md` → `components.md` (`evolution/monitor/`) |
+| **What's in `triage_queue.json` / `lineage.json` / a code `gate_decision.json`** | `data_models.md` (Tier-4/5 artifacts) |
+| **How validation / findings report PDFs are built** | `codebase_info.md` (renderers) → `dependencies.md` (reportlab/pyyaml) |
 | **What flag does X / how to run the CLI** | `interfaces.md` (CLI section) |
 | **Why the deploy gate rejected a run** | `data_models.md` (gate_decision.json) → `components.md` (`constraints.py`) |
 | **What's in `gate_decision.json` / `metrics.json`** | `data_models.md` (full schema with examples) |
@@ -35,7 +39,7 @@ The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and 
 | **Why did the run abort before GEPA started / what's the saturation panel** | `components.md` (saturation_check.py) → `architecture.md` (pattern 10) → `workflows.md` (Workflow 1 Phase B.5) → `data_models.md` (SaturationReport) |
 | **What's tested vs. not** | `interfaces.md` (test surfaces locked by tests) → `workflows.md` (Workflow 8) |
 | **What dependencies are pinned and why** | `dependencies.md` |
-| **What's planned but not built** | `codebase_info.md` (implementation status table) → `PLAN.md` |
+| **What's built vs. the original plan** | `codebase_info.md` (implementation status table) → `PLAN.md` |
 | **Why use this over raw DSPy + GEPA** | `framework_advantages.md` |
 | **What changed recently / project history** | `git log --oneline` |
 | **Style / convention questions** | `AGENTS.md` (repo root) |
@@ -54,10 +58,11 @@ The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and 
 | [`architecture.md`](architecture.md) | One-line model, top-level flow, module dep graph, design patterns, statistical substrate, architectural decisions |
 | [`components.md`](components.md) | Per-module reference: what each owns, public surface, load-bearing implementation notes |
 | [`interfaces.md`](interfaces.md) | CLIs (skill, tool, closed-loop, sessiondb importer), Python API, SkillSource + ToolSource Protocols, output artifacts, DSPy + litellm integration, test surfaces, env vars |
-| [`data_models.md`](data_models.md) | All dataclasses, on-disk formats, full `gate_decision.json` schema with worked examples, `ValidationReport` schema |
-| [`workflows.md`](workflows.md) | Step-by-step workflows with mermaid sequence diagrams: skill deploy path, reject paths, GEPA→MIPROv2 fallback, sessiondb mining, tool evolution, closed-loop validation, closed-loop signal during evolution, prompt-section evolution |
+| [`data_models.md`](data_models.md) | All dataclasses, on-disk formats, full `gate_decision.json` schema with worked examples, `ValidationReport` schema, and the Tier-4/5 artifact schemas (code gate, repair trace, campaign ledger/report, triage queue, lineage/dossier, suite sidecars) |
+| [`workflows.md`](workflows.md) | Step-by-step workflows with mermaid sequence diagrams: skill deploy path, reject paths, GEPA→MIPROv2 fallback, sessiondb mining, tool evolution, closed-loop validation, closed-loop signal during evolution, prompt-section evolution, code repair (Workflow 14), triage sentinel (Workflow 15) |
 | [`dependencies.md`](dependencies.md) | Each external package — what it's used for, why it's pinned, what we don't depend on |
 | [`framework_advantages.md`](framework_advantages.md) | User-facing explainer of how this framework's selection layer, deploy gate, proposer, and composite fitness differ from raw DSPy + GEPA — and when raw GEPA is the right choice |
+| [`operating_the_sentinel.md`](operating_the_sentinel.md) | Operating guide for the Tier-5 propose-only triage sentinel: scan vs. attempt, verdict taxonomy, the dependency-regression caveat, and opt-in scheduled scanning |
 
 ## Documents elsewhere worth knowing about
 
@@ -65,7 +70,7 @@ The codebase is mid-sized (~9K LOC of source + 61 test files / ~1166 tests) and 
 |---|---|
 | [`../README.md`](../README.md) | User-facing quick start. Skill discovery, evolve-a-skill command, CLI examples. |
 | [`../AGENTS.md`](../AGENTS.md) | AI-assistant-focused condensed reference. Project context, dirs, conventions, test/PR guidance. **Read this first when picking up the codebase.** |
-| [`../PLAN.md`](../PLAN.md) | Full project roadmap. Tiers 1 and 2 (skills, tool descriptions) are implemented; Tiers 3-5 are planned. Each implemented phase carries a "Deviations from plan" subsection — load-bearing decisions documented in line. |
+| [`../PLAN.md`](../PLAN.md) | Full project roadmap. All five tiers are implemented (skills, tool descriptions, prompt sections, tool code, triage sentinel). Each phase carries a "Deviations from plan" subsection — load-bearing decisions documented in line, including where Tier 4 dropped population search for test-feedback repair. |
 
 ## Cross-cutting topics with multiple home documents
 
@@ -81,7 +86,7 @@ The fast-moving parts to verify against source when consulting these docs:
 - `EvolutionConfig` defaults (especially `eval_dataset_size`, `growth_*`, `bootstrap_*`)
 - `gate_decision.json` schema_version (currently `"5"`)
 - LM model defaults in `evolve_skill.py` / `evolve_tool.py` CLI options
-- Test count (currently ~1166)
+- Test count (currently ~1,614)
 - LM `request_timeout` / `num_retries` — may be tuned further
 - Closed-loop CLI flags on `evolve_tool` (`--closed-loop-during-evolution`, `--closed-loop-mode`, …)
 - Saturation pre-flight default thresholds (`evolution/core/saturation_check.py:DEFAULT_THRESHOLDS`) — likely to be calibrated as more real-world bands are observed

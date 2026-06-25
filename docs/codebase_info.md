@@ -26,6 +26,7 @@ graph TD
     A --> G[reports/<br/>validation PDFs + prose YAML]
     A --> H[docs/<br/>this knowledge base]
     A --> I[generate_report.py<br/>renderer: run dir + YAML → PDF]
+    A --> N[generate_findings_report.py<br/>renderer: prose YAML + provenance → PDF]
     A --> L[assets/<br/>logo PNGs for the report]
     A --> M[examples/<br/>copy-paste config artifacts]
     A --> J[PLAN.md<br/>full project roadmap]
@@ -84,8 +85,24 @@ evolution/
 │   ├── prompt_judge.py                  # SaveCallJudge + judge_save_calls Layer-2 content judge + fitness/splice scorers
 │   ├── claude_prompt_source.py          # ClaudeCodePromptSource — read/write a sentinel-delimited region in a CLAUDE.md
 │   └── backend.py                       # PromptBackend + build_backend — the single per-target selection seam
-├── code/                                # Tier 4: planned, empty package
-└── monitor/                             # planned, empty package
+├── code/                                # Tier 4: tool-code repair (test-feedback)
+│   ├── harvest.py                       # mine real bug organisms from a repo's git stream (buggy parent + upstream-fix oracle)
+│   ├── worktree.py                      # throwaway git worktree + isolated editable venv (authoritative-import guard)
+│   ├── repair.py                        # RepairEngine — iterative propose→freeze-check→test→feedback loop (whole-file rewrite)
+│   ├── freeze_check.py                  # zero-LM surface-freeze + diff-shape guards (no public-API drift, ≥80% retain)
+│   ├── gate.py                          # code deploy gate: held-out-split / oracle-match, file scope, baseline-diff regression floor
+│   ├── evolve_code.py                   # single-tool repair CLI (+ optional draft PR)
+│   ├── campaign.py                      # staged measurement campaign over harvested organisms (Wilson futility-stop)
+│   ├── campaign_report.py               # cluster-honest organism-level estimands (Wilson CI, ICC, design-effect)
+│   ├── classify_strata.py              # three-stratum classification of harvested bugs
+│   ├── audit_gaming.py                  # adversarial gate-gaming audit (is the oracle gate input-hardcodeable?)
+│   ├── audit_report.py                  # per-organism tally for the gate-gaming audit
+│   └── trace.py                         # repair_trace.json (rounds + final diff) for human review
+└── monitor/                             # Tier 5: propose-only triage sentinel
+    ├── __main__.py                      # CLI: scan (free, git-only) + optional --attempt-top (cost-capped)
+    ├── sentinel.py                      # scan a repo's git stream, classify + rank repair candidates
+    ├── queue.py                         # triage_queue.json + human-readable triage_report.md
+    └── attempt.py                       # run the validated repair loop on the top-K (never opens a PR)
 ```
 
 ## Lines of code (production source)
@@ -127,9 +144,14 @@ evolution/
 | `evolution/prompts/backend.py` | ~125 | PromptBackend strategy + build_backend factory (single per-target seam) |
 | `evolution/validation/agent_runner.py` | ~55 | AgentRunner Protocol + dataclasses |
 | `evolution/core/behavioral_example.py` | ~35 | builder for behavioral dspy.Examples |
-| **Total** | **~10,900** | excludes empty `__init__.py` shims |
+| `evolution/code/` (12 modules) | ~2,850 | Tier 4: harvest → worktree → repair → gate (+ campaign, gate-gaming audit) |
+| `evolution/monitor/` (4 modules) | ~350 | Tier 5: propose-only triage sentinel (scan + ranked queue + attempt) |
+| `evolution/core/` lineage/dossier/telemetry (4 modules) | ~1,000 | GEPA lineage + review dossier + saturation/search ledgers |
+| `evolution/validation/` suite_compiler/discrimination/noise (3 modules) | ~470 | zero-LM floor prompt, per-task discrimination labeler, A/A noise floor |
+| `generate_findings_report.py` (repo root) | ~195 | provenance-checked synthesis-report renderer |
+| **Total** | **~19K code / ~23K raw** | non-blank-non-comment vs. raw `wc -l` across `evolution/`; per-file rows are indicative |
 
-Test suite: 61 test files under `tests/core/`, `tests/skills/`, `tests/tools/`, `tests/validation/`. **1166 tests** collected.
+Test suite: 100 test files under `tests/code/`, `tests/core/`, `tests/monitor/`, `tests/skills/`, `tests/tools/`, `tests/validation/`, `tests/analysis/`. **~1,614 tests** collected.
 
 ## Runtime dependencies
 
@@ -140,14 +162,15 @@ Test suite: 61 test files under `tests/core/`, `tests/skills/`, `tests/tools/`, 
 | `openai` | `>=1.0.0` | Underlying SDK litellm wraps |
 | `click` | `>=8.0` | CLI option parsing |
 | `rich` | `>=13.0` | Console panels + tables |
-| `reportlab` | `>=4.0` | `generate_report.py` PDF output |
-| `pyyaml` | `>=6.0` | `generate_report.py` loading of `reports/<phase>_prose.yaml` |
+| `reportlab` | `>=4.0` | PDF output for `generate_report.py` + `generate_findings_report.py` |
+| `pyyaml` | `>=6.0` | `reports/<name>_prose.yaml` loading for both report renderers |
 | `numpy` | `>=1.24` | `evolution/core/stats.py:paired_bootstrap` |
 
 Optional extras:
 - `[dev]` — `pytest>=7.0`, `pytest-asyncio>=0.21`
 - `[miprov2]` — `dspy[optuna]>=3.2.0,<3.3` (only needed when GEPA fails and the MIPROv2 fallback fires)
-- `[darwinian]` — `darwinian-evolver` (planned Tier 4 code-evolution engine, not yet wired)
+
+Tier 4 code repair needs no extra engine dependency — it reuses the DSPy/litellm stack as a whole-file proposer. The population-search `darwinian-evolver` was evaluated and dominated by plain best-of-N at equal budget, so it was not adopted (see `reports/darwinian_evolver_evaluation.md`); the former `[darwinian]` extra has been removed.
 
 ## Implementation status by tier
 
@@ -158,10 +181,10 @@ The README's table summarizes intent; reality:
 | 1 | Skill files (SKILL.md) | DSPy + GEPA | ✅ implemented in `evolution/skills/` |
 | 2 | Tool descriptions | DSPy + GEPA | ✅ implemented in `evolution/tools/` — MCP-JSON and Hermes-Python-AST adapters; one target tool per run |
 | 3 | System prompt sections | DSPy + GEPA | ✅ implemented in `evolution/prompts/` — two backends via `--target`: `hermes` (AST splice of `prompt_builder.py` constants) and `claude` (CLAUDE.md sentinel region via `--append-system-prompt-file`); purely-behavioral closed-loop deploy gate (no synthetic signal) |
-| 4 | Tool implementation code | Darwinian Evolver | 🔲 `evolution/code/` package exists, empty; `[darwinian]` extra reserves the dep |
-| 5 | Continuous improvement loop | Automated pipeline | 🔲 `evolution/monitor/` package exists, empty |
+| 4 | Tool implementation code | Iterative test-feedback repair | ✅ implemented in `evolution/code/` — harvest real bugs, repair in a throwaway worktree, ship behind the held-out/oracle + surface-freeze + baseline-diff gate (no population search: `darwinian-evolver` was evaluated and dominated by best-of-N) |
+| 5 | Continuous improvement loop | Propose-only triage sentinel | ✅ implemented in `evolution/monitor/` — scan a repo's git stream, rank a queue, optionally attempt the top-K (human-gated, never auto-PR) |
 
-Tiers 1-3 are built. Tier 4-5 packages exist as empty stubs to anchor the planned architecture. See PLAN.md's per-phase "Deviations from plan" subsections for where the built tiers diverge from the original spec.
+All five tiers are built. Tiers 1-3 evolve artifact *text* via GEPA behind the paired-bootstrap / closed-loop gate; Tier 4 repairs tool *code* from a failing test behind an executable-oracle gate; Tier 5 is the propose-only sentinel that feeds candidates to Tier 4. See PLAN.md's per-phase "Deviations from plan" subsections for where the built tiers diverge from the original spec.
 
 **Orthogonal validation surface.** `evolution/validation/` runs a real agent (`hermes -z`) through a JSONL task suite with baseline vs evolved artifacts spliced into the live install. Scores actual tool-selection behavior with `expected_tools` / `forbidden_tools` per task; compares with a two-condition decision rule. Available three ways:
 
