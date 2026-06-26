@@ -5,11 +5,15 @@ Verdict is produced by running spec.eval_script, which reinstalls the package,
 resets+reapplies the gold test_patch (so F2P tests exist), and runs them between
 sentinels. get_logs_eval then parses the captured output; get_eval_tests_report
 maps to dataset ids. One eval per candidate state; every mutation resets the cache.
+
+graded_report() attaches ``_eval_ok`` (bool) to distinguish infra failures
+(build broken / timeout / sentinels missing) from real test outcomes.
 """
 
 from __future__ import annotations
 
 import io
+import os
 import tarfile
 import tempfile
 import time
@@ -73,6 +77,7 @@ class SWEbenchEnv:
         self._spec = spec
         self._container = container
         self._graded: Optional[dict] = None
+        self._last_eval_output: str = ""
 
     # -- construction -------------------------------------------------------
 
@@ -110,11 +115,14 @@ class SWEbenchEnv:
         """Evaluate the current candidate via official eval_script + grading.
 
         Caches the result; resets on any write/patch/reset that changes source.
+        Sets ``_eval_ok`` on the returned dict: False means infra failure (build
+        broken, timeout, or no parseable sentinels) rather than a real test outcome.
         """
         if self._graded is not None:
             return self._graded
 
         from swebench.harness.grading import get_logs_eval, get_eval_tests_report
+        from swebench.harness.constants import START_TEST_OUTPUT, END_TEST_OUTPUT
 
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -124,33 +132,58 @@ class SWEbenchEnv:
         ) as fh:
             log_fp = fh.name
 
-        # Write eval_script into the container and run it, capturing to a host file.
+        # Write eval_script into the container and run it with a container-side
+        # timeout so a wedged test/install cannot hang the campaign.
         eval_path = f"/tmp/eval_{self._spec.instance_id}.sh"
         _put_file(self._container, eval_path, self._spec.eval_script)
-        _, raw_output = _exec(self._container, f"bash {eval_path}", workdir="/testbed")
+        exit_code, raw_output = _exec(
+            self._container,
+            f"timeout {_EXEC_TIMEOUT} bash {eval_path}",
+            workdir="/testbed",
+        )
 
-        Path(log_fp).write_text(raw_output)
+        timed_out = (exit_code == 124)
 
-        status_map, _ = get_logs_eval(self._spec, log_fp)
+        try:
+            Path(log_fp).write_text(raw_output)
+            status_map, applied_ok = get_logs_eval(self._spec, log_fp)
+        finally:
+            os.unlink(log_fp)
+
+        self._last_eval_output = raw_output
+
         gold = {
             "FAIL_TO_PASS": list(self._f2p),
             "PASS_TO_PASS": list(self._p2p),
         }
         report = get_eval_tests_report(status_map, gold)
+
+        eval_ok = bool(applied_ok) and bool(status_map) and not timed_out
+        report["_eval_ok"] = eval_ok
+        report["_timed_out"] = timed_out
+
         self._graded = report
-        self._last_eval_output = raw_output
         return self._graded
 
     # -- gate seam -----------------------------------------------------------
 
     def failing_tests(self, *ids: str) -> set[str]:
-        """Return the subset of ``ids`` that failed in the last graded eval."""
+        """Return the subset of ``ids`` that failed in the last graded eval.
+
+        Conservative: an id not present in success ∪ failure of either scope
+        (i.e. never graded) is treated as FAILING so it cannot certify as fixed.
+        """
         rep = self.graded_report()
+        graded_ok = (
+            set(rep["FAIL_TO_PASS"]["success"])
+            | set(rep["PASS_TO_PASS"]["success"])
+        )
         failures = (
             set(rep["FAIL_TO_PASS"]["failure"])
             | set(rep["PASS_TO_PASS"]["failure"])
         )
-        return {i for i in ids if i in failures}
+        graded = graded_ok | failures
+        return {i for i in ids if i not in graded or i in failures}
 
     # -- run_test (for repair engine) ----------------------------------------
 
@@ -165,8 +198,16 @@ class SWEbenchEnv:
         all_fail = f2p_fail | p2p_fail
         passed = not any(i in all_fail for i in ids) if ids else not all_fail
 
-        raw = getattr(self, "_last_eval_output", "")
+        raw = self._last_eval_output
+        # Slice to the region between sentinels so the LM sees test failures,
+        # not install/setup noise.  Falls back to the whole log if sentinels absent.
+        from swebench.harness.constants import START_TEST_OUTPUT, END_TEST_OUTPUT
+        start_idx = raw.find(START_TEST_OUTPUT)
+        end_idx = raw.find(END_TEST_OUTPUT)
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            raw = raw[start_idx + len(START_TEST_OUTPUT):end_idx]
         output = raw[-_TAIL_CHARS:] if len(raw) > _TAIL_CHARS else raw
+
         # Best-effort exit code: 0 if passed, 1 if not.
         exit_code = 0 if passed else 1
         return TestRun(passed=passed, output=output,
@@ -231,7 +272,7 @@ class SWEbenchEnv:
         """Restore ``relpath`` to HEAD and purge any pycache; invalidates cache."""
         _exec(self._container, f"git checkout -- {relpath}")
         # Purge any adjacent __pycache__ so the restored file runs fresh.
-        stem = relpath.rsplit("/", 1)[-1].replace(".py", "")
+        stem = relpath.rsplit("/", 1)[-1].removesuffix(".py")
         _exec(self._container, f"find /testbed -path '*/__pycache__/{stem}*.pyc' -delete")
         self._graded = None
 

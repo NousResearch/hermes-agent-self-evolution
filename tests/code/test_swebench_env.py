@@ -1,8 +1,8 @@
 """Tests for SWEbenchEnv.
 
 Pure unit tests (no Docker) cover the changed_files filter and cache-invalidation
-contract. The slow integration test builds a real container for a flask Lite
-instance and verifies that the buggy base reproduces the F2P failure and that
+contract. The slow integration tests build real containers for a flask and django
+Lite instance and verify that the buggy base reproduces the F2P failure and that
 applying the gold patch resolves it without P2P regression.
 """
 
@@ -165,21 +165,26 @@ def test_reset_file_invalidates_graded_cache(monkeypatch):
 
 
 def test_failing_tests_resolves_from_graded_report(monkeypatch):
-    """failing_tests returns ids in F2P.failure ∪ P2P.failure only."""
+    """failing_tests returns ids in F2P.failure ∪ P2P.failure, plus ungraded ids."""
     from evolution.code.swebench import env as env_mod
 
     e = _make_env()
     e._graded = {
         "FAIL_TO_PASS": {"success": [], "failure": ["tests/t.py::test_a"]},
         "PASS_TO_PASS": {"success": ["tests/t.py::test_b"], "failure": []},
+        "_eval_ok": True,
+        "_timed_out": False,
     }
 
     result = e.failing_tests("tests/t.py::test_a", "tests/t.py::test_b", "tests/t.py::test_c")
-    assert result == {"tests/t.py::test_a"}
+    # test_a: explicit failure → included
+    # test_b: explicit success → excluded
+    # test_c: never graded (not in success ∪ failure) → conservative: included
+    assert result == {"tests/t.py::test_a", "tests/t.py::test_c"}
 
 
 # ---------------------------------------------------------------------------
-# Integration test (requires Docker)
+# Integration tests (require Docker)
 # ---------------------------------------------------------------------------
 
 
@@ -226,3 +231,50 @@ def test_flask_bug_reproduces_and_gold_resolves():
 
     elapsed = time.monotonic() - t0
     print(f"\n[flask integration] wall-clock {elapsed:.0f}s  instance={inst.instance_id}")
+
+
+@pytest.mark.slow
+def test_django_bug_reproduces_and_gold_resolves():
+    """Django integration: build container, confirm bug, apply gold, confirm green.
+
+    Django is the harder parser case (django-specific test runner output format);
+    this regression-protects the F2P/P2P grading path for django instances.
+    """
+    import time
+
+    from evolution.code.swebench.loader import load_single_file_lite
+    from evolution.code.swebench.env import SWEbenchEnv
+
+    instances = load_single_file_lite(limit=80)
+    django_insts = [i for i in instances if i.repo == "django/django"]
+    assert django_insts, "No django/django instance found in first 80 single-file Lite instances"
+    inst = django_insts[0]
+
+    t0 = time.monotonic()
+    with SWEbenchEnv.create(inst) as env:
+        # Write buggy base so eval_script starts from the base_commit state.
+        buggy_src = env.base_source(inst.gold_file)
+        env.write_tool(inst.gold_file, buggy_src)
+
+        failing_buggy = set(inst.fail_to_pass) & env.failing_tests(*inst.fail_to_pass)
+        assert failing_buggy, (
+            f"Expected at least one F2P failure on buggy base for {inst.instance_id}; "
+            f"got none. F2P={inst.fail_to_pass}"
+        )
+
+        env.apply_patch(inst.gold_patch)
+
+        failing_f2p_after = env.failing_tests(*inst.fail_to_pass)
+        assert not failing_f2p_after, (
+            f"F2P tests still failing after gold patch for {inst.instance_id}: "
+            f"{failing_f2p_after}"
+        )
+
+        failing_p2p_after = env.failing_tests(*inst.pass_to_pass)
+        assert not failing_p2p_after, (
+            f"P2P regression after gold patch for {inst.instance_id}: "
+            f"{failing_p2p_after}"
+        )
+
+    elapsed = time.monotonic() - t0
+    print(f"\n[django integration] wall-clock {elapsed:.0f}s  instance={inst.instance_id}")
