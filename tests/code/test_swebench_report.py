@@ -2,8 +2,8 @@ import json
 from evolution.code.swebench.report import summarize_difficulty, drop_breakdown, HERMES_PROFILE, build
 
 _CHARS = [
-    {"instance_id": "a", "reason": "kept", "gold_loc": 4, "gold_hunks": 1},
-    {"instance_id": "b", "reason": "kept", "gold_loc": 50, "gold_hunks": 3},
+    {"instance_id": "a", "reason": "kept", "gold_loc": 4, "gold_hunks": 1, "emulated": True},
+    {"instance_id": "b", "reason": "kept", "gold_loc": 50, "gold_hunks": 3, "emulated": False},
     {"instance_id": "c", "reason": "gold_violates_freeze", "gold_loc": 80, "gold_hunks": 5},
     {"instance_id": "d", "reason": "bug_not_reproduced", "gold_loc": 0, "gold_hunks": 0},
 ]
@@ -25,4 +25,5 @@ def test_build_joins_and_profiles(tmp_path):
     assert rep["kept_difficulty"]["n"] == 2
     assert rep["freeze_dropped_difficulty"]["n"] == 1 and rep["freeze_dropped_difficulty"]["median_loc"] == 80.0
     assert "interpretation_guard" in rep and "loc_definition" in rep
+    assert rep["emulated_kept"] == 1
     assert (tmp_path / "external_validity_report.json").exists()

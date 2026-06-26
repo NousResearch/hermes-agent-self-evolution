@@ -81,7 +81,8 @@ def build_swebench_runner(*, seeds: int, max_rounds: int, proposer_model: Option
                 return Skip(v.reason)
             org: Organism = v
             characterization.append({"instance_id": inst.instance_id, "reason": "kept",
-                                     "gold_loc": org.gold_loc, "gold_hunks": org.gold_hunks})
+                                     "gold_loc": org.gold_loc, "gold_hunks": org.gold_hunks,
+                                     "emulated": env.emulated})
             seed_results = []
             for _ in range(seeds):
                 env.reset_file(inst.gold_file)

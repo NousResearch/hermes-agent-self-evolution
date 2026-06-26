@@ -45,6 +45,7 @@ def build(output_dir: Path) -> dict:
                            "an unverifiable caveat, not a confirmed match."),
         "drop_breakdown": drop_breakdown(chars),
         "freeze_drop_rate": sum(1 for r in chars if r["reason"] == "gold_violates_freeze") / max(len(chars), 1),
+        "emulated_kept": sum(1 for r in chars if r.get("emulated")),
         "interpretation_guard": (
             "PRE-REGISTERED: if kept_difficulty is systematically easier than hermes_difficulty "
             "(lower median_loc / frac_large_gt20), a deploy-reachable rate matching 0.60-0.74 is NOT "
