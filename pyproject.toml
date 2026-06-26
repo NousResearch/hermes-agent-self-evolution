@@ -39,6 +39,11 @@ dependencies = [
 miprov2 = [
     "dspy[optuna]>=3.2.0,<3.3",
 ]
+swebench = [
+    "datasets>=2.0",
+    "docker>=7.0",
+    "swebench==4.1.0",
+]
 
 [dependency-groups]
 dev = [

@@ -38,3 +38,7 @@ spikes/
 # audit scratch artifacts (full run data, pins, logs) stay local
 reports/_*
 reports/*.pins.json
+
+# swebench build logs + local Task 0 spike scripts
+logs/
+scratch/
