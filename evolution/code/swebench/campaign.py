@@ -128,6 +128,11 @@ def main(max_organisms, stages, seeds, repair_rounds, max_cost_usd, limit_instan
     console.print(f"  characterization → {output_dir/'characterization.json'} "
                   f"({sum(1 for r in characterization if r['reason']=='kept')} kept, "
                   f"{sum(1 for r in characterization if r['reason']!='kept')} dropped)")
+    from evolution.code.swebench import report as _report  # noqa: PLC0415
+    rep = _report.build(output_dir)
+    console.print(f"  [bold]deploy-reachable[/bold] {rep['deploy_reachable']} | "
+                  f"kept_difficulty {rep['kept_difficulty']} vs hermes {rep['hermes_difficulty']}")
+    console.print(f"  [yellow]{rep['interpretation_guard']}[/yellow]")
 
 
 if __name__ == "__main__":
