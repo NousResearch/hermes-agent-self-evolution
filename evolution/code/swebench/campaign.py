@@ -16,6 +16,7 @@ import click
 from rich.console import Console
 
 from evolution.code.campaign import PROPOSER_MAX_TOKENS, Skip, run_campaign
+from evolution.code.harvest import stratify
 from evolution.code.campaign_report import OrganismResult
 from evolution.code.gate import run_code_oracle_gate
 from evolution.code.repair import RepairEngine, build_dspy_proposer
@@ -113,14 +114,18 @@ def main(max_organisms, stages, seeds, repair_rounds, max_cost_usd, limit_instan
                       datetime.now().strftime("%Y%m%d_%H%M%S"))
     output_dir.mkdir(parents=True, exist_ok=True)
     instances = load_single_file_lite(limit=limit_instances)
-    console.print(f"[bold]swebench external-validity[/bold] — {len(instances)} single-file Lite organisms")
+    # Round-robin across repos so the first N valid organisms span many repos
+    # (Lite's dataset order is repo-grouped) — cluster-honest, like the Hermes campaign.
+    candidates = stratify(instances_to_candidates(instances), max_per_tool=None)
+    console.print(f"[bold]swebench external-validity[/bold] — {len(candidates)} single-file Lite "
+                  f"organisms across {len({c.tool_path for c in candidates})} repos (stratified)")
     characterization: list = []
     runner = build_swebench_runner(seeds=seeds, max_rounds=repair_rounds,
                                    proposer_model=proposer_model, characterization=characterization,
                                    max_cost_usd=max_cost_usd)
     run_campaign(output_dir, output_dir=output_dir, max_organisms=max_organisms,
                  stages=tuple(int(s) for s in stages.split(",")), seeds=seeds, max_rounds=repair_rounds,
-                 max_cost_usd=max_cost_usd, candidates=instances_to_candidates(instances),
+                 max_cost_usd=max_cost_usd, candidates=candidates,
                  organism_runner=runner)
     from evolution.core.lm_timing_callback import COST_LEDGER  # noqa: PLC0415
     (output_dir / "cost.json").write_text(json.dumps(COST_LEDGER.summary(), indent=2))
