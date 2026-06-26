@@ -302,6 +302,7 @@ def run_code_oracle_gate(
     oracle_failures: frozenset[str],
     base_src: str,
     repair_result: RepairResult,
+    pass_to_pass: tuple[str, ...] = (),
     floor_paths: Optional[tuple[str, ...]] = None,
     min_retain_ratio: float = DEFAULT_MIN_RETAIN_RATIO,
     run_inputs: Optional[dict] = None,
@@ -339,6 +340,7 @@ def run_code_oracle_gate(
         "test": test_relpath,
         "bug_tests": list(bug_tests),
         "oracle_failure_count": len(oracle_failures),
+        "pass_to_pass_count": len(pass_to_pass),
         "repair": {
             "fixed": repair_result.fixed,
             "fixed_round": repair_result.fixed_round,
@@ -377,19 +379,21 @@ def run_code_oracle_gate(
         return _reject(f"files other than the target tool changed: {offenders}")
 
     # the bug is actually fixed
-    bug_run = env.run_test(*bug_tests, extra_args=["--tb=no"], full_output=True)
-    bug_fail = _parse_pytest_failures(bug_run.output)
+    bug_fail = env.failing_tests(*bug_tests)
     guards["bug_tests_passed"] = not bug_fail
     if bug_fail:
         return _reject(f"repair does not pass the bug tests: {sorted(bug_fail)[:6]}")
 
     # oracle match — the repair introduces no failure the upstream fix doesn't
     # also have, across the FULL fix-commit test file (catches a fix that passes
-    # the bug tests but breaks other behavior the upstream fix preserves)
-    full = env.run_test(test_relpath, extra_args=["--tb=no"], full_output=True)
-    new_vs_oracle = sorted(_parse_pytest_failures(full.output) - set(oracle_failures))
+    # the bug tests but breaks other behavior the upstream fix preserves).
+    # pass_to_pass narrows the scope to specific node-ids (SWE-bench path); when
+    # empty the full test file is the scope (Hermes path, byte-identical to before).
+    oracle_scope = pass_to_pass or (test_relpath,)
+    new_vs_oracle = sorted(env.failing_tests(*oracle_scope) - set(oracle_failures))
     guards["oracle_match"] = {"new_vs_oracle": new_vs_oracle,
-                              "oracle_failure_count": len(oracle_failures)}
+                              "oracle_failure_count": len(oracle_failures),
+                              "oracle_scope_size": len(oracle_scope)}
     if new_vs_oracle:
         return _reject(f"repair fails {len(new_vs_oracle)} test(s) the upstream fix "
                        f"passes: {new_vs_oracle[:6]}")

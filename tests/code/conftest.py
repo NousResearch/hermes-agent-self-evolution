@@ -57,6 +57,11 @@ class StagedRepo:
                        duration_seconds=time.monotonic() - start,
                        exit_code=res.returncode)
 
+    def failing_tests(self, *node_ids: str) -> set[str]:
+        from evolution.code.gate import _parse_pytest_failures
+        run = self.run_test(*node_ids, extra_args=["--tb=no"], full_output=True)
+        return _parse_pytest_failures(run.output)
+
     # -- git support (for gate tests that need HEAD + status) -------------
     def _git(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(["git", *args], cwd=str(self.root),

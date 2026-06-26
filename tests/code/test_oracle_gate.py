@@ -98,3 +98,50 @@ class TestOracleGate:
                                        final_source=None, rounds=[]))
         assert not res.deploy
         assert "did not produce a fix" in res.reason
+
+
+class _FakeEnv:
+    def __init__(self, failing, changed, base):
+        self._f = failing
+        self._c = changed
+        self._b = base
+
+    def failing_tests(self, *ids):
+        return set(self._f.get(tuple(ids), set()))
+
+    def changed_files(self):
+        return list(self._c)
+
+    def write_tool(self, p, s):
+        pass
+
+
+_GOOD = "def f(x):\n    return x + 1\n"
+
+
+def _rep():
+    return RepairResult(fixed=True, fixed_round=1, final_source=_GOOD, rounds=[])
+
+
+def test_pass_to_pass_default_runs_test_relpath():
+    env = _FakeEnv({("t.py::a",): set(), ("tests/x.py",): set()}, ["m.py"], _GOOD)
+    r = run_code_oracle_gate(env, tool_relpath="m.py", test_relpath="tests/x.py",
+        bug_tests=("t.py::a",), oracle_failures=frozenset(), base_src=_GOOD,
+        repair_result=_rep())
+    assert r.deploy is True
+
+
+def test_pass_to_pass_regression_rejected():
+    env = _FakeEnv({("t.py::a",): set(), ("p::keep",): {"p::keep"}}, ["m.py"], _GOOD)
+    r = run_code_oracle_gate(env, tool_relpath="m.py", test_relpath="(swebench)",
+        bug_tests=("t.py::a",), oracle_failures=frozenset(), base_src=_GOOD,
+        repair_result=_rep(), pass_to_pass=("p::keep",))
+    assert r.deploy is False
+
+
+def test_pass_to_pass_envflaky_excluded():
+    env = _FakeEnv({("t.py::a",): set(), ("p::flaky",): {"p::flaky"}}, ["m.py"], _GOOD)
+    r = run_code_oracle_gate(env, tool_relpath="m.py", test_relpath="(swebench)",
+        bug_tests=("t.py::a",), oracle_failures=frozenset({"p::flaky"}), base_src=_GOOD,
+        repair_result=_rep(), pass_to_pass=("p::flaky",))
+    assert r.deploy is True

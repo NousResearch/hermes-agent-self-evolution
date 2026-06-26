@@ -360,6 +360,13 @@ class WorktreeEnv:
                 exit_code=None,
             )
 
+    def failing_tests(self, *test_paths: str, timeout: int = _DEFAULT_TEST_TIMEOUT) -> set[str]:
+        """Failing/erroring pytest node-ids for ``test_paths`` — the seam the oracle
+        gate uses so it never re-implements parsing (SWEbenchEnv overrides it)."""
+        from evolution.code.gate import _parse_pytest_failures  # noqa: PLC0415
+        run = self.run_test(*test_paths, extra_args=["--tb=no"], full_output=True, timeout=timeout)
+        return _parse_pytest_failures(run.output)
+
     # -- teardown ----------------------------------------------------------
 
     def destroy(self) -> None:
