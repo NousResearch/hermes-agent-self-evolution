@@ -106,15 +106,20 @@ def build_swebench_runner(*, seeds: int, max_rounds: int, proposer_model: Option
 @click.option("--max-cost-usd", required=True, type=click.FloatRange(min=0.0),
               help="REQUIRED — abort when cumulative LM cost exceeds this.")
 @click.option("--limit-instances", default=None, type=int)
+@click.option("--exclude-repos", default="",
+              help="Comma-separated repos to skip (e.g. arch-unreachable: pydata/xarray,scikit-learn/scikit-learn).")
 @click.option("--proposer-model", default=None)
 @click.option("--output-dir", default=None, type=click.Path(file_okay=False, path_type=Path))
 def main(max_organisms, stages, seeds, repair_rounds, max_cost_usd, limit_instances,
-         proposer_model, output_dir):
+         exclude_repos, proposer_model, output_dir):
     logging.basicConfig(level=logging.INFO)
     output_dir = Path(output_dir or Path("output") / "swebench_campaign" /
                       datetime.now().strftime("%Y%m%d_%H%M%S"))
     output_dir.mkdir(parents=True, exist_ok=True)
     instances = load_single_file_lite(limit=limit_instances)
+    excluded = {r.strip() for r in exclude_repos.split(",") if r.strip()}
+    if excluded:
+        instances = [i for i in instances if i.repo not in excluded]
     # Round-robin across repos so the first N valid organisms span many repos
     # (Lite's dataset order is repo-grouped) — cluster-honest, like the Hermes campaign.
     candidates = stratify(instances_to_candidates(instances), max_per_tool=None)
