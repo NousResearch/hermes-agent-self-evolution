@@ -144,7 +144,6 @@ class SWEbenchEnv:
             return self._graded
 
         from swebench.harness.grading import get_logs_eval, get_eval_tests_report
-        from swebench.harness.constants import START_TEST_OUTPUT, END_TEST_OUTPUT
 
         with tempfile.NamedTemporaryFile(
             mode="w",
