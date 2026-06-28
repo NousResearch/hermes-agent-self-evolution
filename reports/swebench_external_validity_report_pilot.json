@@ -1,0 +1,38 @@
+{
+  "deploy_reachable": {
+    "k": 0,
+    "n": 2,
+    "fraction": 0.0,
+    "wilson": [
+      0.0,
+      0.6576280471103807
+    ],
+    "cluster_bootstrap": {
+      "mean": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0,
+      "p_below_kill": 1.0
+    }
+  },
+  "verdict": "BELOW_KILL_LINE",
+  "kept_difficulty": {
+    "n": 2,
+    "median_loc": 21.5,
+    "frac_large_gt20": 0.5
+  },
+  "freeze_dropped_difficulty": {
+    "n": 0,
+    "median_loc": 0.0,
+    "frac_large_gt20": 0.0
+  },
+  "hermes_difficulty": {
+    "median_loc": 45,
+    "frac_large_gt20": 0.7608695652173914
+  },
+  "loc_definition": "patch_loc = added+removed diff lines (loader.patch_loc). The Hermes fix_loc computation behind HERMES_PROFILE is not in version control (gitignored run dir), so this comparison ASSUMES the same definition \u2014 an unverifiable caveat, not a confirmed match.",
+  "drop_breakdown": {
+    "kept": 2
+  },
+  "freeze_drop_rate": 0.0,
+  "interpretation_guard": "PRE-REGISTERED: if kept_difficulty is systematically easier than hermes_difficulty (lower median_loc / frac_large_gt20), a deploy-reachable rate matching 0.60-0.74 is NOT sufficient evidence the gradient ports \u2014 the filter may have reduced Lite to the same easy single-file surface. Report the rate ONLY beside this profile."
+}

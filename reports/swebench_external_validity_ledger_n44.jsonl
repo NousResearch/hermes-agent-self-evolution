@@ -1,0 +1,59 @@
+{"status": "organism", "tool": "astropy/astropy", "fix_sha": "astropy__astropy-12907", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "django/django", "fix_sha": "django__django-10914", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "matplotlib/matplotlib", "fix_sha": "matplotlib__matplotlib-18869", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "mwaskom/seaborn", "fix_sha": "mwaskom__seaborn-2848", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "pallets/flask", "fix_sha": "pallets__flask-4045", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "psf/requests", "fix_sha": "psf__requests-1963", "seeds": [true, false, true], "deploy_reachable": true}
+{"status": "organism", "tool": "pylint-dev/pylint", "fix_sha": "pylint-dev__pylint-5859", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "pytest-dev/pytest", "fix_sha": "pytest-dev__pytest-11143", "seeds": [true, false, true], "deploy_reachable": true}
+{"status": "organism", "tool": "sphinx-doc/sphinx", "fix_sha": "sphinx-doc__sphinx-10325", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "sympy/sympy", "fix_sha": "sympy__sympy-11400", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "astropy/astropy", "fix_sha": "astropy__astropy-14182", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "django/django", "fix_sha": "django__django-10924", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "matplotlib/matplotlib", "fix_sha": "matplotlib__matplotlib-22711", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "mwaskom/seaborn", "fix_sha": "mwaskom__seaborn-3010", "seeds": [true, true, true], "deploy_reachable": true}
+{"fix_sha": "pallets__flask-4992", "tool": "pallets/flask", "status": "gold_unresolved"}
+{"status": "organism", "tool": "psf/requests", "fix_sha": "psf__requests-2148", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "pylint-dev__pylint-6506", "tool": "pylint-dev/pylint", "status": "gold_unresolved"}
+{"status": "organism", "tool": "pytest-dev/pytest", "fix_sha": "pytest-dev__pytest-11148", "seeds": [true, true, true], "deploy_reachable": true}
+{"fix_sha": "sphinx-doc__sphinx-10451", "tool": "sphinx-doc/sphinx", "status": "gold_unresolved"}
+{"status": "organism", "tool": "sympy/sympy", "fix_sha": "sympy__sympy-11870", "seeds": [true, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "astropy/astropy", "fix_sha": "astropy__astropy-14365", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "django/django", "fix_sha": "django__django-11001", "seeds": [false, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "matplotlib/matplotlib", "fix_sha": "matplotlib__matplotlib-22835", "seeds": [true, true, false], "deploy_reachable": true}
+{"status": "organism", "tool": "mwaskom/seaborn", "fix_sha": "mwaskom__seaborn-3190", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "pallets/flask", "fix_sha": "pallets__flask-5063", "seeds": [true, true, true], "deploy_reachable": true}
+{"fix_sha": "psf__requests-2317", "tool": "psf/requests", "status": "eval_error"}
+{"fix_sha": "pylint-dev__pylint-7080", "tool": "pylint-dev/pylint", "status": "gold_unresolved"}
+{"status": "organism", "tool": "pytest-dev/pytest", "fix_sha": "pytest-dev__pytest-5103", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "sphinx-doc/sphinx", "fix_sha": "sphinx-doc__sphinx-11445", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "sympy/sympy", "fix_sha": "sympy__sympy-11897", "seeds": [true, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "astropy/astropy", "fix_sha": "astropy__astropy-14995", "seeds": [true, true, false], "deploy_reachable": true}
+{"status": "organism", "tool": "django/django", "fix_sha": "django__django-11019", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "matplotlib__matplotlib-23299", "tool": "matplotlib/matplotlib", "status": "gold_unresolved"}
+{"status": "organism", "tool": "mwaskom/seaborn", "fix_sha": "mwaskom__seaborn-3407", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "psf__requests-2674", "tool": "psf/requests", "status": "bug_not_reproduced"}
+{"fix_sha": "pylint-dev__pylint-7114", "tool": "pylint-dev/pylint", "status": "build_failed"}
+{"status": "organism", "tool": "pytest-dev/pytest", "fix_sha": "pytest-dev__pytest-5221", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "sphinx-doc__sphinx-7686", "tool": "sphinx-doc/sphinx", "status": "eval_error"}
+{"status": "organism", "tool": "sympy/sympy", "fix_sha": "sympy__sympy-12171", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "astropy/astropy", "fix_sha": "astropy__astropy-6938", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "django/django", "fix_sha": "django__django-11039", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "matplotlib/matplotlib", "fix_sha": "matplotlib__matplotlib-23314", "seeds": [true, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "psf/requests", "fix_sha": "psf__requests-3362", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "pylint-dev__pylint-7228", "tool": "pylint-dev/pylint", "status": "build_failed"}
+{"status": "organism", "tool": "pytest-dev/pytest", "fix_sha": "pytest-dev__pytest-5227", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "sphinx-doc__sphinx-7738", "tool": "sphinx-doc/sphinx", "status": "eval_error"}
+{"status": "organism", "tool": "sympy/sympy", "fix_sha": "sympy__sympy-12236", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "astropy/astropy", "fix_sha": "astropy__astropy-7746", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "django/django", "fix_sha": "django__django-11049", "seeds": [false, false, false], "deploy_reachable": false}
+{"status": "organism", "tool": "matplotlib/matplotlib", "fix_sha": "matplotlib__matplotlib-23476", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "psf__requests-863", "tool": "psf/requests", "status": "bug_not_reproduced"}
+{"fix_sha": "pylint-dev__pylint-7993", "tool": "pylint-dev/pylint", "status": "build_failed"}
+{"status": "organism", "tool": "pytest-dev/pytest", "fix_sha": "pytest-dev__pytest-5413", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "sphinx-doc__sphinx-7975", "tool": "sphinx-doc/sphinx", "status": "eval_error"}
+{"status": "organism", "tool": "sympy/sympy", "fix_sha": "sympy__sympy-12419", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "django/django", "fix_sha": "django__django-11099", "seeds": [true, true, true], "deploy_reachable": true}
+{"status": "organism", "tool": "matplotlib/matplotlib", "fix_sha": "matplotlib__matplotlib-23562", "seeds": [true, true, false], "deploy_reachable": true}
+{"status": "organism", "tool": "pytest-dev/pytest", "fix_sha": "pytest-dev__pytest-5495", "seeds": [false, false, false], "deploy_reachable": false}
+{"fix_sha": "sphinx-doc__sphinx-8273", "tool": "sphinx-doc/sphinx", "status": "gold_unresolved"}
