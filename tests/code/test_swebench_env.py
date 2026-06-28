@@ -8,7 +8,26 @@ applying the gold patch resolves it without P2P regression.
 
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
+
+
+def _swebench_stack_available() -> bool:
+    """True only when the optional ``swebench`` extra is installed (docker + swebench +
+    datasets). CI runs a plain ``uv sync`` without the extra, so these integration tests
+    must skip there rather than error on the lazy imports inside the env/loader."""
+    return all(
+        importlib.util.find_spec(mod) is not None
+        for mod in ("docker", "swebench", "datasets")
+    )
+
+
+_requires_swebench_stack = pytest.mark.skipif(
+    not _swebench_stack_available(),
+    reason="integration: requires the 'swebench' extra (uv sync --extra swebench) "
+    "and a running Docker daemon",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +208,7 @@ def test_failing_tests_resolves_from_graded_report(monkeypatch):
 
 
 @pytest.mark.slow
+@_requires_swebench_stack
 def test_flask_bug_reproduces_and_gold_resolves():
     """Full integration: build container, confirm bug, apply gold, confirm green."""
     import time
@@ -236,6 +256,7 @@ def test_flask_bug_reproduces_and_gold_resolves():
 
 
 @pytest.mark.slow
+@_requires_swebench_stack
 def test_django_bug_reproduces_and_gold_resolves():
     """Django integration: build container, confirm bug, apply gold, confirm green.
 
@@ -283,6 +304,7 @@ def test_django_bug_reproduces_and_gold_resolves():
 
 
 @pytest.mark.slow
+@_requires_swebench_stack
 def test_xarray_fallback_to_x86_emulated():
     """Emulation fallback: xarray's arm64 env image fails to build (heavy scipy deps);
     the fallback pulls the prebuilt x86_64 Hub image and runs under QEMU.
