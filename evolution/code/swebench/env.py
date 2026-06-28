@@ -83,52 +83,32 @@ class SWEbenchEnv:
     # -- construction -------------------------------------------------------
 
     @classmethod
-    def create(
-        cls,
-        instance,
-        *,
-        arch: str = "arm64",
-        namespace: Optional[str] = None,
-        run_id: str = "extval",
-    ) -> "SWEbenchEnv":
-        """Build env+instance images and start the container.
+    def create(cls, instance, *, run_id: str = "extval") -> "SWEbenchEnv":
+        """Pull the prebuilt x86_64 instance image and start it under Rosetta.
 
-        Tries native arch first (local build); if the env image fails (e.g. heavy
-        scientific deps with no arm64 wheels), falls back to pulling the prebuilt x86_64
-        image from the swebench Hub namespace and running it under QEMU emulation.
-        Sets ``emulated=True`` on the returned env so callers can flag the result.
+        SWE-bench publishes a per-instance x86_64 image; we pull that and run it under
+        Docker Desktop's Rosetta translation rather than building per-arch locally. This
+        is uniform across repos — no repo is unreachable for lack of arm64 wheels, and no
+        local image build means no build-failure noise — and Rosetta evaluates the
+        numerical C-extension repos (xarray, scikit-learn) cleanly where QEMU segfaulted.
+        ``emulated`` is always True: x86_64 under Rosetta on an arm64 host.
         """
         import docker
-        from swebench.harness.docker_build import (
-            build_env_images,
-            build_container,
-            setup_logger,
-        )
+        from swebench.harness.docker_build import build_container, setup_logger
         from swebench.harness.test_spec.test_spec import make_test_spec
 
         client = docker.from_env()
         log_path = Path(tempfile.mktemp(prefix=f"sweb_{instance.instance_id}_", suffix=".log"))
-
-        # Try native arch (local build); on env-build failure fall back to prebuilt x86 (QEMU).
-        # The x86_64 fallback uses namespace="swebench" which sets is_remote_image=True on the
-        # spec, so build_container pulls the prebuilt instance image from the Hub directly —
-        # no env-image build step needed for that path.
-        spec = make_test_spec(instance.raw, namespace=namespace, arch=arch)
+        spec = make_test_spec(instance.raw, namespace="swebench", arch="x86_64")
         logger = setup_logger(spec.instance_id, log_path)
-        _, failed = build_env_images(client, [spec], force_rebuild=False, max_workers=1)
-        emulated = False
-        if failed:
-            spec = make_test_spec(instance.raw, namespace="swebench", arch="x86_64")
-            logger = setup_logger(spec.instance_id, log_path)
-            if not spec.is_remote_image:
-                raise RuntimeError(
-                    f"env image build failed for {instance.instance_id} on arm64 (local) and "
-                    f"x86_64 spec unexpectedly is_remote_image=False; see {log_path}")
-            emulated = True
+        if not spec.is_remote_image:
+            raise RuntimeError(
+                f"no prebuilt x86_64 image published for {instance.instance_id} "
+                f"(spec.is_remote_image=False); see {log_path}")
         container = build_container(spec, client, run_id, logger, nocache=False)
         container.start()
         env = cls(instance, spec, container)
-        env.emulated = emulated
+        env.emulated = True
         return env
 
     # -- verdict (the core) -------------------------------------------------

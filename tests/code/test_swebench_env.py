@@ -223,7 +223,7 @@ def test_flask_bug_reproduces_and_gold_resolves():
 
     t0 = time.monotonic()
     with SWEbenchEnv.create(inst) as env:
-        assert env.emulated is False, "flask (arm64-buildable) must not use QEMU fallback"
+        assert env.emulated is True  # every instance runs the prebuilt x86_64 image under Rosetta
 
         # Write buggy base (restores base_commit state — eval_script will apply test_patch).
         buggy_src = env.base_source(inst.gold_file)
@@ -305,22 +305,12 @@ def test_django_bug_reproduces_and_gold_resolves():
 
 @pytest.mark.slow
 @_requires_swebench_stack
-def test_xarray_fallback_to_x86_emulated():
-    """Emulation fallback: xarray's arm64 env image fails to build (heavy scipy deps);
-    the fallback pulls the prebuilt x86_64 Hub image and runs under QEMU.
-
-    What this test certifies:
-      - emulated=True (fallback triggered and flagged)
-      - F2P tests appear in the failing set on the buggy base (bug reproduced, even if
-        _eval_ok=False due to C-extension segfaults under QEMU — a test-run crash still
-        means the tests did not pass)
-      - gold resolution is checked when _eval_ok is True; if QEMU crashes (segfault in
-        compiled extensions), we note it and skip the resolution assertion rather than
-        pretending the environment is fully functional
-
-    This is an honest characterization: the fallback recovers from arm64-unbuildable repos
-    and flags them; whether emulated evals are fully valid depends on the instance's
-    compiled-extension usage.
+def test_xarray_x86_under_rosetta_resolves():
+    """Numerical C-extension repo under Rosetta. xarray has no arm64 wheels, so it runs
+    via the prebuilt x86_64 image. This regression-protects that the eval runs to
+    completion under Rosetta — the exact path QEMU segfaulted on (pandas/numpy C
+    extensions): the bug reproduces on the base, the eval is clean (``_eval_ok``), and the
+    gold patch resolves F2P with no P2P regression.
     """
     import time
 
@@ -335,38 +325,33 @@ def test_xarray_fallback_to_x86_emulated():
 
     t0 = time.monotonic()
     with SWEbenchEnv.create(xarray_inst) as env:
-        assert env.emulated is True, (
-            f"Expected QEMU fallback for {xarray_inst.instance_id} (arm64 env build should fail)"
-        )
+        assert env.emulated is True  # x86_64 under Rosetta
 
         buggy_src = env.base_source(xarray_inst.gold_file)
         env.write_tool(xarray_inst.gold_file, buggy_src)
 
+        buggy_report = env.graded_report()
+        assert buggy_report.get("_eval_ok"), (
+            f"eval did not run to completion under Rosetta for {xarray_inst.instance_id}: "
+            f"_eval_ok={buggy_report.get('_eval_ok')} _timed_out={buggy_report.get('_timed_out')}"
+        )
+
         failing_buggy = set(xarray_inst.fail_to_pass) & env.failing_tests(*xarray_inst.fail_to_pass)
         assert failing_buggy, (
-            f"Expected F2P failures on buggy base for {xarray_inst.instance_id} under emulation; "
+            f"Expected F2P failures on buggy base for {xarray_inst.instance_id}; "
             f"got none. F2P={xarray_inst.fail_to_pass}"
         )
 
-        buggy_report = env.graded_report()
-        eval_ok = buggy_report.get("_eval_ok", False)
-
         env.apply_patch(xarray_inst.gold_patch)
 
-        if eval_ok:
-            failing_f2p_after = env.failing_tests(*xarray_inst.fail_to_pass)
-            assert not failing_f2p_after, (
-                f"F2P tests still failing after gold patch under emulation for "
-                f"{xarray_inst.instance_id}: {failing_f2p_after}"
-            )
-        else:
-            # QEMU segfaults in compiled extensions (e.g. pandas C libs) cause _eval_ok=False.
-            # The fallback is still useful: arm64-unbuildable repos get a container; the
-            # campaign drops them via _eval_ok rather than crashing at build time.
-            print(
-                f"\n[xarray x86 emulation] _eval_ok=False (QEMU C-extension crash); "
-                f"emulated=True confirmed, bug reproduced in failing set."
-            )
+        failing_f2p_after = env.failing_tests(*xarray_inst.fail_to_pass)
+        assert not failing_f2p_after, (
+            f"F2P still failing after gold patch for {xarray_inst.instance_id}: {failing_f2p_after}"
+        )
+        failing_p2p_after = env.failing_tests(*xarray_inst.pass_to_pass)
+        assert not failing_p2p_after, (
+            f"P2P regression after gold patch for {xarray_inst.instance_id}: {failing_p2p_after}"
+        )
 
     elapsed = time.monotonic() - t0
-    print(f"\n[xarray x86 emulation] wall-clock {elapsed:.0f}s  instance={xarray_inst.instance_id}")
+    print(f"\n[xarray rosetta] wall-clock {elapsed:.0f}s  instance={xarray_inst.instance_id}")
