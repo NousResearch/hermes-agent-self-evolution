@@ -3,95 +3,113 @@
     "instance_id": "astropy__astropy-12907",
     "reason": "kept",
     "gold_loc": 2,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "django__django-10914",
     "reason": "kept",
     "gold_loc": 2,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "matplotlib__matplotlib-18869",
     "reason": "kept",
     "gold_loc": 67,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "mwaskom__seaborn-2848",
     "reason": "kept",
     "gold_loc": 7,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pallets__flask-4045",
     "reason": "kept",
     "gold_loc": 16,
-    "gold_hunks": 2
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "psf__requests-1963",
     "reason": "kept",
     "gold_loc": 5,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pydata__xarray-3364",
-    "reason": "build_failed",
-    "err": "Error building image pydata__xarray-3364: Environment image sweb.env.py.arm64.502d8fc6ebccd881244091:latest not found for pydata__xarray-3364\nCheck (/tmp/claude-501/sweb_pydata__xarray-3364_5xiojncm.log) for more information."
+    "reason": "kept",
+    "gold_loc": 10,
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pylint-dev__pylint-5859",
     "reason": "kept",
     "gold_loc": 4,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pytest-dev__pytest-11143",
     "reason": "kept",
     "gold_loc": 1,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "scikit-learn__scikit-learn-10297",
-    "reason": "build_failed",
-    "err": "Error building image scikit-learn__scikit-learn-10297: Environment image sweb.env.py.arm64.aa92880033da20ca313928:latest not found for scikit-learn__scikit-learn-10297\nCheck (/tmp/claude-501/sweb_scikit-learn__scikit-learn-10297_26pi4a_e.log) for more information."
+    "reason": "kept",
+    "gold_loc": 34,
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "sphinx-doc__sphinx-10325",
     "reason": "kept",
     "gold_loc": 12,
-    "gold_hunks": 2
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "sympy__sympy-11400",
     "reason": "kept",
     "gold_loc": 14,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "astropy__astropy-14182",
     "reason": "kept",
     "gold_loc": 41,
-    "gold_hunks": 3
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "django__django-10924",
     "reason": "kept",
     "gold_loc": 2,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "matplotlib__matplotlib-22711",
     "reason": "kept",
     "gold_loc": 24,
-    "gold_hunks": 3
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "mwaskom__seaborn-3010",
     "reason": "kept",
     "gold_loc": 5,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pallets__flask-4992",
@@ -103,29 +121,36 @@
     "instance_id": "psf__requests-2148",
     "reason": "kept",
     "gold_loc": 5,
-    "gold_hunks": 3
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "pydata__xarray-4094",
-    "reason": "build_failed",
-    "err": "Error building image pydata__xarray-4094: Environment image sweb.env.py.arm64.502d8fc6ebccd881244091:latest not found for pydata__xarray-4094\nCheck (/tmp/claude-501/sweb_pydata__xarray-4094_cbv5_m42.log) for more information."
+    "reason": "kept",
+    "gold_loc": 2,
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pylint-dev__pylint-6506",
-    "reason": "gold_unresolved",
+    "reason": "kept",
     "gold_loc": 3,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pytest-dev__pytest-11148",
     "reason": "kept",
     "gold_loc": 2,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "scikit-learn__scikit-learn-10508",
-    "reason": "build_failed",
-    "err": "Error building image scikit-learn__scikit-learn-10508: Environment image sweb.env.py.arm64.aa92880033da20ca313928:latest not found for scikit-learn__scikit-learn-10508\nCheck (/tmp/claude-501/sweb_scikit-learn__scikit-learn-10508_seil37vs.log) for more information."
+    "reason": "kept",
+    "gold_loc": 7,
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "sphinx-doc__sphinx-10451",
@@ -137,37 +162,43 @@
     "instance_id": "sympy__sympy-11870",
     "reason": "kept",
     "gold_loc": 7,
-    "gold_hunks": 3
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "astropy__astropy-14365",
     "reason": "kept",
     "gold_loc": 4,
-    "gold_hunks": 2
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "django__django-11001",
     "reason": "kept",
     "gold_loc": 3,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "matplotlib__matplotlib-22835",
     "reason": "kept",
     "gold_loc": 19,
-    "gold_hunks": 2
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "mwaskom__seaborn-3190",
     "reason": "kept",
     "gold_loc": 2,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pallets__flask-5063",
     "reason": "kept",
     "gold_loc": 65,
-    "gold_hunks": 2
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "psf__requests-2317",
@@ -177,99 +208,197 @@
   },
   {
     "instance_id": "pydata__xarray-4248",
-    "reason": "build_failed",
-    "err": "Error building image pydata__xarray-4248: Environment image sweb.env.py.arm64.502d8fc6ebccd881244091:latest not found for pydata__xarray-4248\nCheck (/tmp/claude-501/sweb_pydata__xarray-4248_qm4pm4ob.log) for more information."
+    "reason": "kept",
+    "gold_loc": 2,
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pylint-dev__pylint-7080",
-    "reason": "gold_unresolved",
+    "reason": "kept",
     "gold_loc": 1,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pytest-dev__pytest-5103",
     "reason": "kept",
     "gold_loc": 25,
-    "gold_hunks": 3
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "scikit-learn__scikit-learn-10949",
-    "reason": "build_failed",
-    "err": "Error building image scikit-learn__scikit-learn-10949: Environment image sweb.env.py.arm64.aa92880033da20ca313928:latest not found for scikit-learn__scikit-learn-10949\nCheck (/tmp/claude-501/sweb_scikit-learn__scikit-learn-10949_zq5uwdl5.log) for more information."
+    "reason": "kept",
+    "gold_loc": 16,
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "sphinx-doc__sphinx-11445",
     "reason": "kept",
     "gold_loc": 14,
-    "gold_hunks": 3
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "sympy__sympy-11897",
     "reason": "kept",
     "gold_loc": 4,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "astropy__astropy-14995",
     "reason": "kept",
     "gold_loc": 4,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "django__django-11019",
     "reason": "kept",
     "gold_loc": 76,
-    "gold_hunks": 3
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "matplotlib__matplotlib-23299",
-    "reason": "gold_unresolved",
+    "reason": "kept",
     "gold_loc": 5,
-    "gold_hunks": 2
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "mwaskom__seaborn-3407",
     "reason": "kept",
     "gold_loc": 4,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "psf__requests-2674",
-    "reason": "bug_not_reproduced",
+    "reason": "gold_unresolved",
     "gold_loc": 4,
     "gold_hunks": 2
   },
   {
     "instance_id": "pydata__xarray-4493",
-    "reason": "build_failed",
-    "err": "Error building image pydata__xarray-4493: Environment image sweb.env.py.arm64.502d8fc6ebccd881244091:latest not found for pydata__xarray-4493\nCheck (/tmp/claude-501/sweb_pydata__xarray-4493_3gcqfj3z.log) for more information."
+    "reason": "kept",
+    "gold_loc": 10,
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "pylint-dev__pylint-7114",
-    "reason": "build_failed",
-    "err": "Error building image sweb.eval.arm64.pylint-dev__pylint-7114:latest: The command '/bin/sh -c /bin/bash /root/setup_repo.sh' returned a non-zero code: 1\nCheck (logs/build_images/instances/sweb.eval.arm64.pylint-dev__pylint-7114__latest/build_image.log) for more information."
+    "reason": "kept",
+    "gold_loc": 10,
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "pytest-dev__pytest-5221",
     "reason": "kept",
     "gold_loc": 10,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
   },
   {
     "instance_id": "scikit-learn__scikit-learn-11040",
-    "reason": "build_failed",
-    "err": "Error building image scikit-learn__scikit-learn-11040: Environment image sweb.env.py.arm64.aa92880033da20ca313928:latest not found for scikit-learn__scikit-learn-11040\nCheck (/tmp/claude-501/sweb_scikit-learn__scikit-learn-11040_oi_tll73.log) for more information."
+    "reason": "kept",
+    "gold_loc": 17,
+    "gold_hunks": 2,
+    "emulated": true
   },
   {
     "instance_id": "sphinx-doc__sphinx-7686",
-    "reason": "eval_error",
+    "reason": "kept",
     "gold_loc": 54,
-    "gold_hunks": 3
+    "gold_hunks": 3,
+    "emulated": true
   },
   {
     "instance_id": "sympy__sympy-12171",
     "reason": "kept",
     "gold_loc": 3,
-    "gold_hunks": 1
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "astropy__astropy-6938",
+    "reason": "kept",
+    "gold_loc": 2,
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "django__django-11039",
+    "reason": "kept",
+    "gold_loc": 5,
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "matplotlib__matplotlib-23314",
+    "reason": "kept",
+    "gold_loc": 2,
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "psf__requests-3362",
+    "reason": "kept",
+    "gold_loc": 17,
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "pydata__xarray-5131",
+    "reason": "kept",
+    "gold_loc": 2,
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "pylint-dev__pylint-7228",
+    "reason": "kept",
+    "gold_loc": 13,
+    "gold_hunks": 2,
+    "emulated": true
+  },
+  {
+    "instance_id": "pytest-dev__pytest-5227",
+    "reason": "kept",
+    "gold_loc": 2,
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-11281",
+    "reason": "kept",
+    "gold_loc": 30,
+    "gold_hunks": 3,
+    "emulated": true
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-7738",
+    "reason": "kept",
+    "gold_loc": 2,
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "sympy__sympy-12236",
+    "reason": "kept",
+    "gold_loc": 6,
+    "gold_hunks": 1,
+    "emulated": true
+  },
+  {
+    "instance_id": "astropy__astropy-7746",
+    "reason": "kept",
+    "gold_loc": 5,
+    "gold_hunks": 2,
+    "emulated": true
   }
 ]

@@ -39,10 +39,11 @@ def build(output_dir: Path) -> dict:
         "freeze_dropped_difficulty": summarize_difficulty(
             [r for r in chars if r["reason"] == "gold_violates_freeze"]),
         "hermes_difficulty": HERMES_PROFILE,
-        "loc_definition": ("patch_loc = added+removed diff lines (loader.patch_loc). The Hermes "
-                           "fix_loc computation behind HERMES_PROFILE is not in version control "
-                           "(gitignored run dir), so this comparison ASSUMES the same definition — "
-                           "an unverifiable caveat, not a confirmed match."),
+        "loc_definition": ("patch_loc = added+removed diff lines (loader.patch_loc). HERMES_PROFILE "
+                           "is read from the committed reports/asymmetry_difficulty_curve.json; its "
+                           "per-fix counting is not recorded, so it may not match patch_loc line-for-line. "
+                           "The ~9x median gap (5 vs 45) dwarfs the widest plausible ~2x counting "
+                           "difference, so the 'much smaller' comparison holds under any convention."),
         "drop_breakdown": drop_breakdown(chars),
         "freeze_drop_rate": sum(1 for r in chars if r["reason"] == "gold_violates_freeze") / max(len(chars), 1),
         "emulated_kept": sum(1 for r in chars if r.get("emulated")),

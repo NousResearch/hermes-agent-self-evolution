@@ -1,24 +1,24 @@
 {
   "deploy_reachable": {
-    "k": 18,
-    "n": 44,
-    "fraction": 0.4090909090909091,
+    "k": 23,
+    "n": 53,
+    "fraction": 0.4339622641509434,
     "wilson": [
-      0.27687643879006824,
-      0.5559050735339343
+      0.30950190698960345,
+      0.5673488502023122
     ],
     "cluster_bootstrap": {
-      "mean": 0.40894204545454543,
-      "ci_low": 0.2727272727272727,
-      "ci_high": 0.5681818181818182,
+      "mean": 0.4330132075471698,
+      "ci_low": 0.3018867924528302,
+      "ci_high": 0.5660377358490566,
       "p_below_kill": 0.0
     }
   },
   "verdict": "GREEN",
   "kept_difficulty": {
-    "n": 45,
+    "n": 54,
     "median_loc": 5.0,
-    "frac_large_gt20": 0.15555555555555556
+    "frac_large_gt20": 0.16666666666666666
   },
   "freeze_dropped_difficulty": {
     "n": 0,
@@ -29,15 +29,13 @@
     "median_loc": 45,
     "frac_large_gt20": 0.7608695652173914
   },
-  "loc_definition": "patch_loc = added+removed diff lines (loader.patch_loc). The Hermes fix_loc computation behind HERMES_PROFILE is not in version control (gitignored run dir), so this comparison ASSUMES the same definition \u2014 an unverifiable caveat, not a confirmed match.",
+  "loc_definition": "patch_loc = added+removed diff lines (loader.patch_loc). HERMES_PROFILE is read from the committed reports/asymmetry_difficulty_curve.json; its per-fix counting is not recorded, so it may not match patch_loc line-for-line. The ~9x median gap (5 vs 45) dwarfs the widest plausible ~2x counting difference, so the 'much smaller' comparison holds under any convention.",
   "drop_breakdown": {
-    "kept": 45,
-    "gold_unresolved": 6,
-    "eval_error": 4,
-    "bug_not_reproduced": 2,
-    "build_failed": 3
+    "kept": 54,
+    "gold_unresolved": 3,
+    "eval_error": 1
   },
   "freeze_drop_rate": 0.0,
-  "emulated_kept": 2,
+  "emulated_kept": 54,
   "interpretation_guard": "PRE-REGISTERED: if kept_difficulty is systematically easier than hermes_difficulty (lower median_loc / frac_large_gt20), a deploy-reachable rate matching 0.60-0.74 is NOT sufficient evidence the gradient ports \u2014 the filter may have reduced Lite to the same easy single-file surface. Report the rate ONLY beside this profile."
 }

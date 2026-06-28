@@ -1,0 +1,18 @@
+{
+  "total_usd": 20.011067,
+  "by_model": {
+    "gpt-5.4-mini": {
+      "tokens_in_uncached": 3536938,
+      "tokens_in_cached": 1878784,
+      "tokens_out": 3826101,
+      "reasoning_tokens": 0,
+      "cost_usd": 20.011067,
+      "calls": 490,
+      "cache_hit_rate": 0.34691293238463866
+    }
+  },
+  "agent_cost_usd": 0.0,
+  "n_agent_runs": 0,
+  "n_cost_uncaptured": 0,
+  "total_cost_usd": 20.011067
+}
