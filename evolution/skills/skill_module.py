@@ -119,5 +119,21 @@ def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
 
     Preserves the original YAML frontmatter (name, description, metadata)
     and replaces only the body with the evolved version.
+
+    If evolved_body already contains its own frontmatter block (the
+    optimizer sometimes writes a full skill file rather than just the body),
+    that block is stripped first so the result never has nested frontmatter.
     """
-    return f"---\n{frontmatter}\n---\n\n{evolved_body}\n"
+    body = evolved_body
+    if body.strip().startswith("---"):
+        parts = body.split("---", 2)
+        if len(parts) >= 3:
+            body = parts[2].lstrip("\n")
+    return f"---\n{frontmatter}\n---\n\n{body}\n"
+# def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
+#     """Reassemble a skill file from frontmatter and evolved body.
+
+#     Preserves the original YAML frontmatter (name, description, metadata)
+#     and replaces only the body with the evolved version.
+#     """
+#     return f"---\n{frontmatter}\n---\n\n{evolved_body}\n"

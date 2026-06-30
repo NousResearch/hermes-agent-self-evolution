@@ -185,7 +185,9 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    # evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    # Pehle: evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
