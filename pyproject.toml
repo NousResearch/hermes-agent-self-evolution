@@ -20,6 +20,7 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.0",
     "rich>=13.0",
+    "optuna>=3.0",
 ]
 
 [project.optional-dependencies]
