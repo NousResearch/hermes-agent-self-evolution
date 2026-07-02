@@ -95,6 +95,25 @@ _REQUEST_SIGNAL_FORBIDDEN_TOKENS = {
     "credentials",
     "private_key",
 }
+_SAFETY_OPERATIONAL_TERMS = (
+    "do not",
+    "must",
+    "never",
+    "important",
+    "critical",
+    "dangerous",
+    "destructive",
+    "secrets",
+    "credential",
+    "approval",
+    "confirm",
+    "background",
+    "notify_on_complete",
+    "read_file",
+    "write_file",
+    "patch",
+    "search_files",
+)
 
 
 @dataclass(frozen=True)
@@ -435,7 +454,7 @@ def _candidate_description_for_tool(
     max_description_chars: int,
 ) -> str:
     if not cases:
-        return _fit_description(baseline, max_description_chars)
+        return _fit_description_preserving_safety_terms(baseline, max_description_chars)
 
     confusing_tools = _unique_in_order(tool for case in cases for tool in case.confusing_tools)
     cues = _unique_in_order(
@@ -460,10 +479,25 @@ def _candidate_description_for_tool(
 
 
 def _fit_description_with_suffix(description: str, suffix: str, max_chars: int) -> str:
-    """Fit a description while preserving generated disambiguation cues."""
+    """Fit a description while preserving generated disambiguation cues.
+
+    Active-apply review also requires that cue-focused rewrites do not delete
+    safety/operational terms from long active tool descriptions.  Preserve those
+    terms explicitly before spending the remaining budget on selection cues.
+    """
 
     normalized = " ".join(description.split())
     normalized_suffix = " ".join(suffix.split())
+    safety_terms = _safety_operational_terms_present(normalized)
+    safety_suffix = _safety_operational_suffix(safety_terms)
+    if safety_suffix:
+        return _fit_description_with_required_and_optional_suffix(
+            normalized,
+            required_suffix=safety_suffix,
+            optional_suffix=normalized_suffix,
+            max_chars=max_chars,
+        )
+
     candidate = f"{normalized.rstrip()} {normalized_suffix}".strip()
     if len(candidate) <= max_chars:
         return candidate
@@ -474,6 +508,53 @@ def _fit_description_with_suffix(description: str, suffix: str, max_chars: int) 
 
     baseline_budget = max_chars - len(suffix_with_separator)
     return f"{_fit_description(normalized, baseline_budget)}{suffix_with_separator}"
+
+
+def _fit_description_with_required_and_optional_suffix(
+    description: str,
+    *,
+    required_suffix: str,
+    optional_suffix: str,
+    max_chars: int,
+) -> str:
+    suffix = " ".join(part for part in (required_suffix, optional_suffix) if part).strip()
+    suffix_with_separator = f" {suffix}" if suffix else ""
+    if suffix_with_separator and len(suffix_with_separator) < max_chars:
+        baseline_budget = max_chars - len(suffix_with_separator)
+        return f"{_fit_description(description, baseline_budget)}{suffix_with_separator}"
+
+    if required_suffix and len(required_suffix) < max_chars:
+        optional_budget = max_chars - len(required_suffix) - 1
+        if optional_suffix and optional_budget > 0:
+            return f"{required_suffix} {_fit_description(optional_suffix, optional_budget)}"
+        return _fit_description(required_suffix, max_chars)
+
+    return _fit_description(suffix or description, max_chars)
+
+
+def _safety_operational_terms_present(description: str) -> list[str]:
+    lowered = description.lower()
+    return [term for term in _SAFETY_OPERATIONAL_TERMS if term in lowered]
+
+
+def _safety_operational_suffix(terms: Sequence[str]) -> str:
+    ordered_terms = _unique_in_order(terms)
+    if not ordered_terms:
+        return ""
+    return f"Safety/ops requirements include: {', '.join(ordered_terms)}."
+
+
+def _fit_description_preserving_safety_terms(description: str, max_chars: int) -> str:
+    normalized = " ".join(description.split())
+    safety_suffix = _safety_operational_suffix(_safety_operational_terms_present(normalized))
+    if not safety_suffix:
+        return _fit_description(normalized, max_chars)
+    return _fit_description_with_required_and_optional_suffix(
+        normalized,
+        required_suffix=safety_suffix,
+        optional_suffix="",
+        max_chars=max_chars,
+    )
 
 
 def _fit_description(description: str, max_chars: int) -> str:

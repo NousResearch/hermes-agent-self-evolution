@@ -143,6 +143,64 @@ def test_candidate_generation_reserves_budget_for_golden_cues_on_long_baselines(
     assert "browser_navigate" in candidate.candidate_description
 
 
+def test_candidate_generation_preserves_safety_operational_terms_on_long_baselines():
+    critical_terms = (
+        "do not",
+        "must",
+        "never",
+        "notify_on_complete",
+        "write_file",
+        "patch",
+        "search_files",
+    )
+    records = [
+        ToolInventoryRecord(
+            name="terminal",
+            toolset="terminal",
+            description=(
+                "Execute shell commands for builds and tests. "
+                + "Long general terminal guidance. " * 18
+                + "Do NOT use cat/head/tail for file reading; use read_file. "
+                + "You MUST use background=True with notify_on_complete for bounded long jobs. "
+                + "Never type secrets; use write_file, patch, and search_files instead of shell shortcuts."
+            ),
+            schema={"parameters": {"properties": {}}},
+        )
+    ]
+
+    candidates = generate_candidate_descriptions(records, default_tool_selection_cases(), max_description_chars=420)
+
+    candidate = candidates[0]
+    assert len(candidate.candidate_description) <= 420
+    lowered = candidate.candidate_description.lower()
+    for term in critical_terms:
+        assert term in lowered
+    assert "Prefer over execute_code" in candidate.candidate_description
+
+
+def test_candidate_generation_preserves_safety_operational_terms_without_golden_cases():
+    records = [
+        ToolInventoryRecord(
+            name="browser_cdp",
+            toolset="browser-cdp",
+            description=(
+                "Send raw CDP commands for browser escape hatches. "
+                + "Detailed usage notes. " * 20
+                + "Do NOT use this as the default browser path. Never bypass safer browser tools when they fit."
+            ),
+            schema={"parameters": {"properties": {}}},
+        )
+    ]
+
+    candidates = generate_candidate_descriptions(records, cases=[], max_description_chars=240)
+
+    candidate = candidates[0]
+    assert len(candidate.candidate_description) <= 240
+    lowered = candidate.candidate_description.lower()
+    assert "do not" in lowered
+    assert "never" in lowered
+
+
 def test_candidate_generation_normalizes_overlong_parameter_descriptions_before_reporting(tmp_path):
     long_parameter_description = " ".join(["Long parameter guidance for candidate-only report normalization."] * 8)
     records = [
