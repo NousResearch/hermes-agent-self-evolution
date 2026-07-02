@@ -19,6 +19,9 @@ datasets/**/*.json
 snapshots/
 *.pkl
 
+# Evolution runs (timestamped output dirs — kept locally, not in VCS)
+output/
+
 # IDE
 .idea/
 .vscode/

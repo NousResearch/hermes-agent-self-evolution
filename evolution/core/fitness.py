@@ -104,11 +104,31 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name: str = None,
+    pred_trace=None,
+) -> float:
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
+    This is what gets passed to dspy.GEPA(metric=...) and dspy.MIPROv2.
     Returns a float 0-1 score.
+
+    NOTE: GEPA's adapter calls this with the signature
+        (gold, pred, trace, pred_name, pred_trace)
+    where the first two are positional ``example`` and ``prediction``. To
+    stay backward-compatible with the simpler
+        (example, prediction, trace=None)
+    shape used by MIPROv2 and other DSPy optimizers, we declare the extra
+    GEPA-specific parameters as keyword-only with defaults — they just get
+    ignored. Don't drop the defaults: removing them turns any MIPROv2
+    invocation into a TypeError.
+
+    Why not just *args/**kwargs? Because GEPA inspects the signature to
+    figure out where ``trace`` ends and the GEPA-specific args begin.
+    Positional-or-keyword with defaults is the cleanest compatible shape.
     """
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""

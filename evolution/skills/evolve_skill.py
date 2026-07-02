@@ -3,9 +3,29 @@
 Usage:
     python -m evolution.skills.evolve_skill --skill github-code-review --iterations 10
     python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
+
+Provider selection:
+    The --provider flag chooses the LLM backend. Three values are supported:
+
+    - "openai" (default): use OPENAI_API_KEY / OPENAI_BASE_URL env vars, model
+      names prefixed with "openai/". Works against any OpenAI-compatible
+      endpoint.
+    - "minimax": use MINIMAX_API_KEY from env (falls back to OPENAI_API_KEY),
+      set the base URL to https://api.minimax.io/v1, and pass through
+      MiniMax-flavored model names like "MiniMax-M2.7-highspeed". This is the
+      provider wired into the project owner's setup.
+    - Anything else: used verbatim as the dspy.LM model string (e.g.
+      "anthropic/claude-sonnet-4"), assuming the user has configured the
+      relevant litellm provider keys.
+
+    The MiniMax branch exists because MiniMax's v1 endpoint is
+    OpenAI-compatible but ships only its own model names, not generic ones —
+    so we can't just rename MINIMAX_API_KEY to OPENAI_API_KEY and call it a
+    day. We also have to translate model strings.
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -33,6 +53,70 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+# Mapping from generic "openai/<name>" strings (as used in
+# EvolutionConfig defaults) to MiniMax's actual model IDs. We need this
+# because the v1 endpoint only accepts MiniMax's own model names — passing
+# "openai/gpt-4.1" returns a 404 even though the wire format is OpenAI-
+# compatible.
+_OPENAI_TO_MINIMAX_MODEL = {
+    "openai/gpt-4.1": "openai/MiniMax-M3",
+    "openai/gpt-4.1-mini": "openai/MiniMax-M2.7-highspeed",
+    "openai/gpt-4.1-nano": "openai/MiniMax-M2.5",
+}
+
+
+def _resolve_model_string(model: str, provider: str) -> str:
+    """Translate an EvolutionConfig-style model string for the chosen provider.
+
+    For provider="minimax", rewrite the OpenAI default names to MiniMax
+    equivalents. Pass through anything else verbatim so users can still
+    pin an exact MiniMax model if they want (e.g. "MiniMax-M3" or
+    "MiniMax-Text-01" — but note the latter is only chat, not reasoning).
+    """
+    if provider != "minimax":
+        return model
+    if model in _OPENAI_TO_MINIMAX_MODEL:
+        return _OPENAI_TO_MINIMAX_MODEL[model]
+    # If the caller already wrote "openai/MiniMax-M2.7" or "MiniMax-M2.7",
+    # pass through — we just need to make sure the base URL is set.
+    return model
+
+
+def _configure_provider_env(provider: str) -> None:
+    """Set OPENAI_API_KEY / OPENAI_BASE_URL for the chosen provider.
+
+    DSPy + litellm read these env vars when constructing the LM client.
+    Setting them here (not in the caller) keeps the evolver's surface
+    simple — callers just pick --provider and the env wiring follows.
+
+    For MiniMax we read MINIMAX_API_KEY and override the base URL to the
+    v1 endpoint (which is OpenAI-compatible; the anthropic endpoint at
+    /anthropic is NOT compatible with dspy.LM's OpenAI-format adapter).
+    """
+    if provider == "minimax":
+        key = os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not key:
+            console.print(
+                "[red]✗ provider=minimax requires MINIMAX_API_KEY (or "
+                "OPENAI_API_KEY) in env[/red]"
+            )
+            sys.exit(2)
+        os.environ["OPENAI_API_KEY"] = key
+        # /v1 is the OpenAI-compatible surface; /anthropic is anthropic-format.
+        os.environ["OPENAI_BASE_URL"] = os.getenv(
+            "MINIMAX_BASE_URL", "https://api.minimax.io/v1"
+        )
+    # For provider="openai" (default) we assume the caller already set
+    # OPENAI_API_KEY / OPENAI_BASE_URL — no override needed.
+    elif provider == "openai":
+        if not os.getenv("OPENAI_API_KEY"):
+            console.print(
+                "[red]✗ provider=openai requires OPENAI_API_KEY in env[/red]"
+            )
+            sys.exit(2)
+    # Custom string providers: trust the caller.
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -43,20 +127,48 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    provider: str = "openai",
 ):
-    """Main evolution function — orchestrates the full optimization loop."""
+    """Main evolution function — orchestrates the full optimization loop.
+
+    The ``provider`` argument selects the LLM backend. See module docstring
+    for the three supported values. We translate the EvolutionConfig's
+    OpenAI-flavored default model strings into provider-appropriate names
+    here, so callers can keep using the natural ``--optimizer-model`` /
+    ``--eval-model`` flags without having to know which provider is wired
+    up.
+    """
+
+    # Configure provider env FIRST, before constructing EvolutionConfig, so
+    # any LM objects created downstream pick up the right base URL / key.
+    _configure_provider_env(provider)
+
+    # Translate model strings for the chosen provider (e.g. gpt-4.1 →
+    # MiniMax-M3 when provider=minimax). We resolve against the user's
+    # explicit --optimizer-model / --eval-model args first so they can
+    # still pin a specific MiniMax model.
+    resolved_optimizer = _resolve_model_string(optimizer_model, provider)
+    resolved_eval = _resolve_model_string(eval_model, provider)
+
+    if resolved_optimizer != optimizer_model or resolved_eval != eval_model:
+        console.print(
+            f"  [dim]Provider '{provider}': rewrote model strings[/dim]\n"
+            f"    optimizer: {optimizer_model} → {resolved_optimizer}\n"
+            f"    eval:      {eval_model} → {resolved_eval}"
+        )
 
     config = EvolutionConfig(
         hermes_agent_path=resolve_hermes_agent_path(hermes_repo),
         iterations=iterations,
-        optimizer_model=optimizer_model,
-        eval_model=eval_model,
-        judge_model=eval_model,  # Use same model for dataset generation
+        optimizer_model=resolved_optimizer,
+        eval_model=resolved_eval,
+        judge_model=resolved_eval,  # Use same model for dataset generation
         run_pytest=run_tests,
     )
 
     # ── 1. Find and load the skill ──────────────────────────────────────
     console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]\n")
+    console.print(f"  Provider: {provider} (base URL: {os.getenv('OPENAI_BASE_URL', '<default>')})")
 
     skill_path = find_skill(skill_name, config.hermes_agent_path)
     if not skill_path:
@@ -118,7 +230,11 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    # Validate the full raw skill (frontmatter + body), not just the body.
+    # _check_skill_structure looks for the YAML frontmatter at the top of
+    # the text; passing only the body always fails the frontmatter check
+    # even when the baseline itself is structurally correct.
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -133,11 +249,14 @@ def evolve(
     # ── 4. Set up DSPy + GEPA optimizer ─────────────────────────────────
     console.print(f"\n[bold]Configuring optimizer[/bold]")
     console.print(f"  Optimizer: GEPA ({iterations} iterations)")
-    console.print(f"  Optimizer model: {optimizer_model}")
-    console.print(f"  Eval model: {eval_model}")
+    console.print(f"  Optimizer model: {config.optimizer_model}")
+    console.print(f"  Eval model: {config.eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy with the eval model as the global default. Any
+    # unconfigured LM downstream (e.g. MIPROv2's data-aware proposer) will
+    # pick this up rather than falling back to a hardcoded "gpt-4.1-mini"
+    # that doesn't exist on MiniMax.
+    lm = dspy.LM(config.eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -153,9 +272,27 @@ def evolve(
     start_time = time.time()
 
     try:
+        # Pass a reflection_lm to GEPA so it uses our chosen model for
+        # the reflective mutation prompts. Without this, GEPA falls back
+        # to dspy.settings.lm (already configured) but also defaults to
+        # "gpt-4.1-mini" for some internal calls — which 404s on MiniMax.
+        # Constructing an explicit reflection_lm makes the wiring obvious
+        # and provider-portable.
+        #
+        # GEPA's budget arg is `max_full_evals` (not `max_steps` — that was
+        # the older GEPA API). Each "full eval" runs the metric across the
+        # whole valset, which gives a real budget ≈ `iterations * valset_size`
+        # LM calls. We also cap with `max_metric_calls` as a hard ceiling
+        # so the run can't run away even if valset is large.
+        reflection_lm = dspy.LM(config.optimizer_model)
+        # GEPA accepts exactly one of {max_full_evals, max_metric_calls, auto}.
+        # Pass max_full_evals so a tiny iterations budget (e.g. 3) doesn't
+        # blow up into thousands of metric calls. Drop max_metric_calls
+        # entirely — it causes GEPA to refuse to start with a config error.
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -185,7 +322,14 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    # Use the reassembled full skill (frontmatter + body) for validation —
+    # _check_skill_structure looks for the YAML frontmatter block at the
+    # top of the text, and that lives in frontmatter, not body. Without
+    # this the check always reports the frontmatter as "missing" and
+    # gates every deploy, even when the artifact is structurally fine.
+    evolved_constraints = validator.validate_all(
+        evolved_full, "skill", baseline_text=skill["raw"]
+    )
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -303,7 +447,10 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--provider", default="openai", type=click.Choice(["openai", "minimax"], case_sensitive=False),
+              help="LLM backend. 'openai' uses OPENAI_API_KEY/OPENAI_BASE_URL env vars; "
+                   "'minimax' uses MINIMAX_API_KEY and rewrites model strings to MiniMax equivalents.")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, provider):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -315,6 +462,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        provider=provider,
     )
 
 

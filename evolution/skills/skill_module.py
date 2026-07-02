@@ -5,11 +5,28 @@ where the skill text is the optimizable parameter. GEPA can then
 mutate the skill text and evaluate the results.
 """
 
+import os
 import re
 from pathlib import Path
 from typing import Optional
 
 import dspy
+
+
+def _iter_skill_files(skills_dir: Path):
+    """Recursively yield every SKILL.md under skills_dir, following symlinks.
+
+    ``Path.rglob`` in Python <3.12 doesn't accept ``follow_symlinks``, and
+    even on 3.12+ the default is False — which silently skips user-installed
+    skills that are symlinked into the framework's ``skills/`` tree. We use
+    ``os.walk(..., followlinks=True)`` (stdlib kwarg is ``followlinks``, not
+    ``follow_symlinks`` — that one's pathlib) so the evolver can find any
+    skill the runtime can find, regardless of how it's wired up.
+    """
+    for root, _dirs, files in os.walk(skills_dir, followlinks=True):
+        for name in files:
+            if name == "SKILL.md":
+                yield Path(root) / name
 
 
 def load_skill(skill_path: Path) -> dict:
@@ -65,12 +82,12 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
         return None
 
     # Direct match: skills/<category>/<skill_name>/SKILL.md
-    for skill_md in skills_dir.rglob("SKILL.md"):
+    for skill_md in _iter_skill_files(skills_dir):
         if skill_md.parent.name == skill_name:
             return skill_md
 
     # Fuzzy match: check the name field in frontmatter
-    for skill_md in skills_dir.rglob("SKILL.md"):
+    for skill_md in _iter_skill_files(skills_dir):
         try:
             content = skill_md.read_text()[:500]
             if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
