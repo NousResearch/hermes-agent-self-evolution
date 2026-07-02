@@ -332,22 +332,60 @@ def _parse_copilot_events(
 
 
 class HermesSessionImporter:
-    """Import conversations from Hermes Agent session files.
+    """Import conversations from Hermes Agent session history.
 
-    Hermes stores session transcripts as JSON files in ~/.hermes/sessions/.
-    Each file contains an OpenAI-format message list with user, assistant,
-    and tool messages — providing richer signal than Claude Code (user-only)
-    or Copilot (user+assistant without tool context).
+    Modern Hermes stores all session transcripts in a SQLite database
+    (``state.db``) with a ``messages`` table (role/content/session_id/timestamp)
+    — NOT as per-session JSON files. Older/alternate installs may still expose
+    JSON files under ``<hermes_home>/sessions/*.json``. This importer reads the
+    SQLite store first (the current, canonical location) and falls back to the
+    legacy JSON layout so both work.
 
-    This mines user messages paired with the assistant's final response,
-    giving the LLM judge both the task and how it was actually handled.
+    It mines user messages paired with the assistant's next response (skipping
+    intervening tool messages), giving the LLM judge both the task and how it
+    was actually handled — richer signal than Claude Code (user-only) or
+    Copilot (user+assistant, no tool context).
     """
 
+    # Legacy JSON layout (kept for back-compat / non-standard installs).
     SESSION_DIR = Path.home() / ".hermes" / "sessions"
 
     @staticmethod
+    def _resolve_state_db() -> Optional[Path]:
+        """Locate the Hermes SQLite state store across platforms.
+
+        Priority:
+          1. ``HERMES_STATE_DB`` env var (explicit override)
+          2. ``HERMES_HOME``/state.db if HERMES_HOME is set
+          3. Windows: ``%LOCALAPPDATA%/hermes/state.db`` (and the common
+             ``~/AppData/Local/hermes/state.db``)
+          4. ``~/.hermes/state.db`` (Linux/macOS standard install)
+        """
+        import os
+
+        candidates = []
+        env_db = os.getenv("HERMES_STATE_DB")
+        if env_db:
+            candidates.append(Path(env_db).expanduser())
+        env_home = os.getenv("HERMES_HOME")
+        if env_home:
+            candidates.append(Path(env_home).expanduser() / "state.db")
+        local_appdata = os.getenv("LOCALAPPDATA")
+        if local_appdata:
+            candidates.append(Path(local_appdata) / "hermes" / "state.db")
+        candidates.append(Path.home() / "AppData" / "Local" / "hermes" / "state.db")
+        candidates.append(Path.home() / ".hermes" / "state.db")
+
+        for db_path in candidates:
+            if db_path.exists():
+                return db_path
+        return None
+
+    @staticmethod
     def extract_messages(limit: int = 0) -> list[dict]:
-        """Read user/assistant pairs from Hermes session files.
+        """Read user/assistant pairs from the Hermes state store.
+
+        Tries the SQLite ``state.db`` first, then the legacy JSON layout.
 
         Args:
             limit: Maximum messages to return (0 = no limit).
@@ -356,6 +394,71 @@ class HermesSessionImporter:
             List of dicts with keys: source, task_input, assistant_response,
             session_id.
         """
+        db_path = HermesSessionImporter._resolve_state_db()
+        if db_path is not None:
+            msgs = HermesSessionImporter._extract_from_sqlite(db_path, limit)
+            if msgs:
+                return msgs
+        # Fall back to the legacy per-session JSON layout.
+        return HermesSessionImporter._extract_from_json(limit)
+
+    @staticmethod
+    def _extract_from_sqlite(db_path: Path, limit: int = 0) -> list[dict]:
+        """Mine user→assistant pairs from the messages table of state.db.
+
+        Walks each session's messages in order, pairing every user message
+        with the next assistant response (skipping tool/system messages). Uses
+        a read-only connection so a live Hermes process holding the DB is never
+        disturbed.
+        """
+        import sqlite3
+
+        messages: list[dict] = []
+        try:
+            # Read-only, immutable-friendly connection; never writes or locks.
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        except sqlite3.Error:
+            return []
+
+        try:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            # Order by session, then message id (chronological within session).
+            cur.execute(
+                "SELECT session_id, role, content FROM messages "
+                "WHERE role IN ('user','assistant') AND content IS NOT NULL "
+                "ORDER BY session_id, id"
+            )
+            pending_user: Optional[str] = None
+            for row in cur:
+                role = row["role"]
+                content = row["content"] or ""
+                if role == "user":
+                    # A new user turn; the previous unpaired user msg is dropped.
+                    text = content.strip()
+                    pending_user = text if len(text) >= 10 and not _contains_secret(text) else None
+                elif role == "assistant" and pending_user is not None:
+                    resp = content.strip()
+                    if resp and not _contains_secret(resp):
+                        messages.append({
+                            "source": "hermes",
+                            "task_input": pending_user,
+                            "assistant_response": resp,
+                            "session_id": row["session_id"],
+                        })
+                        if limit and len(messages) >= limit:
+                            break
+                    pending_user = None
+        except sqlite3.Error:
+            return messages
+        finally:
+            conn.close()
+
+        return messages
+
+    @staticmethod
+    def _extract_from_json(limit: int = 0) -> list[dict]:
+        """Legacy path: read user/assistant pairs from <hermes>/sessions/*.json."""
         if not HermesSessionImporter.SESSION_DIR.exists():
             return []
 

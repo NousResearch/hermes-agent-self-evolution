@@ -468,6 +468,16 @@ class TestCopilotHelpers:
 
 
 class TestHermesSessionImporter:
+    """Legacy JSON-layout path. state.db resolver is neutralized so these
+    exercise the fallback (_extract_from_json) in isolation."""
+
+    @pytest.fixture(autouse=True)
+    def _no_state_db(self, monkeypatch):
+        # Force the SQLite resolver to find nothing so the JSON fallback runs.
+        monkeypatch.setattr(
+            HermesSessionImporter, "_resolve_state_db", staticmethod(lambda: None)
+        )
+
     def test_parses_session_json(self, tmp_path):
         session = {
             "session_id": "test-session",
@@ -508,7 +518,7 @@ class TestHermesSessionImporter:
     def test_filters_secrets(self, tmp_path):
         session = {
             "messages": [
-                {"role": "user", "content": "Set ANTHROPIC_API_KEY=sk-ant-api03-xyz in the env"},
+                {"role": "user", "content": "Set ANTHROPIC_API_KEY=«redacted:sk-…» in the env"},
                 {"role": "assistant", "content": "Done."},
             ],
         }
@@ -554,6 +564,110 @@ class TestHermesSessionImporter:
         with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
             msgs = HermesSessionImporter.extract_messages(limit=3)
         assert len(msgs) == 3
+
+
+class TestHermesSessionImporterSQLite:
+    """SQLite state.db path — the modern, canonical Hermes session store."""
+
+    @staticmethod
+    def _make_db(path, rows):
+        """rows: list of (session_id, role, content) in insertion order."""
+        import sqlite3
+        conn = sqlite3.connect(str(path))
+        conn.execute(
+            "CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "session_id TEXT, role TEXT, content TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO messages (session_id, role, content) VALUES (?,?,?)", rows
+        )
+        conn.commit()
+        conn.close()
+
+    def test_pairs_user_assistant_skipping_tools(self, tmp_path, monkeypatch):
+        db = tmp_path / "state.db"
+        self._make_db(db, [
+            ("s1", "user", "Fix the bug in auth.py"),
+            ("s1", "assistant", None),          # tool-call turn (no content)
+            ("s1", "tool", "file contents"),
+            ("s1", "assistant", "I found the issue and fixed it."),
+            ("s1", "user", "Now run the tests"),
+            ("s1", "assistant", "All 42 tests passed."),
+        ])
+        monkeypatch.setattr(HermesSessionImporter, "_resolve_state_db", staticmethod(lambda: db))
+        msgs = HermesSessionImporter.extract_messages()
+        assert len(msgs) == 2
+        assert msgs[0]["task_input"] == "Fix the bug in auth.py"
+        assert msgs[0]["assistant_response"] == "I found the issue and fixed it."
+        assert msgs[0]["source"] == "hermes"
+        assert msgs[0]["session_id"] == "s1"
+        assert msgs[1]["task_input"] == "Now run the tests"
+
+    def test_skips_short_user_messages(self, tmp_path, monkeypatch):
+        db = tmp_path / "state.db"
+        self._make_db(db, [
+            ("s1", "user", "hi"),
+            ("s1", "assistant", "Hello!"),
+        ])
+        monkeypatch.setattr(HermesSessionImporter, "_resolve_state_db", staticmethod(lambda: db))
+        assert HermesSessionImporter.extract_messages() == []
+
+    def test_filters_secrets(self, tmp_path, monkeypatch):
+        db = tmp_path / "state.db"
+        self._make_db(db, [
+            ("s1", "user", "Set ANTHROPIC_API_KEY=«redacted» please here now"),
+            ("s1", "assistant", "Done."),
+        ])
+        monkeypatch.setattr(HermesSessionImporter, "_resolve_state_db", staticmethod(lambda: db))
+        # env var name ANTHROPIC_API_KEY triggers secret filter → dropped
+        assert HermesSessionImporter.extract_messages() == []
+
+    def test_respects_limit(self, tmp_path, monkeypatch):
+        db = tmp_path / "state.db"
+        rows = []
+        for i in range(10):
+            rows.append(("s1", "user", f"Message number {i} with enough text here"))
+            rows.append(("s1", "assistant", f"Reply number {i}"))
+        self._make_db(db, rows)
+        monkeypatch.setattr(HermesSessionImporter, "_resolve_state_db", staticmethod(lambda: db))
+        assert len(HermesSessionImporter.extract_messages(limit=3)) == 3
+
+    def test_unpaired_user_dropped(self, tmp_path, monkeypatch):
+        db = tmp_path / "state.db"
+        self._make_db(db, [
+            ("s1", "user", "A question with no assistant reply following it"),
+            ("s1", "user", "Another question that does get answered here"),
+            ("s1", "assistant", "Here is the answer."),
+        ])
+        monkeypatch.setattr(HermesSessionImporter, "_resolve_state_db", staticmethod(lambda: db))
+        msgs = HermesSessionImporter.extract_messages()
+        assert len(msgs) == 1
+        assert msgs[0]["task_input"] == "Another question that does get answered here"
+
+    def test_sqlite_preferred_over_json(self, tmp_path, monkeypatch):
+        """When state.db yields results, the JSON fallback is not used."""
+        db = tmp_path / "state.db"
+        self._make_db(db, [
+            ("s1", "user", "A real question from the SQLite store"),
+            ("s1", "assistant", "A real answer."),
+        ])
+        # A JSON dir that would yield different data — must be ignored.
+        json_dir = tmp_path / "sessions"
+        json_dir.mkdir()
+        (json_dir / "s.json").write_text(json.dumps(
+            {"messages": [{"role": "user", "content": "JSON path should not run"},
+                          {"role": "assistant", "content": "nope"}]}))
+        monkeypatch.setattr(HermesSessionImporter, "_resolve_state_db", staticmethod(lambda: db))
+        with patch.object(HermesSessionImporter, "SESSION_DIR", json_dir):
+            msgs = HermesSessionImporter.extract_messages()
+        assert len(msgs) == 1
+        assert msgs[0]["task_input"] == "A real question from the SQLite store"
+
+    def test_resolver_finds_nothing_returns_empty(self, tmp_path, monkeypatch):
+        """No state.db and no JSON dir → empty, no crash."""
+        monkeypatch.setattr(HermesSessionImporter, "_resolve_state_db", staticmethod(lambda: None))
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path / "nonexistent"):
+            assert HermesSessionImporter.extract_messages() == []
 
 
 # ── Skill Name Matching ──────────────────────────────────────────────────────
