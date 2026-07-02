@@ -26,15 +26,22 @@ class EvalExample:
     difficulty: str = "medium"  # easy, medium, hard
     category: str = "general"  # Category for stratified eval
     source: str = "synthetic"  # synthetic, sessiondb, golden
+    id: str = ""  # Stable case id for reports and rubric debugging
+    rubric_checks: list[dict] = field(default_factory=list)  # Deterministic strict-rubric checks
 
     def to_dict(self) -> dict:
-        return {
+        payload: dict[str, object] = {
             "task_input": self.task_input,
             "expected_behavior": self.expected_behavior,
             "difficulty": self.difficulty,
             "category": self.category,
             "source": self.source,
         }
+        if self.id:
+            payload["id"] = self.id
+        if self.rubric_checks:
+            payload["rubric_checks"] = self.rubric_checks
+        return payload
 
     @classmethod
     def from_dict(cls, d: dict) -> "EvalExample":
@@ -80,8 +87,13 @@ class EvalDataset:
         data = getattr(self, split)
         return [
             dspy.Example(
+                id=ex.id,
                 task_input=ex.task_input,
                 expected_behavior=ex.expected_behavior,
+                difficulty=ex.difficulty,
+                category=ex.category,
+                source=ex.source,
+                rubric_checks=ex.rubric_checks,
             ).with_inputs("task_input")
             for ex in data
         ]
@@ -224,7 +236,7 @@ class GoldenDatasetLoader:
     @staticmethod
     def load(path: Path) -> EvalDataset:
         """Load a golden dataset. If no splits exist, auto-split the single file."""
-        if (path / "train.jsonl").exists():
+        if any((path / f"{split}.jsonl").exists() for split in ["train", "val", "holdout"]):
             return EvalDataset.load(path)
 
         # Single file — auto-split
@@ -248,3 +260,98 @@ class GoldenDatasetLoader:
             val=examples[n_train:n_train + n_val],
             holdout=examples[n_train + n_val:],
         )
+
+
+def expand_objective_examples(dataset: EvalDataset) -> tuple[EvalDataset, dict]:
+    """Expand train/val objective pressure from existing strict rubric checks.
+
+    The expansion intentionally uses only train and validation rows. Holdout rows
+    are copied unchanged so the strict final gate remains an unseen evaluation
+    slice. Each generated row focuses on one deterministic rubric check while
+    preserving the original row context.
+    """
+
+    expanded_train, added_train = _expand_split_objective_examples(dataset.train)
+    expanded_val, added_val = _expand_split_objective_examples(dataset.val)
+    expanded = EvalDataset(
+        train=expanded_train,
+        val=expanded_val,
+        holdout=list(dataset.holdout),
+    )
+    metadata = {
+        "enabled": True,
+        "source_splits": ["train", "val"],
+        "original_train_examples": len(dataset.train),
+        "original_val_examples": len(dataset.val),
+        "original_holdout_examples": len(dataset.holdout),
+        "added_train_examples": added_train,
+        "added_val_examples": added_val,
+        "holdout_unchanged": expanded.holdout == dataset.holdout,
+    }
+    return expanded, metadata
+
+
+def _expand_split_objective_examples(examples: list[EvalExample]) -> tuple[list[EvalExample], int]:
+    expanded = list(examples)
+    added = 0
+    for example in examples:
+        for check in example.rubric_checks:
+            if not isinstance(check, dict):
+                continue
+            check_id = _safe_objective_check_id(check, added)
+            description = str(check.get("description") or check.get("id") or "strict rubric check")
+            cues = _objective_cues_from_check(check)
+            expanded.append(
+                EvalExample(
+                    id=f"{example.id or 'example'}::objective::{check_id}",
+                    task_input=(
+                        f"{example.task_input}\n\n"
+                        f"Objective focus: satisfy the strict rubric check `{check_id}` ({description}) "
+                        "without weakening the rest of the review workflow."
+                    ),
+                    expected_behavior=(
+                        f"{example.expected_behavior}\n\n"
+                        f"Rubric focus: {description}. Preserve this requirement explicitly."
+                        + (f" Useful literal cues: {', '.join(cues)}." if cues else "")
+                    ),
+                    difficulty=example.difficulty,
+                    category=f"{example.category}:objective",
+                    source="objective_expansion",
+                    rubric_checks=[check],
+                )
+            )
+            added += 1
+    return expanded, added
+
+
+def _safe_objective_check_id(check: dict, fallback_index: int) -> str:
+    raw = str(check.get("id") or check.get("description") or f"check-{fallback_index}").strip().lower()
+    safe = "".join(ch if ch.isalnum() or ch == "_" else "-" for ch in raw).strip("-")
+    return safe or f"check-{fallback_index}"
+
+
+def _objective_cues_from_check(check: dict) -> list[str]:
+    cues: list[str] = []
+    for key in ("pattern_all", "pattern_any"):
+        patterns = check.get(key)
+        if not isinstance(patterns, list | tuple):
+            continue
+        for pattern in patterns:
+            if isinstance(pattern, str) and pattern:
+                cues.append(_simplify_objective_pattern(pattern))
+    return cues[:4]
+
+
+def _simplify_objective_pattern(pattern: str) -> str:
+    value = pattern.strip().strip("^").strip("$")
+    for old, new in {
+        r"\$": "$",
+        r"\.": ".",
+        r"\?": "?",
+        r"\"": '"',
+        r"\\": "",
+        ".?": "",
+        ".*": " ... ",
+    }.items():
+        value = value.replace(old, new)
+    return " ".join(value.split())
