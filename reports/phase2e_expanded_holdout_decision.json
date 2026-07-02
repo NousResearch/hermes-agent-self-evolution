@@ -4,7 +4,7 @@
   "combined_slice": {
     "case_count": 54,
     "category_count": 54,
-    "confusion_pair_count": 88,
+    "confusion_pair_count": 85,
     "confusion_pairs": [
       [
         "browser_back",
@@ -136,10 +136,6 @@
       ],
       [
         "clarify",
-        "send_message"
-      ],
-      [
-        "clarify",
         "terminal"
       ],
       [
@@ -161,10 +157,6 @@
       [
         "computer_use",
         "terminal"
-      ],
-      [
-        "cronjob",
-        "send_message"
       ],
       [
         "cronjob",
@@ -253,14 +245,6 @@
       [
         "search_files",
         "terminal"
-      ],
-      [
-        "send_message",
-        "cronjob"
-      ],
-      [
-        "send_message",
-        "write_file"
       ],
       [
         "session_search",
@@ -308,10 +292,6 @@
       ],
       [
         "text_to_speech",
-        "send_message"
-      ],
-      [
-        "text_to_speech",
         "terminal"
       ],
       [
@@ -352,14 +332,22 @@
       ],
       [
         "write_file",
+        "cronjob"
+      ],
+      [
+        "write_file",
         "patch"
       ],
       [
         "write_file",
         "terminal"
+      ],
+      [
+        "write_file",
+        "todo"
       ]
     ],
-    "expected_tool_count": 29,
+    "expected_tool_count": 28,
     "expected_tools": [
       "browser_back",
       "browser_click",
@@ -382,7 +370,6 @@
       "process",
       "read_file",
       "search_files",
-      "send_message",
       "session_search",
       "terminal",
       "text_to_speech",
@@ -402,7 +389,7 @@
   "default_gate": {
     "case_count": 45,
     "category_count": 45,
-    "confusion_pair_count": 88,
+    "confusion_pair_count": 85,
     "confusion_pairs": [
       [
         "browser_back",
@@ -534,10 +521,6 @@
       ],
       [
         "clarify",
-        "send_message"
-      ],
-      [
-        "clarify",
         "terminal"
       ],
       [
@@ -559,10 +542,6 @@
       [
         "computer_use",
         "terminal"
-      ],
-      [
-        "cronjob",
-        "send_message"
       ],
       [
         "cronjob",
@@ -651,14 +630,6 @@
       [
         "search_files",
         "terminal"
-      ],
-      [
-        "send_message",
-        "cronjob"
-      ],
-      [
-        "send_message",
-        "write_file"
       ],
       [
         "session_search",
@@ -706,10 +677,6 @@
       ],
       [
         "text_to_speech",
-        "send_message"
-      ],
-      [
-        "text_to_speech",
         "terminal"
       ],
       [
@@ -750,14 +717,22 @@
       ],
       [
         "write_file",
+        "cronjob"
+      ],
+      [
+        "write_file",
         "patch"
       ],
       [
         "write_file",
         "terminal"
+      ],
+      [
+        "write_file",
+        "todo"
       ]
     ],
-    "expected_tool_count": 29,
+    "expected_tool_count": 28,
     "expected_tools": [
       "browser_back",
       "browser_click",
@@ -780,7 +755,6 @@
       "process",
       "read_file",
       "search_files",
-      "send_message",
       "session_search",
       "terminal",
       "text_to_speech",

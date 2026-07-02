@@ -81,11 +81,13 @@ def test_default_tool_selection_cases_cover_phase2_quality_slice():
         ("session_search", "web_search"),
         ("terminal", "execute_code"),
         ("terminal", "process"),
-        ("text_to_speech", "send_message"),
+        ("text_to_speech", "write_file"),
         ("video_analyze", "vision_analyze"),
     ):
         assert pair in confusion_pairs
 
+    all_referenced_tools = expected_tools | {tool for _, tool in confusion_pairs}
+    assert "send_message" not in all_referenced_tools
     assert all(confusing_tool != "web" for _, confusing_tool in confusion_pairs)
 
 

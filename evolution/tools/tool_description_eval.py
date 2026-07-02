@@ -338,7 +338,7 @@ def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
         ToolSelectionCase(
             user_request="Schedule a self-contained reminder to check the release feed every two hours.",
             expected_tool="cronjob",
-            confusing_tools=("todo", "terminal", "send_message"),
+            confusing_tools=("todo", "terminal"),
             required_cues=("schedule", "every", "recurring", "job"),
             category="cron-vs-todo",
         ),
@@ -357,11 +357,11 @@ def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
             category="browser-vision-vs-image-file",
         ),
         ToolSelectionCase(
-            user_request="Send this final status update to the configured Discord home channel.",
-            expected_tool="send_message",
-            confusing_tools=("cronjob", "write_file"),
-            required_cues=("send", "discord", "message", "channel"),
-            category="message-send-vs-file",
+            user_request="Prepare a final status update as a complete local Markdown file instead of scheduling or tracking it.",
+            expected_tool="write_file",
+            confusing_tools=("cronjob", "todo"),
+            required_cues=("write", "complete", "local", "markdown", "file"),
+            category="final-status-file-vs-schedule",
         ),
         ToolSelectionCase(
             user_request="Remember that the user prefers release-tag updates as a durable preference.",
@@ -485,7 +485,7 @@ def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
         ToolSelectionCase(
             user_request="Ask me to choose between two deployment targets before taking the irreversible action.",
             expected_tool="clarify",
-            confusing_tools=("terminal", "todo", "send_message"),
+            confusing_tools=("terminal", "todo"),
             required_cues=("ask", "choose", "clarification", "before", "decision"),
             category="clarify-vs-guessing-action",
         ),
@@ -499,7 +499,7 @@ def default_tool_selection_cases() -> tuple[ToolSelectionCase, ...]:
         ToolSelectionCase(
             user_request="Convert this final announcement text into an audio voice memo.",
             expected_tool="text_to_speech",
-            confusing_tools=("send_message", "write_file", "terminal"),
+            confusing_tools=("write_file", "terminal"),
             required_cues=("audio", "voice", "speech", "text", "memo"),
             category="tts-vs-message-send",
         ),

@@ -10,8 +10,8 @@ Candidate-only/no-apply: yes
 - Default gate cases: 45
 - SessionDB holdout cases: 9
 - Combined slice cases: 54
-- Combined expected tools: 29
-- Combined confusion pairs: 88
+- Combined expected tools: 28
+- Combined confusion pairs: 85
 
 ## Coverage delta from holdout
 
