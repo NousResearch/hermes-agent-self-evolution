@@ -13,6 +13,7 @@ import argparse
 import json
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +76,7 @@ def write_real_benchmark_approval_packet(
     """
 
     _require_non_empty("generated_at", generated_at)
+    _validate_budget_limits(max_budget_usd=max_budget_usd, max_budget_krw=max_budget_krw)
     source_path = Path(backfill_report_path).expanduser()
     backfill = _load_backfill(source_path)
     _validate_backfill(backfill)
@@ -220,6 +222,20 @@ def _validate_backfill(backfill: Mapping[str, Any]) -> None:
         raise ValueError("source backfill must not have executed real benchmarks")
     if backfill.get("real_benchmark_execution_approved") is not False:
         raise ValueError("source backfill must not already approve real benchmark execution")
+
+
+def _validate_budget_limits(*, max_budget_usd: int | float | None, max_budget_krw: int | float | None) -> None:
+    for label, value in (
+        ("max_budget_usd", max_budget_usd),
+        ("max_budget_krw", max_budget_krw),
+    ):
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError(f"{label} must be a finite numeric budget limit")
+        if not isfinite(float(value)):
+            raise ValueError("budget limits must be finite")
+
 
 
 def _approval_complete(

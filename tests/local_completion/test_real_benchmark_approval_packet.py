@@ -169,3 +169,36 @@ def test_real_benchmark_approval_packet_can_record_explicit_approval_without_sta
     assert packet["current_authorized_budget_usd"] == 25
     assert packet["approved_runtime_minutes"] == 180
     assert packet["required_next_action"] == "run_real_benchmark_preflight_then_execute_under_packet"
+
+
+@pytest.mark.parametrize(
+    ("max_budget_usd", "max_budget_krw"),
+    [
+        (float("inf"), None),
+        (float("nan"), None),
+        (None, float("inf")),
+        (None, float("nan")),
+    ],
+)
+def test_real_benchmark_approval_packet_rejects_non_finite_budget_limits(
+    tmp_path, max_budget_usd, max_budget_krw
+):
+    backfill_path = tmp_path / "benchmark_gate_backfill.json"
+    backfill_path.write_text(json.dumps(_backfill_report(), indent=2, sort_keys=True) + "\n")
+
+    with pytest.raises(ValueError, match="budget limits must be finite"):
+        write_real_benchmark_approval_packet(
+            backfill_report_path=backfill_path,
+            output_dir=tmp_path / "approval-non-finite-budget",
+            generated_at="2026-07-03T12:50:00+09:00",
+            benchmark_suites=["TBLite", "YC-Bench"],
+            max_budget_usd=max_budget_usd,
+            max_budget_krw=max_budget_krw,
+            max_runtime_minutes=90,
+            network_provider_api_spend_allowed=True,
+            baseline_materialization_allowed=True,
+            current_materialization_allowed=True,
+            human_approval_source="test-human-approval",
+            allowed_write_roots=[str(tmp_path / "approved-output-root")],
+            rollback_plan={"strategy": "delete generated benchmark output root on cancellation"},
+        )

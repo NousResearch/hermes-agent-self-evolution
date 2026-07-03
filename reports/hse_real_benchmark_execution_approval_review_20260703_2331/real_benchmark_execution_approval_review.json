@@ -1,0 +1,154 @@
+{
+  "approval_accepted": false,
+  "approval_complete": false,
+  "approval_rejection_reason": "max_budget_usd and max_budget_krw are non-finite/unbounded values; exact finite budget caps are required before any execution approval can be recorded.",
+  "approval_request_received": true,
+  "approval_statement": "I, Sunwoo, explicitly approve HSE real benchmark execution under the exact limits below.",
+  "approval_statement_present": true,
+  "approved_runtime_minutes": 0,
+  "artifacts": {
+    "approval_review": "real_benchmark_execution_approval_review.json",
+    "approval_review_markdown": "real_benchmark_execution_approval_review.md"
+  },
+  "baseline_materialization_allowed": false,
+  "current_authorized_budget_krw": 0,
+  "current_authorized_budget_usd": 0,
+  "current_materialization_allowed": false,
+  "execution_boundaries": {
+    "active_apply_performed": false,
+    "benchmark_output_written": false,
+    "benchmark_process_started": false,
+    "credential_or_secret_access_performed": false,
+    "cron_mutation_performed": false,
+    "gateway_restart_or_reload_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "provider_or_model_spend_performed": false,
+    "worktree_materialization_performed": false
+  },
+  "execution_ready": false,
+  "execution_started": false,
+  "gate_id": "B0-EAR",
+  "generated_at": "2026-07-03T23:31:40+09:00",
+  "github_policy": "NO_GITHUB_WRITE",
+  "go_no_go_state": {
+    "go_now": false,
+    "no_go_reasons": [
+      "non_finite_budget_limit",
+      "approval_not_accepted",
+      "execution_ready_false",
+      "strict_plan_gate_closed_false"
+    ],
+    "required_correction_before_next_review": "Replace inf budget values with finite numeric caps and resubmit explicit execution approval."
+  },
+  "invalid_fields": {
+    "max_budget_usd_or_krw": {
+      "error": "non_finite_budget_limit",
+      "provided": {
+        "max_budget_krw": "inf",
+        "max_budget_usd": "inf"
+      },
+      "required_correction": "Provide finite numeric caps, e.g. max_budget_usd: 0 for no provider/API spend or a bounded positive number if spend is allowed."
+    }
+  },
+  "network_provider_spend_allowed": false,
+  "phase": "Real Benchmark Explicit Execution Approval Review",
+  "real_benchmark_execution_approved": false,
+  "real_benchmarks_executed": false,
+  "requested_fields": {
+    "allowed_write_roots": [
+      "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310"
+    ],
+    "baseline_materialization_allowed": true,
+    "benchmark_suites": [
+      "TBLite",
+      "YC-Bench",
+      "Phase2 PLAN-scale tool-selection triples"
+    ],
+    "current_materialization_allowed": true,
+    "human_approval_source": {
+      "approval_text": "I explicitly approve HSE real benchmark execution under the exact limits in this message.",
+      "author": "Sunwoo",
+      "channel_context": "SnwEvAH_server / snw-evah / HSE:〔GEPA+DSPy〕",
+      "type": "discord_message"
+    },
+    "max_budget_usd_or_krw": {
+      "max_budget_krw": "inf",
+      "max_budget_usd": "inf"
+    },
+    "max_runtime_minutes": 90,
+    "network_provider_api_spend_allowed": true,
+    "regression_thresholds": {
+      "Phase2 PLAN-scale tool-selection triples": "no_aggregate_or_per_tool_regression_beyond_gate",
+      "TBLite": "within_2_percent_or_better",
+      "YC-Bench": "no_material_regression"
+    },
+    "rollback_plan": {
+      "cleanup_started": false,
+      "delete_future_output_root_if_created": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310",
+      "preserve_preflight_report_artifacts": true,
+      "remove_disposable_worktrees_if_created": true,
+      "rollback_plan_verified": true,
+      "verify_after_cleanup": [
+        "future output root absent or intentionally archived",
+        "disposable baseline/current worktrees absent",
+        "HSE and Hermes git heads unchanged unless committed locally"
+      ]
+    }
+  },
+  "schema_version": "hse-real-benchmark-execution-approval-review-v1",
+  "source_state": {
+    "approval_packet": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_real_benchmark_approval_packet_20260703_1250/real_benchmark_approval_packet.json",
+      "sha256": "96ae671fec53bc8d7ab2d97c58df00565a7295112b7da414da1b92779ec0e6ec",
+      "state": {
+        "approval_complete": false,
+        "approved_runtime_minutes": null,
+        "current_authorized_budget_usd": 0,
+        "execution_ready": null,
+        "execution_started": false,
+        "github_policy": null,
+        "real_benchmark_execution_approved": false,
+        "real_benchmarks_executed": false,
+        "status": "AWAITING_EXPLICIT_BENCHMARK_APPROVAL",
+        "strict_plan_gate_closed": null
+      }
+    },
+    "latest_user_update": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_real_benchmark_approval_fields_update_20260703_2315/real_benchmark_approval_fields_update.json",
+      "sha256": "2477aee37c1fc1a92ae8444aa04e9c36e9f2a074992dd5fee3d1931d28a3d2ff",
+      "state": {
+        "approval_complete": false,
+        "approved_runtime_minutes": 0,
+        "current_authorized_budget_usd": 0,
+        "execution_ready": false,
+        "execution_started": false,
+        "github_policy": "NO_GITHUB_WRITE",
+        "real_benchmark_execution_approved": false,
+        "real_benchmarks_executed": false,
+        "status": "APPROVAL_FIELDS_UPDATE_RECORDED_NOT_EXECUTABLE",
+        "strict_plan_gate_closed": false
+      }
+    },
+    "preflight": {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_real_benchmark_preflight_20260703_1310/real_benchmark_preflight.json",
+      "sha256": "b19d5a9d2d4823f2f358b0dee3fcf55ffc0ce2ea63f6806fac1ffdc35533a46c",
+      "state": {
+        "approval_complete": false,
+        "approved_runtime_minutes": null,
+        "current_authorized_budget_usd": 0,
+        "execution_ready": false,
+        "execution_started": false,
+        "github_policy": "NO_GITHUB_WRITE",
+        "real_benchmark_execution_approved": false,
+        "real_benchmarks_executed": false,
+        "status": "PREFLIGHT_RECORDED_NOT_EXECUTABLE",
+        "strict_plan_gate_closed": false
+      }
+    }
+  },
+  "status": "BLOCKED_NON_FINITE_BUDGET_LIMIT",
+  "strict_plan_gate_closed": false,
+  "summary": "Explicit execution approval request received but rejected fail-closed because max_budget_usd/max_budget_krw were supplied as inf, which is not a finite exact limit.",
+  "target": "strict-plan-real-benchmark-execution-approval-review"
+}
