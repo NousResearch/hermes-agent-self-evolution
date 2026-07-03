@@ -1,0 +1,280 @@
+{
+  "apply_ready": false,
+  "approval_complete": false,
+  "approval_draft_complete": true,
+  "approved_runtime_minutes": 0,
+  "artifacts": {
+    "approval_fields_draft": "real_benchmark_approval_fields_draft.json",
+    "approval_fields_markdown": "real_benchmark_approval_fields_draft.md",
+    "approval_packet_snapshot": "inputs/real_benchmark_approval_packet.json",
+    "preflight_snapshot": "inputs/real_benchmark_preflight.json"
+  },
+  "baseline_materialization_allowed": false,
+  "blocked_by": [
+    "awaiting_explicit_human_benchmark_approval",
+    "max_budget_usd_or_krw",
+    "max_runtime_minutes",
+    "network_provider_api_spend_allowed",
+    "baseline_materialization_allowed",
+    "current_materialization_allowed",
+    "human_approval_source",
+    "allowed_write_roots",
+    "rollback_plan"
+  ],
+  "candidate_only": true,
+  "current_authorized_budget_krw": 0,
+  "current_authorized_budget_usd": 0,
+  "current_materialization_allowed": false,
+  "draft_approval_fields": {
+    "allowed_write_roots": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310"
+      ],
+      "conservative_default": [],
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "An approved write root permits benchmark outputs to be created there in a later run.",
+        "The conservative default is an empty list, which blocks execution."
+      ],
+      "source": "preflight.write_root_guard.allowed_write_roots"
+    },
+    "baseline_materialization_allowed": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": false,
+      "conservative_default": false,
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "True would allow disposable baseline worktree creation.",
+        "False means the baseline worktree plan remains only a plan."
+      ],
+      "source": "preflight.baseline_materialization_plan"
+    },
+    "benchmark_suites": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": [
+        "TBLite",
+        "YC-Bench",
+        "Phase2 PLAN-scale tool-selection triples"
+      ],
+      "conservative_default": [
+        "TBLite",
+        "YC-Bench",
+        "Phase2 PLAN-scale tool-selection triples"
+      ],
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "Changing suites changes benchmark scope, runtime, and comparability.",
+        "Keeping suites from the packet does not authorize execution by itself."
+      ],
+      "source": "approval_packet.requested_benchmark_suites"
+    },
+    "current_materialization_allowed": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": false,
+      "conservative_default": false,
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "True would allow disposable current worktree creation.",
+        "False means the current worktree plan remains only a plan."
+      ],
+      "source": "preflight.current_materialization_plan"
+    },
+    "human_approval_source": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": null,
+      "conservative_default": null,
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "A future approval source must cite an explicit Sunwoo message or approved artifact label.",
+        "This draft and rec-action message are not execution approval."
+      ],
+      "source": "future_explicit_sunwoo_message_required"
+    },
+    "max_budget_usd_or_krw": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": null,
+      "conservative_default": {
+        "max_budget_krw": 0,
+        "max_budget_usd": 0
+      },
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "Any nonzero budget can permit provider/model/API spend.",
+        "Sunwoo must supply an explicit capped amount before execution."
+      ],
+      "source": "conservative_default_zero_spend"
+    },
+    "max_runtime_minutes": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": null,
+      "conservative_default": 0,
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "A positive runtime limit bounds local resource use and hung benchmark risk.",
+        "Zero minutes means execution remains impossible."
+      ],
+      "source": "conservative_default_zero_runtime"
+    },
+    "network_provider_api_spend_allowed": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": false,
+      "conservative_default": false,
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "True would allow network/provider/API spend surfaces.",
+        "False preserves local-only no-spend behavior."
+      ],
+      "source": "fail_closed_network_spend_boundary"
+    },
+    "regression_thresholds": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": {
+        "Phase2 PLAN-scale tool-selection triples": "no_aggregate_or_per_tool_regression_beyond_gate",
+        "TBLite": "within_2_percent_or_better",
+        "YC-Bench": "no_material_regression"
+      },
+      "conservative_default": {
+        "Phase2 PLAN-scale tool-selection triples": "no_aggregate_or_per_tool_regression_beyond_gate",
+        "TBLite": "within_2_percent_or_better",
+        "YC-Bench": "no_material_regression"
+      },
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "Thresholds define what counts as benchmark regression.",
+        "They should not be loosened to manufacture a pass."
+      ],
+      "source": "approval_packet.regression_thresholds"
+    },
+    "rollback_plan": {
+      "approved_for_execution": false,
+      "candidate_for_human_review": {
+        "cleanup_started": false,
+        "delete_future_output_root_if_created": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310",
+        "preserve_preflight_report_artifacts": true,
+        "remove_disposable_worktrees_if_created": true,
+        "rollback_plan_verified": true,
+        "verify_after_cleanup": [
+          "future output root absent or intentionally archived",
+          "disposable baseline/current worktrees absent",
+          "HSE and Hermes git heads unchanged unless committed locally"
+        ]
+      },
+      "conservative_default": null,
+      "requires_explicit_human_approval": true,
+      "risk_notes": [
+        "Rollback must remove disposable worktrees and any future benchmark output root if created.",
+        "A rollback candidate is not accepted until Sunwoo approves it explicitly."
+      ],
+      "source": "preflight.rollback_cleanup_plan"
+    }
+  },
+  "draft_notice": "This is not approval to execute. It is a conservative human-review draft only.",
+  "draft_only": true,
+  "execution_boundaries": {
+    "active_apply_performed": false,
+    "benchmark_output_written": false,
+    "benchmark_process_started": false,
+    "credential_or_secret_access_performed": false,
+    "cron_mutation_performed": false,
+    "gateway_restart_or_reload_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "provider_or_model_spend_performed": false,
+    "worktree_materialization_performed": false
+  },
+  "execution_ready": false,
+  "execution_started": false,
+  "future_execution_requires_explicit_human_go": true,
+  "gate_id": "B0-AFD",
+  "generated_at": "2026-07-03T13:35:03+0900",
+  "github": {
+    "merge_performed": false,
+    "pr_created": false,
+    "publication_deferred": true,
+    "push_performed": false,
+    "queried": false
+  },
+  "github_policy": "NO_GITHUB_WRITE",
+  "go_no_go_state": {
+    "go_now": false,
+    "next_gate_required_before_execution": "explicit_benchmark_approval_then_execution_preflight_or_run",
+    "no_go_reasons": [
+      "awaiting_explicit_human_benchmark_approval",
+      "max_budget_usd_or_krw",
+      "max_runtime_minutes",
+      "network_provider_api_spend_allowed",
+      "baseline_materialization_allowed",
+      "current_materialization_allowed",
+      "human_approval_source",
+      "allowed_write_roots",
+      "rollback_plan"
+    ]
+  },
+  "human_review_decision_template": {
+    "approval_source_placeholder": null,
+    "decision": "do_not_execute_yet",
+    "if_approving_later_required_statement": "Sunwoo explicitly approves the named benchmark suites, budget, runtime, network/provider spend, baseline/current materialization, allowed write roots, rollback plan, and human approval source for a separate later execution gate."
+  },
+  "network_provider_spend_allowed": false,
+  "phase": "Real Benchmark Approval Fields Draft",
+  "real_benchmark_execution_approved": false,
+  "real_benchmarks_executed": false,
+  "required_approval_fields": [
+    "benchmark_suites",
+    "max_budget_usd_or_krw",
+    "max_runtime_minutes",
+    "network_provider_api_spend_allowed",
+    "baseline_materialization_allowed",
+    "current_materialization_allowed",
+    "regression_thresholds",
+    "allowed_write_roots",
+    "rollback_plan",
+    "human_approval_source"
+  ],
+  "safety_invariants": {
+    "active_prompt_modified": false,
+    "active_runtime_mutation": false,
+    "active_skill_modified": false,
+    "active_tool_schema_modified": false,
+    "credentials_accessed": false,
+    "cron_jobs_created": false,
+    "deployment_performed": false,
+    "external_publication_performed": false,
+    "gateway_restart_or_reload": false,
+    "network_calls_performed": false
+  },
+  "schema_version": "hse-real-benchmark-approval-fields-draft-v1",
+  "source_approval_packet": {
+    "approval_complete": false,
+    "execution_started": false,
+    "missing_approval_fields": [
+      "max_budget_usd_or_krw",
+      "max_runtime_minutes",
+      "network_provider_api_spend_allowed",
+      "baseline_materialization_allowed",
+      "current_materialization_allowed",
+      "human_approval_source",
+      "allowed_write_roots",
+      "rollback_plan"
+    ],
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_real_benchmark_approval_packet_20260703_1250/real_benchmark_approval_packet.json",
+    "real_benchmarks_executed": false,
+    "sha256": "96ae671fec53bc8d7ab2d97c58df00565a7295112b7da414da1b92779ec0e6ec",
+    "status": "AWAITING_EXPLICIT_BENCHMARK_APPROVAL"
+  },
+  "source_preflight": {
+    "execution_ready": false,
+    "execution_started": false,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_real_benchmark_preflight_20260703_1310/real_benchmark_preflight.json",
+    "preflight_passed": true,
+    "real_benchmarks_executed": false,
+    "sha256": "b19d5a9d2d4823f2f358b0dee3fcf55ffc0ce2ea63f6806fac1ffdc35533a46c",
+    "status": "PREFLIGHT_RECORDED_NOT_EXECUTABLE",
+    "strict_plan_gate_closed": false
+  },
+  "status": "APPROVAL_FIELDS_DRAFT_RECORDED_NOT_EXECUTABLE",
+  "strict_plan_gate_closed": false,
+  "summary": "Conservative approval fields draft recorded; execution remains unapproved and blocked.",
+  "target": "strict-plan-real-benchmark-approval-fields-draft"
+}
