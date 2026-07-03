@@ -171,6 +171,51 @@ def test_real_benchmark_approval_packet_can_record_explicit_approval_without_sta
     assert packet["required_next_action"] == "run_real_benchmark_preflight_then_execute_under_packet"
 
 
+def test_real_benchmark_approval_packet_accepts_explicit_local_only_zero_budget_approval(tmp_path):
+    backfill_path = tmp_path / "benchmark_gate_backfill.json"
+    backfill_path.write_text(json.dumps(_backfill_report(), indent=2, sort_keys=True) + "\n")
+
+    result = write_real_benchmark_approval_packet(
+        backfill_report_path=backfill_path,
+        output_dir=tmp_path / "approval-local-only",
+        generated_at="2026-07-03T23:47:29+09:00",
+        benchmark_suites=["TBLite", "YC-Bench", "Phase2 PLAN-scale tool-selection triples"],
+        max_budget_usd=0,
+        max_budget_krw=0,
+        max_runtime_minutes=90,
+        network_provider_api_spend_allowed=False,
+        baseline_materialization_allowed=True,
+        current_materialization_allowed=True,
+        human_approval_source="discord_message:Sunwoo:HSE finite local-only approval",
+        allowed_write_roots=[str(tmp_path / "hse-real-benchmark" / "real-run-20260703_1310")],
+        rollback_plan={
+            "delete_future_output_root_if_created": str(tmp_path / "hse-real-benchmark" / "real-run-20260703_1310"),
+            "remove_disposable_worktrees_if_created": True,
+            "rollback_plan_verified": True,
+        },
+    )
+
+    packet = json.loads(Path(result["approval_packet_path"]).read_text())
+    safety = json.loads(Path(result["safety_review_path"]).read_text())
+    assert packet["status"] == "APPROVAL_RECORDED_NOT_EXECUTED"
+    assert packet["missing_approval_fields"] == []
+    assert packet["approval_complete"] is True
+    assert packet["real_benchmark_execution_approved"] is True
+    assert packet["execution_started"] is False
+    assert packet["real_benchmarks_executed"] is False
+    assert packet["current_authorized_budget_usd"] == 0
+    assert packet["current_authorized_budget_krw"] == 0
+    assert packet["approved_runtime_minutes"] == 90
+    assert packet["approval_form"]["network_provider_api_spend_allowed"] is False
+    assert packet["network_provider_spend_allowed"] is False
+    assert packet["baseline_materialization_allowed"] is True
+    assert packet["current_materialization_allowed"] is True
+    assert safety["status"] == "PASS_APPROVAL_RECORDED_NOT_EXECUTED"
+    assert safety["blockers"] == []
+    assert safety["packet_approved_for_execution"] is True
+    assert packet["required_next_action"] == "run_real_benchmark_preflight_then_execute_under_packet"
+
+
 @pytest.mark.parametrize(
     ("max_budget_usd", "max_budget_krw"),
     [

@@ -1,0 +1,106 @@
+{
+  "apply_ready": false,
+  "approval_complete": true,
+  "approved_runtime_minutes": 90,
+  "artifacts": {
+    "readiness_markdown": "real_benchmark_execution_readiness.md",
+    "readiness_report": "real_benchmark_execution_readiness.json"
+  },
+  "benchmark_suites": [
+    "TBLite",
+    "YC-Bench",
+    "Phase2 PLAN-scale tool-selection triples"
+  ],
+  "blocked_by": [
+    "missing_preview_runner_module"
+  ],
+  "candidate_only": true,
+  "current_authorized_budget_krw": 0,
+  "current_authorized_budget_usd": 0,
+  "execution_boundaries": {
+    "active_apply_performed": false,
+    "benchmark_output_written": false,
+    "benchmark_process_started": false,
+    "credential_or_secret_access_performed": false,
+    "cron_mutation_performed": false,
+    "gateway_restart_or_reload_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "provider_or_model_spend_performed": false,
+    "worktree_materialization_performed": false
+  },
+  "execution_go": false,
+  "execution_started": false,
+  "gate_id": "B0-RER",
+  "generated_at": "2026-07-03T23:50:00+09:00",
+  "github": {
+    "merge_performed": false,
+    "pr_created": false,
+    "publication_deferred": true,
+    "push_performed": false,
+    "queried": false
+  },
+  "github_policy": "NO_GITHUB_WRITE",
+  "network_provider_spend_allowed": false,
+  "output_root": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310",
+  "output_root_exists_now": false,
+  "phase": "Real Benchmark Execution Readiness Review",
+  "preflight_execution_ready": true,
+  "preflight_passed": true,
+  "real_benchmark_execution_approved": true,
+  "real_benchmarks_executed": false,
+  "required_next_action": "implement_or_select_real_benchmark_runner_before_execution",
+  "runner_checks": {
+    "all_commands_dry_run_preview": true,
+    "all_commands_unstarted": true,
+    "command_count": 3,
+    "preview_modules": [
+      "evolution.benchmarks.real_benchmark_runner"
+    ],
+    "preview_runner_module": "evolution.benchmarks.real_benchmark_runner",
+    "preview_runner_module_available": false
+  },
+  "safety_invariants": {
+    "active_prompt_modified": false,
+    "active_runtime_mutation": false,
+    "active_skill_modified": false,
+    "active_tool_schema_modified": false,
+    "credentials_accessed": false,
+    "cron_jobs_created": false,
+    "deployment_performed": false,
+    "external_publication_performed": false,
+    "gateway_restart_or_reload": false,
+    "network_calls_performed": false
+  },
+  "schema_version": "hse-real-benchmark-execution-readiness-v1",
+  "source_command_preview": {
+    "benchmark_commands_started": false,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_real_benchmark_preflight_20260703_2348_local_only/real_benchmark_command_preview.json",
+    "schema_version": "hse-real-benchmark-command-preview-v1",
+    "sha256": "9ad79656a4ac64a34f051e8eb11cda0637f9cc1280ff56b2389d9e400bef0689"
+  },
+  "source_preflight": {
+    "execution_ready": true,
+    "execution_started": false,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_real_benchmark_preflight_20260703_2348_local_only/real_benchmark_preflight.json",
+    "real_benchmarks_executed": false,
+    "sha256": "c2981c85724c21393d49be9b64a43c5f913d4b587879eb79d3080510dc39698d",
+    "status": "PREFLIGHT_EXECUTION_READY_NOT_STARTED"
+  },
+  "status": "BLOCKED_RUNNER_NOT_AVAILABLE",
+  "strict_plan_gate_closed": false,
+  "summary": "Execution readiness is blocked because the command preview runner module is not available.",
+  "target": "strict-plan-real-benchmark-execution-readiness",
+  "write_root_checks": {
+    "all_preview_outputs_under_allowed_roots": true,
+    "allowed_write_roots": [
+      "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310"
+    ],
+    "preview_output_count": 3,
+    "preview_output_paths": [
+      "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/tblite.json",
+      "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/yc-bench.json",
+      "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/phase2-plan-scale-tool-selection-triples.json"
+    ]
+  }
+}

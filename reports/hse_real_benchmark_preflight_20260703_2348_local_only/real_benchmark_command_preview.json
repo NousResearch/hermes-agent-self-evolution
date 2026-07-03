@@ -1,0 +1,68 @@
+{
+  "benchmark_commands_started": false,
+  "commands": [
+    {
+      "argv": [
+        "python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "TBLite",
+        "--baseline-commit",
+        "88d1d6206",
+        "--current-commit",
+        "9b50c5655",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/tblite.json",
+        "--dry-run"
+      ],
+      "network_allowed": false,
+      "provider_spend_allowed": false,
+      "started": false,
+      "suite": "TBLite"
+    },
+    {
+      "argv": [
+        "python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "YC-Bench",
+        "--baseline-commit",
+        "88d1d6206",
+        "--current-commit",
+        "9b50c5655",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/yc-bench.json",
+        "--dry-run"
+      ],
+      "network_allowed": false,
+      "provider_spend_allowed": false,
+      "started": false,
+      "suite": "YC-Bench"
+    },
+    {
+      "argv": [
+        "python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "Phase2 PLAN-scale tool-selection triples",
+        "--baseline-commit",
+        "88d1d6206",
+        "--current-commit",
+        "9b50c5655",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/phase2-plan-scale-tool-selection-triples.json",
+        "--dry-run"
+      ],
+      "network_allowed": false,
+      "provider_spend_allowed": false,
+      "started": false,
+      "suite": "Phase2 PLAN-scale tool-selection triples"
+    }
+  ],
+  "dry_run": true,
+  "generated_at": "2026-07-03T23:48:00+09:00",
+  "schema_version": "hse-real-benchmark-command-preview-v1"
+}

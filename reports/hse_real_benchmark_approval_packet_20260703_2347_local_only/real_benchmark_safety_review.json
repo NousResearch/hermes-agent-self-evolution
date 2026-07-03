@@ -1,0 +1,19 @@
+{
+  "blockers": [],
+  "execution_started": false,
+  "next_gate": "run_real_benchmark_preflight_then_execute_under_packet",
+  "no_github_write_preserved": true,
+  "packet_approved_for_execution": true,
+  "packet_status": "APPROVAL_RECORDED_NOT_EXECUTED",
+  "real_benchmarks_executed": false,
+  "review_checks": {
+    "active_apply_not_performed": true,
+    "fail_closed_booleans_present": true,
+    "github_write_not_performed": true,
+    "provider_spend_not_performed": true,
+    "real_execution_not_started": true,
+    "source_backfill_is_blocked_by_approval": true
+  },
+  "schema_version": "hse-real-benchmark-safety-review-v1",
+  "status": "PASS_APPROVAL_RECORDED_NOT_EXECUTED"
+}

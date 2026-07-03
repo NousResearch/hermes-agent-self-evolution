@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from evolution.local_completion.real_benchmark_preflight import (
+    PREFLIGHT_EXECUTION_READY_NOT_STARTED,
     PREFLIGHT_RECORDED_NOT_EXECUTABLE,
     write_real_benchmark_preflight,
 )
@@ -184,6 +185,112 @@ def test_real_benchmark_preflight_records_plan_but_keeps_execution_blocked(tmp_p
     assert "dry_run_only=true" in markdown
     assert "NO_GITHUB_WRITE" in markdown
     assert "not approval to execute" in markdown
+
+
+def test_real_benchmark_preflight_accepts_local_only_zero_budget_approval_as_execution_ready_not_started(tmp_path):
+    backfill_path = tmp_path / "benchmark_gate_backfill.json"
+    backfill_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "hse-benchmark-gate-backfill-v1",
+                "gate_id": "B0",
+                "status": "BLOCKED_BY_BENCHMARK_APPROVAL",
+                "strict_plan_gate_closed": False,
+                "benchmark_gate_passed": None,
+                "real_benchmarks_executed": False,
+                "real_benchmark_execution_approved": False,
+                "benchmark_subjects": {
+                    "baseline": {"subject_id": "baseline", "hermes_source": {"commit": "88d1d6206"}},
+                    "current": {"subject_id": "current", "hermes_source": {"commit": "9b50c5655"}},
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    packet_path = tmp_path / "real_benchmark_approval_packet.json"
+    packet_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "hse-real-benchmark-approval-packet-v1",
+                "gate_id": "B0-RBA",
+                "status": "APPROVAL_RECORDED_NOT_EXECUTED",
+                "approval_complete": True,
+                "execution_started": False,
+                "real_benchmarks_executed": False,
+                "real_benchmark_execution_approved": True,
+                "current_authorized_budget_usd": 0,
+                "current_authorized_budget_krw": 0,
+                "approved_runtime_minutes": 90,
+                "network_provider_spend_allowed": False,
+                "baseline_materialization_allowed": True,
+                "current_materialization_allowed": True,
+                "candidate_only": True,
+                "apply_ready": False,
+                "requested_benchmark_suites": [
+                    {"name": "TBLite", "execution_started": False, "real_result_required_for_strict_plan_gate": True},
+                    {"name": "YC-Bench", "execution_started": False, "real_result_required_for_strict_plan_gate": True},
+                ],
+                "regression_thresholds": {
+                    "TBLite": "within_2_percent_or_better",
+                    "YC-Bench": "no_material_regression",
+                },
+                "missing_approval_fields": [],
+                "source_backfill": {
+                    "path": str(backfill_path),
+                    "status": "BLOCKED_BY_BENCHMARK_APPROVAL",
+                    "strict_plan_gate_closed": False,
+                    "benchmark_gate_passed": None,
+                },
+                "github": {
+                    "queried": False,
+                    "pr_created": False,
+                    "push_performed": False,
+                    "merge_performed": False,
+                    "publication_deferred": True,
+                },
+                "execution_boundaries": {
+                    "benchmark_process_started": False,
+                    "provider_or_model_spend_performed": False,
+                    "network_calls_performed": False,
+                    "github_write_performed": False,
+                    "active_apply_performed": False,
+                    "gateway_restart_or_reload_performed": False,
+                    "cron_mutation_performed": False,
+                    "credential_or_secret_access_performed": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    future_output_root = tmp_path / "repo" / "output" / "hse-real-benchmark" / "run-001"
+
+    result = write_real_benchmark_preflight(
+        approval_packet_path=packet_path,
+        output_dir=tmp_path / "preflight-local-only",
+        future_output_root=future_output_root,
+        generated_at="2026-07-03T23:47:29+09:00",
+        dry_run=True,
+    )
+
+    preflight = json.loads(Path(result["preflight_report_path"]).read_text())
+    assert preflight["status"] == PREFLIGHT_EXECUTION_READY_NOT_STARTED
+    assert preflight["preflight_passed"] is True
+    assert preflight["approval_complete"] is True
+    assert preflight["real_benchmark_execution_approved"] is True
+    assert preflight["execution_ready"] is True
+    assert preflight["network_provider_spend_allowed"] is False
+    assert preflight["baseline_materialization_plan"]["allowed_by_packet"] is True
+    assert preflight["current_materialization_plan"]["allowed_by_packet"] is True
+    assert preflight["blocked_by"] == []
+    assert preflight["execution_started"] is False
+    assert preflight["real_benchmarks_executed"] is False
+    assert preflight["execution_boundaries"]["provider_or_model_spend_performed"] is False
+    assert preflight["execution_boundaries"]["network_calls_performed"] is False
+
 
 
 def test_real_benchmark_preflight_requires_explicit_dry_run(tmp_path):

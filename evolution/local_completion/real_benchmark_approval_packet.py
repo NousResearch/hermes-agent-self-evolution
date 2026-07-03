@@ -58,11 +58,11 @@ def write_real_benchmark_approval_packet(
     generated_at: str,
     benchmark_suites: Sequence[str] | None = None,
     max_budget_usd: int | float | None = None,
-    max_budget_krw: int | None = None,
+    max_budget_krw: int | float | None = None,
     max_runtime_minutes: int | None = None,
-    network_provider_api_spend_allowed: bool = False,
-    baseline_materialization_allowed: bool = False,
-    current_materialization_allowed: bool = False,
+    network_provider_api_spend_allowed: bool | None = None,
+    baseline_materialization_allowed: bool | None = None,
+    current_materialization_allowed: bool | None = None,
     human_approval_source: str | None = None,
     allowed_write_roots: Sequence[str] | None = None,
     rollback_plan: Mapping[str, Any] | None = None,
@@ -242,11 +242,11 @@ def _approval_complete(
     *,
     benchmark_suites: Sequence[str],
     max_budget_usd: int | float | None,
-    max_budget_krw: int | None,
+    max_budget_krw: int | float | None,
     max_runtime_minutes: int | None,
-    network_provider_api_spend_allowed: bool,
-    baseline_materialization_allowed: bool,
-    current_materialization_allowed: bool,
+    network_provider_api_spend_allowed: bool | None,
+    baseline_materialization_allowed: bool | None,
+    current_materialization_allowed: bool | None,
     human_approval_source: str | None,
     allowed_write_roots: Sequence[str] | None,
     rollback_plan: Mapping[str, Any] | None,
@@ -269,11 +269,11 @@ def _missing_approval_fields(
     *,
     benchmark_suites: Sequence[str],
     max_budget_usd: int | float | None,
-    max_budget_krw: int | None,
+    max_budget_krw: int | float | None,
     max_runtime_minutes: int | None,
-    network_provider_api_spend_allowed: bool,
-    baseline_materialization_allowed: bool,
-    current_materialization_allowed: bool,
+    network_provider_api_spend_allowed: bool | None,
+    baseline_materialization_allowed: bool | None,
+    current_materialization_allowed: bool | None,
     human_approval_source: str | None,
     allowed_write_roots: Sequence[str] | None,
     rollback_plan: Mapping[str, Any] | None,
@@ -285,7 +285,7 @@ def _missing_approval_fields(
         missing.append("max_budget_usd_or_krw")
     if max_runtime_minutes is None or max_runtime_minutes <= 0:
         missing.append("max_runtime_minutes")
-    if network_provider_api_spend_allowed is not True:
+    if network_provider_api_spend_allowed is None:
         missing.append("network_provider_api_spend_allowed")
     if baseline_materialization_allowed is not True:
         missing.append("baseline_materialization_allowed")

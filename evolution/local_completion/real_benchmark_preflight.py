@@ -280,7 +280,6 @@ def _execution_ready(*, approval: Mapping[str, Any], preflight_passed: bool) -> 
         preflight_passed
         and approval.get("approval_complete") is True
         and approval.get("real_benchmark_execution_approved") is True
-        and approval.get("network_provider_spend_allowed") is True
         and approval.get("baseline_materialization_allowed") is True
         and approval.get("current_materialization_allowed") is True
         and approval.get("execution_started") is False
