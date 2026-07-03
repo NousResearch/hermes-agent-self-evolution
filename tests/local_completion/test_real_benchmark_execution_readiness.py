@@ -7,6 +7,7 @@ from pathlib import Path
 
 from evolution.local_completion.real_benchmark_execution_readiness import (
     BLOCKED_RUNNER_NOT_AVAILABLE,
+    READY_TO_EXECUTE_NOT_STARTED,
     write_real_benchmark_execution_readiness,
 )
 
@@ -160,6 +161,13 @@ def _approved_preflight(tmp_path: Path) -> tuple[Path, Path, Path]:
 
 def test_real_benchmark_execution_readiness_blocks_missing_preview_runner_without_side_effects(tmp_path: Path):
     preflight_path, command_preview_path, future_output_root = _approved_preflight(tmp_path)
+    preview = json.loads(command_preview_path.read_text())
+    for command in preview["commands"]:
+        argv = command["argv"]
+        argv[argv.index("evolution.benchmarks.real_benchmark_runner")] = (
+            "evolution.benchmarks.missing_real_benchmark_runner"
+        )
+    command_preview_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n")
 
     result = write_real_benchmark_execution_readiness(
         preflight_report_path=preflight_path,
@@ -182,7 +190,7 @@ def test_real_benchmark_execution_readiness_blocks_missing_preview_runner_withou
     assert readiness["preflight_execution_ready"] is True
     assert readiness["current_authorized_budget_usd"] == 0
     assert readiness["network_provider_spend_allowed"] is False
-    assert readiness["runner_checks"]["preview_runner_module"] == "evolution.benchmarks.real_benchmark_runner"
+    assert readiness["runner_checks"]["preview_runner_module"] == "evolution.benchmarks.missing_real_benchmark_runner"
     assert readiness["runner_checks"]["preview_runner_module_available"] is False
     assert "missing_preview_runner_module" in readiness["blocked_by"]
     assert readiness["write_root_checks"]["all_preview_outputs_under_allowed_roots"] is True
@@ -195,3 +203,38 @@ def test_real_benchmark_execution_readiness_blocks_missing_preview_runner_withou
     markdown = markdown_path.read_text()
     assert "BLOCKED_RUNNER_NOT_AVAILABLE" in markdown
     assert "execution_go=false" in markdown
+
+
+def test_real_benchmark_execution_readiness_allows_existing_local_runner_and_assets_without_starting(tmp_path: Path):
+    preflight_path, command_preview_path, future_output_root = _approved_preflight(tmp_path)
+
+    result = write_real_benchmark_execution_readiness(
+        preflight_report_path=preflight_path,
+        command_preview_path=command_preview_path,
+        output_dir=tmp_path / "readiness-ready",
+        generated_at="2026-07-04T01:20:00+09:00",
+        allowed_write_roots=[str(future_output_root)],
+    )
+
+    readiness = json.loads(Path(result["readiness_report_path"]).read_text())
+    assert readiness["status"] == READY_TO_EXECUTE_NOT_STARTED
+    assert readiness["execution_go"] is True
+    assert readiness["execution_started"] is False
+    assert readiness["real_benchmarks_executed"] is False
+    assert readiness["strict_plan_gate_closed"] is False
+    assert readiness["runner_checks"]["preview_runner_module"] == "evolution.benchmarks.real_benchmark_runner"
+    assert readiness["runner_checks"]["preview_runner_module_available"] is True
+    assert readiness["runner_checks"]["all_suite_readiness_ready"] is True
+    assert readiness["blocked_by"] == []
+    assert readiness["write_root_checks"]["all_preview_outputs_under_allowed_roots"] is True
+    assert readiness["output_root_exists_now"] is False
+    suite_readiness = readiness["suite_readiness"]
+    assert [entry["suite"] for entry in suite_readiness] == [
+        "TBLite",
+        "YC-Bench",
+        "Phase2 PLAN-scale tool-selection triples",
+    ]
+    assert all(entry["ready"] is True for entry in suite_readiness)
+    assert all(entry["network_calls_required"] is False for entry in suite_readiness)
+    assert all(entry["provider_or_model_spend_required"] is False for entry in suite_readiness)
+    assert not future_output_root.exists()

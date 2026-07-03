@@ -1,0 +1,387 @@
+{
+  "active_apply_performed": false,
+  "adapter_version": "phase2-tool-selection-local-smoke-v1",
+  "apply_ready": false,
+  "artifacts": {
+    "output_json": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/phase2-plan-scale-tool-selection-triples.json"
+  },
+  "baseline_current_materialization_performed": false,
+  "benchmark": "Phase2 PLAN-scale tool-selection triples",
+  "benchmark_gate_candidate_passed": true,
+  "candidate_only": true,
+  "dry_run": false,
+  "external_benchmark_assets_validated": true,
+  "external_calls_performed": false,
+  "failed_checks": [],
+  "full_benchmark_executed": false,
+  "github_write_performed": false,
+  "metrics": {
+    "argument_cue_coverage": 1.0,
+    "case_count": 45,
+    "constraint_pass_rate": 1.0,
+    "selection_accuracy": 1.0,
+    "wrong_tool_avoidance": 1.0
+  },
+  "mode": "real-benchmark-smoke",
+  "network_calls_performed": false,
+  "output_constraints": {
+    "allowed_root": "output/hse-real-benchmark/",
+    "fresh_output_required": true,
+    "hardlink_output_allowed": false,
+    "input_output_overlap_allowed": false,
+    "suffix": ".json",
+    "symlink_output_allowed": false
+  },
+  "pass_condition": "no_aggregate_or_per_tool_regression_beyond_gate",
+  "passed": true,
+  "phase2d_gate": {
+    "baseline_metrics": {
+      "argument_cue_coverage": 0.7956,
+      "case_count": 45,
+      "constraint_pass_rate": 0.9818,
+      "selection_accuracy": 0.6444,
+      "warning_count": 14,
+      "wrong_tool_avoidance": 0.6444
+    },
+    "candidate_metrics": {
+      "argument_cue_coverage": 1.0,
+      "case_count": 45,
+      "constraint_pass_rate": 1.0,
+      "selection_accuracy": 1.0,
+      "warning_count": 0,
+      "wrong_tool_avoidance": 1.0
+    },
+    "candidate_only": true,
+    "failed_checks": [],
+    "passed": true,
+    "per_tool_regressions": [
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "browser_back",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "browser_click",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 2,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 2,
+        "candidate_pass_rate": 1.0,
+        "case_count": 2,
+        "delta": 0.0,
+        "expected_tool": "browser_console",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "browser_get_images",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 0,
+        "baseline_pass_rate": 0.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 1.0,
+        "expected_tool": "browser_navigate",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 0,
+        "baseline_pass_rate": 0.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 1.0,
+        "expected_tool": "browser_press",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "browser_scroll",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 0.5,
+        "candidate_pass_count": 2,
+        "candidate_pass_rate": 1.0,
+        "case_count": 2,
+        "delta": 0.5,
+        "expected_tool": "browser_snapshot",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "browser_type",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "browser_vision",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 0,
+        "baseline_pass_rate": 0.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 1.0,
+        "expected_tool": "clarify",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 0,
+        "baseline_pass_rate": 0.0,
+        "candidate_pass_count": 3,
+        "candidate_pass_rate": 1.0,
+        "case_count": 3,
+        "delta": 1.0,
+        "expected_tool": "computer_use",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "cronjob",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 0,
+        "baseline_pass_rate": 0.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 1.0,
+        "expected_tool": "delegate_task",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 3,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 3,
+        "candidate_pass_rate": 1.0,
+        "case_count": 3,
+        "delta": 0.0,
+        "expected_tool": "execute_code",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "image_generate",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "memory",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 0.5,
+        "candidate_pass_count": 2,
+        "candidate_pass_rate": 1.0,
+        "case_count": 2,
+        "delta": 0.5,
+        "expected_tool": "patch",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 0,
+        "baseline_pass_rate": 0.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 1.0,
+        "expected_tool": "process",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 0,
+        "baseline_pass_rate": 0.0,
+        "candidate_pass_count": 2,
+        "candidate_pass_rate": 1.0,
+        "case_count": 2,
+        "delta": 1.0,
+        "expected_tool": "read_file",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 0,
+        "baseline_pass_rate": 0.0,
+        "candidate_pass_count": 2,
+        "candidate_pass_rate": 1.0,
+        "case_count": 2,
+        "delta": 1.0,
+        "expected_tool": "search_files",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "send_message",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 4,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 4,
+        "candidate_pass_rate": 1.0,
+        "case_count": 4,
+        "delta": 0.0,
+        "expected_tool": "session_search",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 3,
+        "baseline_pass_rate": 0.75,
+        "candidate_pass_count": 4,
+        "candidate_pass_rate": 1.0,
+        "case_count": 4,
+        "delta": 0.25,
+        "expected_tool": "terminal",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "text_to_speech",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "todo",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "video_analyze",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 1.0,
+        "candidate_pass_count": 1,
+        "candidate_pass_rate": 1.0,
+        "case_count": 1,
+        "delta": 0.0,
+        "expected_tool": "vision_analyze",
+        "passed": true
+      },
+      {
+        "baseline_pass_count": 1,
+        "baseline_pass_rate": 0.5,
+        "candidate_pass_count": 2,
+        "candidate_pass_rate": 1.0,
+        "case_count": 2,
+        "delta": 0.5,
+        "expected_tool": "write_file",
+        "passed": true
+      }
+    ],
+    "phase": "2D",
+    "thresholds": {
+      "max_per_tool_regression": 0.0,
+      "min_case_count": 45,
+      "min_selection_accuracy": 0.7,
+      "min_wrong_tool_avoidance": 0.7
+    }
+  },
+  "provider_or_model_spend_performed": false,
+  "read_only": true,
+  "real_benchmark_evidence": {
+    "candidate_report_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+    "candidate_report_sha256": "b18ce7d331d305f595d7dbc9c9b1e6c2dcdebe7c43a318b517c4ab2c8a598b6d",
+    "dataset_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/datasets/golden/tool-description/tool_selection.jsonl",
+    "dataset_row_count": 45,
+    "dataset_sha256": "18b73ee726445cd9343b6f5c26707191e371fc67cf531c132841c4ffb77ef064",
+    "execution_scope": "local_pinned_tool_selection_report_smoke",
+    "phase2d_gate_passed": true,
+    "selection_accuracy": 1.0,
+    "wrong_tool_avoidance": 1.0
+  },
+  "real_benchmark_smoke_validated": true,
+  "source_tool_selection_dataset": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/datasets/golden/tool-description/tool_selection.jsonl",
+    "sha256": "18b73ee726445cd9343b6f5c26707191e371fc67cf531c132841c4ffb77ef064"
+  },
+  "source_tool_selection_report": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/tool-description/phase5-tool-selection-all-pass-20260606-145446/run/candidate_only_report.json",
+    "sha256": "b18ce7d331d305f595d7dbc9c9b1e6c2dcdebe7c43a318b517c4ab2c8a598b6d"
+  },
+  "strict_plan_gate_closed": false,
+  "subject_commits": {
+    "baseline": "88d1d6206",
+    "current": "9b50c5655"
+  },
+  "write_targets": [
+    "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/phase2-plan-scale-tool-selection-triples.json"
+  ]
+}

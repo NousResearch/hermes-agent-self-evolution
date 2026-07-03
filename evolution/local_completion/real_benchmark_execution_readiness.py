@@ -9,6 +9,7 @@ strict PLAN gates.
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 from collections.abc import Mapping, Sequence
@@ -25,6 +26,7 @@ READINESS_TARGET = "strict-plan-real-benchmark-execution-readiness"
 READY_TO_EXECUTE_NOT_STARTED = "READY_TO_EXECUTE_NOT_STARTED"
 BLOCKED_PREFLIGHT_NOT_READY = "BLOCKED_PREFLIGHT_NOT_READY"
 BLOCKED_RUNNER_NOT_AVAILABLE = "BLOCKED_RUNNER_NOT_AVAILABLE"
+BLOCKED_SUITE_ASSETS_NOT_READY = "BLOCKED_SUITE_ASSETS_NOT_READY"
 BLOCKED_WRITE_ROOT_MISMATCH = "BLOCKED_WRITE_ROOT_MISMATCH"
 
 
@@ -51,6 +53,11 @@ def write_real_benchmark_execution_readiness(
     preview_modules = sorted({module for module in (_preview_module(command) for command in commands) if module})
     primary_preview_module = preview_modules[0] if len(preview_modules) == 1 else None
     preview_module_available = bool(primary_preview_module and importlib.util.find_spec(primary_preview_module) is not None)
+    preview_suites = _preview_suites(commands)
+    suite_readiness_reports = _suite_readiness_reports(primary_preview_module, preview_module_available, preview_suites)
+    all_suite_readiness_ready = bool(suite_readiness_reports) and all(
+        report.get("ready") is True for report in suite_readiness_reports
+    )
     output_paths = _preview_output_paths(commands)
     write_root_checks = _write_root_checks(output_paths=output_paths, allowed_roots=allowed_roots)
     preflight_ready = _preflight_ready(preflight)
@@ -59,6 +66,8 @@ def write_real_benchmark_execution_readiness(
         blocked_by.append("preflight_not_execution_ready")
     if not preview_module_available:
         blocked_by.append("missing_preview_runner_module")
+    if preview_module_available and not all_suite_readiness_ready:
+        blocked_by.append("suite_assets_not_ready")
     if not write_root_checks["all_preview_outputs_under_allowed_roots"]:
         blocked_by.append("preview_output_outside_allowed_write_roots")
     status = _status(blocked_by)
@@ -100,7 +109,9 @@ def write_real_benchmark_execution_readiness(
                 "command_count": len(commands),
                 "all_commands_unstarted": all(command.get("started") is False for command in commands),
                 "all_commands_dry_run_preview": all("--dry-run" in command.get("argv", []) for command in commands),
+                "all_suite_readiness_ready": all_suite_readiness_ready,
             },
+            "suite_readiness": suite_readiness_reports,
             "write_root_checks": write_root_checks,
             "output_root": str(future_output_root) if future_output_root is not None else None,
             "output_root_exists_now": future_output_root.exists() if future_output_root is not None else None,
@@ -192,6 +203,50 @@ def _preview_module(command: Mapping[str, Any]) -> str | None:
     return str(module) if isinstance(module, str) and module else None
 
 
+def _preview_suites(commands: Sequence[Mapping[str, Any]]) -> list[str]:
+    suites: list[str] = []
+    for command in commands:
+        suite = command.get("suite")
+        if isinstance(suite, str) and suite:
+            suites.append(suite)
+            continue
+        argv = command.get("argv")
+        if isinstance(argv, list) and "--suite" in argv:
+            index = argv.index("--suite")
+            if index + 1 < len(argv) and isinstance(argv[index + 1], str):
+                suites.append(argv[index + 1])
+    return suites
+
+
+def _suite_readiness_reports(
+    primary_preview_module: str | None,
+    preview_module_available: bool,
+    suites: Sequence[str],
+) -> list[dict[str, Any]]:
+    if not preview_module_available or not primary_preview_module:
+        return []
+    module = importlib.import_module(primary_preview_module)
+    suite_readiness = getattr(module, "suite_readiness", None)
+    if not callable(suite_readiness):
+        return [
+            {
+                "suite": suite,
+                "ready": False,
+                "blocked_by": ["runner_module_has_no_suite_readiness"],
+                "network_calls_required": False,
+                "provider_or_model_spend_required": False,
+            }
+            for suite in suites
+        ]
+    reports: list[dict[str, Any]] = []
+    for suite in suites:
+        raw = suite_readiness(suite)
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"suite_readiness must return object for {suite}")
+        reports.append(dict(raw))
+    return reports
+
+
 def _preview_output_paths(commands: Sequence[Mapping[str, Any]]) -> list[Path]:
     paths: list[Path] = []
     for command in commands:
@@ -249,6 +304,8 @@ def _status(blocked_by: Sequence[str]) -> str:
         return BLOCKED_PREFLIGHT_NOT_READY
     if "missing_preview_runner_module" in blocked_by:
         return BLOCKED_RUNNER_NOT_AVAILABLE
+    if "suite_assets_not_ready" in blocked_by:
+        return BLOCKED_SUITE_ASSETS_NOT_READY
     return BLOCKED_WRITE_ROOT_MISMATCH
 
 
@@ -257,6 +314,8 @@ def _summary(status: str) -> str:
         return "Execution readiness review passed; real benchmark processes have not started."
     if status == BLOCKED_RUNNER_NOT_AVAILABLE:
         return "Execution readiness is blocked because the command preview runner module is not available."
+    if status == BLOCKED_SUITE_ASSETS_NOT_READY:
+        return "Execution readiness is blocked because one or more suite-local asset checks are not ready."
     if status == BLOCKED_WRITE_ROOT_MISMATCH:
         return "Execution readiness is blocked because preview outputs are outside allowed write roots."
     return "Execution readiness is blocked because preflight is not execution-ready."

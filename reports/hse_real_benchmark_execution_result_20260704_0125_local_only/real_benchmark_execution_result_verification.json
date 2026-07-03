@@ -1,0 +1,69 @@
+{
+  "active_apply_performed": false,
+  "all_suites_passed": true,
+  "approval_packet": "reports/hse_real_benchmark_approval_packet_20260703_2347_local_only/real_benchmark_approval_packet.json",
+  "baseline_current_materialization_performed": false,
+  "execution_output_root": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310",
+  "execution_started": true,
+  "generated_at": "2026-07-04T01:25:00+09:00",
+  "github_write_performed": false,
+  "network_calls_performed": false,
+  "not_claimed": [
+    "full_remote_benchmark",
+    "strict_plan_gate_closure",
+    "provider_api_spend",
+    "github_write",
+    "active_apply"
+  ],
+  "preflight": "reports/hse_real_benchmark_preflight_20260703_2348_local_only/real_benchmark_preflight.json",
+  "provider_or_model_spend_performed": false,
+  "readiness": "reports/hse_real_benchmark_execution_readiness_20260704_0118_runner_ready/real_benchmark_execution_readiness.json",
+  "real_benchmarks_executed": true,
+  "regression_threshold_verdicts": {
+    "Phase2 PLAN-scale tool-selection triples": "PASS: phase2d_gate passed with 1.0 aggregate metrics; no aggregate/per-tool regression in source gate",
+    "TBLite": "PASS: candidate_score equals baseline_score; within_2_percent_or_better satisfied for smoke metrics",
+    "YC-Bench": "PASS: candidate_score exceeds baseline_score; no_material_regression satisfied for smoke metrics"
+  },
+  "reports": [
+    {
+      "benchmark": "TBLite",
+      "bytes": 4339,
+      "failed_checks": [],
+      "passed": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/tblite.json",
+      "sha256": "7543fc1ead0ad7a4c318befa4a84090b3a8469d533905bc6a74499666557448b",
+      "status": null
+    },
+    {
+      "benchmark": "YC-Bench",
+      "bytes": 4669,
+      "failed_checks": [],
+      "passed": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/yc-bench.json",
+      "sha256": "fa442edd6d51032c0da467e22b3278fface41610484960fd8830f60c0788ff14",
+      "status": null
+    },
+    {
+      "benchmark": "Phase2 PLAN-scale tool-selection triples",
+      "bytes": 11560,
+      "failed_checks": [],
+      "passed": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/phase2-plan-scale-tool-selection-triples.json",
+      "sha256": "ebed9f965755d661d0a6aa868a68be4de9905201886fc3b089b727cd35c53577",
+      "status": null
+    },
+    {
+      "benchmark": null,
+      "bytes": 2968,
+      "failed_checks": null,
+      "passed": null,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/execution_summary.json",
+      "sha256": "4d67452fde065fc7182ac50d12ecf590d9d09507a6bfac3e6580b01b6210edfb",
+      "status": "REAL_BENCHMARK_SMOKE_EXECUTED"
+    }
+  ],
+  "schema_version": "hse-real-benchmark-execution-result-verification-v1",
+  "status": "REAL_BENCHMARK_SMOKE_PASS_LOCAL_ONLY",
+  "strict_plan_gate_closed": false,
+  "suite_count": 3
+}

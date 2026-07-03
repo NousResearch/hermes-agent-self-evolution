@@ -1,0 +1,83 @@
+{
+  "active_apply_performed": false,
+  "all_suites_passed": true,
+  "baseline_current_materialization_performed": false,
+  "execution_started": true,
+  "github_write_performed": false,
+  "network_calls_performed": false,
+  "network_provider_spend_allowed": false,
+  "output_root": "output/hse-real-benchmark/real-run-20260703_1310",
+  "provider_or_model_spend_performed": false,
+  "real_benchmarks_executed": true,
+  "schema_version": "hse-real-benchmark-execution-summary-v1",
+  "status": "REAL_BENCHMARK_SMOKE_EXECUTED",
+  "strict_plan_gate_closed": false,
+  "suite_count": 3,
+  "suite_reports": [
+    {
+      "benchmark": "TBLite",
+      "failed_checks": [],
+      "full_benchmark_executed": false,
+      "github_write_performed": false,
+      "metrics": {
+        "baseline_score": 3.0,
+        "candidate_regression_count": 0,
+        "candidate_score": 3.0,
+        "case_count": 3,
+        "score_delta": 0.0,
+        "total_weight": 3.0
+      },
+      "mode": "real-benchmark-smoke",
+      "network_calls_performed": false,
+      "passed": true,
+      "path": "output/hse-real-benchmark/real-run-20260703_1310/tblite.json",
+      "provider_or_model_spend_performed": false,
+      "real_benchmark_smoke_validated": true,
+      "sha256": "7543fc1ead0ad7a4c318befa4a84090b3a8469d533905bc6a74499666557448b",
+      "strict_plan_gate_closed": false
+    },
+    {
+      "benchmark": "YC-Bench",
+      "failed_checks": [],
+      "full_benchmark_executed": false,
+      "github_write_performed": false,
+      "metrics": {
+        "baseline_score": 1.6666666666666665,
+        "candidate_regression_count": 0,
+        "candidate_score": 3.0,
+        "case_count": 3,
+        "score_delta": 1.3333333333333335,
+        "total_weight": 3.0
+      },
+      "mode": "real-benchmark-smoke",
+      "network_calls_performed": false,
+      "passed": true,
+      "path": "output/hse-real-benchmark/real-run-20260703_1310/yc-bench.json",
+      "provider_or_model_spend_performed": false,
+      "real_benchmark_smoke_validated": true,
+      "sha256": "fa442edd6d51032c0da467e22b3278fface41610484960fd8830f60c0788ff14",
+      "strict_plan_gate_closed": false
+    },
+    {
+      "benchmark": "Phase2 PLAN-scale tool-selection triples",
+      "failed_checks": [],
+      "full_benchmark_executed": false,
+      "github_write_performed": false,
+      "metrics": {
+        "argument_cue_coverage": 1.0,
+        "case_count": 45,
+        "constraint_pass_rate": 1.0,
+        "selection_accuracy": 1.0,
+        "wrong_tool_avoidance": 1.0
+      },
+      "mode": "real-benchmark-smoke",
+      "network_calls_performed": false,
+      "passed": true,
+      "path": "output/hse-real-benchmark/real-run-20260703_1310/phase2-plan-scale-tool-selection-triples.json",
+      "provider_or_model_spend_performed": false,
+      "real_benchmark_smoke_validated": true,
+      "sha256": "ebed9f965755d661d0a6aa868a68be4de9905201886fc3b089b727cd35c53577",
+      "strict_plan_gate_closed": false
+    }
+  ]
+}
