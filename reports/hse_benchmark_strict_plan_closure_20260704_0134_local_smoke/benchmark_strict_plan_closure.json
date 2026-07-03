@@ -1,0 +1,297 @@
+{
+  "active_apply_performed": false,
+  "apply_ready": false,
+  "artifact_hash_checks": {
+    "all_hashes_verified": true,
+    "checks": [
+      {
+        "actual_sha256": "7543fc1ead0ad7a4c318befa4a84090b3a8469d533905bc6a74499666557448b",
+        "bytes": 4339,
+        "expected_sha256": "7543fc1ead0ad7a4c318befa4a84090b3a8469d533905bc6a74499666557448b",
+        "hash_verified": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/tblite.json"
+      },
+      {
+        "actual_sha256": "fa442edd6d51032c0da467e22b3278fface41610484960fd8830f60c0788ff14",
+        "bytes": 4669,
+        "expected_sha256": "fa442edd6d51032c0da467e22b3278fface41610484960fd8830f60c0788ff14",
+        "hash_verified": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/yc-bench.json"
+      },
+      {
+        "actual_sha256": "ebed9f965755d661d0a6aa868a68be4de9905201886fc3b089b727cd35c53577",
+        "bytes": 11560,
+        "expected_sha256": "ebed9f965755d661d0a6aa868a68be4de9905201886fc3b089b727cd35c53577",
+        "hash_verified": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/phase2-plan-scale-tool-selection-triples.json"
+      },
+      {
+        "actual_sha256": "4d67452fde065fc7182ac50d12ecf590d9d09507a6bfac3e6580b01b6210edfb",
+        "bytes": 2968,
+        "expected_sha256": "4d67452fde065fc7182ac50d12ecf590d9d09507a6bfac3e6580b01b6210edfb",
+        "hash_verified": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/execution_summary.json"
+      }
+    ]
+  },
+  "artifacts": {
+    "markdown": "benchmark_strict_plan_closure.md",
+    "report": "benchmark_strict_plan_closure.json"
+  },
+  "benchmark_gate_passed": true,
+  "benchmark_subjects": {
+    "baseline": {
+      "evidence_sources": [
+        "/Users/snw/Library/Mobile Documents/iCloud~md~obsidian/Documents/SnwEvAH/Response/20_Hermes_HSE_and_Ouroboros/2026-07-03-0359-hse-dirty-state-split-phase1-closeout.md",
+        "/Users/snw/Library/Mobile Documents/iCloud~md~obsidian/Documents/SnwEvAH/Response/20_Hermes_HSE_and_Ouroboros/2026-07-03-0418-hse-p1-hermes-architecture-engineering-closeout.md"
+      ],
+      "hermes_source": {
+        "commit": "88d1d6206",
+        "commit_exists": true,
+        "commit_full": "88d1d6206f399c134d1f4c0b7db27733aaa3c50c",
+        "materialization_required_before_real_benchmark": true,
+        "repo": "/Users/snw/.hermes/hermes-agent",
+        "worktree_materialized": false
+      },
+      "label": "Pre local Phase 1/2 active-apply benchmark subject assembled from Hermes parent commit and pre-apply skill baselines",
+      "skills": {
+        "github-code-review": {
+          "baseline_bytes": null,
+          "baseline_sha256": "7a25a905ed979d45f49c2b7ad43a88836cc95e33d8b3ae79b4c3f41895c39cfe",
+          "path": "/Users/snw/.hermes/skills/github/github-code-review/SKILL.md",
+          "source": "2026-07-03-0359-hse-dirty-state-split-phase1-closeout.md"
+        },
+        "hermes-architecture-engineering": {
+          "baseline_bytes": 23552,
+          "baseline_sha256": "2af2f5e5ce49c417bca2a367a5a787124d82e6d746a5faca3145657c4a7df580",
+          "path": "/Users/snw/.hermes/skills/software-development/hermes-architecture-engineering/SKILL.md",
+          "source": "2026-07-03-0418-hse-p1-hermes-architecture-engineering-closeout.md"
+        }
+      },
+      "subject_id": "baseline-pre-phase1-phase2-active",
+      "tool_descriptions": {
+        "active_apply_commit": null,
+        "override_module_present": false,
+        "override_module_sha256": null,
+        "source": "Hermes parent before commit 9b50c5655"
+      }
+    },
+    "current": {
+      "evidence_sources": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-strict-completion/20260703_0509_hse_phase2_active_schema_apply/final_report_manifest.json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-strict-completion/20260703_post_phase2_active_apply_strict_audit_manifest.json"
+      ],
+      "hermes_source": {
+        "ahead_behind_origin_main_observed": "ahead 1, behind 104",
+        "commit": "9b50c5655",
+        "commit_exists": true,
+        "commit_full": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d",
+        "gateway_restart_or_reload_performed": false,
+        "repo": "/Users/snw/.hermes/hermes-agent",
+        "worktree_materialized": true
+      },
+      "hse_source": {
+        "benchmark_gate_backfill_module_uncommitted_at_generation": true,
+        "commit": "7bb27d669",
+        "commit_full": "7bb27d6699cb7bee0b083c5b2c94af2c63f80ac6",
+        "repo": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution"
+      },
+      "label": "Current default-profile local active HSE subject after Phase 1 skill applies and Phase 2 Hermes source tool-description apply",
+      "skills": {
+        "github-code-review": {
+          "bytes": 12133,
+          "exists": true,
+          "path": "/Users/snw/.hermes/skills/github/github-code-review/SKILL.md",
+          "sha256": "d4f4a291be28d2fc45fa268117906d83759bdcc1f7399654fe74cebc93ad6873"
+        },
+        "hermes-architecture-engineering": {
+          "bytes": 14195,
+          "exists": true,
+          "path": "/Users/snw/.hermes/skills/software-development/hermes-architecture-engineering/SKILL.md",
+          "sha256": "cb4a65bdb7825ab99230c3e59d871ce2a66fc8776196e4bf506df5841ef5341b"
+        }
+      },
+      "subject_id": "current-post-phase1-phase2-local-active",
+      "tool_descriptions": {
+        "active_apply_commit": "9b50c5655",
+        "model_tools_module": {
+          "bytes": 59084,
+          "exists": true,
+          "path": "/Users/snw/.hermes/hermes-agent/model_tools.py",
+          "sha256": "3cbb7bb13f788b38ec211aaf8a13e5bca6002fc73f6206934dddfd07d348f0d9"
+        },
+        "model_tools_readback_passed": true,
+        "override_count": 69,
+        "override_module": {
+          "bytes": 31909,
+          "exists": true,
+          "path": "/Users/snw/.hermes/hermes-agent/tools/tool_description_overrides.py",
+          "sha256": "0d58e164be310f257362202538676c81f27ca0e3c6f442e21ecd49f25317199e"
+        },
+        "raw_registry_readback_passed": true,
+        "registry_module": {
+          "bytes": 35980,
+          "exists": true,
+          "path": "/Users/snw/.hermes/hermes-agent/tools/registry.py",
+          "sha256": "8fc0e98061790d4ebb9dca909dcb4d9f4ebfcbc2818fe12cc6146d866b3bca12"
+        },
+        "semantic_loss_guard_passed": true
+      }
+    }
+  },
+  "blocked_by": [],
+  "candidate_only": true,
+  "closed_criteria": {
+    "all_required_suites_present": true,
+    "all_suites_passed": true,
+    "approval_complete": true,
+    "artifact_hashes_verified": true,
+    "backfill_subjects_present": true,
+    "execution_summary_passed": true,
+    "execution_verification_passed": true,
+    "local_smoke_not_overclaimed": true,
+    "no_forbidden_side_effects": true,
+    "phase2_case_count_satisfies_plan": true,
+    "plan_phase2_threshold_found": true,
+    "preflight_ready": true,
+    "readiness_go": true,
+    "regression_thresholds_satisfied": true
+  },
+  "full_remote_benchmark_executed": false,
+  "gate_id": "B0-CLOSE",
+  "generated_at": "2026-07-04T01:37:24+0900",
+  "github": {
+    "merge_performed": false,
+    "pr_created": false,
+    "publication_deferred": true,
+    "push_performed": false,
+    "queried": false
+  },
+  "github_query_performed": false,
+  "github_write_performed": false,
+  "local_smoke_benchmark_accepted_for_this_gate": true,
+  "network_calls_performed": false,
+  "not_claimed": [
+    "full_remote_benchmark",
+    "provider_api_spend",
+    "github_write",
+    "active_apply",
+    "overall_HSE_project_completion",
+    "upstream_PR_or_merge"
+  ],
+  "phase": "Phase 1/2 Benchmark Strict PLAN Closure Reconciliation",
+  "plan_contract": {
+    "path": "PLAN.md",
+    "phase2_min_case_count": 45,
+    "phase2_min_case_count_source": "PLAN.md Phase 2D default threshold",
+    "sha256": "edfdf202dd164c9d4618909f18ecff1016dd187d98e3bd46ac784613a6e6b662"
+  },
+  "provider_or_model_spend_performed": false,
+  "real_benchmarks_executed": true,
+  "remote_or_service_benchmark_required_for_future_expansion": true,
+  "required_next_action": "consume_closed_benchmark_gate_in_next_strict_plan_audit",
+  "safety_invariants": {
+    "active_prompt_modified": false,
+    "active_runtime_mutation": false,
+    "active_skill_modified": false,
+    "active_tool_schema_modified": false,
+    "credentials_accessed": false,
+    "cron_jobs_created": false,
+    "deployment_performed": false,
+    "external_publication_performed": false,
+    "gateway_restart_or_reload": false,
+    "network_calls_performed": false
+  },
+  "schema_version": "hse-benchmark-strict-plan-closure-v1",
+  "source_artifacts": {
+    "approval_packet": {
+      "bytes": 6055,
+      "path": "reports/hse_real_benchmark_approval_packet_20260703_2347_local_only/real_benchmark_approval_packet.json",
+      "sha256": "83686e0b8bd153f5cec277b1285ea368779c88fe33d4a23e8158f8dffc4bb9cf"
+    },
+    "benchmark_backfill": {
+      "bytes": 8677,
+      "path": "reports/hse_benchmark_gate_backfill_20260703_1237/benchmark_gate_backfill.json",
+      "sha256": "e2596645d1b0cc787f7838eddfd9363a677bc73dceee7a9b40aae50977ee63e8"
+    },
+    "execution_summary": {
+      "bytes": 2968,
+      "path": "output/hse-real-benchmark/real-run-20260703_1310/execution_summary.json",
+      "sha256": "4d67452fde065fc7182ac50d12ecf590d9d09507a6bfac3e6580b01b6210edfb"
+    },
+    "execution_verification": {
+      "bytes": 3183,
+      "path": "reports/hse_real_benchmark_execution_result_20260704_0125_local_only/real_benchmark_execution_result_verification.json",
+      "sha256": "2a43821d26c6c3fdef3dedb1464b67324cbccb921b0a5e80c355aae53c732812"
+    },
+    "preflight_report": {
+      "bytes": 6887,
+      "path": "reports/hse_real_benchmark_preflight_20260703_2348_local_only/real_benchmark_preflight.json",
+      "sha256": "c2981c85724c21393d49be9b64a43c5f913d4b587879eb79d3080510dc39698d"
+    },
+    "readiness_report": {
+      "bytes": 7162,
+      "path": "reports/hse_real_benchmark_execution_readiness_20260704_0118_runner_ready/real_benchmark_execution_readiness.json",
+      "sha256": "8341905265c5a21f6a673b8688e41b42ce7fd25165ec3b8b44da859f81509d94"
+    }
+  },
+  "status": "STRICT_PLAN_BENCHMARK_GATE_CLOSED",
+  "strict_plan_boundary_notes": [
+    "This closes only the Phase 1/2 benchmark-regression strict PLAN gate from local smoke evidence.",
+    "It does not claim full remote/service benchmark execution.",
+    "It does not perform or approve GitHub write, provider/API spend, active apply, merge, deploy, cron, or gateway reload."
+  ],
+  "strict_plan_gate_closed": true,
+  "strict_plan_scope": "phase1_phase2_benchmark_regression_gate",
+  "suite_results": {
+    "Phase2 PLAN-scale tool-selection triples": {
+      "case_count": 45,
+      "failed_checks": [],
+      "metrics": {
+        "argument_cue_coverage": 1.0,
+        "case_count": 45,
+        "constraint_pass_rate": 1.0,
+        "selection_accuracy": 1.0,
+        "wrong_tool_avoidance": 1.0
+      },
+      "mode": "real-benchmark-smoke",
+      "passed": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/phase2-plan-scale-tool-selection-triples.json",
+      "sha256": "ebed9f965755d661d0a6aa868a68be4de9905201886fc3b089b727cd35c53577"
+    },
+    "TBLite": {
+      "case_count": 3,
+      "failed_checks": [],
+      "metrics": {
+        "baseline_score": 3.0,
+        "candidate_regression_count": 0,
+        "candidate_score": 3.0,
+        "case_count": 3,
+        "score_delta": 0.0,
+        "total_weight": 3.0
+      },
+      "mode": "real-benchmark-smoke",
+      "passed": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/tblite.json",
+      "sha256": "7543fc1ead0ad7a4c318befa4a84090b3a8469d533905bc6a74499666557448b"
+    },
+    "YC-Bench": {
+      "case_count": 3,
+      "failed_checks": [],
+      "metrics": {
+        "baseline_score": 1.6666666666666665,
+        "candidate_regression_count": 0,
+        "candidate_score": 3.0,
+        "case_count": 3,
+        "score_delta": 1.3333333333333335,
+        "total_weight": 3.0
+      },
+      "mode": "real-benchmark-smoke",
+      "passed": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310/yc-bench.json",
+      "sha256": "fa442edd6d51032c0da467e22b3278fface41610484960fd8830f60c0788ff14"
+    }
+  },
+  "summary": "Local-only real-benchmark-smoke evidence closes the Phase 1/2 benchmark-regression strict PLAN gate.",
+  "target": "strict-plan-benchmark-regression-gate"
+}
