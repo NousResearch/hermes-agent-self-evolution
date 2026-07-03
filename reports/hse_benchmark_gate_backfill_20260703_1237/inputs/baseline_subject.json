@@ -1,0 +1,36 @@
+{
+  "evidence_sources": [
+    "/Users/snw/Library/Mobile Documents/iCloud~md~obsidian/Documents/SnwEvAH/Response/20_Hermes_HSE_and_Ouroboros/2026-07-03-0359-hse-dirty-state-split-phase1-closeout.md",
+    "/Users/snw/Library/Mobile Documents/iCloud~md~obsidian/Documents/SnwEvAH/Response/20_Hermes_HSE_and_Ouroboros/2026-07-03-0418-hse-p1-hermes-architecture-engineering-closeout.md"
+  ],
+  "hermes_source": {
+    "commit": "88d1d6206",
+    "commit_exists": true,
+    "commit_full": "88d1d6206f399c134d1f4c0b7db27733aaa3c50c",
+    "materialization_required_before_real_benchmark": true,
+    "repo": "/Users/snw/.hermes/hermes-agent",
+    "worktree_materialized": false
+  },
+  "label": "Pre local Phase 1/2 active-apply benchmark subject assembled from Hermes parent commit and pre-apply skill baselines",
+  "skills": {
+    "github-code-review": {
+      "baseline_bytes": null,
+      "baseline_sha256": "7a25a905ed979d45f49c2b7ad43a88836cc95e33d8b3ae79b4c3f41895c39cfe",
+      "path": "/Users/snw/.hermes/skills/github/github-code-review/SKILL.md",
+      "source": "2026-07-03-0359-hse-dirty-state-split-phase1-closeout.md"
+    },
+    "hermes-architecture-engineering": {
+      "baseline_bytes": 23552,
+      "baseline_sha256": "2af2f5e5ce49c417bca2a367a5a787124d82e6d746a5faca3145657c4a7df580",
+      "path": "/Users/snw/.hermes/skills/software-development/hermes-architecture-engineering/SKILL.md",
+      "source": "2026-07-03-0418-hse-p1-hermes-architecture-engineering-closeout.md"
+    }
+  },
+  "subject_id": "baseline-pre-phase1-phase2-active",
+  "tool_descriptions": {
+    "active_apply_commit": null,
+    "override_module_present": false,
+    "override_module_sha256": null,
+    "source": "Hermes parent before commit 9b50c5655"
+  }
+}

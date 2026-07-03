@@ -1,0 +1,62 @@
+{
+  "evidence_sources": [
+    "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-strict-completion/20260703_0509_hse_phase2_active_schema_apply/final_report_manifest.json",
+    "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-strict-completion/20260703_post_phase2_active_apply_strict_audit_manifest.json"
+  ],
+  "hermes_source": {
+    "ahead_behind_origin_main_observed": "ahead 1, behind 104",
+    "commit": "9b50c5655",
+    "commit_exists": true,
+    "commit_full": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d",
+    "gateway_restart_or_reload_performed": false,
+    "repo": "/Users/snw/.hermes/hermes-agent",
+    "worktree_materialized": true
+  },
+  "hse_source": {
+    "benchmark_gate_backfill_module_uncommitted_at_generation": true,
+    "commit": "7bb27d669",
+    "commit_full": "7bb27d6699cb7bee0b083c5b2c94af2c63f80ac6",
+    "repo": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution"
+  },
+  "label": "Current default-profile local active HSE subject after Phase 1 skill applies and Phase 2 Hermes source tool-description apply",
+  "skills": {
+    "github-code-review": {
+      "bytes": 12133,
+      "exists": true,
+      "path": "/Users/snw/.hermes/skills/github/github-code-review/SKILL.md",
+      "sha256": "d4f4a291be28d2fc45fa268117906d83759bdcc1f7399654fe74cebc93ad6873"
+    },
+    "hermes-architecture-engineering": {
+      "bytes": 14195,
+      "exists": true,
+      "path": "/Users/snw/.hermes/skills/software-development/hermes-architecture-engineering/SKILL.md",
+      "sha256": "cb4a65bdb7825ab99230c3e59d871ce2a66fc8776196e4bf506df5841ef5341b"
+    }
+  },
+  "subject_id": "current-post-phase1-phase2-local-active",
+  "tool_descriptions": {
+    "active_apply_commit": "9b50c5655",
+    "model_tools_module": {
+      "bytes": 59084,
+      "exists": true,
+      "path": "/Users/snw/.hermes/hermes-agent/model_tools.py",
+      "sha256": "3cbb7bb13f788b38ec211aaf8a13e5bca6002fc73f6206934dddfd07d348f0d9"
+    },
+    "model_tools_readback_passed": true,
+    "override_count": 69,
+    "override_module": {
+      "bytes": 31909,
+      "exists": true,
+      "path": "/Users/snw/.hermes/hermes-agent/tools/tool_description_overrides.py",
+      "sha256": "0d58e164be310f257362202538676c81f27ca0e3c6f442e21ecd49f25317199e"
+    },
+    "raw_registry_readback_passed": true,
+    "registry_module": {
+      "bytes": 35980,
+      "exists": true,
+      "path": "/Users/snw/.hermes/hermes-agent/tools/registry.py",
+      "sha256": "8fc0e98061790d4ebb9dca909dcb4d9f4ebfcbc2818fe12cc6146d866b3bca12"
+    },
+    "semantic_loss_guard_passed": true
+  }
+}
