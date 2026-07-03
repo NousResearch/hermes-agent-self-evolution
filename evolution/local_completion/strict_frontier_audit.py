@@ -1,0 +1,564 @@
+"""HSE strict frontier audit writer.
+
+This report reconciles a closed Phase 1/2 benchmark gate against the current
+PLAN.md and the active Hermes target checkout. It intentionally separates the
+recorded-subject frontier from the current-active-target frontier so stale local
+completion artifacts cannot be overclaimed after the active Hermes baseline has
+moved.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+from collections.abc import Mapping
+from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
+from typing import Any
+
+from evolution.local_completion.scope import base_decision_payload, reject_github_or_active_apply_flags
+
+STRICT_FRONTIER_AUDIT_SCHEMA_VERSION = "hse-strict-frontier-audit-v1"
+STRICT_FRONTIER_GATE_ID = "SFA"
+STRICT_FRONTIER_PHASE = "HSE Strict Frontier Audit"
+STRICT_FRONTIER_TARGET = "current-plan-strict-completion-frontier"
+PHASE_2_STRICT_COMPLETE = "PHASE_2_STRICT_COMPLETE"
+CURRENT_BASELINE_REVALIDATION_REQUIRED = "CURRENT_BASELINE_REVALIDATION_REQUIRED"
+RECORDED_SUBJECT_INCOMPLETE = "RECORDED_SUBJECT_INCOMPLETE"
+
+_TOOL_DESCRIPTION_SUBJECT_FILES = {
+    "override_module": "tools/tool_description_overrides.py",
+    "model_tools_module": "model_tools.py",
+    "registry_module": "tools/registry.py",
+}
+
+
+@dataclass(frozen=True)
+class GitResult:
+    args: tuple[str, ...]
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+def write_strict_frontier_audit(
+    *,
+    active_hermes_repo: str | Path,
+    benchmark_closure_path: str | Path,
+    phase2_active_apply_path: str | Path,
+    post_phase2_audit_path: str | Path,
+    phase2_review_path: str | Path,
+    phase3_plan_path: str | Path,
+    phase3_readiness_path: str | Path,
+    phase3_historical_path: str | Path,
+    phase4_completion_path: str | Path,
+    phase5_readiness_path: str | Path,
+    phase5_formal_path: str | Path,
+    plan_path: str | Path,
+    output_dir: str | Path,
+    generated_at: str,
+) -> dict[str, str]:
+    """Write a strict frontier audit JSON/Markdown pair."""
+
+    _require_non_empty("generated_at", generated_at)
+    active_repo = Path(active_hermes_repo).expanduser().resolve()
+    _validate_git_repo(active_repo)
+    paths = {
+        "benchmark_closure": Path(benchmark_closure_path).expanduser(),
+        "phase2_active_apply": Path(phase2_active_apply_path).expanduser(),
+        "post_phase2_audit": Path(post_phase2_audit_path).expanduser(),
+        "phase2_review": Path(phase2_review_path).expanduser(),
+        "phase3_plan": Path(phase3_plan_path).expanduser(),
+        "phase3_readiness": Path(phase3_readiness_path).expanduser(),
+        "phase3_historical": Path(phase3_historical_path).expanduser(),
+        "phase4_completion": Path(phase4_completion_path).expanduser(),
+        "phase5_readiness": Path(phase5_readiness_path).expanduser(),
+        "phase5_formal": Path(phase5_formal_path).expanduser(),
+        "plan": Path(plan_path).expanduser(),
+    }
+    data = {name: _load_json_object(path, name) for name, path in paths.items() if name != "plan"}
+    plan_text = paths["plan"].read_text()
+
+    active = _active_repo_state(active_repo)
+    current_match = _current_baseline_match(active_repo, active, data["benchmark_closure"])
+    recorded_complete = _recorded_subject_phase2_complete(
+        data["benchmark_closure"],
+        data["phase2_active_apply"],
+        data["post_phase2_audit"],
+        data["phase2_review"],
+        plan_text,
+    )
+    recorded_frontier = _recorded_frontier(recorded_complete)
+    current_frontier = _current_frontier(recorded_complete, current_match)
+    phases = _phase_table(data, recorded_complete, current_match, current_frontier)
+
+    report = base_decision_payload(
+        gate_id=STRICT_FRONTIER_GATE_ID,
+        phase=STRICT_FRONTIER_PHASE,
+        target=STRICT_FRONTIER_TARGET,
+        generated_at=generated_at,
+    )
+    report["schema_version"] = STRICT_FRONTIER_AUDIT_SCHEMA_VERSION
+    report.update(
+        {
+            "status": current_frontier["status"],
+            "summary": _summary(recorded_frontier, current_frontier),
+            "recorded_subject_frontier": recorded_frontier,
+            "current_active_frontier": current_frontier,
+            "current_baseline_match": current_match,
+            "phases": phases,
+            "plan_contract": _plan_contract(paths["plan"], plan_text),
+            "active_hermes": active,
+            "source_artifacts": _source_artifacts(paths),
+            "github_query_performed": False,
+            "github_write_performed": False,
+            "provider_or_model_spend_performed": False,
+            "network_calls_performed": False,
+            "active_apply_performed": False,
+            "full_remote_benchmark_executed": False,
+            "overall_hse_project_completion_claimed": False,
+            "strict_frontier_boundary_notes": [
+                "Recorded-subject completion is not automatically current-active-target completion.",
+                "A moved active Hermes baseline requires revalidation before Phase 1/2 strict-complete can be claimed for the current target.",
+                "Historical/local/waiver completion reports for Phase 3+ are treated as evidence, not current strict completion, unless current PLAN gates and current baseline checks pass.",
+            ],
+            "not_claimed": [
+                "overall_HSE_project_completion",
+                "current_active_phase1_phase2_strict_completion_when_baseline_mismatches",
+                "phase3_strict_completion",
+                "phase4_strict_completion",
+                "phase5_strict_completion",
+                "full_remote_benchmark",
+                "provider_api_spend",
+                "github_query_or_write",
+                "active_apply",
+                "cron_or_gateway_mutation",
+            ],
+            "recommended_next_action": _recommended_next(current_frontier),
+            "artifacts": {
+                "report": "strict_frontier_audit.json",
+                "markdown": "strict_frontier_audit.md",
+            },
+        }
+    )
+    reject_github_or_active_apply_flags(report)
+
+    out = Path(output_dir).expanduser()
+    out.mkdir(parents=True, exist_ok=True)
+    report_path = out / "strict_frontier_audit.json"
+    markdown_path = out / "strict_frontier_audit.md"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n")
+    markdown_path.write_text(_render_markdown(report))
+    return {"report_path": str(report_path), "markdown_path": str(markdown_path)}
+
+
+def _validate_git_repo(repo: Path) -> None:
+    if not repo.exists():
+        raise FileNotFoundError(f"active Hermes repo not found: {repo}")
+    result = _run_git(repo, "rev-parse", "--is-inside-work-tree")
+    if result.returncode != 0 or result.stdout.strip() != "true":
+        raise ValueError(f"not a git worktree: {repo}")
+
+
+def _run_git(repo: Path, *args: str) -> GitResult:
+    completed = subprocess.run(["git", "-C", str(repo), *args], text=True, capture_output=True, check=False)
+    return GitResult(tuple(args), completed.returncode, completed.stdout, completed.stderr)
+
+
+def _git_stdout(repo: Path, *args: str) -> str:
+    result = _run_git(repo, *args)
+    if result.returncode != 0:
+        raise ValueError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def _active_repo_state(repo: Path) -> dict[str, Any]:
+    head = _git_stdout(repo, "rev-parse", "HEAD")
+    branch = _git_stdout(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    status = _run_git(repo, "status", "--porcelain=v1", "--untracked-files=all")
+    dirty_entries = [line for line in status.stdout.splitlines() if line.strip()] if status.returncode == 0 else []
+    return {
+        "repo_root": _git_stdout(repo, "rev-parse", "--show-toplevel"),
+        "head": head,
+        "head_short": head[:9],
+        "branch": branch,
+        "dirty_file_count": len(dirty_entries),
+        "clean": len(dirty_entries) == 0,
+    }
+
+
+def _current_baseline_match(repo: Path, active: Mapping[str, Any], closure: Mapping[str, Any]) -> dict[str, Any]:
+    subject = _current_subject(closure)
+    subject_source = subject.get("hermes_source", {}) if isinstance(subject.get("hermes_source"), Mapping) else {}
+    subject_commit = str(subject_source.get("commit_full") or subject_source.get("commit") or "")
+    ancestor = _ancestor_state(repo, subject_commit)
+    file_checks = _tool_description_file_checks(repo, subject)
+    hashes_match = bool(file_checks) and all(check["hash_match"] is True for check in file_checks)
+    blockers: list[str] = []
+    if ancestor["is_ancestor_of_current_head"] is not True:
+        blockers.append("current_hermes_head_not_closure_subject")
+    if not hashes_match:
+        blockers.append("active_tool_description_hash_mismatch")
+    return {
+        "matches_closure_subject": ancestor["is_ancestor_of_current_head"] is True and hashes_match,
+        "active_head": active.get("head"),
+        "active_head_short": active.get("head_short"),
+        "closure_subject_commit": subject_commit,
+        "closure_subject_id": subject.get("subject_id"),
+        "closure_subject_is_ancestor_of_active_head": ancestor["is_ancestor_of_current_head"],
+        "closure_subject_ancestor_rc": ancestor["ancestor_check_rc"],
+        "closure_subject_commit_available": ancestor["available"],
+        "active_tool_description_hashes_match": hashes_match,
+        "tool_description_file_checks": file_checks,
+        "blockers": blockers,
+    }
+
+
+def _ancestor_state(repo: Path, commit: str) -> dict[str, Any]:
+    if not commit:
+        return {"available": False, "ancestor_check_rc": None, "is_ancestor_of_current_head": False}
+    cat = _run_git(repo, "cat-file", "-e", f"{commit}^{{commit}}")
+    if cat.returncode != 0:
+        return {"available": False, "ancestor_check_rc": cat.returncode, "is_ancestor_of_current_head": False}
+    ancestor = _run_git(repo, "merge-base", "--is-ancestor", commit, "HEAD")
+    return {
+        "available": True,
+        "ancestor_check_rc": ancestor.returncode,
+        "is_ancestor_of_current_head": ancestor.returncode == 0,
+    }
+
+
+def _current_subject(closure: Mapping[str, Any]) -> Mapping[str, Any]:
+    subjects = closure.get("benchmark_subjects")
+    if not isinstance(subjects, Mapping):
+        return {}
+    current = subjects.get("current")
+    return current if isinstance(current, Mapping) else {}
+
+
+def _tool_description_file_checks(repo: Path, subject: Mapping[str, Any]) -> list[dict[str, Any]]:
+    tool_descriptions = subject.get("tool_descriptions")
+    if not isinstance(tool_descriptions, Mapping):
+        return []
+    checks: list[dict[str, Any]] = []
+    for key, rel in _TOOL_DESCRIPTION_SUBJECT_FILES.items():
+        record = tool_descriptions.get(key)
+        if not isinstance(record, Mapping):
+            checks.append({"key": key, "relative_path": rel, "exists": False, "expected_sha256": None, "actual_sha256": None, "hash_match": False})
+            continue
+        expected = record.get("sha256")
+        path = repo / rel
+        exists = path.exists()
+        actual = sha256(path.read_bytes()).hexdigest() if exists and path.is_file() else None
+        checks.append(
+            {
+                "key": key,
+                "relative_path": rel,
+                "exists": exists,
+                "expected_sha256": expected,
+                "actual_sha256": actual,
+                "hash_match": exists and actual == expected,
+            }
+        )
+    return checks
+
+
+def _recorded_subject_phase2_complete(
+    closure: Mapping[str, Any],
+    phase2_active: Mapping[str, Any],
+    post_phase2: Mapping[str, Any],
+    phase2_review: Mapping[str, Any],
+    plan_text: str,
+) -> dict[str, Any]:
+    checks = {
+        "plan_phase1_gate_present": "≥1 skill measurably improved" in plan_text and "no benchmark regression" in plan_text,
+        "plan_phase2_gate_present": "Tool selection accuracy improved" in plan_text and "no benchmark regression" in plan_text,
+        "benchmark_closure_passed": closure.get("status") == "STRICT_PLAN_BENCHMARK_GATE_CLOSED"
+        and closure.get("strict_plan_gate_closed") is True
+        and closure.get("benchmark_gate_passed") is True
+        and closure.get("blocked_by") == [],
+        "phase2_active_apply_passed": phase2_active.get("verdict") == "PASS_ACTIVE_SCHEMA_APPLY_LOCAL"
+        and phase2_active.get("phase2d_gate_passed") is True
+        and phase2_active.get("model_tools_readback_passed") is True
+        and phase2_active.get("raw_registry_readback_passed") is True
+        and phase2_active.get("semantic_loss_guard_passed") is True,
+        "post_phase2_open_frontier_consumed": post_phase2.get("strict_verdict")
+        == "LOCAL_P1_P2_ACTIVE_APPLIED__STRICT_BENCHMARK_GATE_OPEN",
+        "phase2_review_complete": phase2_review.get("phase2e_closeout_complete") is True
+        and phase2_review.get("remaining_phase2_closeout_items") == [],
+        "no_github_write_preserved": closure.get("github_query_performed") is False
+        and closure.get("github_write_performed") is False,
+        "no_spend_or_active_apply_in_closure": closure.get("provider_or_model_spend_performed") is False
+        and closure.get("network_calls_performed") is False
+        and closure.get("active_apply_performed") is False,
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    return {"complete": not blockers, "checks": checks, "blockers": blockers}
+
+
+def _recorded_frontier(recorded_complete: Mapping[str, Any]) -> dict[str, Any]:
+    if recorded_complete.get("complete") is True:
+        return {
+            "status": PHASE_2_STRICT_COMPLETE,
+            "highest_strict_complete_phase": 2,
+            "basis": "closed Phase 1/2 benchmark gate plus local active Phase 1/2 evidence on the recorded benchmark subject",
+            "blockers": [],
+        }
+    return {
+        "status": RECORDED_SUBJECT_INCOMPLETE,
+        "highest_strict_complete_phase": 0,
+        "basis": "recorded Phase 1/2 evidence is incomplete",
+        "blockers": list(recorded_complete.get("blockers", [])),
+    }
+
+
+def _current_frontier(recorded_complete: Mapping[str, Any], current_match: Mapping[str, Any]) -> dict[str, Any]:
+    if recorded_complete.get("complete") is True and current_match.get("matches_closure_subject") is True:
+        return {
+            "status": PHASE_2_STRICT_COMPLETE,
+            "highest_strict_complete_phase": 2,
+            "basis": "active Hermes HEAD and tool-description hashes match the closed benchmark-gate subject",
+            "blockers": [],
+        }
+    blockers = list(recorded_complete.get("blockers", []))
+    blockers.extend(current_match.get("blockers", []))
+    if recorded_complete.get("complete") is True:
+        blockers.append("current_baseline_revalidation_required_before_phase1_phase2_strict_claim")
+    return {
+        "status": CURRENT_BASELINE_REVALIDATION_REQUIRED,
+        "highest_strict_complete_phase": 0,
+        "basis": "current active Hermes baseline does not match the closed benchmark-gate subject",
+        "blockers": sorted(set(blockers)),
+    }
+
+
+def _phase_table(data: Mapping[str, Mapping[str, Any]], recorded_complete: Mapping[str, Any], current_match: Mapping[str, Any], current_frontier: Mapping[str, Any]) -> dict[str, Any]:
+    current_phase2 = current_frontier.get("status") == PHASE_2_STRICT_COMPLETE
+    phase1_status = "STRICT_COMPLETE_CURRENT_ACTIVE" if current_phase2 else "REVALIDATION_REQUIRED_CURRENT_BASELINE_MISMATCH"
+    phase2_status = phase1_status
+    phase3_blockers = _phase3_blockers(data["phase3_plan"], data["phase3_readiness"], current_phase2)
+    phase3_strict = not phase3_blockers
+    phase4_blockers = _phase4_blockers(data["phase4_completion"], phase3_strict)
+    phase5_blockers = _phase5_blockers(data["phase5_readiness"], data["phase5_formal"])
+    return {
+        "phase1": {
+            "strict_complete": current_phase2,
+            "recorded_subject_complete": recorded_complete.get("complete") is True,
+            "strict_status": phase1_status,
+            "blockers": [] if current_phase2 else ["current_baseline_revalidation_required_before_phase1_strict_claim"],
+        },
+        "phase2": {
+            "strict_complete": current_phase2,
+            "recorded_subject_complete": recorded_complete.get("complete") is True,
+            "strict_status": phase2_status,
+            "blockers": [] if current_phase2 else ["current_baseline_revalidation_required_before_phase2_strict_claim"],
+        },
+        "phase3": {
+            "strict_complete": phase3_strict,
+            "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE" if phase3_strict else "NOT_STRICT_COMPLETE_PREPARATION_ONLY",
+            "historical_claim_status": data["phase3_historical"].get("status"),
+            "blockers": phase3_blockers,
+        },
+        "phase4": {
+            "strict_complete": not phase4_blockers,
+            "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE" if not phase4_blockers else "NOT_STRICT_COMPLETE_BLOCKED_BY_PHASE3_OR_SCOPE",
+            "historical_local_status": data["phase4_completion"].get("status"),
+            "blockers": phase4_blockers,
+        },
+        "phase5": {
+            "strict_complete": not phase5_blockers,
+            "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE" if not phase5_blockers else "NOT_STRICT_COMPLETE_LOCAL_OR_WAIVED_ONLY",
+            "historical_claim_status": data["phase5_formal"].get("status"),
+            "current_readiness_status": data["phase5_readiness"].get("status"),
+            "blockers": phase5_blockers,
+        },
+    }
+
+
+def _phase3_blockers(phase3_plan: Mapping[str, Any], phase3_readiness: Mapping[str, Any], current_phase2_complete: bool) -> list[str]:
+    blockers: list[str] = []
+    if not current_phase2_complete:
+        blockers.append("phase3_blocked_until_phase1_phase2_strict_complete_current")
+    if phase3_plan.get("status") == "planned_not_executed" or phase3_plan.get("execution_started") is False:
+        blockers.append("phase3_current_plan_status_planned_not_executed")
+    if phase3_readiness.get("real_benchmarks_executed") is not True:
+        blockers.append("phase3_real_benchmarks_not_executed")
+    if phase3_readiness.get("active_system_prompt_apply_approved") is not True:
+        blockers.append("phase3_active_apply_not_approved_current_readiness")
+    ready_state_raw = phase3_readiness.get("ready_state")
+    ready_state: Mapping[str, Any] = ready_state_raw if isinstance(ready_state_raw, Mapping) else {}
+    if ready_state.get("real_benchmark_ready_now") is not True:
+        blockers.append("phase3_real_benchmark_ready_now_false")
+    return sorted(set(blockers))
+
+
+def _phase4_blockers(phase4: Mapping[str, Any], phase3_strict_complete: bool) -> list[str]:
+    blockers: list[str] = []
+    if not phase3_strict_complete:
+        blockers.append("phase4_blocked_until_phase3_strict_complete_current")
+    safety_raw = phase4.get("safety_boundaries")
+    safety: Mapping[str, Any] = safety_raw if isinstance(safety_raw, Mapping) else {}
+    if safety.get("darwinian_cli_invoked") is not True:
+        blockers.append("darwinian_evolver_cli_not_invoked_for_current_strict_gate")
+    if phase4.get("status") != "completed_current_strict_plan_verified":
+        blockers.append("phase4_evidence_local_or_scaffold_not_current_strict_plan_verified")
+    return sorted(set(blockers))
+
+
+def _phase5_blockers(phase5_readiness: Mapping[str, Any], phase5_formal: Mapping[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    if phase5_readiness.get("continuous_loop_enabled") is not True:
+        blockers.append("production_continuous_loop_not_enabled")
+    if phase5_readiness.get("cron_jobs_created") is not True:
+        blockers.append("cron_jobs_not_created")
+    ready_state_raw = phase5_readiness.get("ready_state")
+    ready_state: Mapping[str, Any] = ready_state_raw if isinstance(ready_state_raw, Mapping) else {}
+    if ready_state.get("phase5_unattended_loop_ready_now") is not True:
+        blockers.append("phase5_unattended_loop_ready_now_false")
+    if phase5_formal.get("status") == "FORMAL_PHASE5_COMPLETE_LOCAL_WITH_EXPLICIT_WAIVER":
+        blockers.append("historical_local_waiver_not_current_strict_plan_completion")
+    return sorted(set(blockers))
+
+
+def _plan_contract(plan_path: Path, plan_text: str) -> dict[str, Any]:
+    return {
+        "path": str(plan_path),
+        "sha256": _sha256_path(plan_path),
+        "phase_gates_detected": {
+            "phase1": "≥1 skill measurably improved" in plan_text and "no benchmark regression" in plan_text,
+            "phase2": "Tool selection accuracy improved" in plan_text and "no benchmark regression" in plan_text,
+            "phase3": "Behavioral tests pass" in plan_text and "benchmarks hold or improve" in plan_text,
+            "phase4": "Bugs fixed" in plan_text and "tests pass" in plan_text and "benchmarks hold" in plan_text,
+            "phase5": "Automated pipeline runs unattended" in plan_text,
+        },
+    }
+
+
+def _source_artifacts(paths: Mapping[str, Path]) -> dict[str, dict[str, Any]]:
+    artifacts: dict[str, dict[str, Any]] = {}
+    for name, path in paths.items():
+        artifacts[name] = {"path": str(path), "sha256": _sha256_path(path), "bytes": path.stat().st_size}
+    return artifacts
+
+
+def _summary(recorded_frontier: Mapping[str, Any], current_frontier: Mapping[str, Any]) -> str:
+    if current_frontier.get("status") == PHASE_2_STRICT_COMPLETE:
+        return "Phase 2 is strict-complete for both recorded subject and current active Hermes target; Phase 3+ remain blocked."
+    if recorded_frontier.get("status") == PHASE_2_STRICT_COMPLETE:
+        return "Recorded-subject Phase 2 strict completion is closed, but current active Hermes baseline requires revalidation before Phase 1/2 strict completion can be claimed."
+    return "Strict frontier is blocked before Phase 1/2 because recorded evidence is incomplete."
+
+
+def _recommended_next(current_frontier: Mapping[str, Any]) -> str:
+    if current_frontier.get("status") == PHASE_2_STRICT_COMPLETE:
+        return "phase3_strict_execution_preflight_go_no_remote_no_provider_no_github_write"
+    return "current_baseline_revalidation_required_before_phase1_phase2_strict_claim: refresh active Hermes baseline inventory, rerun/readiness-check Phase 1/2 local benchmark evidence against current HEAD, and keep GitHub/remote/provider expansion blocked."
+
+
+def _load_json_object(path: Path, label: str) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"{label} not found: {path}")
+    data = json.loads(path.read_text(), parse_constant=_reject_json_constant)
+    if not isinstance(data, dict):
+        raise ValueError(f"{label} JSON root must be an object: {path}")
+    return data
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON constant is not allowed: {value}")
+
+
+def _require_non_empty(field: str, value: Any) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} must be non-empty")
+
+
+def _sha256_path(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def _render_markdown(report: Mapping[str, Any]) -> str:
+    phases = report.get("phases", {}) if isinstance(report.get("phases"), Mapping) else {}
+    phase_lines = []
+    for key in ("phase1", "phase2", "phase3", "phase4", "phase5"):
+        phase = phases.get(key, {}) if isinstance(phases.get(key), Mapping) else {}
+        blockers = phase.get("blockers", [])
+        blocker_text = ", ".join(blockers) if isinstance(blockers, list) and blockers else "none"
+        phase_lines.append(
+            f"- {key}: strict_complete={str(phase.get('strict_complete')).lower()} status=`{phase.get('strict_status')}` blockers={blocker_text}"
+        )
+    current = report.get("current_active_frontier", {}) if isinstance(report.get("current_active_frontier"), Mapping) else {}
+    recorded = report.get("recorded_subject_frontier", {}) if isinstance(report.get("recorded_subject_frontier"), Mapping) else {}
+    match = report.get("current_baseline_match", {}) if isinstance(report.get("current_baseline_match"), Mapping) else {}
+    return "\n".join(
+        [
+            "# HSE Strict Frontier Audit",
+            "",
+            f"Status: `{report.get('status')}`",
+            "",
+            "## Frontier",
+            "",
+            f"- recorded_subject_frontier=`{recorded.get('status')}` phase={recorded.get('highest_strict_complete_phase')}",
+            f"- current_active_frontier=`{current.get('status')}` phase={current.get('highest_strict_complete_phase')}",
+            f"- current baseline matches closure subject: `{match.get('matches_closure_subject')}`",
+            "",
+            "## Phase Table",
+            "",
+            *phase_lines,
+            "",
+            "## Boundaries",
+            "",
+            "- No GitHub query/write performed.",
+            "- No provider/API/network spend performed.",
+            "- No active apply, cron, gateway restart, deploy, or remote benchmark expansion performed.",
+            "- Overall HSE project completion is not claimed.",
+            "",
+            "## Recommended Next Action",
+            "",
+            str(report.get("recommended_next_action")),
+            "",
+        ]
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Write an HSE strict frontier audit report.")
+    parser.add_argument("--active-hermes-repo", required=True, type=Path)
+    parser.add_argument("--benchmark-closure", required=True, type=Path)
+    parser.add_argument("--phase2-active-apply", required=True, type=Path)
+    parser.add_argument("--post-phase2-audit", required=True, type=Path)
+    parser.add_argument("--phase2-review", required=True, type=Path)
+    parser.add_argument("--phase3-plan", required=True, type=Path)
+    parser.add_argument("--phase3-readiness", required=True, type=Path)
+    parser.add_argument("--phase3-historical", required=True, type=Path)
+    parser.add_argument("--phase4-completion", required=True, type=Path)
+    parser.add_argument("--phase5-readiness", required=True, type=Path)
+    parser.add_argument("--phase5-formal", required=True, type=Path)
+    parser.add_argument("--plan", required=True, type=Path)
+    parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--generated-at", required=True)
+    args = parser.parse_args(argv)
+    result = write_strict_frontier_audit(
+        active_hermes_repo=args.active_hermes_repo,
+        benchmark_closure_path=args.benchmark_closure,
+        phase2_active_apply_path=args.phase2_active_apply,
+        post_phase2_audit_path=args.post_phase2_audit,
+        phase2_review_path=args.phase2_review,
+        phase3_plan_path=args.phase3_plan,
+        phase3_readiness_path=args.phase3_readiness,
+        phase3_historical_path=args.phase3_historical,
+        phase4_completion_path=args.phase4_completion,
+        phase5_readiness_path=args.phase5_readiness,
+        phase5_formal_path=args.phase5_formal,
+        plan_path=args.plan,
+        output_dir=args.output_dir,
+        generated_at=args.generated_at,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

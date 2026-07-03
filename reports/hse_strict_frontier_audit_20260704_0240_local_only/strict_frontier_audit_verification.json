@@ -1,0 +1,52 @@
+{
+  "audit_markdown": {
+    "exists": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_20260704_0240_local_only/strict_frontier_audit.md",
+    "sha256": "cfbfc3b2d3080bf0bdc16864e50e1382a0efacf2860f12997eecd8b4b9a6722e"
+  },
+  "audit_report": {
+    "json_parse_passed": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_20260704_0240_local_only/strict_frontier_audit.json",
+    "schema_version": "hse-strict-frontier-audit-v1",
+    "sha256": "9411e1a7927fa993cb0d475bcf24cfe572a80fd9d14e791c42690746102ef495"
+  },
+  "generated_at_utc": "2026-07-03T17:42:43.256592+00:00",
+  "independent_qa": {
+    "note": "QA evaluated the artifact summary and recommended retaining/attaching the full JSON payload; this bundle retains the full strict_frontier_audit.json and this verification manifest.",
+    "score": 0.96,
+    "session": "qa-83d2193a",
+    "threshold": 0.9,
+    "tool": "ouroboros_qa",
+    "verdict": "PASS"
+  },
+  "invariants": {
+    "active_apply_performed": false,
+    "artifact_invariant": "PASS",
+    "current_active_highest_strict_complete_phase": 0,
+    "current_active_status": "CURRENT_BASELINE_REVALIDATION_REQUIRED",
+    "current_baseline_matches_closure_subject": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "overall_hse_project_completion_claimed": false,
+    "phase3_strict_complete": false,
+    "phase4_strict_complete": false,
+    "phase5_strict_complete": false,
+    "provider_or_model_spend_performed": false,
+    "recorded_subject_highest_strict_complete_phase": 2,
+    "recorded_subject_status": "PHASE_2_STRICT_COMPLETE"
+  },
+  "mechanical_verification": {
+    "compileall": "PASS for evolution/local_completion/strict_frontier_audit.py and tests/local_completion/test_strict_frontier_audit.py",
+    "diff_check": "tracked diff check PASS; all diff check PASS; new file trailing whitespace PASS",
+    "focused_tests": "9 passed in 1.23s",
+    "full_pytest_recheck": "459 passed, 11 warnings in 9.38s; pytest_recheck_rc=0"
+  },
+  "schema_version": "hse-strict-frontier-audit-verification-v1",
+  "side_effect_boundaries": {
+    "active_apply_or_runtime_mutation_performed": false,
+    "cron_gateway_deploy_mutation_performed": false,
+    "github_or_remote_expansion_performed": false,
+    "provider_or_api_spend_performed": false
+  }
+}
