@@ -1,0 +1,55 @@
+{
+  "field_updates": {
+    "allowed_write_roots": {
+      "candidate_for_human_review": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310"
+      ]
+    },
+    "baseline_materialization_allowed": {
+      "candidate_for_human_review": true,
+      "source_text": "baseline/current materialization 허용"
+    },
+    "current_materialization_allowed": {
+      "candidate_for_human_review": true,
+      "source_text": "baseline/current materialization 허용"
+    },
+    "human_approval_source": {
+      "candidate_for_human_review": {
+        "approval_text": "These fields are provided for draft/review only. This is not approval to execute real benchmarks.",
+        "author": "Sunwoo",
+        "channel_context": "SnwEvAH_server / snw-evah / HSE:〔GEPA+DSPy〕",
+        "scope": "draft_fields_only_not_execution",
+        "type": "discord_message"
+      }
+    },
+    "network_provider_api_spend_allowed": {
+      "candidate_for_human_review": true,
+      "source_text": "network/provider spend 허용"
+    },
+    "rollback_plan": {
+      "candidate_for_human_review": {
+        "cleanup_started": false,
+        "delete_future_output_root_if_created": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310",
+        "preserve_preflight_report_artifacts": true,
+        "remove_disposable_worktrees_if_created": true,
+        "rollback_plan_verified": true,
+        "verify_after_cleanup": [
+          "future output root absent or intentionally archived",
+          "disposable baseline/current worktrees absent",
+          "HSE and Hermes git heads unchanged unless committed locally"
+        ]
+      }
+    }
+  },
+  "not_execution_approval": true,
+  "raw_scope_label": "HSE Real Benchmark Approval Fields Draft Update — NOT EXECUTION APPROVAL",
+  "received_at": "2026-07-03T23:14:49+09:00",
+  "schema_version": "hse-real-benchmark-approval-fields-user-update-v1",
+  "unstructured_mentions": [
+    "benchmark_suites",
+    "max_budget",
+    "max_runtime",
+    "network/provider spend 허용",
+    "baseline/current materialization 허용"
+  ]
+}

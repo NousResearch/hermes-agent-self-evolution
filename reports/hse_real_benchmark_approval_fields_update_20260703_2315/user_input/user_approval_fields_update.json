@@ -1,0 +1,55 @@
+{
+  "schema_version": "hse-real-benchmark-approval-fields-user-update-v1",
+  "received_at": "2026-07-03T23:14:49+09:00",
+  "not_execution_approval": true,
+  "raw_scope_label": "HSE Real Benchmark Approval Fields Draft Update — NOT EXECUTION APPROVAL",
+  "unstructured_mentions": [
+    "benchmark_suites",
+    "max_budget",
+    "max_runtime",
+    "network/provider spend 허용",
+    "baseline/current materialization 허용"
+  ],
+  "field_updates": {
+    "network_provider_api_spend_allowed": {
+      "candidate_for_human_review": true,
+      "source_text": "network/provider spend 허용"
+    },
+    "baseline_materialization_allowed": {
+      "candidate_for_human_review": true,
+      "source_text": "baseline/current materialization 허용"
+    },
+    "current_materialization_allowed": {
+      "candidate_for_human_review": true,
+      "source_text": "baseline/current materialization 허용"
+    },
+    "allowed_write_roots": {
+      "candidate_for_human_review": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310"
+      ]
+    },
+    "rollback_plan": {
+      "candidate_for_human_review": {
+        "delete_future_output_root_if_created": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/real-run-20260703_1310",
+        "remove_disposable_worktrees_if_created": true,
+        "preserve_preflight_report_artifacts": true,
+        "cleanup_started": false,
+        "rollback_plan_verified": true,
+        "verify_after_cleanup": [
+          "future output root absent or intentionally archived",
+          "disposable baseline/current worktrees absent",
+          "HSE and Hermes git heads unchanged unless committed locally"
+        ]
+      }
+    },
+    "human_approval_source": {
+      "candidate_for_human_review": {
+        "type": "discord_message",
+        "scope": "draft_fields_only_not_execution",
+        "author": "Sunwoo",
+        "channel_context": "SnwEvAH_server / snw-evah / HSE:〔GEPA+DSPy〕",
+        "approval_text": "These fields are provided for draft/review only. This is not approval to execute real benchmarks."
+      }
+    }
+  }
+}
