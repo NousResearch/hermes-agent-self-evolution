@@ -1,0 +1,142 @@
+{
+  "allowed_write_roots": [],
+  "apply_ready": false,
+  "approval_complete": false,
+  "approval_form": {
+    "allowed_write_roots": [],
+    "approver_metadata": null,
+    "baseline_materialization_allowed": false,
+    "benchmark_suites": [
+      "TBLite",
+      "YC-Bench",
+      "Phase2 PLAN-scale tool-selection triples"
+    ],
+    "current_materialization_allowed": false,
+    "human_approval_source": null,
+    "max_budget_krw": null,
+    "max_budget_usd": null,
+    "max_runtime_minutes": null,
+    "network_provider_api_spend_allowed": false,
+    "regression_thresholds": {
+      "Phase2 PLAN-scale tool-selection triples": "no_aggregate_or_per_tool_regression_beyond_gate",
+      "TBLite": "within_2_percent_or_better",
+      "YC-Bench": "no_material_regression"
+    },
+    "rollback_plan": null
+  },
+  "approved_runtime_minutes": null,
+  "artifacts": {
+    "approval_markdown": "real_benchmark_approval_packet.md",
+    "approval_packet": "real_benchmark_approval_packet.json",
+    "backfill_snapshot": "inputs/benchmark_gate_backfill.json",
+    "safety_review": "real_benchmark_safety_review.json",
+    "safety_review_markdown": "real_benchmark_safety_review.md"
+  },
+  "baseline_materialization_allowed": false,
+  "candidate_only": true,
+  "current_authorized_budget_krw": 0,
+  "current_authorized_budget_usd": 0,
+  "current_materialization_allowed": false,
+  "execution_boundaries": {
+    "active_apply_performed": false,
+    "benchmark_process_started": false,
+    "credential_or_secret_access_performed": false,
+    "cron_mutation_performed": false,
+    "gateway_restart_or_reload_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "execution_started": false,
+  "gate_id": "B0-RBA",
+  "generated_at": "2026-07-03T12:51:54+0900",
+  "github": {
+    "merge_performed": false,
+    "pr_created": false,
+    "publication_deferred": true,
+    "push_performed": false,
+    "queried": false
+  },
+  "human_approval_source": null,
+  "missing_approval_fields": [
+    "max_budget_usd_or_krw",
+    "max_runtime_minutes",
+    "network_provider_api_spend_allowed",
+    "baseline_materialization_allowed",
+    "current_materialization_allowed",
+    "human_approval_source",
+    "allowed_write_roots",
+    "rollback_plan"
+  ],
+  "network_provider_spend_allowed": false,
+  "phase": "Real Benchmark Approval Packet",
+  "real_benchmark_execution_approved": false,
+  "real_benchmarks_executed": false,
+  "regression_thresholds": {
+    "Phase2 PLAN-scale tool-selection triples": "no_aggregate_or_per_tool_regression_beyond_gate",
+    "TBLite": "within_2_percent_or_better",
+    "YC-Bench": "no_material_regression"
+  },
+  "requested_benchmark_suites": [
+    {
+      "execution_started": false,
+      "name": "TBLite",
+      "real_result_required_for_strict_plan_gate": true
+    },
+    {
+      "execution_started": false,
+      "name": "YC-Bench",
+      "real_result_required_for_strict_plan_gate": true
+    },
+    {
+      "execution_started": false,
+      "name": "Phase2 PLAN-scale tool-selection triples",
+      "real_result_required_for_strict_plan_gate": true
+    }
+  ],
+  "required_approval_fields": [
+    "benchmark_suites",
+    "max_budget_usd_or_krw",
+    "max_runtime_minutes",
+    "network_provider_api_spend_allowed",
+    "baseline_materialization_allowed",
+    "current_materialization_allowed",
+    "regression_thresholds",
+    "allowed_write_roots",
+    "rollback_plan",
+    "human_approval_source"
+  ],
+  "required_next_action": "collect_missing_human_approval_fields_before_execution",
+  "rollback_plan": {
+    "handles": [
+      "git commit/hash for HSE packet state",
+      "disposable baseline/current worktree cleanup plan",
+      "benchmark output root manifest with SHA-256 hashes"
+    ],
+    "required_before_execution": true,
+    "restore_mode": "no active runtime mutation expected; remove generated benchmark outputs if execution is cancelled before strict promotion"
+  },
+  "safety_invariants": {
+    "active_prompt_modified": false,
+    "active_runtime_mutation": false,
+    "active_skill_modified": false,
+    "active_tool_schema_modified": false,
+    "credentials_accessed": false,
+    "cron_jobs_created": false,
+    "deployment_performed": false,
+    "external_publication_performed": false,
+    "gateway_restart_or_reload": false,
+    "network_calls_performed": false
+  },
+  "schema_version": "hse-real-benchmark-approval-packet-v1",
+  "source_backfill": {
+    "benchmark_gate_passed": null,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_benchmark_gate_backfill_20260703_1237/benchmark_gate_backfill.json",
+    "sha256": "e2596645d1b0cc787f7838eddfd9363a677bc73dceee7a9b40aae50977ee63e8",
+    "status": "BLOCKED_BY_BENCHMARK_APPROVAL",
+    "strict_plan_gate_closed": false
+  },
+  "status": "AWAITING_EXPLICIT_BENCHMARK_APPROVAL",
+  "summary": "Real benchmark approval packet is fail-closed and awaiting explicit human approval.",
+  "target": "strict-plan-real-benchmark-approval"
+}
