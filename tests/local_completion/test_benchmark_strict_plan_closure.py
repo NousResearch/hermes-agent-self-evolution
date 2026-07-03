@@ -9,6 +9,7 @@ from pathlib import Path
 from evolution.local_completion.benchmark_strict_plan_closure import (
     BLOCKED_BENCHMARK_EVIDENCE_INCOMPLETE,
     STRICT_PLAN_BENCHMARK_GATE_CLOSED,
+    write_current_baseline_benchmark_strict_plan_closure,
     write_benchmark_strict_plan_closure,
 )
 
@@ -310,3 +311,198 @@ def test_benchmark_strict_plan_closure_blocks_hash_mismatch_without_side_effects
     assert "artifact_hash_mismatch" in report["blocked_by"]
     assert report["github"]["queried"] is False
     assert report["safety_invariants"]["network_calls_performed"] is False
+
+
+def _valid_current_baseline_artifacts(tmp_path: Path) -> dict[str, Path]:
+    paths = _valid_artifacts(tmp_path)
+    old_verification = json.loads(paths["verification"].read_text())
+    suite_records = old_verification["reports"][:3]
+    output_root = Path(suite_records[0]["path"]).parent
+    preflight = _write_json(
+        tmp_path / "reports" / "current_baseline_preflight.json",
+        {
+            "schema_version": "hse-current-baseline-revalidation-preflight-v1",
+            "status": "CURRENT_BASELINE_REVALIDATION_PREFLIGHT_READY_SEPARATE_GO_REQUIRED",
+            "baseline_commit_for_rerun": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d",
+            "current_commit_for_rerun": "551e5af50dc6597069e57af047213f61e40246d6",
+            "execution_go": False,
+            "execution_started": False,
+            "real_benchmarks_executed": False,
+            "strict_plan_gate_closed": False,
+            "full_remote_benchmark_executed": False,
+            "github_query_performed": False,
+            "github_write_performed": False,
+            "provider_or_model_spend_performed": False,
+            "network_calls_performed": False,
+            "active_apply_performed": False,
+            "rerun_decision": {
+                "rerun_recommended": True,
+                "rerun_approved_now": False,
+                "separate_local_smoke_go_required": True,
+                "local_smoke_rerun_ready_not_started": True,
+            },
+            "future_output_root_guard": {
+                "future_output_root": str(output_root),
+                "future_output_root_exists_now": False,
+                "future_output_root_created_now": False,
+                "benchmark_output_written_now": False,
+                "passed": True,
+            },
+            "suite_readiness": [
+                {"suite": "TBLite", "ready": True, "blocked_by": []},
+                {"suite": "YC-Bench", "ready": True, "blocked_by": []},
+                {"suite": "Phase2 PLAN-scale tool-selection triples", "ready": True, "blocked_by": []},
+            ],
+        },
+    )
+    summary = _write_json(
+        output_root / "current_execution_summary.json",
+        {
+            "schema_version": "hse-current-baseline-local-smoke-execution-summary-v1",
+            "status": "LOCAL_SMOKE_EXECUTION_PASSED",
+            "baseline_commit": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d",
+            "current_commit": "551e5af50dc6597069e57af047213f61e40246d6",
+            "execution_started": True,
+            "real_benchmarks_executed": True,
+            "all_commands_succeeded": True,
+            "all_suite_outputs_exist": True,
+            "all_suites_passed": True,
+            "all_boundary_flags_false": True,
+            "strict_plan_gate_closed": False,
+            "full_remote_benchmark_executed": False,
+            "github_query_performed": False,
+            "github_write_performed": False,
+            "provider_or_model_spend_performed": False,
+            "network_calls_performed": False,
+            "active_apply_performed": False,
+            "cron_or_gateway_mutation_performed": False,
+            "suite_passed": {record["benchmark"]: True for record in suite_records},
+        },
+    )
+    produced_files = []
+    for record in suite_records:
+        path = Path(record["path"])
+        produced_files.append(
+            {
+                "path": str(path),
+                "sha256": _sha(path),
+                "bytes": path.stat().st_size,
+                "suite_or_summary_status": record["benchmark"],
+                "passed": True,
+                "dry_run": False,
+                "under_approved_run_output_root": True,
+                "under_allowed_hse_output_root": True,
+            }
+        )
+    produced_files.append(
+        {
+            "path": str(summary),
+            "sha256": _sha(summary),
+            "bytes": summary.stat().st_size,
+            "suite_or_summary_status": "LOCAL_SMOKE_EXECUTION_PASSED",
+            "under_approved_run_output_root": True,
+            "under_allowed_hse_output_root": True,
+        }
+    )
+    verification = _write_json(
+        tmp_path / "reports" / "current_baseline_verification.json",
+        {
+            "schema_version": "hse-current-baseline-local-smoke-verification-v1",
+            "approved_output_root": str(output_root),
+            "source_preflight_report": {"path": str(preflight), "sha256": _sha(preflight)},
+            "execution_summary": {"path": str(summary), "sha256": _sha(summary), "status": "LOCAL_SMOKE_EXECUTION_PASSED"},
+            "invariants": {
+                "status_passed": True,
+                "all_commands_succeeded": True,
+                "all_suite_outputs_exist": True,
+                "all_suites_passed": True,
+                "all_boundary_flags_false": True,
+                "all_executed_commands_removed_dry_run": True,
+                "all_outputs_under_approved_root": True,
+                "all_outputs_under_hse_allowed_root": True,
+                "strict_plan_gate_closed": False,
+                "full_remote_benchmark_executed": False,
+                "github_query_performed": False,
+                "github_write_performed": False,
+                "provider_or_model_spend_performed": False,
+                "network_calls_performed": False,
+                "active_apply_performed": False,
+                "cron_or_gateway_mutation_performed": False,
+            },
+            "produced_files_manifest": produced_files,
+            "not_claimed": [
+                "full_remote_benchmark",
+                "provider_api_spend",
+                "github_query_or_write",
+                "active_apply",
+                "cron_or_gateway_mutation",
+                "strict_plan_gate_closure",
+            ],
+        },
+    )
+    paths.update({"current_preflight": preflight, "current_verification": verification, "current_summary": summary})
+    return paths
+
+
+def test_current_baseline_benchmark_strict_plan_closure_closes_from_revalidation_smoke(tmp_path: Path):
+    paths = _valid_current_baseline_artifacts(tmp_path)
+
+    result = write_current_baseline_benchmark_strict_plan_closure(
+        benchmark_backfill_path=paths["backfill"],
+        approval_packet_path=paths["approval"],
+        current_baseline_preflight_path=paths["current_preflight"],
+        execution_verification_path=paths["current_verification"],
+        execution_summary_path=paths["current_summary"],
+        plan_path=paths["plan"],
+        output_dir=tmp_path / "current-closure",
+        generated_at="2026-07-04T04:10:00+09:00",
+        approval_source="rec action GO: strict_plan_benchmark_closure_current_baseline_go",
+    )
+
+    report = json.loads(Path(result["report_path"]).read_text())
+    assert report["schema_version"] == "hse-benchmark-strict-plan-closure-v1"
+    assert report["status"] == STRICT_PLAN_BENCHMARK_GATE_CLOSED
+    assert report["strict_plan_gate_closed"] is True
+    assert report["benchmark_gate_passed"] is True
+    assert report["strict_plan_scope"] == "phase1_phase2_benchmark_regression_gate"
+    assert report["current_baseline_revalidation_closed"] is True
+    assert report["benchmark_subjects"]["baseline"]["hermes_source"]["commit"] == "9b50c56556f902b62ecc4a7e2e511ca0f316da2d"
+    assert report["benchmark_subjects"]["current"]["hermes_source"]["commit"] == "551e5af50dc6597069e57af047213f61e40246d6"
+    assert report["closed_criteria"]["current_baseline_preflight_ready"] is True
+    assert report["closed_criteria"]["current_baseline_execution_verification_passed"] is True
+    assert report["closed_criteria"]["artifact_hashes_verified"] is True
+    assert report["closed_criteria"]["all_outputs_under_approved_root"] is True
+    assert report["blocked_by"] == []
+    assert report["full_remote_benchmark_executed"] is False
+    assert report["github_query_performed"] is False
+    assert report["github_write_performed"] is False
+    assert report["provider_or_model_spend_performed"] is False
+    assert report["network_calls_performed"] is False
+    assert report["active_apply_performed"] is False
+
+
+def test_current_baseline_benchmark_strict_plan_closure_blocks_hash_mismatch(tmp_path: Path):
+    paths = _valid_current_baseline_artifacts(tmp_path)
+    verification = json.loads(paths["current_verification"].read_text())
+    verification["produced_files_manifest"][0]["sha256"] = "f" * 64
+    paths["current_verification"].write_text(json.dumps(verification, indent=2, sort_keys=True) + "\n")
+
+    result = write_current_baseline_benchmark_strict_plan_closure(
+        benchmark_backfill_path=paths["backfill"],
+        approval_packet_path=paths["approval"],
+        current_baseline_preflight_path=paths["current_preflight"],
+        execution_verification_path=paths["current_verification"],
+        execution_summary_path=paths["current_summary"],
+        plan_path=paths["plan"],
+        output_dir=tmp_path / "current-closure-blocked",
+        generated_at="2026-07-04T04:10:00+09:00",
+        approval_source="rec action GO: strict_plan_benchmark_closure_current_baseline_go",
+    )
+
+    report = json.loads(Path(result["report_path"]).read_text())
+    assert report["status"] == BLOCKED_BENCHMARK_EVIDENCE_INCOMPLETE
+    assert report["strict_plan_gate_closed"] is False
+    assert report["benchmark_gate_passed"] is False
+    assert "artifact_hash_mismatch" in report["blocked_by"]
+    assert report["github_query_performed"] is False
+    assert report["github_write_performed"] is False

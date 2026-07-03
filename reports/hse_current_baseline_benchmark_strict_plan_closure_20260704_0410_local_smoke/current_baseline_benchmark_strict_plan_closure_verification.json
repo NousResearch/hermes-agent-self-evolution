@@ -1,0 +1,96 @@
+{
+  "closed_criteria": {
+    "all_outputs_under_approved_root": true,
+    "all_required_suites_present": true,
+    "all_suites_passed": true,
+    "approval_complete": true,
+    "artifact_hashes_verified": true,
+    "backfill_subjects_present": true,
+    "current_baseline_execution_summary_passed": true,
+    "current_baseline_execution_verification_passed": true,
+    "current_baseline_go_approval_recorded": true,
+    "current_baseline_preflight_ready": true,
+    "local_smoke_not_overclaimed": true,
+    "no_forbidden_side_effects": true,
+    "phase2_case_count_satisfies_plan": true,
+    "plan_phase2_threshold_found": true,
+    "regression_thresholds_satisfied": true,
+    "subject_commits_align": true
+  },
+  "closure_markdown": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_current_baseline_benchmark_strict_plan_closure_20260704_0410_local_smoke/current_baseline_benchmark_strict_plan_closure.md",
+    "sha256": "f63129b66040c1e0e452a0d13658ac2155bb838a735def8fd4605cb752039647"
+  },
+  "closure_report": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_current_baseline_benchmark_strict_plan_closure_20260704_0410_local_smoke/current_baseline_benchmark_strict_plan_closure.json",
+    "sha256": "41b3323deac09a20d982d5d6d1aa8903efdeb16cf46b38fd744501561d422c7e",
+    "status": "STRICT_PLAN_BENCHMARK_GATE_CLOSED"
+  },
+  "generated_at_utc": "2026-07-03T19:11:31.386034+00:00",
+  "git_pre_commit": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "8e77afcbef9348ebf8402eb8c12bc07a2bdc2383"
+  },
+  "implementation_files": [
+    {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/evolution/local_completion/benchmark_strict_plan_closure.py",
+      "sha256": "e9a2e4461c9b7532c56a8338b5b9432bdeac59b10b0a78b3991957d05addd569"
+    },
+    {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/tests/local_completion/test_benchmark_strict_plan_closure.py",
+      "sha256": "2dc483024f665a20c26e45a096e05e72edba6c9ca8322e82f62f5da22736edf3"
+    }
+  ],
+  "independent_qa": {
+    "score": 0.96,
+    "session": "qa-bc486f3e",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "invariants": {
+    "artifact_hash_checks_pass": true,
+    "benchmark_gate_passed": true,
+    "blocked_by_empty": true,
+    "current_baseline_revalidation_closed": true,
+    "does_not_claim_overall_completion": true,
+    "forbidden_boundaries_false": true,
+    "status_is_closed": true,
+    "strict_plan_gate_closed": true
+  },
+  "mechanical_verification": {
+    "artifact_invariant": "current_baseline_strict_closure_invariant=PASS",
+    "compileall": "rc=0",
+    "focused_tests": "16 passed in 1.32s; rc=0",
+    "full_pytest": "464 passed, 11 warnings in 8.29s; rc=0",
+    "git_diff_check": "rc=0"
+  },
+  "schema_version": "hse-current-baseline-benchmark-strict-plan-closure-verification-v1",
+  "side_effect_boundaries": {
+    "active_apply_performed": false,
+    "cron_or_gateway_mutation_performed": false,
+    "full_remote_benchmark_executed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "overall_hse_completion_claimed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "subject_commits": {
+    "baseline": {
+      "hermes_source": {
+        "commit": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d",
+        "commit_full": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d"
+      },
+      "label": "Previously closed Phase 1/2 benchmark subject used as current-baseline rerun baseline",
+      "subject_id": "recorded-phase1-phase2-closure-subject"
+    },
+    "current": {
+      "hermes_source": {
+        "commit": "551e5af50dc6597069e57af047213f61e40246d6",
+        "commit_full": "551e5af50dc6597069e57af047213f61e40246d6"
+      },
+      "label": "Current active Hermes baseline revalidated by local-only Phase 1/2 smoke rerun",
+      "subject_id": "current-active-hermes-baseline-revalidated"
+    }
+  }
+}
