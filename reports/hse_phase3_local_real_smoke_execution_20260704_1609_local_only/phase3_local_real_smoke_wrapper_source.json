@@ -1,0 +1,65 @@
+{
+  "commands": [
+    {
+      "argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.benchmarks.run_tblite",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--fixtures-jsonl",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json",
+        "--benchmark-root",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage123-20260529T145248Z/external-benchmarks/terminal-bench-lite",
+        "--task-limit",
+        "3"
+      ],
+      "name": "phase3_tblite_local_real_smoke",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json"
+    },
+    {
+      "argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.benchmarks.run_yc_bench",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--fixtures-jsonl",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+        "--preset",
+        "fast_test",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json",
+        "--benchmark-root",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/stage123-20260529T145248Z/external-benchmarks/yc-bench"
+      ],
+      "name": "phase3_yc_bench_local_real_smoke",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json"
+    },
+    {
+      "argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.prompts.phase3_preflight_gate",
+        "--candidate-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+        "--tblite-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json",
+        "--yc-bench-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/preflight/phase3_preflight_report.json"
+      ],
+      "name": "phase3_real_mode_preflight_gate_after_real_smoke",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/preflight/phase3_preflight_report.json"
+    }
+  ],
+  "kill_switch_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/.phase3-real-benchmark-kill-switch",
+  "timeout_seconds": 600
+}

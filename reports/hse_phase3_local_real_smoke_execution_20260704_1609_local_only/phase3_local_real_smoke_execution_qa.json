@@ -1,0 +1,36 @@
+{
+  "artifacts": {
+    "evidence": {
+      "bytes": 7370,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/phase3_local_real_smoke_execution_evidence.json",
+      "sha256": "e97fe28a18bfcba861138b3a1deaa8d84e0892bed91f3752a4353781d72fe9b0"
+    },
+    "manifest": {
+      "bytes": 19007,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/phase3_local_real_smoke_execution_manifest.json",
+      "sha256": "bd40efdcd1db4b695b35c6c67ad2347a47ef3b97727aa02ff60049ae6bd55ce6"
+    },
+    "markdown": {
+      "bytes": 10936,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/phase3_local_real_smoke_execution.md",
+      "sha256": "91cc1ea5d807d5b5ef3b22f9066bbf9ea4e73be31909cd68dae3f49f4694b4c9"
+    }
+  },
+  "final_qa": {
+    "score": 0.96,
+    "session": "qa-23fa5e73",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "intermediate_qa": [
+    {
+      "note": "passed before wrapper/surface-scan hardening",
+      "score": 0.94,
+      "session": "qa-08159a97",
+      "threshold": 0.9,
+      "verdict": "PASS"
+    }
+  ],
+  "quality_bar": "local real-smoke execution only; wrapper/surface scan; forbidden boundaries preserved; no strict completion overclaim",
+  "schema_version": "hse-phase3-local-real-smoke-execution-qa-v1"
+}

@@ -1,0 +1,158 @@
+{
+  "command_logs": [
+    {
+      "name": "phase3_tblite_local_real_smoke",
+      "primary_output": {
+        "bytes": 4601,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json",
+        "sha256": "4d830e6593e9997a5c028c0bc04aa1492c0b0b69c9defcdc07ca588666e9fb50"
+      },
+      "returncode": 0,
+      "stderr": {
+        "bytes": 0,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/logs/01_phase3_tblite_local_real_smoke.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 182,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/logs/01_phase3_tblite_local_real_smoke.stdout",
+        "sha256": "c07a3df6e21c40b46446b54c2d3379a858d3db7b50aef7c3e0e62a352caba944"
+      }
+    },
+    {
+      "name": "phase3_yc_bench_local_real_smoke",
+      "primary_output": {
+        "bytes": 4937,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json",
+        "sha256": "8849fafb97463875517811e1686e9c150c618690c8feae7493f4ec477ee79c33"
+      },
+      "returncode": 0,
+      "stderr": {
+        "bytes": 0,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/logs/02_phase3_yc_bench_local_real_smoke.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 186,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/logs/02_phase3_yc_bench_local_real_smoke.stdout",
+        "sha256": "5dfbd39fd48200e445a851bf76ec31f3e75dbccf142328860a3df4d3c541edf1"
+      }
+    },
+    {
+      "name": "phase3_real_mode_preflight_gate_after_real_smoke",
+      "primary_output": {
+        "bytes": 3909,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/preflight/phase3_preflight_report.json",
+        "sha256": "f7327c3aff4d25710ebfbb658468c0c72fc80fc60c5b60fac797ced81906b967"
+      },
+      "returncode": 0,
+      "stderr": {
+        "bytes": 0,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/logs/03_phase3_real_mode_preflight_gate_after_real_smoke.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 242,
+        "exists": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/logs/03_phase3_real_mode_preflight_gate_after_real_smoke.stdout",
+        "sha256": "6377a77de158c100f0a59b4416d2235c5831146fb43c2fb0152d6f6331efa89d"
+      }
+    }
+  ],
+  "forbidden_boundaries_false": true,
+  "local_real_smoke_passed": true,
+  "manifest": {
+    "bytes": 19007,
+    "exists": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/phase3_local_real_smoke_execution_manifest.json",
+    "sha256": "bd40efdcd1db4b695b35c6c67ad2347a47ef3b97727aa02ff60049ae6bd55ce6"
+  },
+  "markdown": {
+    "bytes": 10936,
+    "exists": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/phase3_local_real_smoke_execution.md",
+    "sha256": "91cc1ea5d807d5b5ef3b22f9066bbf9ea4e73be31909cd68dae3f49f4694b4c9"
+  },
+  "mechanical_verification": {
+    "active_repo_guard": "active_status_count=0",
+    "compileall": "rc=0",
+    "focused_tests": "34 passed in 1.41s; rc=0",
+    "full_pytest": "469 passed, 11 warnings in 9.76s; rc=0",
+    "git_diff_check": "rc=0",
+    "json_validation": "manifest json.tool rc=0",
+    "local_real_smoke_invariant": "phase3_local_real_smoke_execution_invariant=PASS; rc=0"
+  },
+  "qa_pending": true,
+  "real_mode_preflight_report": {
+    "bytes": 3909,
+    "exists": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/preflight/phase3_preflight_report.json",
+    "sha256": "f7327c3aff4d25710ebfbb658468c0c72fc80fc60c5b60fac797ced81906b967"
+  },
+  "schema_version": "hse-phase3-local-real-smoke-execution-evidence-v1",
+  "tblite_report": {
+    "bytes": 4601,
+    "exists": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json",
+    "sha256": "4d830e6593e9997a5c028c0bc04aa1492c0b0b69c9defcdc07ca588666e9fb50"
+  },
+  "wrapper_and_forbidden_surface_scan": {
+    "all_forbidden_command_token_hits_empty": true,
+    "all_returncodes_zero": true,
+    "all_stderr_logs_empty": true,
+    "all_timeouts_false": true,
+    "checked_before_each_command": true,
+    "kill_switch_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/.phase3-real-benchmark-kill-switch",
+    "per_command_guard_scan": [
+      {
+        "forbidden_command_token_hits": [],
+        "kill_switch_present_before": false,
+        "name": "phase3_tblite_local_real_smoke",
+        "returncode": 0,
+        "stderr_empty": true,
+        "timed_out": false,
+        "timeout_seconds": 600
+      },
+      {
+        "forbidden_command_token_hits": [],
+        "kill_switch_present_before": false,
+        "name": "phase3_yc_bench_local_real_smoke",
+        "returncode": 0,
+        "stderr_empty": true,
+        "timed_out": false,
+        "timeout_seconds": 600
+      },
+      {
+        "forbidden_command_token_hits": [],
+        "kill_switch_present_before": false,
+        "name": "phase3_real_mode_preflight_gate_after_real_smoke",
+        "returncode": 0,
+        "stderr_empty": true,
+        "timed_out": false,
+        "timeout_seconds": 600
+      }
+    ],
+    "present_at_end": false,
+    "timeout_seconds_per_command": 600
+  },
+  "wrapper_source": {
+    "bytes": 4258,
+    "exists": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_local_real_smoke_execution_20260704_1609_local_only/phase3_local_real_smoke_wrapper_source.json",
+    "sha256": "79b11522585bf4fa12b956085f918af0cace5faf9126740d0bf1e1494bc82112"
+  },
+  "yc_bench_report": {
+    "bytes": 4937,
+    "exists": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json",
+    "sha256": "8849fafb97463875517811e1686e9c150c618690c8feae7493f4ec477ee79c33"
+  }
+}
