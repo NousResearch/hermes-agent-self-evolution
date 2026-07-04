@@ -1,0 +1,92 @@
+{
+  "commands": [
+    {
+      "argv": [
+        "python",
+        "-m",
+        "evolution.prompts.phase3_candidate_scaffold",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/candidate_system_prompt.json",
+        "--output-dir",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review",
+        "--dry-run"
+      ],
+      "name": "phase3_candidate_scaffold_dry_run",
+      "side_effect_class": "preview_only",
+      "started": false
+    },
+    {
+      "argv": [
+        "python",
+        "-m",
+        "evolution.benchmarks.run_tblite",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--fixtures-jsonl",
+        "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+        "--dry-run"
+      ],
+      "name": "phase3_tblite_local_fixture_dry_run",
+      "side_effect_class": "preview_only",
+      "started": false
+    },
+    {
+      "argv": [
+        "python",
+        "-m",
+        "evolution.benchmarks.run_yc_bench",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--fixtures-jsonl",
+        "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+        "--preset",
+        "fast_test",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json",
+        "--dry-run"
+      ],
+      "name": "phase3_yc_bench_local_fixture_dry_run",
+      "side_effect_class": "preview_only",
+      "started": false
+    },
+    {
+      "argv": [
+        "python",
+        "-m",
+        "evolution.prompts.phase3_preflight_gate",
+        "--candidate-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+        "--tblite-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+        "--yc-bench-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/preflight/phase3_preflight_report.json",
+        "--dry-run"
+      ],
+      "name": "phase3_local_preflight_gate_dry_run",
+      "side_effect_class": "preview_only",
+      "started": false
+    }
+  ],
+  "commands_started": false,
+  "dry_run": true,
+  "not_included_until_separate_approval": [
+    "GEPA/DSPy optimizer execution",
+    "real TBLite/YC-Bench execution",
+    "active system prompt/source apply",
+    "runtime restart/reload",
+    "GitHub query/write",
+    "provider/API spend"
+  ],
+  "run_id": "phase3-strict-execution-20260704_1055",
+  "schema_version": "hse-phase3-strict-execution-command-preview-v1"
+}

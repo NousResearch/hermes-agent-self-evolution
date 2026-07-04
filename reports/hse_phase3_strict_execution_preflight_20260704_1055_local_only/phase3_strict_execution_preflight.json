@@ -1,0 +1,350 @@
+{
+  "active_apply_performed": false,
+  "active_prompt_source_inventory": {
+    "branch": "main",
+    "clean": true,
+    "dirty_entries": [],
+    "dirty_file_count": 0,
+    "head": "551e5af50dc6597069e57af047213f61e40246d6",
+    "head_short": "551e5af50",
+    "repo_root": "/Users/snw/.hermes/hermes-agent",
+    "target_files": [
+      {
+        "bytes": 96146,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "agent/prompt_builder.py",
+        "sha256": "3ffda788abe6bca803ed13a3ebf1eefb94aec909576c6dfe48b19f43184c31d7"
+      },
+      {
+        "bytes": 72135,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "tests/agent/test_prompt_builder.py",
+        "sha256": "f9d143c0795a1bdf275d3b28da68e863dfbda1a5c30ba304c9d4ec4483742fbc"
+      }
+    ]
+  },
+  "active_system_prompt_apply_approved": false,
+  "active_system_prompt_apply_ready": false,
+  "apply_ready": false,
+  "artifacts": {
+    "command_preview": "phase3_strict_execution_command_preview.json",
+    "preflight_markdown": "phase3_strict_execution_preflight.md",
+    "preflight_report": "phase3_strict_execution_preflight.json"
+  },
+  "blocked_by": [],
+  "candidate_only": true,
+  "command_preview": {
+    "all_commands_preview_only": true,
+    "commands_started": false,
+    "dry_run": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_execution_preflight_20260704_1055_local_only/phase3_strict_execution_command_preview.json",
+    "relative_path": "phase3_strict_execution_command_preview.json",
+    "schema_version": "hse-phase3-strict-execution-command-preview-v1"
+  },
+  "cron_or_gateway_mutation_performed": false,
+  "deploy_or_publication_performed": false,
+  "execution_started": false,
+  "full_remote_benchmark_executed": false,
+  "future_output_root_guard": {
+    "allowed_root_fragment": "output/phase3-system-prompt",
+    "fresh_output_required": true,
+    "future_output_root": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055",
+    "future_output_root_created_now": false,
+    "future_output_root_exists_now": false,
+    "future_output_root_is_symlink_now": false,
+    "passed": true,
+    "phase3_output_written_now": false
+  },
+  "future_run_id": "phase3-strict-execution-20260704_1055",
+  "gate_id": "SFA-P3-PREFLIGHT",
+  "generated_at": "2026-07-04T10:55:45+0900",
+  "github": {
+    "merge_performed": false,
+    "pr_created": false,
+    "publication_deferred": true,
+    "push_performed": false,
+    "queried": false
+  },
+  "github_query_performed": false,
+  "github_write_performed": false,
+  "local_only_benchmark_readiness": {
+    "dry_run_fixture_benchmarks_ready": true,
+    "full_remote_benchmark_executed": false,
+    "local_fixture_adapters_available": true,
+    "local_only_scope": true,
+    "network_calls_performed": false,
+    "provider_or_model_spend_performed": false,
+    "real_benchmark_ready_now": false,
+    "separate_benchmark_execution_go_required": true
+  },
+  "mutate_active_system_prompt_now": false,
+  "network_calls_performed": false,
+  "not_claimed": [
+    "phase3_strict_completion",
+    "phase4_strict_completion",
+    "phase5_strict_completion",
+    "overall_HSE_project_completion",
+    "full_remote_benchmark",
+    "provider_api_spend",
+    "github_query_or_write",
+    "active_apply",
+    "cron_or_gateway_mutation",
+    "deploy_or_publication"
+  ],
+  "overall_hse_project_completion_claimed": false,
+  "phase": "Phase 3 Strict Execution Preflight",
+  "phase3_contract": {
+    "execution_requires_human_approval": true,
+    "execution_seed_drafted_not_executed": true,
+    "execution_seed_status": "drafted_not_executed",
+    "phase3_plan_not_executed": true,
+    "phase3_plan_status": "planned_not_executed",
+    "plan_phase3_gate_present": true,
+    "readiness_active_apply_ready_now": false,
+    "readiness_real_benchmark_ready_now": false,
+    "readiness_recorded_not_executed": true,
+    "readiness_status": "recorded_not_executed",
+    "source_status_is_local_only": true
+  },
+  "phase3_execution_ready": false,
+  "preflight_passed": true,
+  "provider_or_model_spend_performed": false,
+  "real_benchmarks_executed": false,
+  "required_next_action": "phase3_candidate_execution_dry_run_go_no_remote_no_provider_no_github_write",
+  "run_dspy_now": false,
+  "run_gepa_now": false,
+  "runtime_candidate_execution_preflight": {
+    "candidate_execution_possible_after_separate_go": true,
+    "execution_started": false,
+    "gepa_optimizer_available_but_not_started": true,
+    "phase3_preflight_gate_available": true,
+    "run_dspy_now": false,
+    "run_gepa_now": false,
+    "system_prompt_candidate_scaffold_available": true
+  },
+  "safety_invariants": {
+    "active_prompt_modified": false,
+    "active_runtime_mutation": false,
+    "active_skill_modified": false,
+    "active_tool_schema_modified": false,
+    "credentials_accessed": false,
+    "cron_jobs_created": false,
+    "deployment_performed": false,
+    "external_publication_performed": false,
+    "gateway_restart_or_reload": false,
+    "network_calls_performed": false
+  },
+  "schema_version": "hse-phase3-strict-execution-preflight-v1",
+  "separate_phase3_execution_go_required": true,
+  "side_effect_boundaries": {
+    "active_prompt_or_source_modified": false,
+    "active_runtime_mutated": false,
+    "benchmark_process_started": false,
+    "cron_or_gateway_mutation": false,
+    "deploy_or_publication": false,
+    "future_output_root_created": false,
+    "gepa_or_dspy_started": false,
+    "github_query_or_write": false,
+    "network_calls": false,
+    "phase3_candidate_execution_started": false,
+    "provider_or_model_spend": false,
+    "report_files_written": true
+  },
+  "source_artifacts": {
+    "phase3_execution_seed_draft": {
+      "bytes": 12442,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase3_execution_seed_draft.json",
+      "sha256": "5c191c400f912e0e42e32fb6b679ba53bdc534c2645a30ce1b512977c3c8e915"
+    },
+    "phase3_plan": {
+      "bytes": 5598,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase3_system_prompt_evolution_plan.json",
+      "sha256": "dea4caf03fceb448bfd3e43660048158f063437a6fbdc97ff19d8c7cd715855e"
+    },
+    "phase3_readiness": {
+      "bytes": 7586,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/phase3_real_benchmark_readiness_manifest.json",
+      "sha256": "15f741c11da9c31d75ba8b4e7c69f99bdad1d445119fd7e16e794cfede3f6b0a"
+    },
+    "plan": {
+      "bytes": 56973,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/PLAN.md",
+      "sha256": "edfdf202dd164c9d4618909f18ecff1016dd187d98e3bd46ac784613a6e6b662"
+    },
+    "strict_frontier_audit": {
+      "bytes": 11380,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_current_active_recheck_20260704_1032_local_only/strict_frontier_audit.json",
+      "sha256": "882da5dc3da6142ac77d1c2673bf506388337a67dd7d440edb8316cd270008a0"
+    }
+  },
+  "status": "PHASE3_STRICT_EXECUTION_PREFLIGHT_READY_SEPARATE_GO_REQUIRED",
+  "strict_frontier_gate": {
+    "active_head_from_frontier": "551e5af50dc6597069e57af047213f61e40246d6",
+    "active_head_matches_live_checkout": true,
+    "current_active_frontier_blockers": [],
+    "current_active_frontier_status": "PHASE_2_STRICT_COMPLETE",
+    "current_active_highest_strict_complete_phase": 2,
+    "phase1_strict_complete": true,
+    "phase2_strict_complete": true,
+    "phase3_existing_blockers": [
+      "phase3_active_apply_not_approved_current_readiness",
+      "phase3_current_plan_status_planned_not_executed",
+      "phase3_real_benchmark_ready_now_false",
+      "phase3_real_benchmarks_not_executed"
+    ],
+    "phase3_strict_complete": false,
+    "schema_version": "hse-strict-frontier-audit-v1",
+    "source_status_is_local_only": true,
+    "status": "PHASE_2_STRICT_COMPLETE"
+  },
+  "summary": "Phase 3 strict execution preflight is ready for a separate local-only candidate execution GO; no execution started.",
+  "support_inventory": {
+    "all_required_support_files_present": true,
+    "hse_repo_root": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution",
+    "missing_required_support_files": [],
+    "required_support_files": [
+      "evolution/prompts/phase3_candidate_scaffold.py",
+      "evolution/prompts/phase3_preflight_gate.py",
+      "evolution/prompts/phase3_gepa_optimizer.py",
+      "evolution/benchmarks/run_tblite.py",
+      "evolution/benchmarks/run_yc_bench.py",
+      "datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json",
+      "datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json",
+      "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+      "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl"
+    ],
+    "support_files": [
+      {
+        "bytes": 10881,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/prompts/phase3_candidate_scaffold.py",
+        "sha256": "089e860bb7a3d2043a76f335109628d9d495670819e0bafb46d8bb30223cd24e"
+      },
+      {
+        "bytes": 22664,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/prompts/phase3_preflight_gate.py",
+        "sha256": "fca02b910ae214fa75d56c5403306378fc18a0ed2eb38c548b6391cb0b992129"
+      },
+      {
+        "bytes": 10836,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/prompts/phase3_gepa_optimizer.py",
+        "sha256": "f29d3821d13d5366da334a06edf99992b23ebb016108ce229981d24bc6a07113"
+      },
+      {
+        "bytes": 4598,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/benchmarks/run_tblite.py",
+        "sha256": "6836e2b86e0d07c3f023091ecd8891bd5ba37321107434c117aad621c29cd26d"
+      },
+      {
+        "bytes": 4542,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/benchmarks/run_yc_bench.py",
+        "sha256": "405d87d864c4aa6957f8211976844272e78204048afd6194b51960ebf19d2fe8"
+      },
+      {
+        "bytes": 827,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json",
+        "sha256": "f2eba07e71e8b0da16b7aef4ecdcdddff553386fa9b846b51b46e0c0ecbb0ad7"
+      },
+      {
+        "bytes": 1069,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json",
+        "sha256": "d0e28fff0a61a3330f839fcd66960169fbed2ec5112b2e58f21855177c906781"
+      },
+      {
+        "bytes": 670,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+        "sha256": "38bc0c1d5a991e998bd2ab6290e02d8375c7f4b2acd095d9ed3c5edd3357a629"
+      },
+      {
+        "bytes": 713,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+        "sha256": "0280446d2cd5c81a609b32e8ce77e7fbfd6f55b89b7d1ad2734fb151cf4412d9"
+      }
+    ],
+    "support_files_by_path": {
+      "datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json": {
+        "bytes": 827,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "datasets/golden/benchmarks/phase3-system-prompt/baseline_system_prompt.json",
+        "sha256": "f2eba07e71e8b0da16b7aef4ecdcdddff553386fa9b846b51b46e0c0ecbb0ad7"
+      },
+      "datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json": {
+        "bytes": 1069,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "datasets/golden/benchmarks/phase3-system-prompt/candidate_system_prompt.json",
+        "sha256": "d0e28fff0a61a3330f839fcd66960169fbed2ec5112b2e58f21855177c906781"
+      },
+      "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl": {
+        "bytes": 670,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+        "sha256": "38bc0c1d5a991e998bd2ab6290e02d8375c7f4b2acd095d9ed3c5edd3357a629"
+      },
+      "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl": {
+        "bytes": 713,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+        "sha256": "0280446d2cd5c81a609b32e8ce77e7fbfd6f55b89b7d1ad2734fb151cf4412d9"
+      },
+      "evolution/benchmarks/run_tblite.py": {
+        "bytes": 4598,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/benchmarks/run_tblite.py",
+        "sha256": "6836e2b86e0d07c3f023091ecd8891bd5ba37321107434c117aad621c29cd26d"
+      },
+      "evolution/benchmarks/run_yc_bench.py": {
+        "bytes": 4542,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/benchmarks/run_yc_bench.py",
+        "sha256": "405d87d864c4aa6957f8211976844272e78204048afd6194b51960ebf19d2fe8"
+      },
+      "evolution/prompts/phase3_candidate_scaffold.py": {
+        "bytes": 10881,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/prompts/phase3_candidate_scaffold.py",
+        "sha256": "089e860bb7a3d2043a76f335109628d9d495670819e0bafb46d8bb30223cd24e"
+      },
+      "evolution/prompts/phase3_gepa_optimizer.py": {
+        "bytes": 10836,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/prompts/phase3_gepa_optimizer.py",
+        "sha256": "f29d3821d13d5366da334a06edf99992b23ebb016108ce229981d24bc6a07113"
+      },
+      "evolution/prompts/phase3_preflight_gate.py": {
+        "bytes": 22664,
+        "exists": true,
+        "is_file": true,
+        "relative_path": "evolution/prompts/phase3_preflight_gate.py",
+        "sha256": "fca02b910ae214fa75d56c5403306378fc18a0ed2eb38c548b6391cb0b992129"
+      }
+    }
+  },
+  "target": "phase3-system-prompt-strict-execution-preflight"
+}

@@ -1,0 +1,180 @@
+{
+  "active_hermes": {
+    "branch": "main",
+    "head": "551e5af50dc6597069e57af047213f61e40246d6",
+    "path": "/Users/snw/.hermes/hermes-agent",
+    "porcelain_count": 0
+  },
+  "command_preview": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_execution_preflight_20260704_1055_local_only/phase3_strict_execution_command_preview.json",
+    "schema_version": "hse-phase3-strict-execution-command-preview-v1",
+    "sha256": "97d46036a03e505840add7e95beda0228bf2b7e812bec64912bae3f51bc58905"
+  },
+  "command_preview_excerpt": {
+    "all_commands_started_false": true,
+    "command_names": [
+      "phase3_candidate_scaffold_dry_run",
+      "phase3_tblite_local_fixture_dry_run",
+      "phase3_yc_bench_local_fixture_dry_run",
+      "phase3_local_preflight_gate_dry_run"
+    ],
+    "command_side_effect_classes": [
+      "preview_only",
+      "preview_only",
+      "preview_only",
+      "preview_only"
+    ],
+    "commands_started": false,
+    "dry_run": true,
+    "not_included_until_separate_approval": [
+      "GEPA/DSPy optimizer execution",
+      "real TBLite/YC-Bench execution",
+      "active system prompt/source apply",
+      "runtime restart/reload",
+      "GitHub query/write",
+      "provider/API spend"
+    ],
+    "schema_version": "hse-phase3-strict-execution-command-preview-v1"
+  },
+  "generated_at_utc": "2026-07-04T01:57:48.055670+00:00",
+  "git_pre_commit": {
+    "hse_branch": "hse/phase5-continuous-loop-prep",
+    "hse_head": "33b3ef264edbbda4cd209ccf24beedcbcb9bd640"
+  },
+  "implementation_files": [
+    {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/evolution/local_completion/phase3_strict_execution_preflight.py",
+      "sha256": "66db1c465a5481443194b1bf812f86569663c595db5a975ed85f92bfc1e9290e"
+    },
+    {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/tests/local_completion/test_phase3_strict_execution_preflight.py",
+      "sha256": "a352397bf666d4af54f0c6049d472d28a5bcdd48e5e722d9f6a95da6aa085868"
+    }
+  ],
+  "independent_qa": {
+    "score": 0.95,
+    "session": "qa-60f4a86d",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "invariants": {
+    "active_prompt_source_clean": true,
+    "blocked_by_empty": true,
+    "command_preview_only": true,
+    "command_preview_started_false": true,
+    "dry_run_fixture_benchmarks_ready": true,
+    "execution_not_started": true,
+    "forbidden_boundaries_false": true,
+    "future_output_root_absent": true,
+    "future_output_root_not_created": true,
+    "phase3_execution_not_ready": true,
+    "preflight_passed": true,
+    "real_benchmark_not_ready_now": true,
+    "separate_go_required": true,
+    "status_ready_separate_go_required": true
+  },
+  "mechanical_verification": {
+    "active_repo_guard": "active_head=551e5af50; active_porcelain_count=0",
+    "artifact_invariant": "phase3_strict_execution_preflight_invariant=PASS",
+    "compileall": "rc=0",
+    "focused_tests": "39 passed in 1.84s; rc=0",
+    "full_pytest": "469 passed, 11 warnings in 7.63s; rc=0",
+    "future_root_absent": "future_root_exists=0",
+    "git_diff_check": "rc=0"
+  },
+  "preflight_markdown": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_execution_preflight_20260704_1055_local_only/phase3_strict_execution_preflight.md",
+    "sha256": "8065044b600e46d3b2fe4bd8584bc3298342eec709120c60253a3cdeb79be575"
+  },
+  "preflight_report": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_execution_preflight_20260704_1055_local_only/phase3_strict_execution_preflight.json",
+    "sha256": "b5264e4d903d95627f0e6e221e6c535f4ce5040002133eff288f826b5075bfdc",
+    "status": "PHASE3_STRICT_EXECUTION_PREFLIGHT_READY_SEPARATE_GO_REQUIRED"
+  },
+  "report_excerpt": {
+    "blocked_by": [],
+    "boundary_booleans": {
+      "active_apply_performed": false,
+      "active_system_prompt_apply_approved": false,
+      "cron_or_gateway_mutation_performed": false,
+      "deploy_or_publication_performed": false,
+      "execution_started": false,
+      "full_remote_benchmark_executed": false,
+      "github_query_performed": false,
+      "github_write_performed": false,
+      "mutate_active_system_prompt_now": false,
+      "network_calls_performed": false,
+      "overall_hse_project_completion_claimed": false,
+      "provider_or_model_spend_performed": false,
+      "real_benchmarks_executed": false,
+      "run_dspy_now": false,
+      "run_gepa_now": false
+    },
+    "future_output_root_guard": {
+      "allowed_root_fragment": "output/phase3-system-prompt",
+      "fresh_output_required": true,
+      "future_output_root": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055",
+      "future_output_root_created_now": false,
+      "future_output_root_exists_now": false,
+      "future_output_root_is_symlink_now": false,
+      "passed": true,
+      "phase3_output_written_now": false
+    },
+    "local_only_benchmark_readiness": {
+      "dry_run_fixture_benchmarks_ready": true,
+      "full_remote_benchmark_executed": false,
+      "local_fixture_adapters_available": true,
+      "local_only_scope": true,
+      "network_calls_performed": false,
+      "provider_or_model_spend_performed": false,
+      "real_benchmark_ready_now": false,
+      "separate_benchmark_execution_go_required": true
+    },
+    "not_claimed": [
+      "phase3_strict_completion",
+      "phase4_strict_completion",
+      "phase5_strict_completion",
+      "overall_HSE_project_completion",
+      "full_remote_benchmark",
+      "provider_api_spend",
+      "github_query_or_write",
+      "active_apply",
+      "cron_or_gateway_mutation",
+      "deploy_or_publication"
+    ],
+    "phase3_execution_ready": false,
+    "preflight_passed": true,
+    "runtime_candidate_execution_preflight": {
+      "candidate_execution_possible_after_separate_go": true,
+      "execution_started": false,
+      "gepa_optimizer_available_but_not_started": true,
+      "phase3_preflight_gate_available": true,
+      "run_dspy_now": false,
+      "run_gepa_now": false,
+      "system_prompt_candidate_scaffold_available": true
+    },
+    "schema_version": "hse-phase3-strict-execution-preflight-v1",
+    "separate_phase3_execution_go_required": true,
+    "status": "PHASE3_STRICT_EXECUTION_PREFLIGHT_READY_SEPARATE_GO_REQUIRED",
+    "strict_frontier_gate": {
+      "active_head_from_frontier": "551e5af50dc6597069e57af047213f61e40246d6",
+      "active_head_matches_live_checkout": true,
+      "current_active_frontier_blockers": [],
+      "current_active_frontier_status": "PHASE_2_STRICT_COMPLETE",
+      "current_active_highest_strict_complete_phase": 2,
+      "phase1_strict_complete": true,
+      "phase2_strict_complete": true,
+      "phase3_existing_blockers": [
+        "phase3_active_apply_not_approved_current_readiness",
+        "phase3_current_plan_status_planned_not_executed",
+        "phase3_real_benchmark_ready_now_false",
+        "phase3_real_benchmarks_not_executed"
+      ],
+      "phase3_strict_complete": false,
+      "schema_version": "hse-strict-frontier-audit-v1",
+      "source_status_is_local_only": true,
+      "status": "PHASE_2_STRICT_COMPLETE"
+    }
+  },
+  "schema_version": "hse-phase3-strict-execution-preflight-verification-v1"
+}
