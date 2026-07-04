@@ -1,0 +1,48 @@
+{
+  "artifacts": {
+    "evidence": {
+      "bytes": 16772,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_frontier_schema_integration_preflight_20260704_1957_local_only/phase3_strict_frontier_schema_integration_preflight_evidence.json",
+      "sha256": "bb941934063563396e3603faca75fa8e9e4a72d686febde92ef4f80fb9741269"
+    },
+    "full_pytest_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_frontier_schema_integration_preflight_20260704_1957_local_only/logs/full_pytest.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "full_pytest_stdout": {
+      "bytes": 5231,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_frontier_schema_integration_preflight_20260704_1957_local_only/logs/full_pytest.stdout",
+      "sha256": "fce8239ce0cfebc9bb1bc66e950c567daac1b061feaa3fc9398333194c63643b"
+    },
+    "manifest": {
+      "bytes": 27420,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_frontier_schema_integration_preflight_20260704_1957_local_only/phase3_strict_frontier_schema_integration_preflight_manifest.json",
+      "sha256": "3a60198cff889e23cdc81a9f81a5afa89cb52945fb84ea6a02da49b725e2e692"
+    },
+    "markdown": {
+      "bytes": 13012,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_frontier_schema_integration_preflight_20260704_1957_local_only/phase3_strict_frontier_schema_integration_preflight.md",
+      "sha256": "14a5d6cedb8da7ee52ce8cfc600c13ff92a8aad63d02e81b8720e5c30f6fae6d"
+    }
+  },
+  "final_qa": {
+    "score": 0.96,
+    "session": "qa-6b95d63e",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "quality_bar": "Only schema-integration preflight/command-plan; identifies legacy Phase 3 input limitation; verifies new Phase 3 chain for integration design; no code/schema change; no future recheck execution; forbidden boundaries preserved; mechanical verification and Time Rewind restore evidence present; active Hermes clean.",
+  "schema_version": "hse-phase3-strict-frontier-schema-integration-preflight-qa-v1",
+  "suggestion_handling": "Raw verification logs are stored in logs/full_pytest.stdout and logs/full_pytest.stderr; manifest/evidence/markdown artifacts are committed in the same review bundle."
+}
