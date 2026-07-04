@@ -1,0 +1,27 @@
+{
+  "artifacts": {
+    "evidence": {
+      "bytes": 6184,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_preflight_20260704_1816_local_only/phase3_gepa_dspy_candidate_optimization_preflight_evidence.json",
+      "sha256": "2bb6f81fd7e450c1b7306c62563c22532e11f4f080f7b1cae576553064158763"
+    },
+    "manifest": {
+      "bytes": 19395,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_preflight_20260704_1816_local_only/phase3_gepa_dspy_candidate_optimization_preflight_manifest.json",
+      "sha256": "683187998402b3eea439998a1dbae639242ba6cfd0d41cee7111dba4a8564bc5"
+    },
+    "markdown": {
+      "bytes": 10188,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_preflight_20260704_1816_local_only/phase3_gepa_dspy_candidate_optimization_preflight.md",
+      "sha256": "3acff479bfbb60f0fcb2d4e143355dfd2b84fb06412423890270a5773ecdc643"
+    }
+  },
+  "final_qa": {
+    "score": 0.97,
+    "session": "qa-7d214c20",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "quality_bar": "preflight/command-plan/rollback gate only; planned candidate optimizer not executed; forbidden boundaries preserved; pytest fixture scope truthfully distinguished",
+  "schema_version": "hse-phase3-gepa-dspy-candidate-optimization-preflight-qa-v1"
+}

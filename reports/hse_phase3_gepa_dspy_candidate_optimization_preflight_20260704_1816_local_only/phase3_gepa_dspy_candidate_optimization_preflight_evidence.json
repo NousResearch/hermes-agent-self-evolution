@@ -1,0 +1,140 @@
+{
+  "boundary_ledger": {
+    "active_apply_performed": false,
+    "candidate_gepa_or_dspy_optimizer_executed_now": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "execution_approved_now": false,
+    "execution_ready_now": false,
+    "external_llm_calls_performed": false,
+    "gepa_or_dspy_optimizer_executed_now": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "mutate_active_system_prompt_now": false,
+    "network_calls_performed": false,
+    "overall_hse_project_completion_claimed": false,
+    "phase3_strict_completion_claimed": false,
+    "planned_commands_written_not_executed": true,
+    "planned_output_root_created": false,
+    "preflight_artifact_only": true,
+    "provider_or_model_spend_performed": false,
+    "pytest_fixture_external_llm_calls_performed": false,
+    "pytest_fixture_gepa_optimizer_unit_test_exercised": true
+  },
+  "full_pytest_stderr": {
+    "bytes": 0,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_preflight_20260704_1816_local_only/logs/full_pytest.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "full_pytest_stdout": {
+    "bytes": 5231,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_preflight_20260704_1816_local_only/logs/full_pytest.stdout",
+    "sha256": "0e22f74d7d4cd2bf856da13ff447edd67273d3b6bca4d3451bc84abc976e4a0b"
+  },
+  "manifest": {
+    "bytes": 19743,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_preflight_20260704_1816_local_only/phase3_gepa_dspy_candidate_optimization_preflight_manifest.json",
+    "sha256": "9084374851840986123d9e911a119627303b3a497c1dd8ef68d4d6809ee8e394"
+  },
+  "markdown": {
+    "bytes": 10188,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_preflight_20260704_1816_local_only/phase3_gepa_dspy_candidate_optimization_preflight.md",
+    "sha256": "3acff479bfbb60f0fcb2d4e143355dfd2b84fb06412423890270a5773ecdc643"
+  },
+  "planned_command_surface_scan": [
+    {
+      "exec_token": "python",
+      "forbidden_arg_surface_hits": [],
+      "forbidden_executable_hits": [],
+      "id": "gate-01-create-execution-approved-preflight-report",
+      "module": "evolution.prompts.phase3_preflight_gate"
+    },
+    {
+      "exec_token": "python",
+      "forbidden_arg_surface_hits": [],
+      "forbidden_executable_hits": [],
+      "id": "gate-02-run-bounded-local-dspy-gepa-candidate-optimization",
+      "module": "evolution.prompts.phase3_gepa_optimizer"
+    },
+    {
+      "exec_token": "python",
+      "forbidden_arg_surface_hits": [],
+      "forbidden_executable_hits": [],
+      "id": "gate-03-post-optimizer-local-verification",
+      "module": "pytest"
+    }
+  ],
+  "preconditions": [
+    {
+      "detail": "PHASE3_LOCAL_REAL_SMOKE_EXECUTION_PASSED_SEPARATE_GEPA_DSPY_APPROVAL_STILL_REQUIRED",
+      "name": "local_real_smoke_manifest_passed",
+      "passed": true
+    },
+    {
+      "detail": "phase3_gepa_dspy_candidate_optimization_preflight_go_no_github_write_no_active_apply",
+      "name": "smoke_next_packet_matches_request",
+      "passed": true
+    },
+    {
+      "detail": "{\"score\": 0.96, \"session\": \"qa-23fa5e73\", \"threshold\": 0.9, \"verdict\": \"PASS\"}",
+      "name": "smoke_qa_passed",
+      "passed": true
+    },
+    {
+      "detail": "{\"execution_approved\": false, \"passed\": true, \"phase3_execution_ready\": false, \"run_dspy_now\": false, \"run_gepa_now\": false}",
+      "name": "current_preflight_passed_but_not_execution_ready",
+      "passed": true
+    },
+    {
+      "detail": "{\"external_calls_performed\": false, \"full_benchmark_executed\": false, \"mode\": \"real-benchmark-smoke\", \"passed\": true}",
+      "name": "tblite_real_smoke_passed",
+      "passed": true
+    },
+    {
+      "detail": "{\"external_calls_performed\": false, \"full_benchmark_executed\": false, \"mode\": \"real-benchmark-smoke\", \"passed\": true}",
+      "name": "yc_bench_real_smoke_passed",
+      "passed": true
+    },
+    {
+      "detail": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816",
+      "name": "planned_output_root_fresh",
+      "passed": true
+    },
+    {
+      "detail": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816",
+      "name": "planned_output_under_allowed_root",
+      "passed": true
+    }
+  ],
+  "qa": {
+    "bytes": 1475,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_preflight_20260704_1816_local_only/phase3_gepa_dspy_candidate_optimization_preflight_qa.json",
+    "sha256": "2752ff3f1215ca6570ac3f5598aa38133d44cab40c6b2c41fea1526ba76eb9c1"
+  },
+  "schema_version": "hse-phase3-gepa-dspy-candidate-optimization-preflight-evidence-v1",
+  "testing_scope": {
+    "candidate_optimization_command_executed": false,
+    "planned_output_root_created": false,
+    "pytest_fixture_external_llm_calls_performed": false,
+    "pytest_fixture_gepa_optimizer_code_exercised": true,
+    "pytest_fixture_output_cleanup_performed": true
+  },
+  "verification": {
+    "active_repo_guard": "active_status_count=0",
+    "artifact_invariant": "phase3_gepa_dspy_preflight_plan_invariant=PASS; rc=0",
+    "compileall": "rc=0",
+    "focused_tests": "35 passed, 11 warnings in 4.83s; rc=0",
+    "full_pytest": "469 passed, 11 warnings in 9.11s; rc=0",
+    "git_diff_check": "rc=0",
+    "json_validation": "manifest json.tool rc=0",
+    "planned_root_guard": "planned output root exists=false after verification",
+    "test_generated_output_cleanup": "output/phase3-system-prompt/pytest-gepa-optimizer removed after focused/full tests; cleanup rc=0",
+    "testing_scope_note": "Focused/full pytest exercised the test fixture for phase3_gepa_optimizer using deterministic DummyLM; the HSE candidate optimization command plan was not executed and the planned candidate optimization root was not created."
+  }
+}
