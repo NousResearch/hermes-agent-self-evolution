@@ -1,0 +1,31 @@
+{
+  "artifacts": {
+    "evidence": {
+      "bytes": 1292,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_real_benchmark_readiness_recheck_20260704_1208_local_only/phase3_real_benchmark_readiness_recheck_evidence.json",
+      "sha256": "fc1580e0ec20ac13a492071c6137cf940532dafffa8450dc04a6088d137165e4"
+    },
+    "manifest": {
+      "bytes": 18696,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_real_benchmark_readiness_recheck_20260704_1208_local_only/phase3_real_benchmark_readiness_recheck.json",
+      "sha256": "bc95d5422cab4d7f30dff3582321b2d2ec65de019d9f3cd87bf691d3a6f6ef54"
+    },
+    "markdown": {
+      "bytes": 9072,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_real_benchmark_readiness_recheck_20260704_1208_local_only/phase3_real_benchmark_readiness_recheck.md",
+      "sha256": "b5b5c967c86300dc472982a948b1805d14be0a2e0f28bdd0ce4d139e380d6211"
+    }
+  },
+  "qa_notes": {
+    "blocking": false,
+    "differences": [
+      "Prompt hashes and mechanical command lines are present in the full artifacts or verification context but abbreviated in the QA excerpt."
+    ]
+  },
+  "qa_session": "qa-db70bcb3",
+  "quality_bar": "readiness recheck only; no provider/API spend; no GitHub write; no active apply; no real benchmark command execution",
+  "schema_version": "hse-phase3-real-benchmark-readiness-recheck-qa-v1",
+  "score": 0.96,
+  "threshold": 0.9,
+  "verdict": "PASS"
+}

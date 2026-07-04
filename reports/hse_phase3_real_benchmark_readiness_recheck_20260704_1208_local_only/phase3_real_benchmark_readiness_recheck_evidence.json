@@ -1,0 +1,26 @@
+{
+  "forbidden_boundaries_false": true,
+  "json_report": {
+    "bytes": 18696,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_real_benchmark_readiness_recheck_20260704_1208_local_only/phase3_real_benchmark_readiness_recheck.json",
+    "sha256": "bc95d5422cab4d7f30dff3582321b2d2ec65de019d9f3cd87bf691d3a6f6ef54"
+  },
+  "markdown_report": {
+    "bytes": 9072,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_real_benchmark_readiness_recheck_20260704_1208_local_only/phase3_real_benchmark_readiness_recheck.md",
+    "sha256": "b5b5c967c86300dc472982a948b1805d14be0a2e0f28bdd0ce4d139e380d6211"
+  },
+  "mechanical_verification": {
+    "active_repo_guard": "active_status_count=0",
+    "compileall": "rc=0",
+    "focused_tests": "34 passed in 1.40s; rc=0",
+    "full_pytest": "469 passed, 11 warnings in 9.58s; rc=0",
+    "git_diff_check": "rc=0",
+    "json_validation": "manifest json.tool rc=0; evidence json.tool rc=0",
+    "readiness_invariant": "phase3_real_benchmark_readiness_recheck_invariant=PASS; rc=0"
+  },
+  "read_only_probe_returned": true,
+  "real_benchmarks_executed": false,
+  "schema_version": "hse-phase3-real-benchmark-readiness-recheck-evidence-v1",
+  "source_artifact_count": 10
+}
