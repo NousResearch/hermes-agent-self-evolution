@@ -1,0 +1,164 @@
+{
+  "archival_pr108": {
+    "head": "4d7b62b31665877a5f8f1ca58afffa15377d7e73",
+    "kept_unmerged_as_archival_evidence": true,
+    "merge_as_is_recommended": false,
+    "reason": "conflicting/path-heavy/evidence-heavy branch; successor publishes sanitized reviewer-facing evidence only",
+    "url": "https://github.com/NousResearch/hermes-agent-self-evolution/pull/108"
+  },
+  "generated_at_utc": "2026-07-04T17:41:15.221884+00:00",
+  "non_claims": [
+    "not CI pass unless GitHub reports passing checks",
+    "not auto-merge ready",
+    "not deploy ready",
+    "not a replacement for maintainers reviewing the full archival evidence if desired"
+  ],
+  "production_operational_evidence": {
+    "cron_loop_status": "PRODUCTION_STRICT_PR_READY_LOOP_PASS",
+    "human_merge_boundary": {
+      "auto_merge_allowed": false,
+      "auto_merge_performed": false,
+      "human_review_required_before_apply": true,
+      "human_review_required_before_github_publication": true
+    },
+    "production_boundaries": {
+      "active_apply_performed_by_script": false,
+      "active_hse_bridge_expected": true,
+      "auto_merge_performed": false,
+      "gateway_restart_performed_by_script": false,
+      "github_write_performed": false,
+      "hermes_cron_job_expected": true,
+      "human_review_required_before_publication_or_merge": true,
+      "kill_switch": "output/phase5-continuous-loop/production-strict-pr-ready/PRODUCTION_STRICT_LOOP_KILL_SWITCH",
+      "provider_or_model_spend_performed": false
+    },
+    "strict_unattended_loop_status": "PHASE5_STRICT_UNATTENDED_LOOP_PASS_LOCAL_PR_READY"
+  },
+  "published_files_allowlist": {
+    "path_limited_report_only": true,
+    "prefix": "reports/hse_pr108_sanitized_successor_20260705_024004/",
+    "raw_output_files_included": false,
+    "source_code_changes_included": false
+  },
+  "redaction_policy": {
+    "output_artifacts": "raw output/ artifacts excluded",
+    "private_local_home_paths": "raw local home paths are replaced with <LOCAL_HOME>",
+    "raw_logs": "not included except selected sanitized JSON mirrors",
+    "scanner_hostile_fixture_values": "not included; only redacted classification metrics are kept",
+    "temp_paths": "private temp/folder paths -> <LOCAL_TMP>"
+  },
+  "schema_version": "hse-pr108-sanitized-successor-v1",
+  "side_effect_ledger": {
+    "auto_merge_performed": false,
+    "deploy_performed": false,
+    "gateway_restart_or_reload_performed": false,
+    "git_push_planned": true,
+    "merge_performed": false,
+    "pr108_mutated": false,
+    "pr_create_planned": true,
+    "provider_or_model_spend_performed": false
+  },
+  "source_artifact_hashes": {
+    "audit_refresh_manifest": {
+      "sanitized_artifact": "audit_refresh_manifest.sanitized.json",
+      "source_artifact": "reports/hse_current_head_strict_audit_refresh_20260705_013424_production_operational_revalidated_local_only/audit_refresh_manifest.json",
+      "source_sha256": "4080259dec72904218ba0c76385e7376f4e55d43e8da8f5007ad4ba45ea8724f"
+    },
+    "phase5_production_cron_verified_loop_run": {
+      "sanitized_artifact": "phase5_production_cron_verified_loop_run.sanitized.json",
+      "source_artifact": "reports/hse_current_head_strict_audit_refresh_20260705_013424_production_operational_revalidated_local_only/phase5_production_cron_verified_loop_run.json",
+      "source_sha256": "176115ee208c86523d10711bc0c64eaa495e2cf6f0c5da3b34a1ebf6bf9a8f95"
+    },
+    "phase5_production_cron_verified_strict_unattended_loop_report": {
+      "sanitized_artifact": "phase5_production_cron_verified_strict_unattended_loop_report.sanitized.json",
+      "source_artifact": "reports/hse_current_head_strict_audit_refresh_20260705_013424_production_operational_revalidated_local_only/phase5_production_cron_verified_strict_unattended_loop_report.json",
+      "source_sha256": "825e9fdd8afc5af7b505a39a2b7ba3d1b4e2f9a25c029b72145123eaf876406a"
+    },
+    "strict_frontier_audit": {
+      "sanitized_artifact": "strict_frontier_audit.sanitized.json",
+      "source_artifact": "reports/hse_current_head_strict_audit_refresh_20260705_013424_production_operational_revalidated_local_only/strict_frontier_audit.json",
+      "source_sha256": "d4ed7294f2f72d19ac7eb5350a6d11c596cf0db6f81c4ccf0893106bb77611bc"
+    }
+  },
+  "source_hygiene_metrics": {
+    "files_changed_against_current_main": 672,
+    "output_file_count": 25,
+    "private_local_path_mentions_added_lines": 2335,
+    "private_path_file_count": 222,
+    "reports_file_count": 525,
+    "secret_like_hits_redacted": [
+      {
+        "classification": "synthetic_test_fixture_or_metadata; raw value intentionally omitted",
+        "entropy_bits_per_char": 3.39,
+        "file": "seeds/phase3_system_prompt_evolution_execution_seed_draft.yaml",
+        "has_whitespace": true,
+        "looks_high_entropy_secret": false,
+        "pattern_class": "authorization",
+        "value_length": 13
+      },
+      {
+        "classification": "synthetic_test_fixture_or_metadata; raw value intentionally omitted",
+        "entropy_bits_per_char": 3.39,
+        "file": "seeds/phase3_system_prompt_evolution_seed.yaml",
+        "has_whitespace": true,
+        "looks_high_entropy_secret": false,
+        "pattern_class": "authorization",
+        "value_length": 13
+      },
+      {
+        "classification": "synthetic_test_fixture_or_metadata; raw value intentionally omitted",
+        "entropy_bits_per_char": 3.39,
+        "file": "seeds/phase4_code_evolution_planning_seed.yaml",
+        "has_whitespace": true,
+        "looks_high_entropy_secret": false,
+        "pattern_class": "authorization",
+        "value_length": 13
+      },
+      {
+        "classification": "synthetic_test_fixture_or_metadata; raw value intentionally omitted",
+        "entropy_bits_per_char": 4.16,
+        "file": "tests/local_completion/test_active_skill_canary.py",
+        "has_whitespace": false,
+        "looks_high_entropy_secret": true,
+        "pattern_class": "token",
+        "value_length": 33
+      }
+    ],
+    "top_level_counts": {
+      ".github": 1,
+      ".gitignore": 1,
+      ".planning": 1,
+      "PLAN.md": 1,
+      "README.md": 1,
+      "datasets": 15,
+      "evolution": 47,
+      "output": 25,
+      "pyproject.toml": 1,
+      "reports": 525,
+      "seeds": 3,
+      "tests": 51
+    }
+  },
+  "strict_completion_evidence": {
+    "active_hermes_head": "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+    "full_pytest": "486 passed, 11 warnings in 10.29s",
+    "highest_strict_complete_phase": 5,
+    "hse_source_head": "4d7b62b31665877a5f8f1ca58afffa15377d7e73",
+    "overall_hse_project_completion_claimed": true,
+    "phase_strict_complete": {
+      "phase1": true,
+      "phase2": true,
+      "phase3": true,
+      "phase4": true,
+      "phase5": true
+    },
+    "status": "HSE_PROJECT_STRICT_COMPLETE",
+    "targeted_pytest": "23 passed in 3.30s"
+  },
+  "successor_base": {
+    "base_head": "0a929e3aa20e15cf04dc7c28492a7d41a5139125",
+    "base_ref": "origin/main",
+    "repo": "NousResearch/hermes-agent-self-evolution"
+  },
+  "successor_branch": "hse/pr108-sanitized-successor-20260705-024004"
+}

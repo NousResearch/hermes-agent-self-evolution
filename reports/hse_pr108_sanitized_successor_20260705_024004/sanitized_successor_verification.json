@@ -1,0 +1,11 @@
+{
+  "allowlist_ok": true,
+  "artifact_prefix": "reports/hse_pr108_sanitized_successor_20260705_024004",
+  "generated_at_utc": "2026-07-04T17:41:50.375632+00:00",
+  "json_files_valid": true,
+  "pass": true,
+  "private_path_violations": [],
+  "raw_output_files_included": false,
+  "schema_version": "hse-pr108-sanitized-successor-verification-v1",
+  "secret_like_assignment_hits_redacted": []
+}
