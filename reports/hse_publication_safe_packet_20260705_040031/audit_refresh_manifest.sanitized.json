@@ -1,0 +1,131 @@
+{
+  "active_hermes_head": "a23a0087f8ee98662f46b8da4dd59d3049f74aaf",
+  "active_hermes_repo": "<LOCAL_HOME>/.hermes/hermes-agent",
+  "active_hermes_status_count": 0,
+  "current_baseline_closure_status": "STRICT_PLAN_BENCHMARK_GATE_CLOSED",
+  "current_baseline_revalidated": true,
+  "diagnostic_revalidation_required_status": "CURRENT_BASELINE_REVALIDATION_REQUIRED",
+  "generated_at": "2026-07-05T03:13:59+0900",
+  "highest_strict_complete_phase": null,
+  "hse_head_pre_refresh": "857a882d10cb5ec23251979f32601ac918a9467e",
+  "hse_repo": "<LOCAL_HOME>/.hermes/evolution/repos/hermes-agent-self-evolution",
+  "hse_status_count_pre_commit": 5,
+  "overall_hse_project_completion_claimed": true,
+  "phase_strict_complete": {
+    "phase1": true,
+    "phase2": true,
+    "phase3": true,
+    "phase4": true,
+    "phase5": true
+  },
+  "production_operational_progress": {
+    "active_bool_exit_hardening_commit": "a23a0087f8ee98662f46b8da4dd59d3049f74aaf",
+    "active_hse_bridge_applied_to_active_repo": true,
+    "active_hse_bridge_gate_hardening_commit": "c6270e8ac7fdbe3f9d9dcb02ff623087bc6ff856",
+    "auto_merge_performed": false,
+    "cron_job_expected": "644578c9c5e1",
+    "cron_manual_run_status": "PRODUCTION_STRICT_PR_READY_LOOP_PASS",
+    "cron_manual_run_verified": true,
+    "gateway_restart_performed_during_this_turn": false,
+    "gateway_restart_required_for_in_process_command_registry_pickup": true,
+    "github_publication_performed": false,
+    "human_review_required_before_publication_or_merge": true
+  },
+  "safety_ledger": {
+    "auto_merge_performed": false,
+    "deploy_or_publication_performed": false,
+    "gateway_restart_or_reload_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "merge_performed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "schema_version": "hse-production-operational-audit-refresh-v3",
+  "self_contained_files": [
+    {
+      "bytes": 0,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/current_baseline_revalidation_preflight.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 719,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/current_baseline_revalidation_preflight.stdout",
+      "sha256": "e7cd41d896d92fb59f2e61cff5ae754704b0c1db833481cf54f694ac790c86ae"
+    },
+    {
+      "bytes": 0,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/diagnostic_strict_frontier.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 435,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/diagnostic_strict_frontier.stdout",
+      "sha256": "3d40f3e7cbe005f720ee6f6399b023943f06eeeb316ec47bd9c12ac65af3158f"
+    },
+    {
+      "bytes": 0,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/manual_production_strict_loop.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 514,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/manual_production_strict_loop.stdout",
+      "sha256": "1cf489cbbb02d725b83a097b34a883e9c4a12c78302d48929df574cce7cf3f59"
+    },
+    {
+      "bytes": 0,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/strict_frontier_audit.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 433,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/strict_frontier_audit.stdout",
+      "sha256": "581917dc74f07e93916e0e9d4076358dcbca157a07bc71e4d1f6571372a3b5bd"
+    },
+    {
+      "bytes": 2782,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_loop_run.json",
+      "sha256": "b6f7346d0b43d739ce9901db8462e9855dd58bbd094185397df3feebc82eebed"
+    },
+    {
+      "bytes": 520,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_loop_state.json",
+      "sha256": "84cd2e8b5afb26b1b0f9145b8a820cba38e30fea4bbafd3cbd14ad657f7d020e"
+    },
+    {
+      "bytes": 4686,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_strict_unattended_loop_report.json",
+      "sha256": "501d6b2f9cc3b031662b411fc1181438584ef123fc88b242c1f66d0bf649ab77"
+    },
+    {
+      "bytes": 490,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/production_operational_handoff.md",
+      "sha256": "a181b925a77c0a07ce99e8c6825393100cc9d7b4a73cdd72ef033a3f454b5f9d"
+    },
+    {
+      "bytes": 15568,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.json",
+      "sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9"
+    },
+    {
+      "bytes": 1112,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.md",
+      "sha256": "9f4af0c08266eb0d555a8fac8f793a2983f23503c32b800e29c56757d8988c00"
+    }
+  ],
+  "self_hash_policy": "audit_refresh_manifest.json excludes itself from self_contained_files to avoid circular hash.",
+  "source_artifact_groups": {
+    "current_baseline_closure": "reports/hse_current_baseline_benchmark_strict_plan_closure_20260705_031359_bool_exit_hardening_local_smoke",
+    "current_baseline_local_smoke_rerun": "reports/hse_current_baseline_local_smoke_rerun_20260705_031359_bool_exit_hardening_local_only",
+    "current_baseline_preflight": "reports/hse_current_baseline_revalidation_preflight_20260705_031359_bool_exit_hardening_local_only",
+    "diagnostic_revalidation_required_audit": "reports/hse_current_head_strict_audit_refresh_20260705_031359_diagnostic_revalidation_required_local_only"
+  },
+  "stamp": "20260705_031359",
+  "status": "HSE_PROJECT_STRICT_COMPLETE",
+  "verification": {
+    "active_hse_cli_pytest": "169 passed (tests/hermes_cli/test_hse_cli.py + tests/hermes_cli/test_commands.py); focused test_hse_cli.py: 8 passed",
+    "final_strict_frontier_audit": "HSE_PROJECT_STRICT_COMPLETE",
+    "hse_current_baseline_local_smoke": "LOCAL_SMOKE_EXECUTION_PASSED",
+    "production_strict_loop_manual_run": "PRODUCTION_STRICT_PR_READY_LOOP_PASS"
+  }
+}
