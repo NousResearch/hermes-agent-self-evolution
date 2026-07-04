@@ -1,0 +1,150 @@
+{
+  "artifacts": {
+    "baseline_file": {
+      "bytes": 333,
+      "path": "baseline/path_tool.py",
+      "sha256": "4003db97fc73c5a7c81f8155c7cf8949f5a803166eb07fd509fdf92e2156a003",
+      "symlink": false
+    },
+    "candidate_file": {
+      "bytes": 357,
+      "path": "candidate/path_tool.py",
+      "sha256": "be4e034122c03224bde2671e49c01581bf17129df5a307ee14d163ee75d8d425",
+      "symlink": false
+    },
+    "freeze_report": {
+      "bytes": 2756,
+      "path": "freeze_report.json",
+      "sha256": "5292367760c6eaa1ab56869ff387a9693047aabeae049f312783f5f3985ee172",
+      "symlink": false
+    },
+    "report_json": "phase4_strict_code_evolution_report.json",
+    "report_markdown": "phase4_strict_code_evolution_report.md",
+    "reproducer": {
+      "bytes": 527,
+      "path": "reproducer/test_path_expansion.py",
+      "sha256": "7e8ec02375472cc55f02642f7934640589d6b9763ed054bf6462728e00f5a750",
+      "symlink": false
+    }
+  },
+  "bug": {
+    "id": "phase4-local-path-expansion-fixture",
+    "red_reproducer_executed": true,
+    "red_reproducer_failed_before_fix": true,
+    "summary": "Fixture normalize_user_path returned '~' paths unchanged instead of expanding user-home syntax."
+  },
+  "candidate": {
+    "active_hermes_source_mutated": false,
+    "candidate_file": {
+      "bytes": 357,
+      "path": "candidate/path_tool.py",
+      "sha256": "be4e034122c03224bde2671e49c01581bf17129df5a307ee14d163ee75d8d425",
+      "symlink": false
+    },
+    "candidate_generated": true,
+    "exactly_one_target_file_mutated": true,
+    "non_empty_diff": true
+  },
+  "engine": {
+    "approved_local_code_evolution_engine": true,
+    "darwinian_evolver_cli_invoked": false,
+    "darwinian_evolver_imported": false,
+    "deterministic_mutation_engine_invoked": true,
+    "engine_id": "hse-local-deterministic-code-evolution-engine-v1",
+    "mutation_strategy": "replace the single buggy return statement while preserving public API surface",
+    "package_installed": false
+  },
+  "failed_checks": [],
+  "formal_gate_assessment": {
+    "approved_code_evolution_engine_invoked": true,
+    "benchmarks_hold": true,
+    "freeze_surface_preserved": true,
+    "human_review_required_before_active_apply": true,
+    "known_bug_fixed_green": true,
+    "known_bug_reproduced_red": true,
+    "phase4_strict_complete": true,
+    "tests_pass": true
+  },
+  "generated_at": "2026-07-05T00:44:24+0900",
+  "phase": "4",
+  "safety_boundaries": {
+    "active_apply_performed": false,
+    "active_runtime_mutation_performed": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "external_calls_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "schema_version": "hse-phase4-strict-code-evolution-v1",
+  "status": "PHASE4_STRICT_CODE_EVOLUTION_COMPLETE_LOCAL_APPROVED_ENGINE",
+  "verification": {
+    "benchmark_gate": {
+      "failed_checks": [],
+      "full_remote_benchmark_executed": false,
+      "local_real_benchmark_smoke_accepted": true,
+      "passed": true,
+      "report_count": 3,
+      "reports": [
+        {
+          "benchmark": "TBLite",
+          "benchmark_gate_candidate_passed": true,
+          "bytes": 4433,
+          "failed_checks": [],
+          "passed": true,
+          "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260704_0252/tblite.json",
+          "sha256": "90570943c29daf55ac96bc06e79638bd01159c377427281c43cb349f3f5114a3"
+        },
+        {
+          "benchmark": "YC-Bench",
+          "benchmark_gate_candidate_passed": true,
+          "bytes": 4763,
+          "failed_checks": [],
+          "passed": true,
+          "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260704_0252/yc-bench.json",
+          "sha256": "8d86d50701711e130a93c7fb681ea5b2ce10bda7dce466221177def568598b89"
+        },
+        {
+          "benchmark": "Phase2 PLAN-scale tool-selection triples",
+          "benchmark_gate_candidate_passed": true,
+          "bytes": 11654,
+          "failed_checks": [],
+          "passed": true,
+          "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260704_0252/phase2-plan-scale-tool-selection-triples.json",
+          "sha256": "ee9e346e5b098fda8e5897821bc5c47a59dba6d52b21bd357ccbf63f58bd0800"
+        }
+      ]
+    },
+    "benchmarks_hold": true,
+    "freeze_passed": true,
+    "freeze_report": {
+      "bytes": 2756,
+      "path": "freeze_report.json",
+      "sha256": "5292367760c6eaa1ab56869ff387a9693047aabeae049f312783f5f3985ee172",
+      "symlink": false
+    },
+    "green_reproducer": {
+      "argv": [
+        "python",
+        "<reproducer>",
+        "<target-file>"
+      ],
+      "returncode": 0,
+      "stderr_tail": "",
+      "stdout_tail": "path expansion reproducer passed\n"
+    },
+    "red_reproducer": {
+      "argv": [
+        "python",
+        "<reproducer>",
+        "<target-file>"
+      ],
+      "returncode": 1,
+      "stderr_tail": "Traceback (most recent call last):\n  File \"/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase4-code-evolution/strict-local-code-evolution-20260705_004424/reproducer/test_path_expansion.py\", line 13, in <module>\n    assert result != \"~/hse-fixture\", result\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: ~/hse-fixture\n",
+      "stdout_tail": ""
+    },
+    "tests_pass": true
+  }
+}

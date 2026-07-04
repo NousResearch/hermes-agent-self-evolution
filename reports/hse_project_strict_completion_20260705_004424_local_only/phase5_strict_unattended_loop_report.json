@@ -1,0 +1,118 @@
+{
+  "approved_bounded_unattended_rehearsal": true,
+  "artifacts": {
+    "auto_triage_report": {
+      "bytes": 2335,
+      "path": "auto_triage_report.json",
+      "sha256": "5d1742fe2a3bd754b7523359cfa5f780a608513a68b3de62f4adab4058ca35e1",
+      "symlink": false
+    },
+    "candidate_bundle_decision_snapshot": {
+      "bytes": 1070,
+      "path": "candidate_bundle_decision_snapshot.json",
+      "sha256": "0f8e89cae2c1cd80743f3afbd8cc601cbcae2040871994d40699c44659291f7d",
+      "symlink": false
+    },
+    "metrics_input": {
+      "bytes": 692,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase5-continuous-loop/strict-unattended-loop-input-20260705_004424/metrics.json",
+      "sha256": "b9d3d2600653aad710c70b08b44a9f2246bf70ea808c8f6a87b38c9490d1cd8f",
+      "symlink": false
+    },
+    "optimizer_result": {
+      "bytes": 823,
+      "path": "optimizer_result.json",
+      "sha256": "622bf48ee7e90bc713ddda4d15acdb011ff9c06a0aff06411bf00d9ccefa17fa",
+      "symlink": false
+    },
+    "performance_report": {
+      "bytes": 2108,
+      "path": "performance_snapshot_report.json",
+      "sha256": "56b6e436c7e0fd96c16c3a9047df6a53cef017630ff36d5630b0663ca7e2fae4",
+      "symlink": false
+    },
+    "pr_ready_packet": {
+      "bytes": 726,
+      "path": "pr_ready_handoff.json",
+      "sha256": "a6990e1e38bb2591434647bbfc518a994ef550213ba5e854a0c8b7102d119b1e",
+      "symlink": false
+    },
+    "report_json": "phase5_strict_unattended_loop_report.json",
+    "report_markdown": "phase5_strict_unattended_loop_report.md"
+  },
+  "candidate_bundle": {
+    "created": true,
+    "decision_run_id": "phase5-strict-local-20260705t004424-0900",
+    "decision_sha256": "0f8e89cae2c1cd80743f3afbd8cc601cbcae2040871994d40699c44659291f7d",
+    "decision_status": "PASS_CANDIDATE_ONLY",
+    "root_label": "<hse-runs-root>/phase5-strict-local-20260705t004424-0900-phase-5-continuous-loop-tool-selection-accuracy"
+  },
+  "detection": {
+    "auto_triage_status": "REVIEW_REQUIRED",
+    "performance_status": "NEEDS_TRIAGE",
+    "ranked_target_count": 1,
+    "top_component": "tool_descriptions",
+    "top_metric_id": "tool_selection_accuracy"
+  },
+  "failed_checks": [],
+  "formal_gate_assessment": {
+    "auto_triage_ran": true,
+    "candidate_bundle_created": true,
+    "github_write_performed": false,
+    "human_merge_boundary_preserved": true,
+    "local_pr_ready_handoff_created": true,
+    "optimizer_ran": true,
+    "performance_monitor_ran": true,
+    "phase5_strict_complete": true,
+    "unattended_detect_to_optimize_to_pr_ready_completed": true
+  },
+  "generated_at": "2026-07-05T00:44:24+0900",
+  "human_merge_boundary": {
+    "auto_merge_allowed": false,
+    "auto_merge_performed": false,
+    "human_review_required_before_apply": true,
+    "human_review_required_before_github_publication": true
+  },
+  "mode": "bounded_noninteractive_local_unattended_rehearsal",
+  "optimizer": {
+    "apply_ready": false,
+    "auto_optimizer_triggered": true,
+    "candidate_only": true,
+    "deterministic_local_optimizer": true,
+    "engine_id": "hse-local-deterministic-unattended-optimizer-v1",
+    "optimizer_execution_completed": true,
+    "optimizer_execution_started": true
+  },
+  "phase": "5",
+  "pr_ready_handoff": {
+    "auto_merge_performed": false,
+    "branch_pushed": false,
+    "candidate_bundle_label": "<hse-runs-root>/phase5-strict-local-20260705t004424-0900-phase-5-continuous-loop-tool-selection-accuracy",
+    "candidate_patch_sha256": "8a1249dd3245dcb0a2a1c9ce4c0b9d3bb240af289df8361e896725d26d997973",
+    "component": "tool_descriptions",
+    "decision_status": "PASS_CANDIDATE_ONLY",
+    "generated_at": "2026-07-05T00:44:24+0900",
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "human_review_required": true,
+    "pull_request_created": false,
+    "schema_version": "hse-local-pr-ready-handoff-v1",
+    "status": "LOCAL_PR_READY_HANDOFF_CREATED_GITHUB_WRITE_DEFERRED",
+    "target_metric_id": "tool_selection_accuracy"
+  },
+  "safety_boundaries": {
+    "active_apply_performed": false,
+    "active_runtime_mutation_performed": false,
+    "cron_jobs_created": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "external_calls_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "schema_version": "hse-phase5-strict-unattended-loop-v1",
+  "status": "PHASE5_STRICT_UNATTENDED_LOOP_PASS_LOCAL_PR_READY",
+  "weekly_or_bounded_job_gate": "bounded_unattended_rehearsal_accepted_for_local_strict_completion_no_cron_mutation"
+}

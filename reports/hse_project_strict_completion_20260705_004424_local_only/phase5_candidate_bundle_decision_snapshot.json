@@ -1,0 +1,35 @@
+{
+  "apply_ready": false,
+  "artifacts": {
+    "candidate_patch": "candidates/candidate.patch",
+    "verification": "eval/local_verification.json"
+  },
+  "candidate_only": true,
+  "generated_at": "2026-07-05T00:44:24+0900",
+  "github": {
+    "merge_performed": false,
+    "pr_created": false,
+    "publication_deferred": true,
+    "push_performed": false
+  },
+  "metrics": {
+    "priority_score": 8.55,
+    "sample_count": 45,
+    "severity": 0.19
+  },
+  "phase": "Phase 5: Continuous Loop",
+  "run_id": "phase5-strict-local-20260705t004424-0900",
+  "safety_invariants": {
+    "active_prompt_modified": false,
+    "active_runtime_mutation": false,
+    "active_skill_modified": false,
+    "active_tool_schema_modified": false,
+    "credentials_accessed": false,
+    "deployment_performed": false,
+    "external_publication_performed": false
+  },
+  "schema_version": "hse-local-candidate-bundle-v1",
+  "status": "PASS_CANDIDATE_ONLY",
+  "summary": "Strict Phase 5 local unattended loop generated a PR-ready candidate-only bundle.",
+  "target": "tool_selection_accuracy"
+}

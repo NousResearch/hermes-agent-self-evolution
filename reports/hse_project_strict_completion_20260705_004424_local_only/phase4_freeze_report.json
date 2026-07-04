@@ -1,0 +1,79 @@
+{
+  "apply_ready": false,
+  "artifacts": {
+    "output_json": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase4-code-evolution/strict-local-code-evolution-20260705_004424/freeze_report.json"
+  },
+  "baseline_api_surface": {
+    "class_names": {},
+    "decorators": {
+      "normalize_user_path": [],
+      "parse_args": []
+    },
+    "function_signatures": {
+      "normalize_user_path": "(path: str) -> str",
+      "parse_args": "(argv: list[str] | None=None) -> list[str] | None"
+    },
+    "public_cli_args": {},
+    "registry_register_calls": {},
+    "sha256": "4003db97fc73c5a7c81f8155c7cf8949f5a803166eb07fd509fdf92e2156a003",
+    "target_file": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase4-code-evolution/strict-local-code-evolution-20260705_004424/baseline/path_tool.py"
+  },
+  "baseline_file": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase4-code-evolution/strict-local-code-evolution-20260705_004424/baseline/path_tool.py",
+  "candidate_api_surface": {
+    "class_names": {},
+    "decorators": {
+      "normalize_user_path": [],
+      "parse_args": []
+    },
+    "function_signatures": {
+      "normalize_user_path": "(path: str) -> str",
+      "parse_args": "(argv: list[str] | None=None) -> list[str] | None"
+    },
+    "public_cli_args": {},
+    "registry_register_calls": {},
+    "sha256": "be4e034122c03224bde2671e49c01581bf17129df5a307ee14d163ee75d8d425",
+    "target_file": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase4-code-evolution/strict-local-code-evolution-20260705_004424/candidate/path_tool.py"
+  },
+  "candidate_file": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase4-code-evolution/strict-local-code-evolution-20260705_004424/candidate/path_tool.py",
+  "candidate_only": true,
+  "comparator_version": "phase4-freeze-comparator-v1",
+  "comparisons": {
+    "class_names": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "decorators": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "function_signatures": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "public_cli_args": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "registry_register_calls": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    }
+  },
+  "failed_checks": [],
+  "hermes_source_mutation_performed": false,
+  "mode": "freeze-comparator",
+  "output_constraints": {
+    "allowed_root": "output/phase4-code-evolution/",
+    "fresh_output_required": true,
+    "hermes_source_write_allowed": false,
+    "symlink_output_allowed": false
+  },
+  "passed": true,
+  "phase": "4",
+  "read_only_inputs": true
+}

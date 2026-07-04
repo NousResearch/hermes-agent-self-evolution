@@ -258,6 +258,78 @@ def _phase3_integrated_chain_inputs(tmp_path: Path) -> dict[str, Path]:
     }
 
 
+def _phase4_phase5_strict_inputs(tmp_path: Path) -> dict[str, Path]:
+    phase4 = _write_json(
+        tmp_path / "reports" / "phase4_strict_code_evolution.json",
+        {
+            "schema_version": "hse-phase4-strict-code-evolution-v1",
+            "phase": "4",
+            "status": "PHASE4_STRICT_CODE_EVOLUTION_COMPLETE_LOCAL_APPROVED_ENGINE",
+            "engine": {"approved_local_code_evolution_engine": True},
+            "candidate": {"candidate_generated": True, "non_empty_diff": True},
+            "verification": {"freeze_passed": True, "tests_pass": True, "benchmark_gate": {"passed": True}},
+            "formal_gate_assessment": {
+                "known_bug_reproduced_red": True,
+                "known_bug_fixed_green": True,
+                "approved_code_evolution_engine_invoked": True,
+                "freeze_surface_preserved": True,
+                "tests_pass": True,
+                "benchmarks_hold": True,
+                "phase4_strict_complete": True,
+            },
+            "safety_boundaries": {
+                "github_query_performed": False,
+                "github_write_performed": False,
+                "provider_or_model_spend_performed": False,
+                "network_calls_performed": False,
+                "external_calls_performed": False,
+                "active_apply_performed": False,
+                "active_runtime_mutation_performed": False,
+                "cron_or_gateway_mutation_performed": False,
+                "deploy_or_publication_performed": False,
+            },
+            "failed_checks": [],
+        },
+    )
+    phase5 = _write_json(
+        tmp_path / "reports" / "phase5_strict_unattended_loop.json",
+        {
+            "schema_version": "hse-phase5-strict-unattended-loop-v1",
+            "phase": "5",
+            "status": "PHASE5_STRICT_UNATTENDED_LOOP_PASS_LOCAL_PR_READY",
+            "optimizer": {"optimizer_execution_started": True, "optimizer_execution_completed": True},
+            "candidate_bundle": {"created": True},
+            "pr_ready_handoff": {"status": "LOCAL_PR_READY_HANDOFF_CREATED_GITHUB_WRITE_DEFERRED", "github_write_performed": False},
+            "human_merge_boundary": {"human_review_required_before_github_publication": True, "auto_merge_performed": False},
+            "formal_gate_assessment": {
+                "unattended_detect_to_optimize_to_pr_ready_completed": True,
+                "performance_monitor_ran": True,
+                "auto_triage_ran": True,
+                "optimizer_ran": True,
+                "candidate_bundle_created": True,
+                "local_pr_ready_handoff_created": True,
+                "github_write_performed": False,
+                "human_merge_boundary_preserved": True,
+                "phase5_strict_complete": True,
+            },
+            "safety_boundaries": {
+                "github_query_performed": False,
+                "github_write_performed": False,
+                "provider_or_model_spend_performed": False,
+                "network_calls_performed": False,
+                "external_calls_performed": False,
+                "active_apply_performed": False,
+                "active_runtime_mutation_performed": False,
+                "cron_jobs_created": False,
+                "cron_or_gateway_mutation_performed": False,
+                "deploy_or_publication_performed": False,
+            },
+            "failed_checks": [],
+        },
+    )
+    return {"phase4_strict_code_evolution_path": phase4, "phase5_strict_unattended_loop_path": phase5}
+
+
 def _run_audit(tmp_path: Path, active_repo: Path, inputs: dict[str, Path]) -> dict:
     result = write_strict_frontier_audit(
         active_hermes_repo=active_repo,
@@ -271,7 +343,7 @@ def _run_audit(tmp_path: Path, active_repo: Path, inputs: dict[str, Path]) -> di
 
 
 def _audit_cli_args(tmp_path: Path, active_repo: Path, inputs: dict[str, Path]) -> list[str]:
-    return [
+    args = [
         "--active-hermes-repo",
         str(active_repo),
         "--benchmark-closure",
@@ -309,6 +381,11 @@ def _audit_cli_args(tmp_path: Path, active_repo: Path, inputs: dict[str, Path]) 
         "--generated-at",
         "2026-07-04T02:41:00+09:00",
     ]
+    if "phase4_strict_code_evolution_path" in inputs:
+        args.extend(["--phase4-strict-code-evolution", str(inputs["phase4_strict_code_evolution_path"])])
+    if "phase5_strict_unattended_loop_path" in inputs:
+        args.extend(["--phase5-strict-unattended-loop", str(inputs["phase5_strict_unattended_loop_path"])])
+    return args
 
 
 def test_strict_frontier_audit_marks_phase2_current_complete_when_active_matches_closure_subject(tmp_path: Path):
@@ -523,6 +600,50 @@ def test_strict_frontier_audit_cli_accepts_phase3_integrated_chain_flags(tmp_pat
     assert report["phases"]["phase3"]["strict_complete"] is True
     assert report["phases"]["phase3"]["integrated_chain"]["complete"] is True
     assert report["phase3_strict_completion_claimed"] is False
+
+
+def test_strict_frontier_audit_claims_hse_project_when_phase4_and_phase5_strict_evidence_pass(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+    inputs.update(_phase4_phase5_strict_inputs(tmp_path))
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    assert report["status"] == "HSE_PROJECT_STRICT_COMPLETE"
+    assert report["current_active_frontier"]["status"] == "HSE_PROJECT_STRICT_COMPLETE"
+    assert report["current_active_frontier"]["highest_strict_complete_phase"] == 5
+    for phase in ("phase1", "phase2", "phase3", "phase4", "phase5"):
+        assert report["phases"][phase]["strict_complete"] is True
+        assert report["phases"][phase]["blockers"] == []
+    assert report["phases"]["phase4"]["strict_gate"]["complete"] is True
+    assert report["phases"]["phase5"]["strict_gate"]["complete"] is True
+    assert report["phase3_strict_completion_claimed"] is True
+    assert report["phase4_strict_completion_claimed"] is True
+    assert report["phase5_strict_completion_claimed"] is True
+    assert report["overall_hse_project_completion_claimed"] is True
+    assert "overall_HSE_project_completion" not in report["not_claimed"]
+    assert "phase5_strict_completion" not in report["not_claimed"]
+    assert "github_query_or_write" in report["not_claimed"]
+    assert report["github_query_performed"] is False
+    assert report["github_write_performed"] is False
+    assert report["provider_or_model_spend_performed"] is False
+    assert report["active_apply_performed"] is False
+
+
+def test_strict_frontier_audit_cli_claims_hse_project_with_phase4_phase5_flags(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+    inputs.update(_phase4_phase5_strict_inputs(tmp_path))
+
+    assert strict_frontier_audit.main(_audit_cli_args(tmp_path, active_repo, inputs)) == 0
+    report = json.loads((tmp_path / "audit-cli" / "strict_frontier_audit.json").read_text())
+
+    assert report["status"] == "HSE_PROJECT_STRICT_COMPLETE"
+    assert report["overall_hse_project_completion_claimed"] is True
 
 
 def _current_baseline_closure_inputs(tmp_path: Path, active_repo: Path, subject: dict[str, str]) -> dict[str, Path]:

@@ -1,0 +1,31 @@
+{
+  "metrics": [
+    {
+      "baseline": 0.82,
+      "component": "tool_descriptions",
+      "higher_is_better": true,
+      "id": "tool_selection_accuracy",
+      "sample_count": 45,
+      "threshold": 0.9,
+      "value": 0.71
+    },
+    {
+      "baseline": 0.02,
+      "component": "system_prompts",
+      "higher_is_better": false,
+      "id": "prompt_contract_warning_rate",
+      "sample_count": 20,
+      "threshold": 0.05,
+      "value": 0.01
+    }
+  ],
+  "schema_version": "phase5-performance-input-v1",
+  "source": {
+    "kind": "sanitized_local_fixture",
+    "label": "hse-strict-completion-local-fixture"
+  },
+  "window": {
+    "end": "2026-07-05",
+    "start": "2026-07-01"
+  }
+}

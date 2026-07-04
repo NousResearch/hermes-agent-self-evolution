@@ -1,0 +1,85 @@
+{
+  "highest_phase": 5,
+  "not_claimed": [
+    "full_remote_benchmark",
+    "provider_api_spend",
+    "github_query_or_write",
+    "active_apply",
+    "cron_or_gateway_mutation",
+    "auto_merge_or_deploy"
+  ],
+  "overall_claimed": true,
+  "phase4_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase4-code-evolution/strict-local-code-evolution-20260705_004424/phase4_strict_code_evolution_report.json",
+  "phase4_report_status": "PHASE4_STRICT_CODE_EVOLUTION_COMPLETE_LOCAL_APPROVED_ENGINE",
+  "phase5_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase5-continuous-loop/strict-unattended-loop-20260705_004424/phase5_strict_unattended_loop_report.json",
+  "phase5_report_status": "PHASE5_STRICT_UNATTENDED_LOOP_PASS_LOCAL_PR_READY",
+  "report_dir": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_project_strict_completion_20260705_004424_local_only",
+  "self_contained_audit_generated_at": "2026-07-05T00:47:41+0900",
+  "self_contained_files": [
+    {
+      "bytes": 15459,
+      "path": "strict_frontier_audit.json",
+      "sha256": "7d7ef273155c2a1e032b31dbbafc1be143f80c37cada8c87dde91dca791ef640"
+    },
+    {
+      "bytes": 1112,
+      "path": "strict_frontier_audit.md",
+      "sha256": "9f4af0c08266eb0d555a8fac8f793a2983f23503c32b800e29c56757d8988c00"
+    },
+    {
+      "bytes": 5639,
+      "path": "phase4_strict_code_evolution_report.json",
+      "sha256": "cff5ebc22df752ca3f33b5beeb8dfe37ea7680ae5e0c3cdf4349f33ffca7f950"
+    },
+    {
+      "bytes": 533,
+      "path": "phase4_strict_code_evolution_report.md",
+      "sha256": "4270c2d144c8479973834e540c63c1ae13d53bf1f9f77f0d0bd0612286d121d2"
+    },
+    {
+      "bytes": 2756,
+      "path": "phase4_freeze_report.json",
+      "sha256": "5292367760c6eaa1ab56869ff387a9693047aabeae049f312783f5f3985ee172"
+    },
+    {
+      "bytes": 4703,
+      "path": "phase5_strict_unattended_loop_report.json",
+      "sha256": "3f85b857a81183356fb596a970b96d40a54ab2993ae755ba6fcbaaff282b6a8c"
+    },
+    {
+      "bytes": 570,
+      "path": "phase5_strict_unattended_loop_report.md",
+      "sha256": "b48def7e7a4b392635fe179633b42d1865ec5dd454011860dd0a2a31b0f42160"
+    },
+    {
+      "bytes": 726,
+      "path": "phase5_pr_ready_handoff.json",
+      "sha256": "a6990e1e38bb2591434647bbfc518a994ef550213ba5e854a0c8b7102d119b1e"
+    },
+    {
+      "bytes": 1070,
+      "path": "phase5_candidate_bundle_decision_snapshot.json",
+      "sha256": "0f8e89cae2c1cd80743f3afbd8cc601cbcae2040871994d40699c44659291f7d"
+    },
+    {
+      "bytes": 692,
+      "path": "phase5_metrics_input.json",
+      "sha256": "b9d3d2600653aad710c70b08b44a9f2246bf70ea808c8f6a87b38c9490d1cd8f"
+    },
+    {
+      "bytes": 5788,
+      "path": "logs/final_verification.log",
+      "sha256": "297ac665b08e971e61903d0046d6c771e8ef0334ae3af24f1ffbc0ea2dfb5543"
+    },
+    {
+      "bytes": 895,
+      "path": "logs/time_rewind_restore_out_of_scope_apply.stdout",
+      "sha256": "5acf2b82c243a889718341164f291a9005bd605d59f022ac58a2b2e31a35435b"
+    }
+  ],
+  "self_contained_report_bundle": true,
+  "self_hash_policy": "completion_run_summary.json is excluded from self_contained_files hashes to avoid circular/stale self-reference; hash it externally after writes if needed.",
+  "stamp": "20260705_004424",
+  "strict_frontier_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_project_strict_completion_20260705_004424_local_only/strict_frontier_audit.json",
+  "strict_frontier_report_status": "HSE_PROJECT_STRICT_COMPLETE"
+}
