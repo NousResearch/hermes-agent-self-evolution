@@ -1,0 +1,48 @@
+{
+  "artifacts": {
+    "evidence": {
+      "bytes": 25033,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution_evidence.json",
+      "sha256": "b1f7d57ab7f9dfbb8c8bbf4fdffe574974243e1dbde87fc800341d4b39a4eaca"
+    },
+    "manifest": {
+      "bytes": 29325,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution_manifest.json",
+      "sha256": "72d945c25a80c2a43950f187c63c36f36b57243cefb61345423cdc998239168f"
+    },
+    "markdown": {
+      "bytes": 13069,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution.md",
+      "sha256": "e15e84280c956c9e2ab0b0227d048b4a8464ebe9596611d3b5b1f604c0eb4acd"
+    },
+    "replay": {
+      "bytes": 16590,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution_replay.md",
+      "sha256": "2b8dbc8a2255db89649ea12aaf2146ad407421a60689a90221148324b07212e1"
+    }
+  },
+  "final_qa": {
+    "score": 0.94,
+    "session": "qa-25bbc2e4",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "intermediate_qa": [
+    {
+      "note": "before replay hardening",
+      "score": 0.96,
+      "session": "qa-40e4ed44",
+      "threshold": 0.9,
+      "verdict": "PASS"
+    },
+    {
+      "note": "after replay hardening before raw approval/argv string hardening",
+      "score": 0.93,
+      "session": "qa-12372918",
+      "threshold": 0.9,
+      "verdict": "PASS"
+    }
+  ],
+  "quality_bar": "approved bounded local DSPy.GEPA execution; no provider/GitHub/active apply/cron/gateway/deploy/publication/strict completion overclaim; semantic no-op reported; mechanical verification passed",
+  "schema_version": "hse-phase3-gepa-dspy-candidate-optimization-execution-qa-v1"
+}

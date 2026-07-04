@@ -1,0 +1,48 @@
+................................                                         [100%]
+=============================== warnings summary ===============================
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:12: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    goal: str = dspy.InputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:16: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    tools: list[str] = dspy.InputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:20: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    action_1: Action = dspy.OutputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:30: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    instruction: str = dspy.InputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:34: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    actions: list[str] = dspy.InputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:38: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    pos_input_with_metrics: list[EvalResult] = dspy.InputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:42: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    neg_input_with_metrics: list[EvalResult] = dspy.InputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:46: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    feedback: str = dspy.OutputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:61: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    previous_instruction: str = dspy.InputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:65: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    feedback: str = dspy.InputField(
+
+tests/tools/test_phase3_gepa_optimizer.py::test_phase3_gepa_optimizer_runs_bounded_dspy_gepa_and_writes_artifacts
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:69: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    new_instruction: str = dspy.OutputField(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+32 passed, 11 warnings in 3.37s

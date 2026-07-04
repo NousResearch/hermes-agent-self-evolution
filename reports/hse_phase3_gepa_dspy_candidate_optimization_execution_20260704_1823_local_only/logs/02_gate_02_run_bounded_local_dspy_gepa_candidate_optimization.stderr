@@ -1,0 +1,7 @@
+2026/07/04 18:24:50 INFO dspy.teleprompt.gepa.gepa: Running GEPA for approx 5 metric calls of the program. This amounts to 0.50 full evals on the train+val set.
+2026/07/04 18:24:50 INFO dspy.teleprompt.gepa.gepa: Using 5 examples for tracking Pareto scores.
+
+GEPA Optimization:   0%|          | 0/5 [00:00<?, ?rollouts/s]2026/07/04 18:24:51 INFO dspy.evaluate.evaluate: Average Metric: 5.0 / 5 (100.0%)
+2026/07/04 18:24:51 INFO dspy.teleprompt.gepa.gepa: Iteration 0: Base program full valset score: 1.0 over 5 / 5 examples
+
+GEPA Optimization:   0%|          | 0/5 [00:00<?, ?rollouts/s]

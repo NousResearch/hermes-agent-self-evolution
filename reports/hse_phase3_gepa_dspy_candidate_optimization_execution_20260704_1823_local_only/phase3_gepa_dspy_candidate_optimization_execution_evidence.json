@@ -1,0 +1,355 @@
+{
+  "approval_reference": {
+    "approval_scope_summary": "fresh Time Rewind anchor + kill-switch/timeout wrapper; execution-approved preflight; bounded local DSPy.GEPA candidate optimizer; verify optimizer artifact; no GitHub write/query, no active apply, no cron/gateway mutation, no deploy/publication, no Phase 3 strict completion claim",
+    "approved_packet": "phase3_gepa_dspy_candidate_optimization_execution_go_no_github_write_no_active_apply",
+    "approver": "sunwoo",
+    "observed_processing_started_at": "2026-07-04 18:22:19 KST +0900",
+    "raw_approval_excerpt": "[sunwoo] rec action go -- [Recommended next step/action: phase3_gepa_dspy_candidate_optimization_execution_go_no_github_write_no_active_apply \u2014 \ub2e4\uc74c \uc548\uc804 \ub2e8\uacc4\ub294 fresh Time Rewind anchor\uc640 kill-switch/timeout wrapper \uc544\ub798\uc5d0\uc11c execution-approved preflight \uc0dd\uc131 \ud6c4 bounded local DSPy.GEPA candidate optimizer\ub97c \uc2e4\ud589\ud558\uace0, optimizer artifact\ub97c \uac80\uc99d\ud558\ub294 \uac83\uc785\ub2c8\ub2e4. GitHub write, active apply, cron/gateway mutation, deploy/publication, Phase 3 strict completion claim\uc740 \uacc4\uc18d \ubcc4\ub3c4 \uc2b9\uc778 \uc804\uae4c\uc9c0 \ubcf4\ub958\ud558\uc138\uc694.]",
+    "raw_approval_text_length": 453,
+    "raw_approval_text_sha256": "0a3004da761f3699fd3e6cfa68e8d99e730ff3e5259e8312324c5bb4432d56f9",
+    "source": "current Discord thread user message",
+    "verification_command": "python - <<PY ... sha256(raw_approval.encode()).hexdigest() == raw_approval_text_sha256 and len(raw_approval) == raw_approval_text_length"
+  },
+  "boundary_ledger": {
+    "active_apply_performed": false,
+    "bounded_local_dspy_gepa_optimizer_executed": true,
+    "candidate_optimization_command_executed": true,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "deterministic_local_fallback": true,
+    "execution_approved_preflight_created": true,
+    "external_llm_calls_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "mutate_active_system_prompt_now": false,
+    "network_calls_performed": false,
+    "overall_hse_project_completion_claimed": false,
+    "phase3_strict_completion_claimed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "command_records": [
+    {
+      "aborted_by_kill_switch": false,
+      "absolute_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.prompts.phase3_preflight_gate",
+        "--candidate-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+        "--tblite-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json",
+        "--yc-bench-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/preflight/phase3_execution_approved_preflight_report.json",
+        "--execution-approved"
+      ],
+      "elapsed_seconds": 0.037,
+      "kill_switch_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/.phase3-gepa-dspy-kill-switch",
+      "kill_switch_present_before": false,
+      "name": "gate_01_create_execution_approved_preflight_report",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/preflight/phase3_execution_approved_preflight_report.json",
+      "primary_output_record": {
+        "bytes": 3734,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/preflight/phase3_execution_approved_preflight_report.json",
+        "sha256": "724e2df5976f2c76df014244c78b229fa7a5f2ef894db83b507f249bc1097f4d"
+      },
+      "returncode": 0,
+      "started": true,
+      "stderr": {
+        "bytes": 0,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/01_gate_01_create_execution_approved_preflight_report.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/01_gate_01_create_execution_approved_preflight_report.stderr",
+      "stdout": {
+        "bytes": 282,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/01_gate_01_create_execution_approved_preflight_report.stdout",
+        "sha256": "416bf349b0ae6d61689e1e216ff0014ea339d444598609428e83459f9b0a6a20"
+      },
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/01_gate_01_create_execution_approved_preflight_report.stdout",
+      "timed_out": false,
+      "timeout_seconds": 540
+    },
+    {
+      "aborted_by_kill_switch": false,
+      "absolute_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.prompts.phase3_gepa_optimizer",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--tblite-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json",
+        "--yc-bench-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json",
+        "--preflight-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/preflight/phase3_execution_approved_preflight_report.json",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_optimizer_report.json",
+        "--optimized-candidate-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/optimized_candidate_system_prompt.json",
+        "--log-dir",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_logs",
+        "--remote-blocker",
+        "openrouter_402_openai_anthropic_unavailable"
+      ],
+      "elapsed_seconds": 1.54,
+      "kill_switch_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/.phase3-gepa-dspy-kill-switch",
+      "kill_switch_present_before": false,
+      "name": "gate_02_run_bounded_local_dspy_gepa_candidate_optimization",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_optimizer_report.json",
+      "primary_output_record": {
+        "bytes": 3184,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_optimizer_report.json",
+        "sha256": "380e8f58c989b0c978b6f1200b06b50eb014bb5700aa2b6f5adec086cb4fc8b0"
+      },
+      "returncode": 0,
+      "started": true,
+      "stderr": {
+        "bytes": 588,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/02_gate_02_run_bounded_local_dspy_gepa_candidate_optimization.stderr",
+        "sha256": "f02fb53add665e62ff180f3c8a003619712cd63ac165dd1f9ce5a8ac2f471de9"
+      },
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/02_gate_02_run_bounded_local_dspy_gepa_candidate_optimization.stderr",
+      "stdout": {
+        "bytes": 222,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/02_gate_02_run_bounded_local_dspy_gepa_candidate_optimization.stdout",
+        "sha256": "4af526c21c42425a19c7e9ac3b76eeb2125c2ec9f322ce2ed1dd36e6ce92d3eb"
+      },
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/02_gate_02_run_bounded_local_dspy_gepa_candidate_optimization.stdout",
+      "timed_out": false,
+      "timeout_seconds": 540
+    },
+    {
+      "aborted_by_kill_switch": false,
+      "absolute_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/tools/test_phase3_gepa_optimizer.py",
+        "tests/tools/test_phase3_preflight_gate.py",
+        "tests/tools/test_phase3_benchmark_adapters.py"
+      ],
+      "elapsed_seconds": 3.966,
+      "kill_switch_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/.phase3-gepa-dspy-kill-switch",
+      "kill_switch_present_before": false,
+      "name": "gate_03_post_optimizer_focused_verification",
+      "primary_output": null,
+      "primary_output_record": null,
+      "returncode": 0,
+      "started": true,
+      "stderr": {
+        "bytes": 0,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/03_gate_03_post_optimizer_focused_verification.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/03_gate_03_post_optimizer_focused_verification.stderr",
+      "stdout": {
+        "bytes": 5196,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/03_gate_03_post_optimizer_focused_verification.stdout",
+        "sha256": "f6658d789b1e07b86dc9d3ac200d26d3b35b62774b8f7b2b8cc9db62b06b229d"
+      },
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/03_gate_03_post_optimizer_focused_verification.stdout",
+      "timed_out": false,
+      "timeout_seconds": 540
+    }
+  ],
+  "command_surface_scan": [
+    {
+      "exec_token": "python",
+      "forbidden_executable_hits": [],
+      "module": "evolution.prompts.phase3_preflight_gate",
+      "name": "gate_01_create_execution_approved_preflight_report"
+    },
+    {
+      "exec_token": "python",
+      "forbidden_executable_hits": [],
+      "module": "evolution.prompts.phase3_gepa_optimizer",
+      "name": "gate_02_run_bounded_local_dspy_gepa_candidate_optimization"
+    },
+    {
+      "exec_token": "python",
+      "forbidden_executable_hits": [],
+      "module": "pytest",
+      "name": "gate_03_post_optimizer_focused_verification"
+    }
+  ],
+  "execution_approved_preflight_report": {
+    "bytes": 3734,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/preflight/phase3_execution_approved_preflight_report.json",
+    "sha256": "724e2df5976f2c76df014244c78b229fa7a5f2ef894db83b507f249bc1097f4d"
+  },
+  "full_pytest_stderr": {
+    "bytes": 0,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/full_pytest.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "full_pytest_stdout": {
+    "bytes": 5231,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/full_pytest.stdout",
+    "sha256": "5a88b91a93a9dd5516e17500bf68577e051b18e2aa94ad53a08c53980d92b71e"
+  },
+  "gepa_log_dir": {
+    "exists": true,
+    "file_count": 6,
+    "is_dir": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_logs",
+    "total_bytes": 1063,
+    "tree_sha256": "9e782142b95d10c72870320c5805271cc9a1140064a71da3d6eff084da5437d8"
+  },
+  "gepa_optimizer_report": {
+    "bytes": 3184,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_optimizer_report.json",
+    "sha256": "380e8f58c989b0c978b6f1200b06b50eb014bb5700aa2b6f5adec086cb4fc8b0"
+  },
+  "manifest": {
+    "bytes": 29673,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution_manifest.json",
+    "sha256": "0a32d3863448101ae0d86791bb0d772b204a9ffc1bfe9ea1b3bf4a0f0d6f161a"
+  },
+  "markdown": {
+    "bytes": 13069,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution.md",
+    "sha256": "e15e84280c956c9e2ab0b0227d048b4a8464ebe9596611d3b5b1f604c0eb4acd"
+  },
+  "optimized_candidate_system_prompt": {
+    "bytes": 1069,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/optimized_candidate_system_prompt.json",
+    "sha256": "813af249322a0ca0c519a87a8de1d87032267b917c9c6182bff9c44255bbb44e"
+  },
+  "per_command_replay_index": [
+    {
+      "argv_string": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python -m evolution.prompts.phase3_preflight_gate --candidate-report /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json --tblite-report /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json --yc-bench-report /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json --output-json /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/preflight/phase3_execution_approved_preflight_report.json --execution-approved",
+      "elapsed_seconds": 0.037,
+      "name": "gate_01_create_execution_approved_preflight_report",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/preflight/phase3_execution_approved_preflight_report.json",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/01_gate_01_create_execution_approved_preflight_report.stderr",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 282,
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/01_gate_01_create_execution_approved_preflight_report.stdout",
+      "stdout_sha256": "416bf349b0ae6d61689e1e216ff0014ea339d444598609428e83459f9b0a6a20",
+      "timed_out": false
+    },
+    {
+      "argv_string": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python -m evolution.prompts.phase3_gepa_optimizer --baseline-prompt /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json --candidate-prompt /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json --tblite-report /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/tblite.json --yc-bench-report /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-real-smoke-20260704_1208/benchmarks/yc_bench.json --preflight-report /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/preflight/phase3_execution_approved_preflight_report.json --output-json /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_optimizer_report.json --optimized-candidate-json /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/optimized_candidate_system_prompt.json --log-dir /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_logs --remote-blocker openrouter_402_openai_anthropic_unavailable",
+      "elapsed_seconds": 1.54,
+      "name": "gate_02_run_bounded_local_dspy_gepa_candidate_optimization",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/gepa_optimizer_report.json",
+      "returncode": 0,
+      "stderr_bytes": 588,
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/02_gate_02_run_bounded_local_dspy_gepa_candidate_optimization.stderr",
+      "stderr_sha256": "f02fb53add665e62ff180f3c8a003619712cd63ac165dd1f9ce5a8ac2f471de9",
+      "stdout_bytes": 222,
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/02_gate_02_run_bounded_local_dspy_gepa_candidate_optimization.stdout",
+      "stdout_sha256": "4af526c21c42425a19c7e9ac3b76eeb2125c2ec9f322ce2ed1dd36e6ce92d3eb",
+      "timed_out": false
+    },
+    {
+      "argv_string": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python -m pytest -q tests/tools/test_phase3_gepa_optimizer.py tests/tools/test_phase3_preflight_gate.py tests/tools/test_phase3_benchmark_adapters.py",
+      "elapsed_seconds": 3.966,
+      "name": "gate_03_post_optimizer_focused_verification",
+      "primary_output": null,
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/03_gate_03_post_optimizer_focused_verification.stderr",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 5196,
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/logs/03_gate_03_post_optimizer_focused_verification.stdout",
+      "stdout_sha256": "f6658d789b1e07b86dc9d3ac200d26d3b35b62774b8f7b2b8cc9db62b06b229d",
+      "timed_out": false
+    }
+  ],
+  "qa": {
+    "bytes": 2239,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution_qa.json",
+    "sha256": "208aea9d5b19dd121b09d3b895044b280e66fcad87d4c02aa78ecf6d475711e9"
+  },
+  "replay_markdown": {
+    "bytes": 16590,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution_replay.md",
+    "sha256": "2b8dbc8a2255db89649ea12aaf2146ad407421a60689a90221148324b07212e1"
+  },
+  "schema_version": "hse-phase3-gepa-dspy-candidate-optimization-execution-evidence-v1",
+  "semantic_candidate_equality": {
+    "file_sha_differs_due_to_json_reformatting": true,
+    "json_object_equal": true,
+    "optimized_candidate_canonical_sha256": "106f8ab4480669d9ab187ac3bf7efb94c8381633e4f2ec909959deef4c4f0448",
+    "optimized_candidate_file": {
+      "bytes": 1069,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-gepa-dspy-candidate-optimization-20260704_1816/optimizer/optimized_candidate_system_prompt.json",
+      "sha256": "813af249322a0ca0c519a87a8de1d87032267b917c9c6182bff9c44255bbb44e"
+    },
+    "source_candidate_canonical_sha256": "106f8ab4480669d9ab187ac3bf7efb94c8381633e4f2ec909959deef4c4f0448",
+    "source_candidate_file": {
+      "bytes": 1069,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+      "sha256": "d0e28fff0a61a3330f839fcd66960169fbed2ec5112b2e58f21855177c906781"
+    }
+  },
+  "testing_scope": {
+    "post_optimizer_focused_pytest_executed": true,
+    "pytest_fixture_output_cleanup_performed": true,
+    "pytest_fixture_output_existed_after_test": true,
+    "pytest_fixture_output_exists_after_cleanup": false
+  },
+  "verification": {
+    "active_repo_guard": "active_status_count=0",
+    "artifact_invariant": "phase3_gepa_dspy_execution_invariant=PASS; rc=0",
+    "compileall": "rc=0",
+    "focused_tests": "35 passed, 11 warnings in 3.74s; rc=0",
+    "full_pytest": "469 passed, 11 warnings in 7.86s; rc=0",
+    "git_diff_check": "rc=0",
+    "json_validation": "manifest/preflight/optimizer/optimized-candidate json.tool rc=0",
+    "optimizer_stderr_classification": "non-empty stderr contains DSPy/GEPA INFO/progress logging only; no traceback/error marker observed",
+    "pytest_fixture_output_cleanup": "output/phase3-system-prompt/pytest-gepa-optimizer exists=false after cleanup"
+  },
+  "wrapper_source": {
+    "bytes": 4438,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_gepa_dspy_candidate_optimization_execution_20260704_1823_local_only/phase3_gepa_dspy_candidate_optimization_execution_wrapper_source.json",
+    "sha256": "75023f1b6def170a097d9834ecd023192e38efcf3b59261744da4b0287a4a16e"
+  }
+}
