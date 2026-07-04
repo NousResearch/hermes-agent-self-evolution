@@ -1,0 +1,68 @@
+{
+  "branch": "hse/pr108-sanitized-successor-20260705-024004",
+  "generated_at_utc": "2026-07-04T17:41:50.371349+00:00",
+  "redaction_policy": {
+    "output_artifacts": "raw output/ artifacts excluded",
+    "private_local_home_paths": "raw local home paths are replaced with <LOCAL_HOME>",
+    "raw_logs": "not included except selected sanitized JSON mirrors",
+    "scanner_hostile_fixture_values": "not included; only redacted classification metrics are kept",
+    "temp_paths": "private temp/folder paths -> <LOCAL_TMP>"
+  },
+  "sanitized_files": {
+    "README.md": {
+      "bytes": 2371,
+      "sha256": "73ed95eba2d79cdbf600390e595517b265d9f44bd8a6c4dffb58972ea23fd24f"
+    },
+    "audit_refresh_manifest.sanitized.json": {
+      "bytes": 8953,
+      "sha256": "f802fa6ac63458046b05e28b920977e49a91df819dbf854e3415a1f1d2fc45fb"
+    },
+    "phase5_production_cron_verified_loop_run.sanitized.json": {
+      "bytes": 2784,
+      "sha256": "330360ce683043722d2d18d78b7b33565a382e90b7d5e9404b392deec7ffa84e"
+    },
+    "phase5_production_cron_verified_strict_unattended_loop_report.sanitized.json": {
+      "bytes": 4688,
+      "sha256": "91bac9f849dcfa0acb786094971f0bc87e6073beefb8f497d9565ccf49d2a40b"
+    },
+    "sanitized_successor_summary.json": {
+      "bytes": 7089,
+      "sha256": "53c1ea152a1393552e97d420575044830f5affccdcf971080daa31f2effde302"
+    },
+    "sanitized_successor_summary.md": {
+      "bytes": 2371,
+      "sha256": "73ed95eba2d79cdbf600390e595517b265d9f44bd8a6c4dffb58972ea23fd24f"
+    },
+    "sanitized_successor_verification.json": {
+      "bytes": 393,
+      "sha256": "31f051ba143a1215ea2c565b14f8befdb8a427c6953562962385fd3932ce8851"
+    },
+    "strict_frontier_audit.sanitized.json": {
+      "bytes": 15611,
+      "sha256": "dd3917eb3c7db1d713a47aa1c358a286d3cdf858159ec83071ad91e7b75ecc25"
+    }
+  },
+  "schema_version": "hse-pr108-sanitized-source-manifest-v1",
+  "source_artifacts": {
+    "audit_refresh_manifest": {
+      "sanitized_artifact": "audit_refresh_manifest.sanitized.json",
+      "source_artifact": "reports/hse_current_head_strict_audit_refresh_20260705_013424_production_operational_revalidated_local_only/audit_refresh_manifest.json",
+      "source_sha256": "4080259dec72904218ba0c76385e7376f4e55d43e8da8f5007ad4ba45ea8724f"
+    },
+    "phase5_production_cron_verified_loop_run": {
+      "sanitized_artifact": "phase5_production_cron_verified_loop_run.sanitized.json",
+      "source_artifact": "reports/hse_current_head_strict_audit_refresh_20260705_013424_production_operational_revalidated_local_only/phase5_production_cron_verified_loop_run.json",
+      "source_sha256": "176115ee208c86523d10711bc0c64eaa495e2cf6f0c5da3b34a1ebf6bf9a8f95"
+    },
+    "phase5_production_cron_verified_strict_unattended_loop_report": {
+      "sanitized_artifact": "phase5_production_cron_verified_strict_unattended_loop_report.sanitized.json",
+      "source_artifact": "reports/hse_current_head_strict_audit_refresh_20260705_013424_production_operational_revalidated_local_only/phase5_production_cron_verified_strict_unattended_loop_report.json",
+      "source_sha256": "825e9fdd8afc5af7b505a39a2b7ba3d1b4e2f9a25c029b72145123eaf876406a"
+    },
+    "strict_frontier_audit": {
+      "sanitized_artifact": "strict_frontier_audit.sanitized.json",
+      "source_artifact": "reports/hse_current_head_strict_audit_refresh_20260705_013424_production_operational_revalidated_local_only/strict_frontier_audit.json",
+      "source_sha256": "d4ed7294f2f72d19ac7eb5350a6d11c596cf0db6f81c4ccf0893106bb77611bc"
+    }
+  }
+}
