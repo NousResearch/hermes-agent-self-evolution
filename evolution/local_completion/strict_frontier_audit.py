@@ -194,6 +194,9 @@ def _current_baseline_match(repo: Path, active: Mapping[str, Any], closure: Mapp
     subject_source = subject.get("hermes_source", {}) if isinstance(subject.get("hermes_source"), Mapping) else {}
     subject_commit = str(subject_source.get("commit_full") or subject_source.get("commit") or "")
     ancestor = _ancestor_state(repo, subject_commit)
+    if closure.get("current_baseline_revalidation_closed") is True:
+        return _current_baseline_revalidation_match(repo, active, closure, subject, subject_commit, ancestor)
+
     file_checks = _tool_description_file_checks(repo, subject)
     hashes_match = bool(file_checks) and all(check["hash_match"] is True for check in file_checks)
     blockers: list[str] = []
@@ -203,6 +206,7 @@ def _current_baseline_match(repo: Path, active: Mapping[str, Any], closure: Mapp
         blockers.append("active_tool_description_hash_mismatch")
     return {
         "matches_closure_subject": ancestor["is_ancestor_of_current_head"] is True and hashes_match,
+        "current_baseline_revalidation_closure": False,
         "active_head": active.get("head"),
         "active_head_short": active.get("head_short"),
         "closure_subject_commit": subject_commit,
@@ -210,10 +214,145 @@ def _current_baseline_match(repo: Path, active: Mapping[str, Any], closure: Mapp
         "closure_subject_is_ancestor_of_active_head": ancestor["is_ancestor_of_current_head"],
         "closure_subject_ancestor_rc": ancestor["ancestor_check_rc"],
         "closure_subject_commit_available": ancestor["available"],
+        "active_head_equals_revalidated_current_subject": None,
+        "current_baseline_preflight_hash_verified": None,
+        "current_baseline_preflight_current_commit_matches_subject": None,
+        "current_baseline_preflight_inventory_head_matches_subject": None,
         "active_tool_description_hashes_match": hashes_match,
         "tool_description_file_checks": file_checks,
         "blockers": blockers,
     }
+
+
+def _current_baseline_revalidation_match(
+    repo: Path,
+    active: Mapping[str, Any],
+    closure: Mapping[str, Any],
+    subject: Mapping[str, Any],
+    subject_commit: str,
+    ancestor: Mapping[str, Any],
+) -> dict[str, Any]:
+    preflight, preflight_meta = _current_baseline_preflight_from_closure(closure)
+    file_checks = _current_baseline_inventory_file_checks(repo, preflight)
+    hashes_match = bool(file_checks) and all(check["hash_match"] is True for check in file_checks)
+    active_head_equals_subject = active.get("head") == subject_commit
+    preflight_current_commit_matches_subject = bool(preflight) and preflight.get("current_commit_for_rerun") == subject_commit
+    inventory = preflight.get("current_baseline_inventory", {}) if isinstance(preflight.get("current_baseline_inventory"), Mapping) else {}
+    preflight_inventory_head_matches_subject = bool(inventory) and inventory.get("head") == subject_commit
+    blockers: list[str] = []
+    if not active_head_equals_subject:
+        blockers.append("current_hermes_head_not_revalidated_current_subject")
+    if preflight_meta.get("hash_verified") is not True:
+        blockers.append("current_baseline_preflight_hash_not_verified")
+    if not preflight_current_commit_matches_subject:
+        blockers.append("current_baseline_preflight_current_commit_mismatch")
+    if not preflight_inventory_head_matches_subject:
+        blockers.append("current_baseline_preflight_inventory_head_mismatch")
+    if not hashes_match:
+        blockers.append("active_tool_description_hash_mismatch")
+    blockers.extend(preflight_meta.get("blockers", []))
+    matches = bool(
+        active_head_equals_subject
+        and preflight_meta.get("hash_verified") is True
+        and preflight_current_commit_matches_subject
+        and preflight_inventory_head_matches_subject
+        and hashes_match
+    )
+    return {
+        "matches_closure_subject": matches,
+        "current_baseline_revalidation_closure": True,
+        "active_head": active.get("head"),
+        "active_head_short": active.get("head_short"),
+        "closure_subject_commit": subject_commit,
+        "closure_subject_id": subject.get("subject_id"),
+        "closure_subject_is_ancestor_of_active_head": ancestor["is_ancestor_of_current_head"],
+        "closure_subject_ancestor_rc": ancestor["ancestor_check_rc"],
+        "closure_subject_commit_available": ancestor["available"],
+        "active_head_equals_revalidated_current_subject": active_head_equals_subject,
+        "current_baseline_preflight": preflight_meta,
+        "current_baseline_preflight_hash_verified": preflight_meta.get("hash_verified") is True,
+        "current_baseline_preflight_current_commit_matches_subject": preflight_current_commit_matches_subject,
+        "current_baseline_preflight_inventory_head_matches_subject": preflight_inventory_head_matches_subject,
+        "active_tool_description_hashes_match": hashes_match,
+        "tool_description_file_checks": file_checks,
+        "blockers": sorted(set(blockers)),
+    }
+
+
+def _current_baseline_preflight_from_closure(closure: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    meta: dict[str, Any] = {"available": False, "hash_verified": False, "blockers": []}
+    source_artifacts = closure.get("source_artifacts")
+    if not isinstance(source_artifacts, Mapping):
+        meta["blockers"].append("current_baseline_preflight_source_missing")
+        return {}, meta
+    record = source_artifacts.get("current_baseline_preflight")
+    if not isinstance(record, Mapping):
+        meta["blockers"].append("current_baseline_preflight_source_missing")
+        return {}, meta
+    path_value = record.get("path")
+    expected_sha = record.get("sha256")
+    if not isinstance(path_value, str) or not path_value:
+        meta["blockers"].append("current_baseline_preflight_path_missing")
+        return {}, meta
+    path = Path(path_value).expanduser()
+    meta.update({"path": str(path), "expected_sha256": expected_sha})
+    if not path.exists():
+        meta["blockers"].append("current_baseline_preflight_file_missing")
+        return {}, meta
+    actual_sha = _sha256_path(path)
+    meta["actual_sha256"] = actual_sha
+    meta["bytes"] = path.stat().st_size
+    meta["hash_verified"] = actual_sha == expected_sha
+    if meta["hash_verified"] is not True:
+        meta["blockers"].append("current_baseline_preflight_hash_mismatch")
+        return {}, meta
+    data = _load_json_object(path, "current-baseline preflight")
+    meta["available"] = True
+    meta["schema_version"] = data.get("schema_version")
+    meta["status"] = data.get("status")
+    meta["current_commit_for_rerun"] = data.get("current_commit_for_rerun")
+    inventory = data.get("current_baseline_inventory", {}) if isinstance(data.get("current_baseline_inventory"), Mapping) else {}
+    meta["inventory_head"] = inventory.get("head")
+    if data.get("schema_version") != "hse-current-baseline-revalidation-preflight-v1":
+        meta["blockers"].append("current_baseline_preflight_schema_mismatch")
+    if data.get("status") != "CURRENT_BASELINE_REVALIDATION_PREFLIGHT_READY_SEPARATE_GO_REQUIRED":
+        meta["blockers"].append("current_baseline_preflight_not_ready")
+    return data, meta
+
+
+def _current_baseline_inventory_file_checks(repo: Path, preflight: Mapping[str, Any]) -> list[dict[str, Any]]:
+    inventory = preflight.get("current_baseline_inventory", {}) if isinstance(preflight.get("current_baseline_inventory"), Mapping) else {}
+    files = inventory.get("files")
+    if not isinstance(files, list):
+        return []
+    checks: list[dict[str, Any]] = []
+    for index, record in enumerate(files):
+        if not isinstance(record, Mapping):
+            checks.append({"key": f"inventory[{index}]", "relative_path": None, "exists": False, "expected_sha256": None, "actual_sha256": None, "hash_match": False})
+            continue
+        rel = record.get("relative_path")
+        if not isinstance(rel, str) or not rel:
+            checks.append({"key": f"inventory[{index}]", "relative_path": rel, "exists": False, "expected_sha256": record.get("sha256"), "actual_sha256": None, "hash_match": False})
+            continue
+        expected_exists = record.get("exists") is True
+        expected_sha = record.get("sha256")
+        path = repo / rel
+        exists = path.exists()
+        is_file = exists and path.is_file()
+        actual = sha256(path.read_bytes()).hexdigest() if is_file else None
+        hash_match = exists == expected_exists and ((not expected_exists and expected_sha is None) or (is_file and actual == expected_sha))
+        checks.append(
+            {
+                "key": f"current_baseline_inventory[{index}]",
+                "relative_path": rel,
+                "exists": exists,
+                "expected_exists": expected_exists,
+                "expected_sha256": expected_sha,
+                "actual_sha256": actual,
+                "hash_match": hash_match,
+            }
+        )
+    return checks
 
 
 def _ancestor_state(repo: Path, commit: str) -> dict[str, Any]:

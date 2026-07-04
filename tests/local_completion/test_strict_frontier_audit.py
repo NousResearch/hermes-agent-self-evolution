@@ -228,3 +228,107 @@ def test_strict_frontier_audit_does_not_accept_historical_phase3_or_phase5_compl
     assert report["phases"]["phase5"]["historical_claim_status"] == "FORMAL_PHASE5_COMPLETE_LOCAL_WITH_EXPLICIT_WAIVER"
     assert report["phases"]["phase5"]["strict_complete"] is False
     assert "production_continuous_loop_not_enabled" in report["phases"]["phase5"]["blockers"]
+
+
+def _current_baseline_closure_inputs(tmp_path: Path, active_repo: Path, subject: dict[str, str]) -> dict[str, Path]:
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    preflight = _write_json(
+        tmp_path / "reports" / "current_baseline_preflight.json",
+        {
+            "schema_version": "hse-current-baseline-revalidation-preflight-v1",
+            "status": "CURRENT_BASELINE_REVALIDATION_PREFLIGHT_READY_SEPARATE_GO_REQUIRED",
+            "baseline_commit_for_rerun": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d",
+            "current_commit_for_rerun": subject["commit_full"],
+            "current_baseline_inventory": {
+                "head": subject["commit_full"],
+                "head_short": subject["commit"],
+                "files": [
+                    {"relative_path": "tools/tool_description_overrides.py", "exists": True, "is_file": True, "sha256": subject["override_sha"]},
+                    {"relative_path": "model_tools.py", "exists": True, "is_file": True, "sha256": subject["model_tools_sha"]},
+                    {"relative_path": "tools/registry.py", "exists": True, "is_file": True, "sha256": subject["registry_sha"]},
+                ],
+            },
+        },
+    )
+    closure = _write_json(
+        tmp_path / "reports" / "current_baseline_closure.json",
+        {
+            "schema_version": "hse-benchmark-strict-plan-closure-v1",
+            "status": "STRICT_PLAN_BENCHMARK_GATE_CLOSED",
+            "strict_plan_gate_closed": True,
+            "benchmark_gate_passed": True,
+            "strict_plan_scope": "phase1_phase2_benchmark_regression_gate",
+            "current_baseline_revalidation_closed": True,
+            "local_smoke_benchmark_accepted_for_this_gate": True,
+            "full_remote_benchmark_executed": False,
+            "blocked_by": [],
+            "closed_criteria": {
+                "artifact_hashes_verified": True,
+                "all_suites_passed": True,
+                "phase2_case_count_satisfies_plan": True,
+                "no_forbidden_side_effects": True,
+                "current_baseline_preflight_ready": True,
+                "current_baseline_execution_verification_passed": True,
+                "current_baseline_execution_summary_passed": True,
+                "subject_commits_align": True,
+            },
+            "benchmark_subjects": {
+                "baseline": {
+                    "subject_id": "recorded-phase1-phase2-closure-subject",
+                    "hermes_source": {
+                        "commit": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d",
+                        "commit_full": "9b50c56556f902b62ecc4a7e2e511ca0f316da2d",
+                    },
+                },
+                "current": {
+                    "subject_id": "current-active-hermes-baseline-revalidated",
+                    "hermes_source": {"commit": subject["commit_full"], "commit_full": subject["commit_full"]},
+                },
+            },
+            "source_artifacts": {
+                "current_baseline_preflight": {"path": str(preflight), "sha256": _sha(preflight), "bytes": preflight.stat().st_size}
+            },
+            "provider_or_model_spend_performed": False,
+            "network_calls_performed": False,
+            "github_query_performed": False,
+            "github_write_performed": False,
+            "active_apply_performed": False,
+            "cron_or_gateway_mutation_performed": False,
+        },
+    )
+    inputs["benchmark_closure_path"] = closure
+    return inputs
+
+
+def test_strict_frontier_audit_accepts_current_baseline_revalidation_closure_when_inventory_matches(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _current_baseline_closure_inputs(tmp_path, active_repo, subject)
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    assert report["recorded_subject_frontier"]["status"] == PHASE_2_STRICT_COMPLETE
+    assert report["current_active_frontier"]["status"] == PHASE_2_STRICT_COMPLETE
+    assert report["current_active_frontier"]["highest_strict_complete_phase"] == 2
+    assert report["current_baseline_match"]["matches_closure_subject"] is True
+    assert report["current_baseline_match"]["current_baseline_revalidation_closure"] is True
+    assert report["current_baseline_match"]["active_head_equals_revalidated_current_subject"] is True
+    assert report["current_baseline_match"]["active_tool_description_hashes_match"] is True
+    assert report["phases"]["phase1"]["strict_status"] == "STRICT_COMPLETE_CURRENT_ACTIVE"
+    assert report["phases"]["phase2"]["strict_status"] == "STRICT_COMPLETE_CURRENT_ACTIVE"
+
+
+def test_strict_frontier_audit_blocks_current_baseline_revalidation_closure_when_inventory_hash_drifts(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _current_baseline_closure_inputs(tmp_path, active_repo, subject)
+    (active_repo / "model_tools.py").write_text("MODEL_TOOLS = ['drift-after-revalidation']\n")
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    assert report["recorded_subject_frontier"]["status"] == PHASE_2_STRICT_COMPLETE
+    assert report["current_active_frontier"]["status"] == CURRENT_BASELINE_REVALIDATION_REQUIRED
+    assert report["current_baseline_match"]["matches_closure_subject"] is False
+    assert report["current_baseline_match"]["active_head_equals_revalidated_current_subject"] is True
+    assert report["current_baseline_match"]["active_tool_description_hashes_match"] is False
+    assert "active_tool_description_hash_mismatch" in report["current_active_frontier"]["blockers"]
