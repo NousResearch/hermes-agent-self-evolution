@@ -1,0 +1,33 @@
+{
+  "artifact_paths": {
+    "evidence": {
+      "bytes": 15815,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation_evidence.json",
+      "sha256": "1d82b8b17008c9339a784a9152040f3083227999e1c614139bbd88cacdfc5f7c"
+    },
+    "manifest": {
+      "bytes": 17623,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation_manifest.json",
+      "sha256": "406cdb08abbb1566da48d8a7c8c266aca9f50ff781989e56e0076e1da4a40292"
+    },
+    "markdown": {
+      "bytes": 5019,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation.md",
+      "sha256": "593c67103e11790768f7ced38a56e213706bdfb6ac555eb9dabe9dd233781475"
+    }
+  },
+  "final_qa": {
+    "score": 0.94,
+    "session": "qa-20e6b06d",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "schema_version": "hse-phase3-current-active-frontier-status-alignment-implementation-qa-v1",
+  "verdict_summary": "Implementation matches approved local-only packet, aligns current-active frontier to internal PHASE_3_STRICT_COMPLETE when integrated-chain evidence passes, preserves fail-closed boundaries, and does not emit official claim language or external side effects."
+}

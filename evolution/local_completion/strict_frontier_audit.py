@@ -25,6 +25,7 @@ STRICT_FRONTIER_GATE_ID = "SFA"
 STRICT_FRONTIER_PHASE = "HSE Strict Frontier Audit"
 STRICT_FRONTIER_TARGET = "current-plan-strict-completion-frontier"
 PHASE_2_STRICT_COMPLETE = "PHASE_2_STRICT_COMPLETE"
+PHASE_3_STRICT_COMPLETE = "PHASE_3_STRICT_COMPLETE"
 CURRENT_BASELINE_REVALIDATION_REQUIRED = "CURRENT_BASELINE_REVALIDATION_REQUIRED"
 RECORDED_SUBJECT_INCOMPLETE = "RECORDED_SUBJECT_INCOMPLETE"
 
@@ -106,6 +107,7 @@ def write_strict_frontier_audit(
     recorded_frontier = _recorded_frontier(recorded_complete)
     current_frontier = _current_frontier(recorded_complete, current_match)
     phases = _phase_table(data, recorded_complete, current_match, current_frontier)
+    current_frontier = _align_current_frontier_with_phase_table(current_frontier, phases)
 
     report = base_decision_payload(
         gate_id=STRICT_FRONTIER_GATE_ID,
@@ -138,6 +140,7 @@ def write_strict_frontier_audit(
                 "A moved active Hermes baseline requires revalidation before Phase 1/2 strict-complete can be claimed for the current target.",
                 "Historical/local/waiver completion reports for Phase 3+ are treated as evidence, not current strict completion, unless current PLAN gates and current baseline checks pass.",
                 "Phase 3 integrated-chain acceptance is local audit evidence only; it does not approve active apply, publication, cron/gateway mutation, provider spend, or overall HSE completion.",
+                "PHASE_3_STRICT_COMPLETE is an internal strict-frontier audit status, not an official Phase 3 completion claim",
             ],
             "not_claimed": [
                 "overall_HSE_project_completion",
@@ -488,6 +491,24 @@ def _current_frontier(recorded_complete: Mapping[str, Any], current_match: Mappi
     }
 
 
+def _align_current_frontier_with_phase_table(current_frontier: Mapping[str, Any], phases: Mapping[str, Any]) -> dict[str, Any]:
+    phase3 = phases.get("phase3", {}) if isinstance(phases.get("phase3"), Mapping) else {}
+    if (
+        current_frontier.get("status") == PHASE_2_STRICT_COMPLETE
+        and phase3.get("strict_complete") is True
+        and phase3.get("blockers") == []
+    ):
+        return {
+            "status": PHASE_3_STRICT_COMPLETE,
+            "highest_strict_complete_phase": 3,
+            "basis": "active Hermes baseline matches the Phase 1/2 closure subject and Phase 3 integrated-chain evidence is strict-complete",
+            "blockers": [],
+            "internal_audit_status_only": True,
+            "official_completion_claimed": False,
+        }
+    return dict(current_frontier)
+
+
 def _phase_table(data: Mapping[str, Mapping[str, Any]], recorded_complete: Mapping[str, Any], current_match: Mapping[str, Any], current_frontier: Mapping[str, Any]) -> dict[str, Any]:
     current_phase2 = current_frontier.get("status") == PHASE_2_STRICT_COMPLETE
     phase1_status = "STRICT_COMPLETE_CURRENT_ACTIVE" if current_phase2 else "REVALIDATION_REQUIRED_CURRENT_BASELINE_MISMATCH"
@@ -699,6 +720,8 @@ def _source_artifacts(paths: Mapping[str, Path]) -> dict[str, dict[str, Any]]:
 
 
 def _summary(recorded_frontier: Mapping[str, Any], current_frontier: Mapping[str, Any], phases: Mapping[str, Any]) -> str:
+    if current_frontier.get("status") == PHASE_3_STRICT_COMPLETE:
+        return "Current-active strict frontier is internally aligned through Phase 3 from the integrated artifact chain; official Phase 3 completion claim remains separate."
     phase3 = phases.get("phase3", {}) if isinstance(phases.get("phase3"), Mapping) else {}
     if phase3.get("strict_complete") is True:
         return "Phase 2 is strict-complete for the current active Hermes target and the Phase 3 integrated artifact chain passes local strict-frontier audit checks; final Phase 3 completion claim remains separate."
@@ -710,6 +733,8 @@ def _summary(recorded_frontier: Mapping[str, Any], current_frontier: Mapping[str
 
 
 def _recommended_next(current_frontier: Mapping[str, Any]) -> str:
+    if current_frontier.get("status") == PHASE_3_STRICT_COMPLETE:
+        return "phase3_internal_frontier_alignment_closure_review_go_no_github_write_no_active_apply_no_deploy_no_official_claim"
     if current_frontier.get("status") == PHASE_2_STRICT_COMPLETE:
         return "phase3_strict_execution_preflight_go_no_remote_no_provider_no_github_write"
     return "current_baseline_revalidation_required_before_phase1_phase2_strict_claim: refresh active Hermes baseline inventory, rerun/readiness-check Phase 1/2 local benchmark evidence against current HEAD, and keep GitHub/remote/provider expansion blocked."

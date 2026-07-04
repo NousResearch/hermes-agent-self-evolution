@@ -400,6 +400,85 @@ def test_strict_frontier_audit_accepts_phase3_integrated_chain_when_current_phas
     assert report["overall_hse_project_completion_claimed"] is False
 
 
+def test_strict_frontier_audit_aligns_current_active_frontier_to_internal_phase3_when_integrated_chain_passes(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    assert report["status"] == "PHASE_3_STRICT_COMPLETE"
+    assert report["current_active_frontier"]["status"] == "PHASE_3_STRICT_COMPLETE"
+    assert report["current_active_frontier"]["highest_strict_complete_phase"] == 3
+    assert report["current_active_frontier"]["basis"] == "active Hermes baseline matches the Phase 1/2 closure subject and Phase 3 integrated-chain evidence is strict-complete"
+    assert report["current_active_frontier"]["blockers"] == []
+    assert report["phases"]["phase3"]["strict_complete"] is True
+    assert report["phases"]["phase4"]["strict_complete"] is False
+    assert report["phases"]["phase5"]["strict_complete"] is False
+    assert report["phase3_strict_completion_claimed"] is False
+    assert report["overall_hse_project_completion_claimed"] is False
+    assert "phase3_strict_completion" in report["not_claimed"]
+    assert "PHASE_3_STRICT_COMPLETE is an internal strict-frontier audit status, not an official Phase 3 completion claim" in report["strict_frontier_boundary_notes"]
+
+
+def test_strict_frontier_audit_keeps_current_frontier_phase2_when_integrated_chain_has_forbidden_boundary(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+    smoke_payload = json.loads(inputs["phase3_local_real_smoke_path"].read_text())
+    smoke_payload["decision"]["phase3_strict_completion_claimed"] = True
+    _write_json(inputs["phase3_local_real_smoke_path"], smoke_payload)
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    assert report["status"] == PHASE_2_STRICT_COMPLETE
+    assert report["current_active_frontier"]["status"] == PHASE_2_STRICT_COMPLETE
+    assert report["current_active_frontier"]["highest_strict_complete_phase"] == 2
+    assert report["phases"]["phase3"]["strict_complete"] is False
+    assert any("phase3_integrated_chain_forbidden_boundary" in blocker for blocker in report["phases"]["phase3"]["blockers"])
+    assert report["phase3_strict_completion_claimed"] is False
+
+
+def test_strict_frontier_audit_keeps_current_baseline_revalidation_required_with_integrated_chain_when_active_drifted(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+
+    (active_repo / "model_tools.py").write_text("MODEL_TOOLS = ['drifted-before-phase3-alignment']\n")
+    _git(active_repo, "add", "-A")
+    _git(active_repo, "commit", "-m", "current active drift before phase3 alignment")
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    assert report["status"] == CURRENT_BASELINE_REVALIDATION_REQUIRED
+    assert report["current_active_frontier"]["status"] == CURRENT_BASELINE_REVALIDATION_REQUIRED
+    assert report["current_active_frontier"]["highest_strict_complete_phase"] == 0
+    assert report["phases"]["phase3"]["strict_complete"] is False
+    assert "phase3_blocked_until_phase1_phase2_strict_complete_current" in report["phases"]["phase3"]["blockers"]
+    assert report["phase3_strict_completion_claimed"] is False
+
+
+def test_strict_frontier_audit_cli_aligns_current_active_frontier_to_internal_phase3(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+
+    assert strict_frontier_audit.main(_audit_cli_args(tmp_path, active_repo, inputs)) == 0
+    report = json.loads((tmp_path / "audit-cli" / "strict_frontier_audit.json").read_text())
+
+    assert report["status"] == "PHASE_3_STRICT_COMPLETE"
+    assert report["current_active_frontier"]["status"] == "PHASE_3_STRICT_COMPLETE"
+    assert report["current_active_frontier"]["highest_strict_complete_phase"] == 3
+    assert report["phases"]["phase3"]["strict_complete"] is True
+    assert report["phase3_strict_completion_claimed"] is False
+    assert report["github_query_performed"] is False
+    assert report["active_apply_performed"] is False
+
+
 def test_strict_frontier_audit_keeps_phase3_fail_closed_when_integrated_chain_missing(tmp_path: Path):
     active_repo = tmp_path / "active-hermes"
     subject = _init_active_hermes_repo(active_repo)
