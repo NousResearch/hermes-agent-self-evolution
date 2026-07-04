@@ -85,7 +85,7 @@
     }
   },
   "status": "EVIDENCE_RECORDED_LOCAL_ONLY_POST_RESTORE",
-  "updated_at": "2026-07-05T00:29:00+09:00",
+  "updated_at": "2026-07-05T00:26:28+09:00",
   "verification_summary": {
     "active_hermes_repo_clean": "PASS",
     "contract_invariant": "PASS",
