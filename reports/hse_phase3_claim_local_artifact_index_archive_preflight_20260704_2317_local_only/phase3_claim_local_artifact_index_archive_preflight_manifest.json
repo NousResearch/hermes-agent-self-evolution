@@ -1,0 +1,789 @@
+{
+  "abort_conditions": {
+    "any_precondition_false": "Abort; do not create archive or publish index.",
+    "archive_command_would_include_active_repo_or_obsidian_or_git_metadata": "Abort and narrow archive scope.",
+    "claim_emit_missing_or_not_local_only": "Abort; restore/verify claim emit packet first.",
+    "phase4_phase5_or_overall_claim_detected": "Abort and write incident review; this index is Phase 3 only.",
+    "provider_or_network_required": "Abort; this packet forbids provider/API/network spend.",
+    "repo_dirty_outside_current_report_artifacts": "Abort and classify dirty state before proceeding."
+  },
+  "approval_reference": {
+    "approved_packet": "phase3_claim_local_artifact_index_and_archive_preflight_go_no_github_write_no_active_apply_no_deploy_no_provider_spend",
+    "approver": "sunwoo",
+    "source": "current Discord thread user message"
+  },
+  "archive_preflight": {
+    "archive_candidate_files_before_current_preflight_files": [
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/focused_strict_frontier_tests.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 99,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/focused_strict_frontier_tests.stdout",
+        "sha256": "c9e479141f6abf2a1a045a4686a7d2dce4b73fc0e1b6d912434925edbc093286"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/full_pytest.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 5231,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/full_pytest.stdout",
+        "sha256": "ca02191b15cf5c17a0e802f81e81c7b830cebe90089d7c69bfb964ee869044e3"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/git_diff_check.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/git_diff_check.stdout",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 10255,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/implementation.diff",
+        "sha256": "b26cc606a77190bf505438299bcff8954a396034d62fe419c9c393f32af835ab"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/py_compile.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/py_compile.stdout",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/targeted_alignment_tests.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 98,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/targeted_alignment_tests.stdout",
+        "sha256": "7eb3878804a36e397b690b06959940424d4b86de20af5b47bb0c6c60a9b2f3a3"
+      },
+      {
+        "bytes": 3838,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/time_rewind_inspect_post_restore.stdout",
+        "sha256": "3ac7e0e2ea365c9326b012085a8b22490c4d8bd0389d9d843634487801273e67"
+      },
+      {
+        "bytes": 2888,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/time_rewind_inspect_post_verify.stdout",
+        "sha256": "4bc51e6c060d98486fbf344c423ddfb8fe45f0629405175a349dd2ffe754a659"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/time_rewind_record_restore.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 92,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/time_rewind_record_restore.stdout",
+        "sha256": "15afce903e2abe647340a55d7dcda10eba047ff80172c076f69d3047a41403bb"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/time_rewind_surgical_restore_dry_run.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 434,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/time_rewind_surgical_restore_dry_run.stdout",
+        "sha256": "7bb27ffb06e1fe9ecbb2f566b39fc5de5829f12ad4b0cfaf87beba17a6a979a4"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/time_rewind_surgical_restore_execute.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 895,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/logs/time_rewind_surgical_restore_execute.stdout",
+        "sha256": "914860a76240cee3a0ae3189f7419573782453575e1511620e5e81d5cb388561"
+      },
+      {
+        "bytes": 5019,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation.md",
+        "sha256": "593c67103e11790768f7ced38a56e213706bdfb6ac555eb9dabe9dd233781475"
+      },
+      {
+        "bytes": 16220,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation_evidence.json",
+        "sha256": "1ca082e5f61890b7bd53b6a73600cf6d353643d9f88b7f38608a7b5cdf4c3af5"
+      },
+      {
+        "bytes": 18150,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation_manifest.json",
+        "sha256": "919a704248923f29ffa42085a39b994a823316dad8fb6b6ac3de4c5304c29f0b"
+      },
+      {
+        "bytes": 1806,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation_qa.json",
+        "sha256": "aa8e7e7bc240935aa1b6f356016d3cf0bb3465ea0ae48321004793ef796d761c"
+      },
+      {
+        "bytes": 4907,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/post_patch_alignment_audit_summary.json",
+        "sha256": "c622805eca201e83f3f3d8c5fed5aa13337d9831b63ddba2a4b416eab8ba7b92"
+      },
+      {
+        "bytes": 3095,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/strict_frontier_alignment_recheck.argv.json",
+        "sha256": "0f58e4cfbd10de03d6e8a5b83e20ca0ffc5ebdc67f9b6a1c825762f8604e4c81"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/strict_frontier_alignment_recheck.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 423,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/strict_frontier_alignment_recheck.stdout",
+        "sha256": "d8d0f7d7b54e41c7b853ecab54552fa7a80a44b9d470cf879de04e124cf2f364"
+      },
+      {
+        "bytes": 14040,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/strict_frontier_audit.json",
+        "sha256": "ec29c793d793087a43be09a52f1b5e3cbd75057bb65f4f600beb927ca471cff1"
+      },
+      {
+        "bytes": 1374,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/strict_frontier_audit.md",
+        "sha256": "bb257d349e33fc1534118a1c31df75b242855bd7be3b1107aea6b201937dddca"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/focused_strict_frontier_tests.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 98,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/focused_strict_frontier_tests.stdout",
+        "sha256": "6dc8ed9f494495eefb1982620eb963205e141fe2286e4ae6b5f7e47ef4ca2fa7"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/full_pytest.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 5231,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/full_pytest.stdout",
+        "sha256": "1c1439e89d893ed4124bd231859fd9b2ba56a3662f91e1d9c57faf07f8a4262a"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/git_diff_check.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/git_diff_check.stdout",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 2769,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_inspect_post_restore.stdout",
+        "sha256": "1e35d6cb92d0380105f111b9feeecbe108083bddc88fbf46a1e4473e9c69de33"
+      },
+      {
+        "bytes": 1854,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_inspect_post_verify.stdout",
+        "sha256": "fcfe6981ba40733830807ecd2cf23289af901744424aba8672f736aed3e4145d"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_record_restore.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 92,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_record_restore.stdout",
+        "sha256": "7d036f4d19d54a9ca4e8817f44c438a150bbad0a597e966ca2fb85b4cf27d392"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_dry_run.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 434,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_dry_run.stdout",
+        "sha256": "e5682870f47fe02f7879c90a2d1155b3b5aa12b2800269460669e14598882a0b"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_execute.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 895,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_execute.stdout",
+        "sha256": "f358a82de751f29dda9884f34fbd5d1835009118add266d7f6023eb31819c39b"
+      },
+      {
+        "bytes": 13493,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight.md",
+        "sha256": "d13e4f1f3365ef66fba731edca1e0737ceccc63a15e841b07cc1eb69195d4286"
+      },
+      {
+        "bytes": 36019,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_evidence.json",
+        "sha256": "c9c76dc882d8192ae10e0ee802f5ad5f9c353b9322a43742eb33fca02f656d2d"
+      },
+      {
+        "bytes": 37991,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_manifest.json",
+        "sha256": "904148541bbd9741d871653bb49add293bcd5aa72668ea785a2a3a07850f948d"
+      },
+      {
+        "bytes": 2012,
+        "relpath": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_qa.json",
+        "sha256": "d44ec0223d4a8529bb0f011c3fd16c5a416c0d4d20d8547e5cbbb12706976be9"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/focused_strict_frontier_tests.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 98,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/focused_strict_frontier_tests.stdout",
+        "sha256": "df68f33f6874f7db27c600431c4384efc5af351e6048e7b05c8f2a56704848a0"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/full_pytest.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 5231,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/full_pytest.stdout",
+        "sha256": "26c9acb04d398791b18e2461a877769eb3573148cd9e277d2d2a05ff1ad68c5f"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/git_diff_check.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/git_diff_check.stdout",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 2703,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/time_rewind_inspect_post_restore.stdout",
+        "sha256": "cbdd85ed41504516d9545a39b2d88ec3aeeaf1b6c4b630a561bc3cb20d1b551e"
+      },
+      {
+        "bytes": 1809,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/time_rewind_inspect_post_verify.stdout",
+        "sha256": "a3a4423340fdcc07fb0e5274b2e4221e4b9470579c98004f4c7f3068b647eb6c"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/time_rewind_record_restore.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 92,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/time_rewind_record_restore.stdout",
+        "sha256": "e36eb7c1c244bd3ed0dfe6e1710879c1cd677ba0ecb34971abdf9fd07f936d4f"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/time_rewind_surgical_restore_dry_run.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 434,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/time_rewind_surgical_restore_dry_run.stdout",
+        "sha256": "48e04e895b7778e77f557f02d3f8f7ad202375bb47d59a0ee576b6108547e607"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/time_rewind_surgical_restore_execute.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 895,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/logs/time_rewind_surgical_restore_execute.stdout",
+        "sha256": "1820b03a0896cedf02e1967e99c56f9c3708854da1fdc8c77568aa4927efe917"
+      },
+      {
+        "bytes": 3011,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review.md",
+        "sha256": "ca54450440ec8c869748810e5ef1637fbde8453166e27ddbd1c4ec6abb70c709"
+      },
+      {
+        "bytes": 13522,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_evidence.json",
+        "sha256": "1d52b6b58b3f3ea97a2d3d22a35e1afef52074d14281e06962539ebbcfd01bec"
+      },
+      {
+        "bytes": 15144,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_manifest.json",
+        "sha256": "be019f67fb7ed00da60fd51015d64252f7423fa4aeb5f5893795c5ff21cfb71a"
+      },
+      {
+        "bytes": 1686,
+        "relpath": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_qa.json",
+        "sha256": "09fc5f9c2a6c9b4bd73a6fb08d2ad37c9c72fd85c3ae3cc3888e6352dfa7c51a"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/logs/deterministic_invariant.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 219,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/logs/deterministic_invariant.stdout",
+        "sha256": "5510f54326db999a9ef928b3b296501f76159cdef108a03958b3428d1748ecdc"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/logs/focused_strict_frontier_tests.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 99,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/logs/focused_strict_frontier_tests.stdout",
+        "sha256": "8d95d33ef5f98ad50b32e59de412057c2fae7f4b0261328faf6c878b3838d58d"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/logs/git_diff_check.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/logs/git_diff_check.stdout",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 1661,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/logs/time_rewind_inspect_post_verify.stdout",
+        "sha256": "d14d4b0aa0b8558fb79333346abf654bf0e564762e45e70a25d9fc8e130fcfc9"
+      },
+      {
+        "bytes": 7655,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/phase3_internal_frontier_alignment_closure_review.md",
+        "sha256": "55243cfc516f8df5e13ec2c67a416fe53295447dab55d833358ebf20d1490c50"
+      },
+      {
+        "bytes": 11567,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/phase3_internal_frontier_alignment_closure_review_evidence.json",
+        "sha256": "c5f3ee9b8fba05f68c651c5bfa940ff4d4bf2b5e87d93ee2e0d88d5551c599d3"
+      },
+      {
+        "bytes": 13170,
+        "relpath": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/phase3_internal_frontier_alignment_closure_review_manifest.json",
+        "sha256": "972cac3454fa75f9a0c9893c3ec572fef1080a5752af603c8c41270f6ecca4b3"
+      },
+      {
+        "bytes": 481,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/logs/claim_artifact_hashes.stdout",
+        "sha256": "f12b3d7e84e1195c273ac2550383b0762080bff122a07f2c29feae9e73520eea"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/logs/deterministic_invariant.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 144,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/logs/deterministic_invariant.stdout",
+        "sha256": "30be9123644689e10a0fb1b0318c6ec507d0670edec17f29bdb2e01d44eac6a7"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/logs/focused_strict_frontier_tests.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 99,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/logs/focused_strict_frontier_tests.stdout",
+        "sha256": "3ecde35ff2460fb5407af39de5e3a5007c5f94c52a6e99b133f6aade8c32602e"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/logs/git_diff_check.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/logs/git_diff_check.stdout",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 1705,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/logs/time_rewind_inspect_post_verify.stdout",
+        "sha256": "68a17d0a6ac4403f2be55cd528b356abdefa31425deb5968a19c2dd48414205b"
+      },
+      {
+        "bytes": 1424,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/phase3_official_completion_claim.md",
+        "sha256": "d32f1afe2c842d59548cddb50e787b89776ceabf9b09c7374327a0bd29bf5cd1"
+      },
+      {
+        "bytes": 1395,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/phase3_official_completion_claim.txt",
+        "sha256": "38036d6ddf4cca90fbc114b7c8347fc039cc09bd861db4a4f1b48915fce3f63a"
+      },
+      {
+        "bytes": 12986,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/phase3_official_completion_claim_emit_evidence.json",
+        "sha256": "3ab8bb610834bccf662e616192889e3be277dd56afc67d8d0c57a1c791e12403"
+      },
+      {
+        "bytes": 14776,
+        "relpath": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/phase3_official_completion_claim_emit_manifest.json",
+        "sha256": "743938166ebf58d2dab026d734b6bb2757f8b61d10f9a8cf8c201cdbc7d10644"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/logs/deterministic_invariant.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 245,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/logs/deterministic_invariant.stdout",
+        "sha256": "2d92d3b1bbc3ea18841e1ebc94692322e4606b3025f814aa319eb49a2bb64e48"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/logs/focused_strict_frontier_tests.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 99,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/logs/focused_strict_frontier_tests.stdout",
+        "sha256": "7052fbf329a332cda269397e3060cca6b0b8019a1986f35ce17c6b7861a347bd"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/logs/git_diff_check.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 0,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/logs/git_diff_check.stdout",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "bytes": 1556,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/logs/time_rewind_inspect_post_verify.stdout",
+        "sha256": "0c0672c3fcf5313362b08e69f551cb575cbb4aa1b4c33fcd0daf40d49f049a2a"
+      },
+      {
+        "bytes": 6487,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/phase3_official_completion_claim_preflight.md",
+        "sha256": "a08891e2b5bc56e6fdc9d1050138d05601f43e1b1edf1933e94ea10e4a142187"
+      },
+      {
+        "bytes": 13498,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/phase3_official_completion_claim_preflight_evidence.json",
+        "sha256": "ace256fd02772f38b36c7983c2ad6ed2062ff3165cdd900ee63ff2e43875087b"
+      },
+      {
+        "bytes": 15299,
+        "relpath": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/phase3_official_completion_claim_preflight_manifest.json",
+        "sha256": "6311ad2745ce143c3adbc5ed12c7b6ce45af0acca4405fd846ff4e9d87bf87c9"
+      }
+    ],
+    "archive_created_in_this_packet": false,
+    "archive_execution_allowed_in_this_packet": false,
+    "candidate_archive_filename": "hse_phase3_claim_chain_local_artifact_archive_20260704_2317.tar.zst",
+    "candidate_archive_format": "tar.zst or tar.gz; choose available local tooling at execution time",
+    "candidate_archive_scope": "Only the indexed HSE repo report directories and generated index/preflight files after this preflight passes; no active Hermes repo, no Obsidian vault, no credentials, no .git, no remote refs.",
+    "candidate_file_count_before_current_preflight_files": 97,
+    "candidate_file_list_sha256_before_current_preflight_files": "269fdc1657293da5df70422ee9157a1227278dcb433c3cfb5534837e44ffc47a",
+    "candidate_total_bytes_before_current_preflight_files": 338942,
+    "must_verify_on_execution": [
+      "archive exists",
+      "archive nonempty",
+      "archive listing matches candidate index plus approved current preflight files",
+      "archive SHA-256 recorded",
+      "no forbidden surface flags changed"
+    ],
+    "next_exact_packet_name": "phase3_claim_local_archive_execute_go_no_github_write_no_active_apply_no_deploy_no_provider_spend"
+  },
+  "artifacts": {
+    "evidence": {
+      "exists": true,
+      "hash_policy": "evidence references final manifest hash; manifest stores evidence path only to avoid circular hash reference",
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/phase3_claim_local_artifact_index_archive_preflight_evidence.json"
+    },
+    "index_json": {
+      "bytes": 7902,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/phase3_claim_chain_local_index.json",
+      "sha256": "59923ec4dd444e0875872391489e2d2c4a7690f4545414ba80dd7e4bef9fd634"
+    },
+    "index_markdown": {
+      "bytes": 5764,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/phase3_claim_chain_local_index.md",
+      "sha256": "ba73232d50fa2eb568dc0e2fc211194fb05dacbb7f71428d43b414ec45744825"
+    },
+    "manifest": {
+      "bytes": 43761,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/phase3_claim_local_artifact_index_archive_preflight_manifest.json",
+      "sha256": "280827971834cea6235d527041bf9d10742f5d3797ce955cc5c22eb78609802a"
+    }
+  },
+  "claim_chain_index": [
+    {
+      "directory": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only",
+      "file_count": 18,
+      "key": "integrated_chain_closure_review_fail_closed_before_alignment",
+      "kind": "closure-review",
+      "primary_manifest": {
+        "bytes": 15144,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_manifest.json",
+        "sha256": "be019f67fb7ed00da60fd51015d64252f7423fa4aeb5f5893795c5ff21cfb71a"
+      },
+      "status": "PHASE3_CLOSURE_REVIEW_FAIL_CLOSED_NOT_READY_FOR_OFFICIAL_CLAIM",
+      "step": 1,
+      "summary": "Established that phase3.strict_complete=true existed in the phase table while top-level/current-active frontier still failed closed at Phase 2.",
+      "total_bytes": 44625
+    },
+    {
+      "directory": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only",
+      "file_count": 18,
+      "key": "current_active_frontier_alignment_preflight",
+      "kind": "preflight",
+      "primary_manifest": {
+        "bytes": 37991,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_manifest.json",
+        "sha256": "904148541bbd9741d871653bb49add293bcd5aa72668ea785a2a3a07850f948d"
+      },
+      "status": "PHASE3_CURRENT_ACTIVE_FRONTIER_STATUS_ALIGNMENT_PREFLIGHT_READY_NO_CODE_CHANGE",
+      "step": 2,
+      "summary": "Preflighted the internal current-active frontier alignment implementation without changing code or emitting claim language.",
+      "total_bytes": 100888
+    },
+    {
+      "directory": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only",
+      "file_count": 29,
+      "key": "current_active_frontier_alignment_implementation",
+      "kind": "implementation",
+      "primary_manifest": {
+        "bytes": 18150,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation_manifest.json",
+        "sha256": "919a704248923f29ffa42085a39b994a823316dad8fb6b6ac3de4c5304c29f0b"
+      },
+      "status": "PHASE3_CURRENT_ACTIVE_FRONTIER_STATUS_ALIGNMENT_IMPLEMENTED_LOCAL_AUDIT_PASS_NO_OFFICIAL_CLAIM",
+      "step": 3,
+      "summary": "Implemented and verified internal PHASE_3_STRICT_COMPLETE current-active frontier alignment while preserving no-official-claim flags.",
+      "total_bytes": 88864
+    },
+    {
+      "directory": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only",
+      "file_count": 10,
+      "key": "internal_frontier_alignment_closure_review",
+      "kind": "closure-review",
+      "primary_manifest": {
+        "bytes": 13170,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/phase3_internal_frontier_alignment_closure_review_manifest.json",
+        "sha256": "972cac3454fa75f9a0c9893c3ec572fef1080a5752af603c8c41270f6ecca4b3"
+      },
+      "status": "PHASE3_INTERNAL_FRONTIER_ALIGNMENT_CLOSURE_REVIEW_PASS_READY_FOR_SEPARATE_OFFICIAL_PHASE3_CLAIM_PROPOSAL_NO_CLAIM_EMITTED",
+      "step": 4,
+      "summary": "Closed the internal frontier alignment review and found a separate official Phase 3 claim packet could be proposed.",
+      "total_bytes": 34371
+    },
+    {
+      "directory": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only",
+      "file_count": 10,
+      "key": "official_completion_claim_preflight",
+      "kind": "claim-preflight",
+      "primary_manifest": {
+        "bytes": 15299,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/phase3_official_completion_claim_preflight_manifest.json",
+        "sha256": "6311ad2745ce143c3adbc5ed12c7b6ce45af0acca4405fd846ff4e9d87bf87c9"
+      },
+      "status": "PHASE3_OFFICIAL_COMPLETION_CLAIM_PREFLIGHT_READY_NO_CLAIM_EMITTED",
+      "step": 5,
+      "summary": "Fixed the exact official Phase 3 claim text, qualifiers, evidence references, abort conditions, and next emit packet without emitting the claim.",
+      "total_bytes": 37184
+    },
+    {
+      "directory": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only",
+      "file_count": 12,
+      "key": "official_completion_claim_emit",
+      "kind": "claim-emit",
+      "primary_manifest": {
+        "bytes": 14776,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/phase3_official_completion_claim_emit_manifest.json",
+        "sha256": "743938166ebf58d2dab026d734b6bb2757f8b61d10f9a8cf8c201cdbc7d10644"
+      },
+      "status": "PHASE3_OFFICIAL_COMPLETION_CLAIM_EMITTED_LOCAL_ARTIFACT_ONLY",
+      "step": 6,
+      "summary": "Emitted the official HSE Phase 3 completion claim as a local artifact/text only, without publication, deployment, active apply, provider spend, Phase 4/5, or overall completion claim.",
+      "total_bytes": 33010
+    }
+  ],
+  "decision": {
+    "archive_created_in_this_packet": false,
+    "archive_execution_can_be_proposed": true,
+    "external_publication_performed": false,
+    "human_review_index_created": true,
+    "next_exact_packet_name": "phase3_claim_local_archive_execute_go_no_github_write_no_active_apply_no_deploy_no_provider_spend",
+    "official_phase3_claim_status_preserved": "already emitted as local artifact in previous packet",
+    "overall_hse_project_completion_claimed": false,
+    "phase4_completion_claimed": false,
+    "phase5_completion_claimed": false,
+    "preflight_passed": true
+  },
+  "failed_preconditions": [],
+  "forbidden_surface_ledger": {
+    "active_apply_performed": false,
+    "active_runtime_mutation_performed": false,
+    "archive_created": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "local_index_preflight_artifact_only": true,
+    "network_calls_performed": false,
+    "overall_hse_project_completion_claimed": false,
+    "phase4_completion_claimed": false,
+    "phase5_completion_claimed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "generated_at": "2026-07-04T23:17:09+0900",
+  "preconditions": {
+    "active_repo_clean": true,
+    "approved_scope_is_index_archive_preflight_only": true,
+    "audit_highest_phase_3": true,
+    "audit_status_phase3_strict_complete": true,
+    "chain_dirs_exist": true,
+    "chain_primary_manifests_exist": true,
+    "claim_emit_status_local_artifact_only": true,
+    "claim_external_publication_false": true,
+    "hse_repo_clean_before_artifact": true,
+    "official_phase3_claim_already_emitted_locally": true,
+    "overall_completion_not_claimed": true,
+    "phase4_not_claimed": true,
+    "phase5_not_claimed": true,
+    "preflight_no_provider_spend": true
+  },
+  "repo_guards": {
+    "active_branch": "main",
+    "active_head": "551e5af50dc6597069e57af047213f61e40246d6",
+    "active_status_count": 0,
+    "active_status_count_before_commit": 0,
+    "hse_branch": "hse/phase5-continuous-loop-prep",
+    "hse_head_before_artifact": "0b503858fbc59ab1a9bad5fd0e647383afdcead5",
+    "hse_status_count_before_artifact": 0,
+    "hse_status_count_before_commit": 12
+  },
+  "rollback_plan": {
+    "after_commit": "Use git revert of the local report commit or Time Rewind surgical restore if explicitly requested; no remote rollback is needed because no remote side effects are allowed.",
+    "archive_execution_not_performed": "No archive rollback is needed in this packet because no archive file is created.",
+    "local_artifact_only": "If this preflight is wrong before commit, remove only this report directory or rewind to the Time Rewind anchor after dry-run review."
+  },
+  "schema_version": "hse-phase3-claim-local-artifact-index-archive-preflight-v1",
+  "status": "PHASE3_CLAIM_LOCAL_ARTIFACT_INDEX_ARCHIVE_PREFLIGHT_READY_NO_ARCHIVE_CREATED",
+  "time_rewind": {
+    "primary_anchor_id": "20260704-141706-before-hse-phase3-claim-local-artifact-index-arc",
+    "primary_anchor_label": "before HSE phase3 claim local artifact index archive preflight 20260704",
+    "primary_anchor_seal": "f748a6a581a413ae3cd8099619d188d306b8bf4e87c1ce4641b50e0d560733dc"
+  },
+  "verification": {
+    "archive_created": false,
+    "deterministic_invariant": "PASS",
+    "focused_strict_frontier_tests": "13 passed in 2.26s",
+    "git_diff_check": "PASS",
+    "independent_llm_qa_skipped_due_to_no_provider_spend_boundary": true,
+    "index_json_validation": "PASS",
+    "json_validation": "PASS",
+    "provider_or_model_spend_performed": false,
+    "time_rewind_inspect": "PASS; modified=0; added paths limited to local index/archive preflight report artifacts"
+  },
+  "verification_logs": {
+    "deterministic_invariant_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/deterministic_invariant.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "deterministic_invariant_stdout": {
+      "bytes": 168,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/deterministic_invariant.stdout",
+      "sha256": "0da72ce19dbbc3ca8089d13d2c9179f1a210a0c284ee0264d1caeccb21329874"
+    },
+    "focused_strict_frontier_tests_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/focused_strict_frontier_tests.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused_strict_frontier_tests_stdout": {
+      "bytes": 99,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/focused_strict_frontier_tests.stdout",
+      "sha256": "9568cc8a56b1da7a8319357941d4d483425f5793ea4394e88a09fb0a202a1434"
+    },
+    "git_diff_check_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/git_diff_check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "git_diff_check_stdout": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/git_diff_check.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "index_artifact_hashes_stdout": {
+      "bytes": 1074,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/index_artifact_hashes.stdout",
+      "sha256": "675ab93a188f3c3af3ef3d5ae589fb6a84119858818ffdefb99bbb8555a7b590"
+    },
+    "time_rewind_inspect_post_verify": {
+      "bytes": 1926,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/time_rewind_inspect_post_verify.stdout",
+      "sha256": "644a4ecf007755a347b7bf8874555fc43f16e5ce94fff7d6611e2ea5534f7253"
+    }
+  }
+}

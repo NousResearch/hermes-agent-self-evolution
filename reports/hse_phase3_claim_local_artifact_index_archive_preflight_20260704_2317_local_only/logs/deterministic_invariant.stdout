@@ -1,0 +1,5 @@
+deterministic_invariant=PASS
+status=PHASE3_CLAIM_LOCAL_ARTIFACT_INDEX_ARCHIVE_PREFLIGHT_READY_NO_ARCHIVE_CREATED
+index_steps=6
+archive_created=False
+candidate_files=97

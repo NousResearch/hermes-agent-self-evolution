@@ -1,0 +1,275 @@
+{
+  "abort_conditions": {
+    "any_precondition_false": "Abort; do not create archive or publish index.",
+    "archive_command_would_include_active_repo_or_obsidian_or_git_metadata": "Abort and narrow archive scope.",
+    "claim_emit_missing_or_not_local_only": "Abort; restore/verify claim emit packet first.",
+    "phase4_phase5_or_overall_claim_detected": "Abort and write incident review; this index is Phase 3 only.",
+    "provider_or_network_required": "Abort; this packet forbids provider/API/network spend.",
+    "repo_dirty_outside_current_report_artifacts": "Abort and classify dirty state before proceeding."
+  },
+  "archive_candidate_file_count": 97,
+  "archive_candidate_file_list_digest": "269fdc1657293da5df70422ee9157a1227278dcb433c3cfb5534837e44ffc47a",
+  "archive_candidate_total_bytes": 338942,
+  "archive_preflight": {
+    "archive_created_in_this_packet": false,
+    "archive_execution_allowed_in_this_packet": false,
+    "candidate_archive_filename": "hse_phase3_claim_chain_local_artifact_archive_20260704_2317.tar.zst",
+    "candidate_archive_format": "tar.zst or tar.gz; choose available local tooling at execution time",
+    "candidate_archive_scope": "Only the indexed HSE repo report directories and generated index/preflight files after this preflight passes; no active Hermes repo, no Obsidian vault, no credentials, no .git, no remote refs.",
+    "candidate_file_count_before_current_preflight_files": 97,
+    "candidate_file_list_sha256_before_current_preflight_files": "269fdc1657293da5df70422ee9157a1227278dcb433c3cfb5534837e44ffc47a",
+    "candidate_total_bytes_before_current_preflight_files": 338942,
+    "must_verify_on_execution": [
+      "archive exists",
+      "archive nonempty",
+      "archive listing matches candidate index plus approved current preflight files",
+      "archive SHA-256 recorded",
+      "no forbidden surface flags changed"
+    ],
+    "next_exact_packet_name": "phase3_claim_local_archive_execute_go_no_github_write_no_active_apply_no_deploy_no_provider_spend"
+  },
+  "claim_chain_index": [
+    {
+      "directory": "reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only",
+      "file_count": 18,
+      "key": "integrated_chain_closure_review_fail_closed_before_alignment",
+      "kind": "closure-review",
+      "primary_manifest": {
+        "bytes": 15144,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_manifest.json",
+        "sha256": "be019f67fb7ed00da60fd51015d64252f7423fa4aeb5f5893795c5ff21cfb71a"
+      },
+      "status": "PHASE3_CLOSURE_REVIEW_FAIL_CLOSED_NOT_READY_FOR_OFFICIAL_CLAIM",
+      "step": 1,
+      "summary": "Established that phase3.strict_complete=true existed in the phase table while top-level/current-active frontier still failed closed at Phase 2.",
+      "total_bytes": 44625
+    },
+    {
+      "directory": "reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only",
+      "file_count": 18,
+      "key": "current_active_frontier_alignment_preflight",
+      "kind": "preflight",
+      "primary_manifest": {
+        "bytes": 37991,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_manifest.json",
+        "sha256": "904148541bbd9741d871653bb49add293bcd5aa72668ea785a2a3a07850f948d"
+      },
+      "status": "PHASE3_CURRENT_ACTIVE_FRONTIER_STATUS_ALIGNMENT_PREFLIGHT_READY_NO_CODE_CHANGE",
+      "step": 2,
+      "summary": "Preflighted the internal current-active frontier alignment implementation without changing code or emitting claim language.",
+      "total_bytes": 100888
+    },
+    {
+      "directory": "reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only",
+      "file_count": 29,
+      "key": "current_active_frontier_alignment_implementation",
+      "kind": "implementation",
+      "primary_manifest": {
+        "bytes": 18150,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_implementation_20260704_2231_local_only/phase3_current_active_frontier_status_alignment_implementation_manifest.json",
+        "sha256": "919a704248923f29ffa42085a39b994a823316dad8fb6b6ac3de4c5304c29f0b"
+      },
+      "status": "PHASE3_CURRENT_ACTIVE_FRONTIER_STATUS_ALIGNMENT_IMPLEMENTED_LOCAL_AUDIT_PASS_NO_OFFICIAL_CLAIM",
+      "step": 3,
+      "summary": "Implemented and verified internal PHASE_3_STRICT_COMPLETE current-active frontier alignment while preserving no-official-claim flags.",
+      "total_bytes": 88864
+    },
+    {
+      "directory": "reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only",
+      "file_count": 10,
+      "key": "internal_frontier_alignment_closure_review",
+      "kind": "closure-review",
+      "primary_manifest": {
+        "bytes": 13170,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_internal_frontier_alignment_closure_review_20260704_2244_local_only/phase3_internal_frontier_alignment_closure_review_manifest.json",
+        "sha256": "972cac3454fa75f9a0c9893c3ec572fef1080a5752af603c8c41270f6ecca4b3"
+      },
+      "status": "PHASE3_INTERNAL_FRONTIER_ALIGNMENT_CLOSURE_REVIEW_PASS_READY_FOR_SEPARATE_OFFICIAL_PHASE3_CLAIM_PROPOSAL_NO_CLAIM_EMITTED",
+      "step": 4,
+      "summary": "Closed the internal frontier alignment review and found a separate official Phase 3 claim packet could be proposed.",
+      "total_bytes": 34371
+    },
+    {
+      "directory": "reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only",
+      "file_count": 10,
+      "key": "official_completion_claim_preflight",
+      "kind": "claim-preflight",
+      "primary_manifest": {
+        "bytes": 15299,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_official_completion_claim_preflight_20260704_2254_local_only/phase3_official_completion_claim_preflight_manifest.json",
+        "sha256": "6311ad2745ce143c3adbc5ed12c7b6ce45af0acca4405fd846ff4e9d87bf87c9"
+      },
+      "status": "PHASE3_OFFICIAL_COMPLETION_CLAIM_PREFLIGHT_READY_NO_CLAIM_EMITTED",
+      "step": 5,
+      "summary": "Fixed the exact official Phase 3 claim text, qualifiers, evidence references, abort conditions, and next emit packet without emitting the claim.",
+      "total_bytes": 37184
+    },
+    {
+      "directory": "reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only",
+      "file_count": 12,
+      "key": "official_completion_claim_emit",
+      "kind": "claim-emit",
+      "primary_manifest": {
+        "bytes": 14776,
+        "exists": true,
+        "is_file": true,
+        "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_official_completion_claim_emit_20260704_2305_local_only/phase3_official_completion_claim_emit_manifest.json",
+        "sha256": "743938166ebf58d2dab026d734b6bb2757f8b61d10f9a8cf8c201cdbc7d10644"
+      },
+      "status": "PHASE3_OFFICIAL_COMPLETION_CLAIM_EMITTED_LOCAL_ARTIFACT_ONLY",
+      "step": 6,
+      "summary": "Emitted the official HSE Phase 3 completion claim as a local artifact/text only, without publication, deployment, active apply, provider spend, Phase 4/5, or overall completion claim.",
+      "total_bytes": 33010
+    }
+  ],
+  "decision": {
+    "archive_created_in_this_packet": false,
+    "archive_execution_can_be_proposed": true,
+    "external_publication_performed": false,
+    "human_review_index_created": true,
+    "next_exact_packet_name": "phase3_claim_local_archive_execute_go_no_github_write_no_active_apply_no_deploy_no_provider_spend",
+    "official_phase3_claim_status_preserved": "already emitted as local artifact in previous packet",
+    "overall_hse_project_completion_claimed": false,
+    "phase4_completion_claimed": false,
+    "phase5_completion_claimed": false,
+    "preflight_passed": true
+  },
+  "failed_preconditions": [],
+  "forbidden_surface_ledger": {
+    "active_apply_performed": false,
+    "active_runtime_mutation_performed": false,
+    "archive_created": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "local_index_preflight_artifact_only": true,
+    "network_calls_performed": false,
+    "overall_hse_project_completion_claimed": false,
+    "phase4_completion_claimed": false,
+    "phase5_completion_claimed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "index_json": {
+    "bytes": 7902,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/phase3_claim_chain_local_index.json",
+    "sha256": "59923ec4dd444e0875872391489e2d2c4a7690f4545414ba80dd7e4bef9fd634"
+  },
+  "index_markdown": {
+    "bytes": 5764,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/phase3_claim_chain_local_index.md",
+    "sha256": "ba73232d50fa2eb568dc0e2fc211194fb05dacbb7f71428d43b414ec45744825"
+  },
+  "manifest": {
+    "bytes": 43761,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/phase3_claim_local_artifact_index_archive_preflight_manifest.json",
+    "sha256": "dd5ffcd0362b08bcaa960f59ca6e6404e3e2adcfc404e74cef340b38a89e0f79"
+  },
+  "preconditions": {
+    "active_repo_clean": true,
+    "approved_scope_is_index_archive_preflight_only": true,
+    "audit_highest_phase_3": true,
+    "audit_status_phase3_strict_complete": true,
+    "chain_dirs_exist": true,
+    "chain_primary_manifests_exist": true,
+    "claim_emit_status_local_artifact_only": true,
+    "claim_external_publication_false": true,
+    "hse_repo_clean_before_artifact": true,
+    "official_phase3_claim_already_emitted_locally": true,
+    "overall_completion_not_claimed": true,
+    "phase4_not_claimed": true,
+    "phase5_not_claimed": true,
+    "preflight_no_provider_spend": true
+  },
+  "rollback_plan": {
+    "after_commit": "Use git revert of the local report commit or Time Rewind surgical restore if explicitly requested; no remote rollback is needed because no remote side effects are allowed.",
+    "archive_execution_not_performed": "No archive rollback is needed in this packet because no archive file is created.",
+    "local_artifact_only": "If this preflight is wrong before commit, remove only this report directory or rewind to the Time Rewind anchor after dry-run review."
+  },
+  "schema_version": "hse-phase3-claim-local-artifact-index-archive-preflight-evidence-v1",
+  "verification": {
+    "archive_created": false,
+    "deterministic_invariant": "PASS",
+    "focused_strict_frontier_tests": "13 passed in 2.26s",
+    "git_diff_check": "PASS",
+    "independent_llm_qa_skipped_due_to_no_provider_spend_boundary": true,
+    "index_json_validation": "PASS",
+    "json_validation": "PASS",
+    "provider_or_model_spend_performed": false,
+    "time_rewind_inspect": "PASS; modified=0; added paths limited to local index/archive preflight report artifacts"
+  },
+  "verification_logs": {
+    "deterministic_invariant_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/deterministic_invariant.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "deterministic_invariant_stdout": {
+      "bytes": 168,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/deterministic_invariant.stdout",
+      "sha256": "0da72ce19dbbc3ca8089d13d2c9179f1a210a0c284ee0264d1caeccb21329874"
+    },
+    "focused_strict_frontier_tests_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/focused_strict_frontier_tests.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused_strict_frontier_tests_stdout": {
+      "bytes": 99,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/focused_strict_frontier_tests.stdout",
+      "sha256": "9568cc8a56b1da7a8319357941d4d483425f5793ea4394e88a09fb0a202a1434"
+    },
+    "git_diff_check_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/git_diff_check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "git_diff_check_stdout": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/git_diff_check.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "index_artifact_hashes_stdout": {
+      "bytes": 1074,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/index_artifact_hashes.stdout",
+      "sha256": "675ab93a188f3c3af3ef3d5ae589fb6a84119858818ffdefb99bbb8555a7b590"
+    },
+    "time_rewind_inspect_post_verify": {
+      "bytes": 1926,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_artifact_index_archive_preflight_20260704_2317_local_only/logs/time_rewind_inspect_post_verify.stdout",
+      "sha256": "644a4ecf007755a347b7bf8874555fc43f16e5ce94fff7d6611e2ea5534f7253"
+    }
+  }
+}
