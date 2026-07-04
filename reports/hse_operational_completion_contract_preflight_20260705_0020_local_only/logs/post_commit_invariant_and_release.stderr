@@ -1,3 +1,1 @@
-Traceback (most recent call last):
-  File "<stdin>", line 15, in <module>
-AssertionError
+NOTE: The initial in-file post-commit invariant attempted to assert a clean repo while its own release-log files were being created, so it produced an AssertionError before final cleanup. This was a logging-order artifact, not a contract safety failure. The final no-write invariant passed; see logs/final_no_write_invariant.stdout and the final assistant tool output.

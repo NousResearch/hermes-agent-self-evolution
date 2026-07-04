@@ -85,14 +85,16 @@
     }
   },
   "status": "EVIDENCE_RECORDED_LOCAL_ONLY_POST_RESTORE",
-  "updated_at": "2026-07-05T00:23:30+09:00",
+  "updated_at": "2026-07-05T00:29:00+09:00",
   "verification_summary": {
     "active_hermes_repo_clean": "PASS",
     "contract_invariant": "PASS",
+    "final_no_write_invariant": "PASS",
     "full_pytest": "477 passed, 11 warnings in 9.65s",
     "full_pytest_mutated_out_of_scope_generated_report": "RESTORED_WITH_TIME_REWIND_SURGICAL_ALLOW_CONFLICTS",
     "git_diff_check": "PASS",
     "json_parse": "PASS",
+    "post_commit_log_clean_assertion_note": "initial release-log clean assertion was invalidated by concurrently created log files; corrected evidence recorded in final_no_write_invariant.stdout",
     "time_rewind_final_modified_count_expected": "0"
   }
 }
