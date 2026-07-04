@@ -1,0 +1,16 @@
+{
+  "auto_merge_performed": false,
+  "branch_pushed": false,
+  "candidate_bundle_label": "<hse-runs-root>/phase5-strict-local-20260704t163105z-phase-5-continuous-loop-tool-selection-accuracy",
+  "candidate_patch_sha256": "8a1249dd3245dcb0a2a1c9ce4c0b9d3bb240af289df8361e896725d26d997973",
+  "component": "tool_descriptions",
+  "decision_status": "PASS_CANDIDATE_ONLY",
+  "generated_at": "2026-07-04T16:31:05Z",
+  "github_query_performed": false,
+  "github_write_performed": false,
+  "human_review_required": true,
+  "pull_request_created": false,
+  "schema_version": "hse-local-pr-ready-handoff-v1",
+  "status": "LOCAL_PR_READY_HANDOFF_CREATED_GITHUB_WRITE_DEFERRED",
+  "target_metric_id": "tool_selection_accuracy"
+}

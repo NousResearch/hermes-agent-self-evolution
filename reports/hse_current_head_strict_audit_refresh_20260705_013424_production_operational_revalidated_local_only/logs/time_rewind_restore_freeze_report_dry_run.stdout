@@ -1,0 +1,9 @@
+Rewind plan for 20260704-163158-before-hse-current-head-strict-audit-refresh-pro
+  mode: surgical
+  restore entries: 1
+  missing in anchor: 0
+  conflicts: 1
+  remove candidates: 0
+Conflicts:
+  - output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json: changed since anchor but not present in journal
+Refusing restore due to conflicts. Re-run with --allow-conflicts after reviewing dry-run output.

@@ -1,0 +1,224 @@
+{
+  "active_hermes_head": "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+  "active_hermes_repo": "/Users/snw/.hermes/hermes-agent",
+  "active_hermes_status_count_pre_hse_report_commit": 0,
+  "current_baseline_revalidated": true,
+  "generated_at": "2026-07-05T01:34:24+0900",
+  "highest_strict_complete_phase": 5,
+  "hse_branch": "hse/phase5-continuous-loop-prep",
+  "hse_head_pre_commit": "5c10379f51af21d2769b7d0d59958f00e0e26e55",
+  "hse_repo": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution",
+  "overall_hse_project_completion_claimed": true,
+  "phase_strict_complete": {
+    "phase1": true,
+    "phase2": true,
+    "phase3": true,
+    "phase4": true,
+    "phase5": true
+  },
+  "production_operational_progress": {
+    "active_hse_bridge_applied_to_active_repo": true,
+    "active_hse_bridge_commit": "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+    "active_runtime_apply_approved_by_sunwoo": true,
+    "auto_merge_performed": false,
+    "cron_gateway_mutation_approved_by_sunwoo": true,
+    "cron_job_created": true,
+    "cron_job_id": "644578c9c5e1",
+    "cron_manual_run_status": "PRODUCTION_STRICT_PR_READY_LOOP_PASS",
+    "cron_manual_run_verified": true,
+    "cron_schedule": "30 4 * * *",
+    "deploy_publication_auto_merge_approved_by_sunwoo": true,
+    "deploy_publication_auto_merge_performed": false,
+    "gateway_restart_required_for_bridge": false,
+    "github_publication_performed": false,
+    "human_review_required_before_publication_or_merge": true,
+    "production_script": "/Users/snw/.hermes/scripts/hse_phase5_production_strict_loop.py"
+  },
+  "safety_ledger": {
+    "auto_merge_performed": false,
+    "deploy_or_publication_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "schema_version": "hse-current-head-strict-audit-refresh-production-operational-manifest-v1",
+  "self_contained_files": [
+    {
+      "bytes": 0,
+      "path": "logs/active_git_diff_check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/active_git_diff_check.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/active_hse_cli_pytest.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 98,
+      "path": "logs/active_hse_cli_pytest.stdout",
+      "sha256": "2ae8f2817e9958cc181e54334e64cdb0f822408aefd258f49af7ed61b53a91ca"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/current_baseline_revalidation_preflight.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 728,
+      "path": "logs/current_baseline_revalidation_preflight.stdout",
+      "sha256": "21914dd90b2d309cf5745041668b950b9a66e2385da650a4e9bfc57266ec71c9"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/full_hse_pytest.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 5232,
+      "path": "logs/full_hse_pytest.stdout",
+      "sha256": "af7ad66687903cc06633dbe8b463a00afe8ddc9c3b12203297721886b781bfc8"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/hse_git_diff_check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/hse_git_diff_check.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/strict_frontier_audit.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 439,
+      "path": "logs/strict_frontier_audit.stdout",
+      "sha256": "093f1706ca15bcae0d0f870ff37175c4a4ee10c3a382be29a4598ba830847a2b"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/targeted_revalidation_frontier_pytest.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 99,
+      "path": "logs/targeted_revalidation_frontier_pytest.stdout",
+      "sha256": "1e4dbff28502840e7716fc01dbc017378528431b4d2453fc6dbf8600aecb3ba1"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/time_rewind_inspect_after_freeze_restore.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 8377,
+      "path": "logs/time_rewind_inspect_after_freeze_restore.stdout",
+      "sha256": "1e7fc212c8ed7e76b2f80c091875b12d64d6a7177602cd116038816398bdef84"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/time_rewind_inspect_before_commit.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 7484,
+      "path": "logs/time_rewind_inspect_before_commit.stdout",
+      "sha256": "6de44567ac8468ac6bbbf3cf60418ed27ce9d314e4b8040e6072ef9567263751"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/time_rewind_restore_freeze_report_apply.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 895,
+      "path": "logs/time_rewind_restore_freeze_report_apply.stdout",
+      "sha256": "33405c734fb59aca574a9182691e384f9b20439b558b3eeea630f6ad985e4593"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/time_rewind_restore_freeze_report_dry_run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 434,
+      "path": "logs/time_rewind_restore_freeze_report_dry_run.stdout",
+      "sha256": "a7b0c5b67b12ee821d9a3885f8c435ccbc463a826021a53dea2cfce0503c84b2"
+    },
+    {
+      "bytes": 2782,
+      "path": "phase5_production_cron_verified_loop_run.json",
+      "sha256": "176115ee208c86523d10711bc0c64eaa495e2cf6f0c5da3b34a1ebf6bf9a8f95"
+    },
+    {
+      "bytes": 520,
+      "path": "phase5_production_cron_verified_loop_state.json",
+      "sha256": "05bfe96cb33f66c0905bcaf9bc614d67aa51a490fb51f905902afd82015cc1a3"
+    },
+    {
+      "bytes": 718,
+      "path": "phase5_production_cron_verified_pr_ready_handoff.json",
+      "sha256": "c656de6245482b04db544563fbd1f2c55389aaccbaa509df21a5cbbb19d737af"
+    },
+    {
+      "bytes": 4686,
+      "path": "phase5_production_cron_verified_strict_unattended_loop_report.json",
+      "sha256": "825e9fdd8afc5af7b505a39a2b7ba3d1b4e2f9a25c029b72145123eaf876406a"
+    },
+    {
+      "bytes": 859,
+      "path": "production_operational_handoff.md",
+      "sha256": "18ea59e21a001c129afe3ba411ff805030dd972ec3f5c458cfc0207ace38c270"
+    },
+    {
+      "bytes": 15577,
+      "path": "strict_frontier_audit.json",
+      "sha256": "d4ed7294f2f72d19ac7eb5350a6d11c596cf0db6f81c4ccf0893106bb77611bc"
+    },
+    {
+      "bytes": 1112,
+      "path": "strict_frontier_audit.md",
+      "sha256": "9f4af0c08266eb0d555a8fac8f793a2983f23503c32b800e29c56757d8988c00"
+    }
+  ],
+  "self_hash_policy": "audit_refresh_manifest.json excludes itself from self_contained_files to avoid circular hash.",
+  "source_artifact_groups": {
+    "current_baseline_closure": "reports/hse_current_baseline_benchmark_strict_plan_closure_20260705_013424_production_operational_local_smoke",
+    "current_baseline_local_smoke_rerun": "reports/hse_current_baseline_local_smoke_rerun_20260705_013424_production_operational_local_only",
+    "current_baseline_preflight": "reports/hse_current_baseline_revalidation_preflight_20260705_013424_production_operational_local_only",
+    "diagnostic_revalidation_required_audit": "reports/hse_current_head_strict_audit_refresh_20260705_013158_production_operational_local_only"
+  },
+  "status": "HSE_PROJECT_STRICT_COMPLETE",
+  "time_rewind": {
+    "allowed_post_anchor_mutations": [
+      "tracked report artifacts",
+      "ignored output/hse-real-benchmark current baseline smoke outputs",
+      "surgically restored out-of-scope pytest freeze comparator output"
+    ],
+    "anchor_id": "20260704-163158-before-hse-current-head-strict-audit-refresh-pro",
+    "final_modified_count_after_restore": 0,
+    "inspect_after_freeze_restore": "logs/time_rewind_inspect_after_freeze_restore.stdout",
+    "inspect_before_commit": "logs/time_rewind_inspect_before_commit.stdout",
+    "restore_freeze_report_apply": "logs/time_rewind_restore_freeze_report_apply.stdout",
+    "restore_freeze_report_dry_run": "logs/time_rewind_restore_freeze_report_dry_run.stdout"
+  },
+  "verification": {
+    "active_git_diff_check_rc": 0,
+    "active_hse_cli_pytest": "5 passed in 0.12s",
+    "conflict_marker_scan_passed": true,
+    "full_hse_pytest": "486 passed, 11 warnings in 10.29s",
+    "hse_git_diff_check_rc": 0,
+    "manifest_hashes_recorded": true,
+    "secretish_assignment_scan_passed": true,
+    "targeted_revalidation_frontier_pytest": "23 passed in 3.30s",
+    "time_rewind_inspect_recorded": true
+  }
+}

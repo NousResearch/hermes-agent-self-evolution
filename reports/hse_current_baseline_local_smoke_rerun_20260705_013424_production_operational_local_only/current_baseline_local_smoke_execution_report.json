@@ -1,0 +1,184 @@
+{
+  "active_apply_performed": false,
+  "active_hermes_head_verified": "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+  "active_hermes_worktree_clean_verified": true,
+  "all_boundary_flags_false": true,
+  "all_commands_succeeded": true,
+  "all_suite_outputs_exist": true,
+  "all_suites_passed": true,
+  "baseline_commit": "551e5af50dc6597069e57af047213f61e40246d6",
+  "command_preview": {
+    "dry_run": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_current_baseline_revalidation_preflight_20260705_013424_production_operational_local_only/current_baseline_revalidation_command_preview.json",
+    "sha256": "62b938d129cee6a0676d7f8b8879931554713fadc2bbe977e96c0c6cca605fde"
+  },
+  "commands": [
+    {
+      "actual_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "TBLite",
+        "--baseline-commit",
+        "551e5af50dc6597069e57af047213f61e40246d6",
+        "--current-commit",
+        "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/tblite.json"
+      ],
+      "argv": [
+        "python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "TBLite",
+        "--baseline-commit",
+        "551e5af50dc6597069e57af047213f61e40246d6",
+        "--current-commit",
+        "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/tblite.json",
+        "--dry-run"
+      ],
+      "github_write_allowed": false,
+      "network_allowed": false,
+      "output_json": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/tblite.json",
+      "provider_spend_allowed": false,
+      "returncode": 0,
+      "started": true,
+      "stderr": "",
+      "stdout": "TBLite real benchmark smoke passed: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/tblite.json\n",
+      "suite": "TBLite"
+    },
+    {
+      "actual_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "YC-Bench",
+        "--baseline-commit",
+        "551e5af50dc6597069e57af047213f61e40246d6",
+        "--current-commit",
+        "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/yc-bench.json"
+      ],
+      "argv": [
+        "python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "YC-Bench",
+        "--baseline-commit",
+        "551e5af50dc6597069e57af047213f61e40246d6",
+        "--current-commit",
+        "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/yc-bench.json",
+        "--dry-run"
+      ],
+      "github_write_allowed": false,
+      "network_allowed": false,
+      "output_json": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/yc-bench.json",
+      "provider_spend_allowed": false,
+      "returncode": 0,
+      "started": true,
+      "stderr": "",
+      "stdout": "YC-Bench real benchmark smoke passed: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/yc-bench.json\n",
+      "suite": "YC-Bench"
+    },
+    {
+      "actual_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "Phase2 PLAN-scale tool-selection triples",
+        "--baseline-commit",
+        "551e5af50dc6597069e57af047213f61e40246d6",
+        "--current-commit",
+        "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/phase2-plan-scale-tool-selection-triples.json"
+      ],
+      "argv": [
+        "python",
+        "-m",
+        "evolution.benchmarks.real_benchmark_runner",
+        "--suite",
+        "Phase2 PLAN-scale tool-selection triples",
+        "--baseline-commit",
+        "551e5af50dc6597069e57af047213f61e40246d6",
+        "--current-commit",
+        "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/phase2-plan-scale-tool-selection-triples.json",
+        "--dry-run"
+      ],
+      "github_write_allowed": false,
+      "network_allowed": false,
+      "output_json": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/phase2-plan-scale-tool-selection-triples.json",
+      "provider_spend_allowed": false,
+      "returncode": 0,
+      "started": true,
+      "stderr": "",
+      "stdout": "Phase2 PLAN-scale tool-selection triples real benchmark smoke passed: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/phase2-plan-scale-tool-selection-triples.json\n",
+      "suite": "Phase2 PLAN-scale tool-selection triples"
+    }
+  ],
+  "completed_at_utc": "2026-07-04T16:34:24.746117+00:00",
+  "cron_or_gateway_mutation_performed": false,
+  "current_commit": "418f7f5499c39b85b582b6bd63a3d24e1ff1356b",
+  "execution_started": true,
+  "execution_summary": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/execution_summary.json",
+    "sha256": "12c4ecb9359b16a4cd35ec6fec14603390278efae1ee4154083a4a9b6e02b5d9"
+  },
+  "full_remote_benchmark_executed": false,
+  "github_query_performed": false,
+  "github_write_performed": false,
+  "network_calls_performed": false,
+  "not_claimed": [
+    "full_remote_benchmark",
+    "provider_api_spend",
+    "github_query_or_write",
+    "strict_plan_gate_closure"
+  ],
+  "output_root": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424",
+  "output_root_exists_after": true,
+  "preflight_report": {
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_current_baseline_revalidation_preflight_20260705_013424_production_operational_local_only/current_baseline_revalidation_preflight.json",
+    "sha256": "57e14ace0f5764b8bf53cd9a23f6fda3d2477ef9d7fa8e75786ed51df8c8f145",
+    "status": "CURRENT_BASELINE_REVALIDATION_PREFLIGHT_READY_SEPARATE_GO_REQUIRED"
+  },
+  "provider_or_model_spend_performed": false,
+  "real_benchmarks_executed": true,
+  "schema_version": "hse-current-baseline-local-smoke-execution-report-v1",
+  "started_at_utc": "2026-07-04T16:34:24.602997+00:00",
+  "status": "LOCAL_SMOKE_EXECUTION_PASSED",
+  "strict_plan_gate_closed": false,
+  "suite_outputs": [
+    {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/tblite.json",
+      "sha256": "642569c789065bcd0eafe323ac2405416e346870cc617df292c8a484bf4bea9f",
+      "suite": "TBLite"
+    },
+    {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/yc-bench.json",
+      "sha256": "0cb691fff66c6bb380704ad57e13d975e3cfb3b93e4f9551c2b7088081ac7c8e",
+      "suite": "YC-Bench"
+    },
+    {
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/hse-real-benchmark/current-p12-revalidation-20260705_013424/phase2-plan-scale-tool-selection-triples.json",
+      "sha256": "632a10aa5172f2f896ae1c3d1e041200ee5b4b7b4d4682f446261eef6c75a829",
+      "suite": "Phase2 PLAN-scale tool-selection triples"
+    }
+  ],
+  "suite_passed": {
+    "Phase2 PLAN-scale tool-selection triples": true,
+    "TBLite": true,
+    "YC-Bench": true
+  }
+}
