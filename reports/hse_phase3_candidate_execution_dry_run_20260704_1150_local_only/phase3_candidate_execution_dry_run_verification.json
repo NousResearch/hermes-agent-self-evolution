@@ -1,0 +1,364 @@
+{
+  "active_hermes_guard": {
+    "branch": "main",
+    "head": "551e5af50dc6597069e57af047213f61e40246d6",
+    "porcelain_count": 0
+  },
+  "all_command_returncodes_zero": true,
+  "boundary_booleans": {
+    "active_apply_performed": false,
+    "active_system_prompt_apply_approved": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "execution_started": false,
+    "full_remote_benchmark_executed": false,
+    "gepa_or_dspy_started": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "mutate_active_system_prompt_now": false,
+    "network_calls_performed": false,
+    "overall_hse_project_completion_claimed": false,
+    "phase3_strict_completion_claimed": false,
+    "provider_or_model_spend_performed": false,
+    "real_benchmarks_executed": false,
+    "run_dspy_now": false,
+    "run_gepa_now": false
+  },
+  "command_returncodes": {
+    "candidate_scaffold": 0,
+    "local_preflight_gate": 0,
+    "manifest_write": 0,
+    "materialize_inputs": 0,
+    "tblite_dry_run": 0,
+    "yc_bench_dry_run": 0
+  },
+  "command_transcripts": [
+    {
+      "absolute_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.prompts.phase3_candidate_scaffold",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/candidate_system_prompt.json",
+        "--output-dir",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review",
+        "--dry-run"
+      ],
+      "argv": [
+        ".venv/bin/python",
+        "-m",
+        "evolution.prompts.phase3_candidate_scaffold",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/candidate_system_prompt.json",
+        "--output-dir",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review",
+        "--dry-run"
+      ],
+      "name": "phase3_candidate_scaffold_dry_run",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+      "primary_output_bytes": 4316,
+      "primary_output_sha256": "592ed9ebc17d2131b1a0f6ee0f4fb9fcae763bc9af3d3c339f139208a192577e",
+      "rc": 0,
+      "stderr_bytes": 0,
+      "stderr_empty": true,
+      "stderr_excerpt": "",
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/01_candidate_scaffold.stderr",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 208,
+      "stdout_empty": false,
+      "stdout_excerpt": "{\"candidate_only_report\": \"/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json\", \"passed\": true}\n",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/01_candidate_scaffold.stdout",
+      "stdout_sha256": "86378d905741d499d4fccff73e4db024a4582c48c23c5b673c1a89b000aa6912"
+    },
+    {
+      "absolute_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.benchmarks.run_tblite",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--fixtures-jsonl",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+        "--dry-run"
+      ],
+      "argv": [
+        ".venv/bin/python",
+        "-m",
+        "evolution.benchmarks.run_tblite",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--fixtures-jsonl",
+        "datasets/golden/benchmarks/phase3-system-prompt/tblite_cases.jsonl",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+        "--dry-run"
+      ],
+      "name": "phase3_tblite_local_fixture_dry_run",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+      "primary_output_bytes": 3933,
+      "primary_output_sha256": "4643bf015d69525aa98ab5b37d4d6992268d1954f1443bfce6e32bbace93f669",
+      "rc": 0,
+      "stderr_bytes": 0,
+      "stderr_empty": true,
+      "stderr_excerpt": "",
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/02_tblite.stderr",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 193,
+      "stdout_empty": false,
+      "stdout_excerpt": "TBLite dry-run fixture benchmark passed: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json\n",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/02_tblite.stdout",
+      "stdout_sha256": "19d908789b0122b891ce2941af1f4a8617fd856bf62623ea3a773fcc8d1170f7"
+    },
+    {
+      "absolute_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.benchmarks.run_yc_bench",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--fixtures-jsonl",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+        "--preset",
+        "fast_test",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json",
+        "--dry-run"
+      ],
+      "argv": [
+        ".venv/bin/python",
+        "-m",
+        "evolution.benchmarks.run_yc_bench",
+        "--baseline-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+        "--candidate-prompt",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+        "--fixtures-jsonl",
+        "datasets/golden/benchmarks/phase3-system-prompt/yc_bench_fast_test.jsonl",
+        "--preset",
+        "fast_test",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json",
+        "--dry-run"
+      ],
+      "name": "phase3_yc_bench_local_fixture_dry_run",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json",
+      "primary_output_bytes": 4196,
+      "primary_output_sha256": "f23565fbdd654b02377da54c61b833dd1bbcdb38d2e58b0d9038cb12f3efac74",
+      "rc": 0,
+      "stderr_bytes": 0,
+      "stderr_empty": true,
+      "stderr_excerpt": "",
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/03_yc_bench.stderr",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 197,
+      "stdout_empty": false,
+      "stdout_excerpt": "YC-Bench dry-run fixture benchmark passed: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json\n",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/03_yc_bench.stdout",
+      "stdout_sha256": "2a67327faee98c6e6d3179b7f5ee2a4154ee26004cbdc70c3448e838d335acfd"
+    },
+    {
+      "absolute_argv": [
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+        "-m",
+        "evolution.prompts.phase3_preflight_gate",
+        "--candidate-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+        "--tblite-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+        "--yc-bench-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/preflight/phase3_preflight_report.json",
+        "--dry-run"
+      ],
+      "argv": [
+        ".venv/bin/python",
+        "-m",
+        "evolution.prompts.phase3_preflight_gate",
+        "--candidate-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+        "--tblite-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+        "--yc-bench-report",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json",
+        "--output-json",
+        "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/preflight/phase3_preflight_report.json",
+        "--dry-run"
+      ],
+      "name": "phase3_local_preflight_gate_dry_run",
+      "primary_output": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/preflight/phase3_preflight_report.json",
+      "primary_output_bytes": 3913,
+      "primary_output_sha256": "d6f6ec68d395eb0a25c965062b128d21c16047b695782d1685d2f130c5281e93",
+      "rc": 0,
+      "stderr_bytes": 0,
+      "stderr_empty": true,
+      "stderr_excerpt": "",
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/04_preflight_gate.stderr",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 248,
+      "stdout_empty": false,
+      "stdout_excerpt": "{\"phase3_preflight_report\": \"/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/preflight/phase3_preflight_report.json\", \"passed\": true, \"phase3_execution_ready\": false}\n",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/04_preflight_gate.stdout",
+      "stdout_sha256": "bf33a6e5beebda45f01694168ea78eff1df965c5652bbf7786b9a4a13c5e271d"
+    }
+  ],
+  "dry_run_manifest": {
+    "bytes": 11100,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/phase3_candidate_execution_dry_run_manifest.json",
+    "sha256": "1800b132e799778d9ece3308989d1e4546ab7b23a65d1fb95abff1584b97a2ef"
+  },
+  "dry_run_markdown": {
+    "bytes": 1047,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/phase3_candidate_execution_dry_run.md",
+    "sha256": "7fc01bf4c0167cb7bd9277b0d466e29d77c72aac27eab7b4df2ae09c4457f636"
+  },
+  "generated_at_utc": "2026-07-04T02:52:38.153983+00:00",
+  "hse_repo_pre_commit_guard": {
+    "branch": "hse/phase5-continuous-loop-prep",
+    "head": "1016b41bda726c58ed6085c2745055250d69d666",
+    "porcelain_count": 10
+  },
+  "invariants": {
+    "all_command_logs_hashed": true,
+    "all_command_transcripts_have_absolute_argv": true,
+    "all_command_transcripts_have_outputs": true,
+    "all_command_transcripts_rc_zero": true,
+    "all_primary_outputs_hashed": true,
+    "candidate_dry_run_started": true,
+    "candidate_non_evolvable_section_changes_empty": true,
+    "candidate_report_passed": true,
+    "dry_run_passed": true,
+    "forbidden_boundaries_false": true,
+    "generic_execution_boundary_false": true,
+    "preflight_passed_but_execution_not_ready": true,
+    "stderr_logs_empty": true,
+    "tblite_passed_no_regression": true,
+    "yc_bench_passed_no_regression": true
+  },
+  "mechanical_verification": {
+    "active_repo_guard": "active_head=551e5af50; active_porcelain_count=0",
+    "artifact_invariant": "phase3_candidate_execution_dry_run_invariant=PASS; rc=0",
+    "compileall": "rc=0",
+    "focused_tests": "43 passed in 1.19s; rc=0",
+    "full_pytest": "469 passed, 11 warnings in 7.50s; rc=0",
+    "git_diff_check": "rc=0"
+  },
+  "not_claimed": [
+    "phase3_strict_completion",
+    "overall_HSE_project_completion",
+    "real_benchmark",
+    "full_remote_benchmark",
+    "provider_api_spend",
+    "github_query_or_write",
+    "active_apply",
+    "cron_or_gateway_mutation",
+    "deploy_or_publication"
+  ],
+  "run_artifacts": {
+    "candidate_report": {
+      "bytes": 4316,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+      "sha256": "592ed9ebc17d2131b1a0f6ee0f4fb9fcae763bc9af3d3c339f139208a192577e"
+    },
+    "input_baseline": {
+      "bytes": 827,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/baseline_system_prompt.json",
+      "sha256": "f2eba07e71e8b0da16b7aef4ecdcdddff553386fa9b846b51b46e0c0ecbb0ad7"
+    },
+    "input_candidate": {
+      "bytes": 1069,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/candidate_system_prompt.json",
+      "sha256": "d0e28fff0a61a3330f839fcd66960169fbed2ec5112b2e58f21855177c906781"
+    },
+    "preflight_report": {
+      "bytes": 3913,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/preflight/phase3_preflight_report.json",
+      "sha256": "d6f6ec68d395eb0a25c965062b128d21c16047b695782d1685d2f130c5281e93"
+    },
+    "review_packet": {
+      "bytes": 388,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/review_packet.md",
+      "sha256": "fc5b868c304e6bfe36baa73d9ccf02ec7fd7aa4403e545e156d38d720f108dad"
+    },
+    "tblite_report": {
+      "bytes": 3933,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+      "sha256": "4643bf015d69525aa98ab5b37d4d6992268d1954f1443bfce6e32bbace93f669"
+    },
+    "yc_bench_report": {
+      "bytes": 4196,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json",
+      "sha256": "f23565fbdd654b02377da54c61b833dd1bbcdb38d2e58b0d9038cb12f3efac74"
+    }
+  },
+  "run_output_root": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055",
+  "schema_version": "hse-phase3-candidate-execution-dry-run-verification-v1",
+  "side_effect_boundaries": {
+    "active_prompt_or_source_modified": false,
+    "active_runtime_mutated": false,
+    "candidate_dry_run_output_root_created": true,
+    "candidate_scaffold_dry_run_started": true,
+    "cron_or_gateway_mutation": false,
+    "deploy_or_publication": false,
+    "fixture_benchmark_dry_runs_started": true,
+    "full_remote_benchmark_started": false,
+    "gepa_or_dspy_started": false,
+    "github_query_or_write": false,
+    "local_preflight_gate_dry_run_started": true,
+    "network_calls": false,
+    "provider_or_model_spend": false,
+    "real_benchmark_started": false
+  },
+  "source_preflight": {
+    "bytes": 14257,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_strict_execution_preflight_20260704_1055_local_only/phase3_strict_execution_preflight.json",
+    "sha256": "b5264e4d903d95627f0e6e221e6c535f4ce5040002133eff288f826b5075bfdc"
+  },
+  "status_excerpt": {
+    "candidate_changed_sections": [
+      "DEFAULT_AGENT_IDENTITY",
+      "MEMORY_GUIDANCE",
+      "PLATFORM_HINTS"
+    ],
+    "candidate_dry_run_started": true,
+    "candidate_non_evolvable_section_changes": [],
+    "candidate_report_passed": true,
+    "dry_run_passed": true,
+    "generic_execution_started_boundary": false,
+    "manifest_status": "PHASE3_CANDIDATE_EXECUTION_DRY_RUN_PASSED_SEPARATE_APPROVAL_STILL_REQUIRED",
+    "preflight_human_approval_required_before_execution": true,
+    "preflight_passed": true,
+    "preflight_phase3_execution_ready": false,
+    "preflight_real_benchmarks_required_before_execution": true,
+    "tblite_metrics": {
+      "baseline_score": 3.0,
+      "candidate_regression_count": 0,
+      "candidate_score": 3.0,
+      "case_count": 3,
+      "score_delta": 0.0,
+      "total_weight": 3.0
+    },
+    "tblite_passed": true,
+    "yc_bench_metrics": {
+      "baseline_score": 1.6666666666666665,
+      "candidate_regression_count": 0,
+      "candidate_score": 3.0,
+      "case_count": 3,
+      "score_delta": 1.3333333333333335,
+      "total_weight": 3.0
+    },
+    "yc_bench_passed": true
+  }
+}

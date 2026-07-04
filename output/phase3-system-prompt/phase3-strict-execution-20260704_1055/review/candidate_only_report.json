@@ -1,0 +1,86 @@
+{
+  "active_system_prompt_apply_approved": false,
+  "apply_ready": false,
+  "artifacts": {
+    "baseline_prompt": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+    "candidate_only_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+    "candidate_prompt": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+    "output_dir": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review",
+    "review_packet": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/review_packet.md"
+  },
+  "benchmark_gate": {
+    "deferred_benchmarks": [
+      "TBLite",
+      "YC-Bench"
+    ],
+    "real_benchmarks_executed": false,
+    "real_benchmarks_required_before_acceptance": true,
+    "status": "real_benchmarks_required_not_executed"
+  },
+  "candidate_only": true,
+  "changed_sections": [
+    "DEFAULT_AGENT_IDENTITY",
+    "MEMORY_GUIDANCE",
+    "PLATFORM_HINTS"
+  ],
+  "dry_run": true,
+  "evolvable_sections": [
+    "DEFAULT_AGENT_IDENTITY",
+    "MEMORY_GUIDANCE",
+    "SESSION_SEARCH_GUIDANCE",
+    "SKILLS_GUIDANCE",
+    "PLATFORM_HINTS"
+  ],
+  "execution_started": false,
+  "external_calls_performed": false,
+  "failed_checks": [],
+  "human_approval_gate": {
+    "active_apply_approved": false,
+    "execution_approved": false,
+    "separate_approval_required_before": [
+      "running GEPA/DSPy optimization",
+      "running real TBLite/YC-Bench benchmark commands",
+      "editing Hermes Agent prompt source",
+      "applying evolved prompt to active runtime",
+      "default-gate promotion"
+    ]
+  },
+  "mode": "candidate-only-scaffold",
+  "mutate_active_system_prompt_now": false,
+  "non_evolvable_section_changes": [],
+  "output_constraints": {
+    "allowed_root": "output/phase3-system-prompt/",
+    "path_traversal": "resolved_path_must_remain_under_allowed_root"
+  },
+  "passed": true,
+  "phase": "3",
+  "prompt_artifacts": {
+    "baseline": {
+      "bytes": 827,
+      "input_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/baseline_system_prompt.json",
+      "sha256": "f2eba07e71e8b0da16b7aef4ecdcdddff553386fa9b846b51b46e0c0ecbb0ad7",
+      "snapshot_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json"
+    },
+    "candidate": {
+      "bytes": 1069,
+      "input_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/inputs/candidate_system_prompt.json",
+      "sha256": "d0e28fff0a61a3330f839fcd66960169fbed2ec5112b2e58f21855177c906781",
+      "snapshot_path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json"
+    }
+  },
+  "read_only_inputs": true,
+  "real_benchmarks_executed": false,
+  "run_dspy_now": false,
+  "run_gepa_now": false,
+  "scaffold_version": "phase3-candidate-scaffold-v1",
+  "unchanged_sections": [
+    "SAFETY_PRIVACY",
+    "TOOL_USE_DISCIPLINE"
+  ],
+  "write_targets": [
+    "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/baseline_system_prompt.json",
+    "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_system_prompt.json",
+    "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+    "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/review_packet.md"
+  ]
+}

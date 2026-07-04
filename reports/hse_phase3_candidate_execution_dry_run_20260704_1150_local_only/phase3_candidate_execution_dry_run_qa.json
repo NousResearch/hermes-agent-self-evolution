@@ -1,0 +1,41 @@
+{
+  "final_qa": {
+    "score": 0.95,
+    "session": "qa-5adf6925",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "intermediate_qa": [
+    {
+      "note": "pre-command-transcript improvement pass",
+      "score": 0.97,
+      "session": "qa-55a33150",
+      "verdict": "PASS"
+    },
+    {
+      "note": "placeholder summary pass with evidence presentation suggestions",
+      "score": 0.94,
+      "session": "qa-4ab931b0",
+      "verdict": "PASS"
+    },
+    {
+      "note": "failed due to non-absolute/summarized evidence presentation; corrected",
+      "score": 0.88,
+      "session": "qa-23c36505",
+      "verdict": "REVISE"
+    },
+    {
+      "note": "failed due omitted Commands 2-4 path fields in QA summary; corrected",
+      "score": 0.86,
+      "session": "qa-b8d9cf3f",
+      "verdict": "REVISE"
+    }
+  ],
+  "quality_bar": "local-only Phase 3 candidate dry-run, exact command evidence, boundary preservation, no overclaim",
+  "schema_version": "hse-phase3-candidate-execution-dry-run-qa-v1",
+  "verification_manifest": {
+    "bytes": 20293,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_candidate_execution_dry_run_20260704_1150_local_only/phase3_candidate_execution_dry_run_verification.json",
+    "sha256": "9efb7fad9441363ecd5e3fe2a4f6230471319d2e6665516b6ba320e5538f5275"
+  }
+}

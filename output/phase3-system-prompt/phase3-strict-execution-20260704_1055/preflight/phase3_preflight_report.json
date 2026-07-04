@@ -1,0 +1,99 @@
+{
+  "active_system_prompt_apply_approved": false,
+  "artifacts": {
+    "candidate_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/review/candidate_only_report.json",
+    "preflight_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/preflight/phase3_preflight_report.json",
+    "tblite_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/tblite.json",
+    "yc_bench_report": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/benchmarks/yc_bench.json"
+  },
+  "benchmark_reports": {
+    "TBLite": {
+      "apply_ready": false,
+      "candidate_regression_count": 0,
+      "case_count": 3,
+      "external_benchmark_assets_validated": false,
+      "external_calls_performed": false,
+      "full_benchmark_executed": false,
+      "mode": "dry-run-fixture",
+      "passed": true,
+      "read_only": true,
+      "real_benchmark_smoke_validated": false
+    },
+    "YC-Bench": {
+      "apply_ready": false,
+      "candidate_regression_count": 0,
+      "case_count": 3,
+      "external_benchmark_assets_validated": false,
+      "external_calls_performed": false,
+      "full_benchmark_executed": false,
+      "mode": "dry-run-fixture",
+      "passed": true,
+      "read_only": true,
+      "real_benchmark_smoke_validated": false
+    }
+  },
+  "candidate_only": true,
+  "dry_run": true,
+  "dry_run_benchmark_reports": {
+    "TBLite": {
+      "apply_ready": false,
+      "candidate_regression_count": 0,
+      "case_count": 3,
+      "external_benchmark_assets_validated": false,
+      "external_calls_performed": false,
+      "full_benchmark_executed": false,
+      "mode": "dry-run-fixture",
+      "passed": true,
+      "read_only": true,
+      "real_benchmark_smoke_validated": false
+    },
+    "YC-Bench": {
+      "apply_ready": false,
+      "candidate_regression_count": 0,
+      "case_count": 3,
+      "external_benchmark_assets_validated": false,
+      "external_calls_performed": false,
+      "full_benchmark_executed": false,
+      "mode": "dry-run-fixture",
+      "passed": true,
+      "read_only": true,
+      "real_benchmark_smoke_validated": false
+    }
+  },
+  "execution_approved": false,
+  "execution_started": false,
+  "failed_checks": [],
+  "human_approval_required_before_execution": true,
+  "mode": "local-preflight-gate",
+  "mutate_active_system_prompt_now": false,
+  "next_required_before_phase3_execution": [
+    "separate human approval for GEPA/DSPy execution",
+    "separate human approval for real TBLite/YC-Bench execution",
+    "real benchmark reports replacing or supplementing dry-run fixture reports",
+    "rollback handle verified before active apply"
+  ],
+  "output_constraints": {
+    "allowed_root": "output/phase3-system-prompt/",
+    "fresh_output_required": true,
+    "hardlink_output_allowed": false,
+    "input_output_overlap_allowed": false,
+    "suffix": ".json",
+    "symlink_output_allowed": false
+  },
+  "passed": true,
+  "phase": "3",
+  "phase3_execution_ready": false,
+  "preflight_version": "phase3-local-preflight-gate-v1",
+  "prompt_artifact_checks": {
+    "baseline_sha256": "f2eba07e71e8b0da16b7aef4ecdcdddff553386fa9b846b51b46e0c0ecbb0ad7",
+    "candidate_sha256": "d0e28fff0a61a3330f839fcd66960169fbed2ec5112b2e58f21855177c906781",
+    "consistent_across_reports": true
+  },
+  "real_benchmarks_executed": false,
+  "real_benchmarks_required_before_execution": true,
+  "run_dspy_now": false,
+  "run_gepa_now": false,
+  "write_targets": [
+    "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/output/phase3-system-prompt/phase3-strict-execution-20260704_1055/preflight/phase3_preflight_report.json"
+  ]
+}
