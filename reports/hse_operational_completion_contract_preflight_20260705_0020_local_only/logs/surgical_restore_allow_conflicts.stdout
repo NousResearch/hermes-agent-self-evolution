@@ -1,0 +1,44 @@
+== surgical restore execute allow-conflicts ==
+Rewind plan for 20260704-152041-before-hse-operational-completion-contract-prefl
+  mode: surgical
+  restore entries: 1
+  missing in anchor: 0
+  conflicts: 1
+  remove candidates: 0
+Conflicts:
+  - output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json: changed since anchor but not present in journal
+Anchor created: rescue-20260704-152330-before-rewind-to-20260704-152041-before-hse-oper
+  root: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution
+  files: 8194
+  dirs: 1898
+  symlinks: 0
+  hash-only: 64
+  skipped: 334
+  seal: b08512f2d439b5139e829c0dd8c29ac6abe558b9e0c8f4a7f41b5c05b6d7ff73
+  OK restored file output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json
+Restored entries: 1
+Removed added paths: 0
+Failures: 0
+Rescue anchor: rescue-20260704-152330-before-rewind-to-20260704-152041-before-hse-oper
+restore_rc=0
+== record restore ==
+Recorded shell command for 20260704-152041-before-hse-operational-completion-contract-prefl
+== post-restore inspect ==
+Inspecting anchor: 20260704-152041-before-hse-operational-completion-contract-prefl
+modified: 0
+added: 13
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract.md
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract_preflight_evidence.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract_preflight_manifest.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/artifact_hashes.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_verification.stderr
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_verification.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_allow_conflicts.stderr
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_allow_conflicts.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_out_of_scope_generated_report.stderr
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_out_of_scope_generated_report.stdout
+deleted: 0
+metadata: 0

@@ -1,0 +1,82 @@
+== contract invariant ==
+contract_invariant=PASS
+== json parse ==
+json_ok hse_operational_completion_contract.json
+json_ok hse_operational_completion_contract_preflight_evidence.json
+json_ok hse_operational_completion_contract_preflight_manifest.json
+== git diff check ==
+git_diff_check_rc=0
+== full pytest ==
+........................................................................ [ 15%]
+........................................................................ [ 30%]
+........................................................................ [ 45%]
+........................................................................ [ 60%]
+........................................................................ [ 75%]
+........................................................................ [ 90%]
+.............................................                            [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:12
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:12: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    goal: str = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:16
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:16: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    tools: list[str] = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:20
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:20: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    action_1: Action = dspy.OutputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:30
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:30: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    instruction: str = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:34
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:34: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    actions: list[str] = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:38
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:38: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    pos_input_with_metrics: list[EvalResult] = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:42
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:42: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    neg_input_with_metrics: list[EvalResult] = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:46
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:46: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    feedback: str = dspy.OutputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:61
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:61: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    previous_instruction: str = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:65
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:65: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    feedback: str = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:69
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:69: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    new_instruction: str = dspy.OutputField(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+477 passed, 11 warnings in 9.65s
+pytest_rc=0
+== active repo clean ==
+active_status_count=0
+== time rewind inspect ==
+Inspecting anchor: 20260704-152041-before-hse-operational-completion-contract-prefl
+modified: 1
+  - output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json
+added: 9
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract.md
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract_preflight_evidence.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract_preflight_manifest.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/artifact_hashes.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_verification.stderr
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_verification.stdout
+deleted: 0
+metadata: 0

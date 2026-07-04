@@ -1,0 +1,98 @@
+{
+  "created_at": "2026-07-05T00:20:44+09:00",
+  "hash_policy": "Final hashes for manifest/evidence themselves are recorded in logs/final_artifact_hashes.stdout after all writes; manifest/evidence avoid self-referential/circular hash fields.",
+  "preflight_result": {
+    "allowed_evidence_class_count": 9,
+    "contract_ready": true,
+    "forbidden_shortcut_count": 10,
+    "next_exact_packet_name": "hse_phase1_current_active_revalidation_preflight_go_no_active_apply_no_github_write_no_cron_mutation_no_provider_spend",
+    "overall_hse_completion_claimed": false,
+    "phase4_strict_complete": false,
+    "phase5_strict_complete": false,
+    "phase_count": 5,
+    "strict_current_frontier": "phase3"
+  },
+  "repo_snapshot_post_artifact": {
+    "active_head": "551e5af50dc6597069e57af047213f61e40246d6",
+    "active_status_count": 0,
+    "hse_head_before_commit": "b6819b16d18e5475f45257c6ad0498dfd4dbc2d7",
+    "hse_status_count_including_new_artifacts": 11
+  },
+  "restore_evidence": {
+    "dry_run_log": "logs/surgical_restore_out_of_scope_generated_report.stdout",
+    "execute_log": "logs/surgical_restore_allow_conflicts.stdout",
+    "post_restore_modified_count": 0,
+    "reason": "Full local pytest regenerated an existing out-of-scope report; this packet is contract-only, so the generated report was restored to the Time Rewind anchor state.",
+    "restored_path": "output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json"
+  },
+  "safety_flags": {
+    "active_apply_performed": false,
+    "active_hermes_repo_modified": false,
+    "cron_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "gateway_mutation_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "overall_hse_completion_claimed": false,
+    "provider_or_api_spend_performed": false
+  },
+  "schema_version": "hse-operational-completion-contract-preflight-evidence-v2",
+  "stable_artifact_records": {
+    "artifact_hashes.stdout": {
+      "bytes": 805,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/artifact_hashes.stdout",
+      "sha256": "7a3176618e9ee9453661860ce55208c6603da5debbd1b4d470f9eb80b357999a"
+    },
+    "final_verification.stderr": {
+      "bytes": 0,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_verification.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "final_verification.stdout": {
+      "bytes": 6892,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_verification.stdout",
+      "sha256": "598ac8f37b1d652ce33b6c2a5f6708b3468c53aea1d63b32b36d5660cfd2558e"
+    },
+    "hse_operational_completion_contract.json": {
+      "bytes": 10013,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract.json",
+      "sha256": "63e37463f4444e45a212d61b6caca4810b32c93ce8e92bbcbecf4023c1bd24a0"
+    },
+    "hse_operational_completion_contract.md": {
+      "bytes": 9086,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract.md",
+      "sha256": "df71b5f20104a5f332a0d022f2cb2e0f76de0d7d4ae3d245824b071835855c08"
+    },
+    "surgical_restore_allow_conflicts.stderr": {
+      "bytes": 0,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_allow_conflicts.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "surgical_restore_allow_conflicts.stdout": {
+      "bytes": 2806,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_allow_conflicts.stdout",
+      "sha256": "65b875a8ecf7f5f4967012e43ca151233cc618d94510b9a5f5071963b49ad28d"
+    },
+    "surgical_restore_out_of_scope_generated_report.stderr": {
+      "bytes": 0,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_out_of_scope_generated_report.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "surgical_restore_out_of_scope_generated_report.stdout": {
+      "bytes": 2622,
+      "path": "reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_out_of_scope_generated_report.stdout",
+      "sha256": "22612bf83545e41f0e9110ecb38d73c641cbe0b4c1d5c8b3676dc36a61a52997"
+    }
+  },
+  "status": "EVIDENCE_RECORDED_LOCAL_ONLY_POST_RESTORE",
+  "updated_at": "2026-07-05T00:23:30+09:00",
+  "verification_summary": {
+    "active_hermes_repo_clean": "PASS",
+    "contract_invariant": "PASS",
+    "full_pytest": "477 passed, 11 warnings in 9.65s",
+    "full_pytest_mutated_out_of_scope_generated_report": "RESTORED_WITH_TIME_REWIND_SURGICAL_ALLOW_CONFLICTS",
+    "git_diff_check": "PASS",
+    "json_parse": "PASS",
+    "time_rewind_final_modified_count_expected": "0"
+  }
+}

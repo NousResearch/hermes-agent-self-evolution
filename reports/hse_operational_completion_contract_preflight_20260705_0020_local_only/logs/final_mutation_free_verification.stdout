@@ -1,0 +1,32 @@
+== final contract invariant ==
+final_contract_invariant=PASS
+== final json parse ==
+json_ok hse_operational_completion_contract.json
+json_ok hse_operational_completion_contract_preflight_evidence.json
+json_ok hse_operational_completion_contract_preflight_manifest.json
+== final git diff check ==
+final_git_diff_check_rc=0
+== final active clean ==
+active_status_count=0
+== final time rewind inspect ==
+Inspecting anchor: 20260704-152041-before-hse-operational-completion-contract-prefl
+modified: 0
+added: 16
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract.md
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract_preflight_evidence.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/hse_operational_completion_contract_preflight_manifest.json
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/artifact_hashes.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_artifact_hashes.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_mutation_free_verification.stderr
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_mutation_free_verification.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_verification.stderr
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/final_verification.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_allow_conflicts.stderr
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_allow_conflicts.stdout
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_out_of_scope_generated_report.stderr
+  - reports/hse_operational_completion_contract_preflight_20260705_0020_local_only/logs/surgical_restore_out_of_scope_generated_report.stdout
+deleted: 0
+metadata: 0
