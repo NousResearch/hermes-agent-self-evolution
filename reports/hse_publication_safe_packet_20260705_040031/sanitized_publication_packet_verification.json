@@ -1,0 +1,209 @@
+{
+  "allowed_prefix_ok": true,
+  "auto_merge_performed": false,
+  "branch_pushed": false,
+  "bundle_path": "reports/hse_publication_safe_packet_20260705_040031",
+  "conflict_marker_hits": [],
+  "created_at": "2026-07-05 04:00:31 KST",
+  "credential_assignment_hits": [],
+  "file_count": 13,
+  "file_count_excluding_archive": 12,
+  "files": [
+    {
+      "bytes": 1337,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/PR_BODY_DRAFT.md",
+      "sha256": "33d27e3e010000f807558a5797a28a3106e01b8168604f362da9dc398ca46bf9"
+    },
+    {
+      "bytes": 4093,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/README.md",
+      "sha256": "f3719ab33548488c964ca2263624e8631227a7eaffef33fbc9f88e975232c70b"
+    },
+    {
+      "bytes": 7030,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/audit_refresh_manifest.sanitized.json",
+      "sha256": "9be226f1485fe8a26dcb5b4a0f42b37ebd7b44ad74703f26fb304ace545f719e"
+    },
+    {
+      "bytes": 38006,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/hse_evidence_reconciliation_index.sanitized.json",
+      "sha256": "fdc3c2d82c16bb0a574d837753b344d4dee79e039f0934e19c8a1ac4dd0c7565"
+    },
+    {
+      "bytes": 6436,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/hse_evidence_reconciliation_index.sanitized.md",
+      "sha256": "e6ac19525b987cf80e9142d5e82adc0bf30c121210f0019ffe35e2d6e8ccad30"
+    },
+    {
+      "bytes": 2784,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_loop_run.sanitized.json",
+      "sha256": "63bbff91409a9c4adbcf01e45d16e11f883b91601cd21bbb4f1e9f0cc1ddc317"
+    },
+    {
+      "bytes": 520,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_loop_state.sanitized.json",
+      "sha256": "84cd2e8b5afb26b1b0f9145b8a820cba38e30fea4bbafd3cbd14ad657f7d020e"
+    },
+    {
+      "bytes": 4688,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_strict_unattended_loop_report.sanitized.json",
+      "sha256": "ce88ad074931ecd59fbba6249f519794dc21a63d71828500f43b1e98c168f3f7"
+    },
+    {
+      "bytes": 8132,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_publication_packet_summary.json",
+      "sha256": "09b2e2be69facd26046a016e129dfac84c698b3abb3e491b7b8f85b598d96e33"
+    },
+    {
+      "bytes": 1210,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_publication_packet_summary.md",
+      "sha256": "f5acafb7acba287c0a0475211bf0307390c1bef23d6c9d7632c898beb61ef321"
+    },
+    {
+      "bytes": 7757,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_source_manifest.json",
+      "sha256": "2a8fe0c12ec5aebd0be39624644338ba539377349fab3aa08dccf5623d3fcf62"
+    },
+    {
+      "bytes": 15602,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/strict_frontier_audit.sanitized.json",
+      "sha256": "03a0eb4f5ad6d9e2ab61c2a78b4e48507874d4909901c6137f9cdf24c38b8986"
+    }
+  ],
+  "files_excluding_self_hash": [
+    {
+      "bytes": 1337,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/PR_BODY_DRAFT.md",
+      "sha256": "33d27e3e010000f807558a5797a28a3106e01b8168604f362da9dc398ca46bf9"
+    },
+    {
+      "bytes": 4093,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/README.md",
+      "sha256": "f3719ab33548488c964ca2263624e8631227a7eaffef33fbc9f88e975232c70b"
+    },
+    {
+      "bytes": 7030,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/audit_refresh_manifest.sanitized.json",
+      "sha256": "9be226f1485fe8a26dcb5b4a0f42b37ebd7b44ad74703f26fb304ace545f719e"
+    },
+    {
+      "bytes": 38006,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/hse_evidence_reconciliation_index.sanitized.json",
+      "sha256": "fdc3c2d82c16bb0a574d837753b344d4dee79e039f0934e19c8a1ac4dd0c7565"
+    },
+    {
+      "bytes": 6436,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/hse_evidence_reconciliation_index.sanitized.md",
+      "sha256": "e6ac19525b987cf80e9142d5e82adc0bf30c121210f0019ffe35e2d6e8ccad30"
+    },
+    {
+      "bytes": 2784,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_loop_run.sanitized.json",
+      "sha256": "63bbff91409a9c4adbcf01e45d16e11f883b91601cd21bbb4f1e9f0cc1ddc317"
+    },
+    {
+      "bytes": 520,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_loop_state.sanitized.json",
+      "sha256": "84cd2e8b5afb26b1b0f9145b8a820cba38e30fea4bbafd3cbd14ad657f7d020e"
+    },
+    {
+      "bytes": 4688,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_strict_unattended_loop_report.sanitized.json",
+      "sha256": "ce88ad074931ecd59fbba6249f519794dc21a63d71828500f43b1e98c168f3f7"
+    },
+    {
+      "bytes": 8132,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_publication_packet_summary.json",
+      "sha256": "09b2e2be69facd26046a016e129dfac84c698b3abb3e491b7b8f85b598d96e33"
+    },
+    {
+      "bytes": 1210,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_publication_packet_summary.md",
+      "sha256": "f5acafb7acba287c0a0475211bf0307390c1bef23d6c9d7632c898beb61ef321"
+    },
+    {
+      "bytes": 7757,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_source_manifest.json",
+      "sha256": "2a8fe0c12ec5aebd0be39624644338ba539377349fab3aa08dccf5623d3fcf62"
+    },
+    {
+      "bytes": 15602,
+      "label": null,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/strict_frontier_audit.sanitized.json",
+      "sha256": "03a0eb4f5ad6d9e2ab61c2a78b4e48507874d4909901c6137f9cdf24c38b8986"
+    }
+  ],
+  "github_write_performed": false,
+  "json_validation": [
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/audit_refresh_manifest.sanitized.json"
+    },
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/hse_evidence_reconciliation_index.sanitized.json"
+    },
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_loop_run.sanitized.json"
+    },
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_loop_state.sanitized.json"
+    },
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/phase5_production_cron_verified_strict_unattended_loop_report.sanitized.json"
+    },
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_publication_packet_summary.json"
+    },
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_publication_packet_verification.json"
+    },
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/sanitized_source_manifest.json"
+    },
+    {
+      "ok": true,
+      "path": "reports/hse_publication_safe_packet_20260705_040031/strict_frontier_audit.sanitized.json"
+    }
+  ],
+  "json_validation_pass": true,
+  "merge_performed": false,
+  "packet_name": "hse_publication_safe_packet_20260705_040031",
+  "provider_or_model_spend_performed": false,
+  "pull_request_created": false,
+  "raw_home_path_hits": [],
+  "raw_logs_included": false,
+  "raw_output_artifacts_included": false,
+  "raw_tmp_path_hits": [],
+  "schema_version": "hse-sanitized-publication-packet-verification-v1",
+  "verification_pass": true
+}

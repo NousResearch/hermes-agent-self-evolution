@@ -1,0 +1,9 @@
+{
+  "kill_switch": "output/phase5-continuous-loop/production-strict-pr-ready/PRODUCTION_STRICT_LOOP_KILL_SWITCH",
+  "last_completed_at_utc": "2026-07-04T18:13:59Z",
+  "last_run_id": "20260704-181359",
+  "last_run_root": "output/phase5-continuous-loop/production-strict-pr-ready/run-20260704-181359",
+  "last_status": "PRODUCTION_STRICT_PR_READY_LOOP_PASS",
+  "runs_jsonl": "output/phase5-continuous-loop/production-strict-pr-ready/runs.jsonl",
+  "schema_version": "hse-phase5-production-strict-pr-ready-loop-state-v1"
+}

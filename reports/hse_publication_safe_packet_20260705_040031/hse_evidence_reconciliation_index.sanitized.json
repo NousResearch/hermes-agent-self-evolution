@@ -1,0 +1,842 @@
+{
+  "artifact_scope": "read-only reconciliation artifact; no GitHub write, PR, merge, provider spend, deploy, gateway restart, or cron mutation",
+  "cron_snapshot": {
+    "hse_phase5_production_read_only_continuous_loop": {
+      "enabled": true,
+      "job_id": "1efba8b7bf84",
+      "last_status": "ok",
+      "no_agent": true,
+      "script": "hse_phase5_production_readonly_loop.py",
+      "state": "scheduled"
+    },
+    "hse_phase5_production_strict_pr_ready_loop": {
+      "enabled": true,
+      "job_id": "644578c9c5e1",
+      "last_status": "ok",
+      "next_run_at": "2026-07-05T04:30:00+09:00",
+      "no_agent": true,
+      "script": "hse_phase5_production_strict_loop.py",
+      "state": "scheduled",
+      "workdir": "<LOCAL_HOME>/.hermes/evolution/repos/hermes-agent-self-evolution"
+    },
+    "source": "cronjob(action=list) tool output in this turn"
+  },
+  "current_state": {
+    "active_bridge_status": {
+      "active_hermes_repo": {
+        "exists": true,
+        "git_head": "a23a0087f8ee98662f46b8da4dd59d3049f74aaf",
+        "git_status_count": 0,
+        "path": "<LOCAL_HOME>/.hermes/hermes-agent"
+      },
+      "boundary": {
+        "active_apply_performed": false,
+        "arbitrary_module_execution_allowed": false,
+        "cron_or_gateway_mutation_performed": false,
+        "default_read_only": true,
+        "deploy_or_publication_performed": false,
+        "github_write_performed": false,
+        "provider_or_model_spend_performed": false
+      },
+      "hse_python": "<LOCAL_HOME>/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/bin/python",
+      "hse_repo": {
+        "exists": true,
+        "git_head": "c8f5d97f73c44e9ee6a459f93e789f98da6612d9",
+        "git_status_count": 0,
+        "path": "<LOCAL_HOME>/.hermes/evolution/repos/hermes-agent-self-evolution"
+      },
+      "schema_version": "hermes-hse-bridge-status-v1",
+      "status": "ready"
+    },
+    "gateway_status_read_only": {
+      "cmd": "<LOCAL_HOME>/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main gateway status",
+      "rc": 0,
+      "stderr": "",
+      "stdout": "Launchd plist: <LOCAL_HOME>/Library/LaunchAgents/ai.hermes.gateway.plist\n✓ Service definition matches the current Hermes install\n✓ Gateway is supervised by launchd (PID 99143)\n  Auto-start at login and auto-restart on crash are available."
+    },
+    "generated_at": "2026-07-05 03:52:03 KST",
+    "repos": {
+      "active_hermes": {
+        "head": "a23a0087f8ee98662f46b8da4dd59d3049f74aaf",
+        "root": "<LOCAL_HOME>/.hermes/hermes-agent",
+        "status_short_branch": [
+          "## main...origin/main [ahead 3, behind 125]"
+        ]
+      },
+      "hse": {
+        "head": "c8f5d97f73c44e9ee6a459f93e789f98da6612d9",
+        "root": "<LOCAL_HOME>/.hermes/evolution/repos/hermes-agent-self-evolution",
+        "status_short_branch": [
+          "## hse/phase5-continuous-loop-prep"
+        ]
+      }
+    },
+    "safety_scope": {
+      "auto_merge_performed": false,
+      "cron_mutation_performed": false,
+      "deploy_or_publication_performed": false,
+      "files_written": [
+        "Obsidian Markdown report",
+        "Obsidian JSON evidence index",
+        "document_cache staged attachment copies"
+      ],
+      "gateway_restart_or_reload_performed": false,
+      "github_read_performed": "raw PLAN fetch only",
+      "github_write_performed": false,
+      "merge_performed": false,
+      "mode": "read_only_reconciliation_artifacts_only",
+      "pr_created": false,
+      "provider_or_model_spend_performed": false
+    }
+  },
+  "final_verdict": {
+    "local_current_head_strict_status": "Phase 1-5 local/current-head strict complete",
+    "production_operational_local_status": "local PR-ready unattended loop layer installed and verified",
+    "publication_status": "not claimed; GitHub write/PR/merge not performed",
+    "remote_plan_status": "local PLAN diverges from remote upstream PLAN; audit basis frozen to local operational PLAN SHA plus user-provided phase table"
+  },
+  "generated_at": "2026-07-05 03:52:03 KST",
+  "latest_current_head_strict_bundle": {
+    "audit_refresh_manifest": {
+      "bytes": 7026,
+      "exists": true,
+      "label": "latest current-head audit refresh manifest",
+      "note": null,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/audit_refresh_manifest.json",
+      "publication_safe_path": true,
+      "raw_local_path_embedded_in_index": false,
+      "sha256": "27a39548f2bd022ff17257e1ba7e3f3679cde789677bba864f726d8395e4e2db",
+      "status": "HSE_PROJECT_STRICT_COMPLETE"
+    },
+    "bundle": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only",
+    "current_baseline_closure_status": "STRICT_PLAN_BENCHMARK_GATE_CLOSED",
+    "current_baseline_revalidated": true,
+    "hash_checks": [
+      {
+        "actual_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/current_baseline_revalidation_preflight.stderr"
+      },
+      {
+        "actual_sha256": "e7cd41d896d92fb59f2e61cff5ae754704b0c1db833481cf54f694ac790c86ae",
+        "expected_sha256": "e7cd41d896d92fb59f2e61cff5ae754704b0c1db833481cf54f694ac790c86ae",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/current_baseline_revalidation_preflight.stdout"
+      },
+      {
+        "actual_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/diagnostic_strict_frontier.stderr"
+      },
+      {
+        "actual_sha256": "3d40f3e7cbe005f720ee6f6399b023943f06eeeb316ec47bd9c12ac65af3158f",
+        "expected_sha256": "3d40f3e7cbe005f720ee6f6399b023943f06eeeb316ec47bd9c12ac65af3158f",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/diagnostic_strict_frontier.stdout"
+      },
+      {
+        "actual_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/manual_production_strict_loop.stderr"
+      },
+      {
+        "actual_sha256": "1cf489cbbb02d725b83a097b34a883e9c4a12c78302d48929df574cce7cf3f59",
+        "expected_sha256": "1cf489cbbb02d725b83a097b34a883e9c4a12c78302d48929df574cce7cf3f59",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/manual_production_strict_loop.stdout"
+      },
+      {
+        "actual_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/strict_frontier_audit.stderr"
+      },
+      {
+        "actual_sha256": "581917dc74f07e93916e0e9d4076358dcbca157a07bc71e4d1f6571372a3b5bd",
+        "expected_sha256": "581917dc74f07e93916e0e9d4076358dcbca157a07bc71e4d1f6571372a3b5bd",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/logs/strict_frontier_audit.stdout"
+      },
+      {
+        "actual_sha256": "b6f7346d0b43d739ce9901db8462e9855dd58bbd094185397df3feebc82eebed",
+        "expected_sha256": "b6f7346d0b43d739ce9901db8462e9855dd58bbd094185397df3feebc82eebed",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_loop_run.json"
+      },
+      {
+        "actual_sha256": "84cd2e8b5afb26b1b0f9145b8a820cba38e30fea4bbafd3cbd14ad657f7d020e",
+        "expected_sha256": "84cd2e8b5afb26b1b0f9145b8a820cba38e30fea4bbafd3cbd14ad657f7d020e",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_loop_state.json"
+      },
+      {
+        "actual_sha256": "501d6b2f9cc3b031662b411fc1181438584ef123fc88b242c1f66d0bf649ab77",
+        "expected_sha256": "501d6b2f9cc3b031662b411fc1181438584ef123fc88b242c1f66d0bf649ab77",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_strict_unattended_loop_report.json"
+      },
+      {
+        "actual_sha256": "a181b925a77c0a07ce99e8c6825393100cc9d7b4a73cdd72ef033a3f454b5f9d",
+        "expected_sha256": "a181b925a77c0a07ce99e8c6825393100cc9d7b4a73cdd72ef033a3f454b5f9d",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/production_operational_handoff.md"
+      },
+      {
+        "actual_sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9",
+        "expected_sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.json"
+      },
+      {
+        "actual_sha256": "9f4af0c08266eb0d555a8fac8f793a2983f23503c32b800e29c56757d8988c00",
+        "expected_sha256": "9f4af0c08266eb0d555a8fac8f793a2983f23503c32b800e29c56757d8988c00",
+        "ok": true,
+        "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.md"
+      }
+    ],
+    "manifest_status": "HSE_PROJECT_STRICT_COMPLETE",
+    "not_claimed_by_strict_audit_run": [
+      "full_remote_benchmark",
+      "provider_api_spend",
+      "github_query_or_write",
+      "active_apply",
+      "cron_or_gateway_mutation",
+      "auto_merge_or_deploy"
+    ],
+    "phase_strict_complete": {
+      "phase1": true,
+      "phase2": true,
+      "phase3": true,
+      "phase4": true,
+      "phase5": true
+    },
+    "self_contained_hash_count": 14,
+    "self_contained_hashes_ok": true,
+    "strict_frontier_audit": {
+      "bytes": 15568,
+      "exists": true,
+      "label": "latest strict frontier audit",
+      "note": null,
+      "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.json",
+      "publication_safe_path": true,
+      "raw_local_path_embedded_in_index": false,
+      "sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9",
+      "status": "HSE_PROJECT_STRICT_COMPLETE"
+    },
+    "strict_highest_phase": 5,
+    "strict_overall_claimed": true
+  },
+  "phase_evidence_index": [
+    {
+      "basis": "latest strict frontier marks phase1 strict_complete=true and current-head manifest is hash-verified",
+      "caveats": [
+        "External/upstream publication status is not claimed by this index."
+      ],
+      "classification": "PASS_LOCAL_CURRENT_HEAD_STRICT",
+      "evidence": [
+        {
+          "bytes": 7026,
+          "exists": true,
+          "label": "latest current-head audit refresh manifest",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/audit_refresh_manifest.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "27a39548f2bd022ff17257e1ba7e3f3679cde789677bba864f726d8395e4e2db",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 15568,
+          "exists": true,
+          "label": "latest strict frontier audit",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 14535,
+          "exists": true,
+          "label": "legacy Phase 1 validation report",
+          "note": null,
+          "path": "reports/phase1_validation_report.pdf",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "e4032b141343f70a416679eb562308befc9eb38e73fc55331a0a86c80f581a71",
+          "status": "present"
+        }
+      ],
+      "phase": "Phase 1",
+      "plan_gate": "≥1 skill measurably improved, no benchmark regression",
+      "strict_audit_phase_status": {
+        "blockers": [],
+        "recorded_subject_complete": true,
+        "strict_complete": true,
+        "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE"
+      }
+    },
+    {
+      "basis": "latest strict frontier marks phase2 strict_complete=true; Phase 2E decision artifacts record holdout/gate/human-review decisions",
+      "caveats": [
+        "Candidate/apply boundary remains explicit; active tool schema apply is not implied by candidate-only evidence."
+      ],
+      "classification": "PASS_LOCAL_CURRENT_HEAD_STRICT",
+      "evidence": [
+        {
+          "bytes": 7026,
+          "exists": true,
+          "label": "latest current-head audit refresh manifest",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/audit_refresh_manifest.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "27a39548f2bd022ff17257e1ba7e3f3679cde789677bba864f726d8395e4e2db",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 15568,
+          "exists": true,
+          "label": "latest strict frontier audit",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 15186,
+          "exists": true,
+          "label": "Phase 2E expanded holdout decision",
+          "note": null,
+          "path": "reports/phase2e_expanded_holdout_decision.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "915504af357272c53ca1ed4982caca05fe168bd5476603a17d91ce39dc8ef183",
+          "status": "recorded"
+        },
+        {
+          "bytes": 1758,
+          "exists": true,
+          "label": "Phase 2E benchmark gate decision",
+          "note": null,
+          "path": "reports/phase2e_benchmark_gate_decision.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "f62a304c665e879614c89d70e23b2e5746a8fc78a126d48a0fe780544f630d0c",
+          "status": "recorded"
+        },
+        {
+          "bytes": 1795,
+          "exists": true,
+          "label": "Phase 2E human review checkpoint",
+          "note": null,
+          "path": "reports/phase2e_human_review_checkpoint.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "cf29a318d04d48bae061785522ee9a2e6517a95b7a69510198e6b3cb8838f860",
+          "status": "recorded"
+        },
+        {
+          "bytes": 14405,
+          "exists": true,
+          "label": "tool-description golden gate dataset",
+          "note": null,
+          "path": "datasets/golden/tool-description/tool_selection.jsonl",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "18b73ee726445cd9343b6f5c26707191e371fc67cf531c132841c4ffb77ef064",
+          "status": "present"
+        }
+      ],
+      "phase": "Phase 2",
+      "plan_gate": "Tool selection accuracy improved, no benchmark regression",
+      "strict_audit_phase_status": {
+        "blockers": [],
+        "recorded_subject_complete": true,
+        "strict_complete": true,
+        "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE"
+      }
+    },
+    {
+      "basis": "latest strict frontier marks phase3 strict_complete=true; local full completion manifest records bounded local active source apply and smoke validation",
+      "caveats": [
+        "Real remote/provider-spend benchmark execution remains not claimed unless explicitly approved and run."
+      ],
+      "classification": "PASS_LOCAL_CURRENT_HEAD_STRICT_WITH_BOUNDED_LOCAL_EVIDENCE",
+      "evidence": [
+        {
+          "bytes": 7026,
+          "exists": true,
+          "label": "latest current-head audit refresh manifest",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/audit_refresh_manifest.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "27a39548f2bd022ff17257e1ba7e3f3679cde789677bba864f726d8395e4e2db",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 15568,
+          "exists": true,
+          "label": "latest strict frontier audit",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 6107,
+          "exists": true,
+          "label": "Phase 3 full completion manifest",
+          "note": null,
+          "path": "reports/phase3_full_completion_manifest.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "1097ab1df2c9373e6aa20aae654c658d7cd3353c1d0db21aa9f3831bbceab763",
+          "status": "completed_with_local_active_source_apply_and_bounded_smoke_validation"
+        },
+        {
+          "bytes": 2694,
+          "exists": true,
+          "label": "Phase 3/4 completion summary",
+          "note": null,
+          "path": "reports/phase3_phase4_completion_summary.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "47da168a3038cfe677095548b919e614f67453d3041e6a3ebdb3e3d52b84fabf",
+          "status": "completed_local_verified"
+        },
+        {
+          "bytes": 7586,
+          "exists": true,
+          "label": "Phase 3 real benchmark readiness manifest",
+          "note": null,
+          "path": "reports/phase3_real_benchmark_readiness_manifest.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "15f741c11da9c31d75ba8b4e7c69f99bdad1d445119fd7e16e794cfede3f6b0a",
+          "status": "recorded_not_executed"
+        }
+      ],
+      "phase": "Phase 3",
+      "plan_gate": "Behavioral tests pass, benchmarks hold or improve",
+      "strict_audit_phase_status": {
+        "blockers": [],
+        "historical_claim_status": "completed_with_local_active_source_apply_and_bounded_smoke_validation",
+        "integrated_chain": {
+          "available": true,
+          "blockers": [],
+          "checks": {
+            "bounded_local_gepa_dspy_execution_passed": true,
+            "local_real_smoke_passed": true,
+            "post_noop_recheck_confirms_phase2_fail_closed": true,
+            "semantic_noop_apply_closure_satisfies_active_write_gate": true
+          },
+          "complete": true,
+          "mode": "phase3_integrated_artifact_chain",
+          "source_statuses": {
+            "gepa_execution": null,
+            "local_real_smoke": null,
+            "noop_apply_closure": null,
+            "post_noop_recheck": null
+          }
+        },
+        "strict_complete": true,
+        "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE"
+      }
+    },
+    {
+      "basis": "latest strict frontier marks phase4 strict_complete=true; Phase 4 clean-worktree gate records known-bug red→green and freeze-surface preservation",
+      "caveats": [
+        "Human review/merge upstream is not claimed here."
+      ],
+      "classification": "PASS_LOCAL_CURRENT_HEAD_STRICT",
+      "evidence": [
+        {
+          "bytes": 7026,
+          "exists": true,
+          "label": "latest current-head audit refresh manifest",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/audit_refresh_manifest.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "27a39548f2bd022ff17257e1ba7e3f3679cde789677bba864f726d8395e4e2db",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 15568,
+          "exists": true,
+          "label": "latest strict frontier audit",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 2616,
+          "exists": true,
+          "label": "Phase 4 clean worktree gate completion",
+          "note": null,
+          "path": "reports/phase4_clean_worktree_gate_completion.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "c4a60ce56f22137a03e204f5f9c50794c64de9898051d53df48f6f6580a7ea02",
+          "status": "completed_local_verified"
+        },
+        {
+          "bytes": 3111,
+          "exists": true,
+          "label": "Phase 4 Darwinian install smoke",
+          "note": null,
+          "path": "reports/phase4_darwinian_install_smoke.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "23b502a1383242dd136d95556f7b118094f123012914ea11999df47b5c74201b",
+          "status": "passed"
+        },
+        {
+          "bytes": 2507,
+          "exists": true,
+          "label": "Phase 4 code evolution planning spike",
+          "note": null,
+          "path": "reports/phase4_code_evolution_planning_spike.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "8d228628e210226abc9bcc75a6da178e9d4fbf571042ef8c3b84ad60e7860514",
+          "status": "completed_planning_artifacts_only"
+        },
+        {
+          "bytes": 2694,
+          "exists": true,
+          "label": "Phase 3/4 completion summary",
+          "note": null,
+          "path": "reports/phase3_phase4_completion_summary.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "47da168a3038cfe677095548b919e614f67453d3041e6a3ebdb3e3d52b84fabf",
+          "status": "completed_local_verified"
+        }
+      ],
+      "phase": "Phase 4",
+      "plan_gate": "Bugs fixed, tests pass, benchmarks hold",
+      "strict_audit_phase_status": {
+        "blockers": [],
+        "historical_local_status": "completed_local_verified",
+        "strict_complete": true,
+        "strict_gate": {
+          "available": true,
+          "blockers": [],
+          "checks": {
+            "approved_code_evolution_engine_invoked": true,
+            "benchmarks_hold": true,
+            "candidate_generated_with_non_empty_diff": true,
+            "failed_checks_empty": true,
+            "freeze_surface_preserved": true,
+            "known_bug_fixed_green": true,
+            "known_bug_reproduced_red": true,
+            "phase4_strict_complete": true,
+            "schema_version": true,
+            "status_passed": true,
+            "tests_pass": true
+          },
+          "complete": true,
+          "mode": "strict_local_code_evolution",
+          "source_status": "PHASE4_STRICT_CODE_EVOLUTION_COMPLETE_LOCAL_APPROVED_ENGINE"
+        },
+        "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE"
+      }
+    },
+    {
+      "basis": "latest strict frontier marks phase5 strict_complete=true; latest production strict loop records unattended detect→optimize→local PR-ready handoff with GitHub write deferred",
+      "caveats": [
+        "Local PR-ready handoff is publication-safe evidence; GitHub branch push, PR creation, merge, auto-merge, deploy are not performed."
+      ],
+      "classification": "PASS_LOCAL_CURRENT_HEAD_STRICT_PRODUCTION_SURROGATE",
+      "evidence": [
+        {
+          "bytes": 7026,
+          "exists": true,
+          "label": "latest current-head audit refresh manifest",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/audit_refresh_manifest.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "27a39548f2bd022ff17257e1ba7e3f3679cde789677bba864f726d8395e4e2db",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 15568,
+          "exists": true,
+          "label": "latest strict frontier audit",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/strict_frontier_audit.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "8c4064f70a795b78ce878ddff3171549e80870ef37d3a5e1db92feefe92f67f9",
+          "status": "HSE_PROJECT_STRICT_COMPLETE"
+        },
+        {
+          "bytes": 4686,
+          "exists": true,
+          "label": "Phase 5 strict unattended loop report",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_strict_unattended_loop_report.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "501d6b2f9cc3b031662b411fc1181438584ef123fc88b242c1f66d0bf649ab77",
+          "status": "PHASE5_STRICT_UNATTENDED_LOOP_PASS_LOCAL_PR_READY"
+        },
+        {
+          "bytes": 2782,
+          "exists": true,
+          "label": "Phase 5 production strict loop manual/current run",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_loop_run.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "b6f7346d0b43d739ce9901db8462e9855dd58bbd094185397df3feebc82eebed",
+          "status": "PRODUCTION_STRICT_PR_READY_LOOP_PASS"
+        },
+        {
+          "bytes": 520,
+          "exists": true,
+          "label": "Phase 5 production strict loop state",
+          "note": null,
+          "path": "reports/hse_current_head_strict_audit_refresh_20260705_031359_bool_exit_hardening_revalidated_local_only/phase5_production_cron_verified_loop_state.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "84cd2e8b5afb26b1b0f9145b8a820cba38e30fea4bbafd3cbd14ad657f7d020e",
+          "status": "last_status=PRODUCTION_STRICT_PR_READY_LOOP_PASS"
+        },
+        {
+          "bytes": 4920,
+          "exists": true,
+          "label": "Phase 5 formal completion with explicit waiver",
+          "note": null,
+          "path": "reports/phase5_formal_completion_20260607_091723.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "5f41178be7d48ae4c481e20156ea0500cd71c7d35f03ed91bde480e5a7ee8b9a",
+          "status": "FORMAL_PHASE5_COMPLETE_LOCAL_WITH_EXPLICIT_WAIVER"
+        },
+        {
+          "bytes": 4798,
+          "exists": true,
+          "label": "Phase 5 readiness manifest",
+          "note": null,
+          "path": "reports/phase5_continuous_loop_readiness_manifest.json",
+          "publication_safe_path": true,
+          "raw_local_path_embedded_in_index": false,
+          "sha256": "0217e9eb69783ee8321f2cd6431cb4f15fbf5f61c394a2a9312aca3d2d3fca4a",
+          "status": "local_preparation_started_not_deployed"
+        }
+      ],
+      "phase": "Phase 5",
+      "plan_gate": "Automated pipeline runs unattended",
+      "strict_audit_phase_status": {
+        "blockers": [],
+        "current_readiness_status": "local_preparation_started_not_deployed",
+        "historical_claim_status": "FORMAL_PHASE5_COMPLETE_LOCAL_WITH_EXPLICIT_WAIVER",
+        "strict_complete": true,
+        "strict_gate": {
+          "available": true,
+          "blockers": [],
+          "checks": {
+            "auto_triage_ran": true,
+            "candidate_bundle_created": true,
+            "failed_checks_empty": true,
+            "github_write_deferred": true,
+            "human_merge_boundary_preserved": true,
+            "local_pr_ready_handoff_created": true,
+            "optimizer_ran": true,
+            "performance_monitor_ran": true,
+            "phase5_strict_complete": true,
+            "schema_version": true,
+            "status_passed": true,
+            "unattended_detect_to_optimize_to_pr_ready_completed": true
+          },
+          "complete": true,
+          "mode": "strict_local_unattended_pr_ready_loop",
+          "source_status": "PHASE5_STRICT_UNATTENDED_LOOP_PASS_LOCAL_PR_READY"
+        },
+        "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE"
+      }
+    }
+  ],
+  "plan_comparison": {
+    "audit_basis": "local operational PLAN plus user-provided Phase 1-5 table; remote upstream PLAN compared for divergence",
+    "diff_stats": {
+      "delete_lines_from_remote": 0,
+      "insert_lines_in_local": 131,
+      "replace_local_lines": 14,
+      "replace_remote_lines": 2
+    },
+    "divergence_interpretation": "local PLAN contains operational amendments/evidence contracts beyond upstream remote raw PLAN; publication or upstream-merge completion is not claimed by this reconciliation.",
+    "line_delta_local_minus_remote": 143,
+    "local": {
+      "bytes": 56973,
+      "lines": 924,
+      "path": "<LOCAL_HOME>/.hermes/evolution/repos/hermes-agent-self-evolution/PLAN.md",
+      "sha256": "edfdf202dd164c9d4618909f18ecff1016dd187d98e3bd46ac784613a6e6b662"
+    },
+    "local_only_heading_sample": [
+      "#### Phase 2D/2E Candidate-Only Report Contract",
+      "# or, after package install:",
+      "### Phase 3 candidate-only scaffold",
+      "### Phase 3 benchmark adapters",
+      "### Phase 3 local preflight gate",
+      "### Phase 3 real benchmark readiness manifest"
+    ],
+    "remote": {
+      "bytes": 40694,
+      "lines": 781,
+      "sha256": "5928030b470710480a4c0fd7e702af1b2352c9470adddc437c3bc965a23a71f8",
+      "status": "ok",
+      "url": "https://raw.githubusercontent.com/NousResearch/hermes-agent-self-evolution/main/PLAN.md"
+    },
+    "remote_equals_local": false
+  },
+  "recommended_next_action": "hse_publication_safe_packet_review_GO — inspect this reconciliation index and decide whether to create a sanitized no-auto-merge publication packet; do not push or open PR unless explicitly approved.",
+  "schema_version": "hse-evidence-reconciliation-index-v1",
+  "status_snippets": {
+    "audit_refresh_manifest": {
+      "current_baseline_closure_status": "STRICT_PLAN_BENCHMARK_GATE_CLOSED",
+      "current_baseline_revalidated": true,
+      "production_operational_progress": {
+        "active_bool_exit_hardening_commit": "a23a0087f8ee98662f46b8da4dd59d3049f74aaf",
+        "active_hse_bridge_applied_to_active_repo": true,
+        "active_hse_bridge_gate_hardening_commit": "c6270e8ac7fdbe3f9d9dcb02ff623087bc6ff856",
+        "auto_merge_performed": false,
+        "cron_job_expected": "644578c9c5e1",
+        "cron_manual_run_status": "PRODUCTION_STRICT_PR_READY_LOOP_PASS",
+        "cron_manual_run_verified": true,
+        "gateway_restart_performed_during_this_turn": false,
+        "gateway_restart_required_for_in_process_command_registry_pickup": true,
+        "github_publication_performed": false,
+        "human_review_required_before_publication_or_merge": true
+      },
+      "safety_ledger": {
+        "auto_merge_performed": false,
+        "deploy_or_publication_performed": false,
+        "gateway_restart_or_reload_performed": false,
+        "github_query_performed": false,
+        "github_write_performed": false,
+        "merge_performed": false,
+        "provider_or_model_spend_performed": false
+      },
+      "status": "HSE_PROJECT_STRICT_COMPLETE",
+      "verification": {
+        "active_hse_cli_pytest": "169 passed (tests/hermes_cli/test_hse_cli.py + tests/hermes_cli/test_commands.py); focused test_hse_cli.py: 8 passed",
+        "final_strict_frontier_audit": "HSE_PROJECT_STRICT_COMPLETE",
+        "hse_current_baseline_local_smoke": "LOCAL_SMOKE_EXECUTION_PASSED",
+        "production_strict_loop_manual_run": "PRODUCTION_STRICT_PR_READY_LOOP_PASS"
+      }
+    },
+    "phase3_full_completion": {
+      "active_apply_ready_now": true,
+      "phase": "3",
+      "status": "completed_with_local_active_source_apply_and_bounded_smoke_validation",
+      "verification": {
+        "hermes_agent_targeted_tests": "141 passed, 1 skipped, 1 warning",
+        "self_evolution_benchmark_preflight_optimizer_tests": "32 passed, 11 warnings",
+        "self_evolution_focused_phase3_tests": "49 passed, 11 warnings"
+      }
+    },
+    "phase4_clean_worktree_gate": {
+      "formal_gate_assessment": {
+        "benchmarks_hold": true,
+        "bugs_fixed": true,
+        "phase4_local_completion": true,
+        "tests_pass": true
+      },
+      "phase": "4",
+      "safety_boundaries": {
+        "active_runtime_apply_by_hse": false,
+        "darwinian_cli_invoked": false,
+        "external_network_calls_performed": false,
+        "hermes_source_mutation_by_hse": false,
+        "remote_push_performed": false
+      },
+      "status": "completed_local_verified",
+      "verification": {
+        "compileall": "passed for evolution/code/target_contract.py and tests/code/test_phase4_target_contract.py",
+        "diff_check": "passed for changed files",
+        "dspy_version": "3.2.1",
+        "hse_full_tests": "351 passed, 11 warnings in 4.96s",
+        "phase4_code_suite": "72 passed in 0.44s",
+        "targeted_green": "1 passed in 0.03s"
+      }
+    },
+    "phase5_loop_run": {
+      "formal_gate_assessment": {
+        "auto_triage_ran": true,
+        "candidate_bundle_created": true,
+        "github_write_performed": false,
+        "human_merge_boundary_preserved": true,
+        "local_pr_ready_handoff_created": true,
+        "optimizer_ran": true,
+        "performance_monitor_ran": true,
+        "phase5_strict_complete": true,
+        "unattended_detect_to_optimize_to_pr_ready_completed": true
+      },
+      "status": "PRODUCTION_STRICT_PR_READY_LOOP_PASS"
+    },
+    "phase5_strict_loop": {
+      "formal_gate_assessment": {
+        "auto_triage_ran": true,
+        "candidate_bundle_created": true,
+        "github_write_performed": false,
+        "human_merge_boundary_preserved": true,
+        "local_pr_ready_handoff_created": true,
+        "optimizer_ran": true,
+        "performance_monitor_ran": true,
+        "phase5_strict_complete": true,
+        "unattended_detect_to_optimize_to_pr_ready_completed": true
+      },
+      "human_merge_boundary": {
+        "auto_merge_allowed": false,
+        "auto_merge_performed": false,
+        "human_review_required_before_apply": true,
+        "human_review_required_before_github_publication": true
+      },
+      "phase": "5",
+      "safety_boundaries": {
+        "active_apply_performed": false,
+        "active_runtime_mutation_performed": false,
+        "cron_jobs_created": false,
+        "cron_or_gateway_mutation_performed": false,
+        "deploy_or_publication_performed": false,
+        "external_calls_performed": false,
+        "github_query_performed": false,
+        "github_write_performed": false,
+        "network_calls_performed": false,
+        "provider_or_model_spend_performed": false
+      },
+      "status": "PHASE5_STRICT_UNATTENDED_LOOP_PASS_LOCAL_PR_READY"
+    },
+    "strict_frontier": {
+      "highest_strict_complete_phase": 5,
+      "not_claimed": [
+        "full_remote_benchmark",
+        "provider_api_spend",
+        "github_query_or_write",
+        "active_apply",
+        "cron_or_gateway_mutation",
+        "auto_merge_or_deploy"
+      ],
+      "overall_hse_project_completion_claimed": true,
+      "status": "HSE_PROJECT_STRICT_COMPLETE"
+    }
+  },
+  "title": "HSE Evidence Reconciliation Index — publication-safe, local-only"
+}
