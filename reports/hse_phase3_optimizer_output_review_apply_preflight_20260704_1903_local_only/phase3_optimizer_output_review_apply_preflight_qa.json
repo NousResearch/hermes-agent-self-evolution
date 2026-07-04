@@ -1,0 +1,33 @@
+{
+  "artifacts": {
+    "evidence": {
+      "bytes": 10422,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_optimizer_output_review_apply_preflight_20260704_1903_local_only/phase3_optimizer_output_review_apply_preflight_evidence.json",
+      "sha256": "58d6bee1093f1a0a111035f3e832d95e8c369b334b03b3e6a6e6213f32a535d4"
+    },
+    "manifest": {
+      "bytes": 12163,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_optimizer_output_review_apply_preflight_20260704_1903_local_only/phase3_optimizer_output_review_apply_preflight_manifest.json",
+      "sha256": "6aef8c8dc90d2fae8d83e185f7f61ec68f9a0d15794cb0aa6a1fa770ffc73f15"
+    },
+    "markdown": {
+      "bytes": 5092,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_optimizer_output_review_apply_preflight_20260704_1903_local_only/phase3_optimizer_output_review_apply_preflight.md",
+      "sha256": "ad34e800c895c239ff0be9a985572cf82352785e16062258eee9842d2f84ae1d"
+    }
+  },
+  "final_qa": {
+    "score": 0.96,
+    "session": "qa-0a399667",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "quality_bar": "semantic no-op review; active apply not recommended; rollback/active-runtime guard preflight only; no active apply/GitHub/provider/cron/gateway/deploy/strict completion; mechanical verification and active repo guard",
+  "schema_version": "hse-phase3-optimizer-output-review-apply-preflight-qa-v1"
+}
