@@ -1,0 +1,168 @@
+{
+  "archive_artifact": {
+    "bytes": 60877,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/hse_phase3_claim_chain_local_artifact_archive_20260704_2317.tar.gz",
+    "sha256": "30ccb88c8759f40c74a7178b9ffe4224c75458ae7a0b7d211486cae7e0d1e41c"
+  },
+  "archive_listing": {
+    "bytes": 29919,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/phase3_claim_local_archive_listing.json",
+    "sha256": "c596b853a9352052282cdb4e926d0018e9e7d71251266c3383aa4c293d5741da"
+  },
+  "archive_result": {
+    "base_candidate_file_count": 97,
+    "bytes": 60877,
+    "created_in_this_packet": true,
+    "current_preflight_file_count": 12,
+    "expected_file_count": 109,
+    "expected_file_list_sha256": "1125f55073b2d0c4c80077a1c10ce1a782c55a0f3b6df3ea51d57aa55a8d2e4a",
+    "format": "tar.gz deterministic stdlib gzip mtime=0",
+    "listing_file_count": 109,
+    "listing_matches_expected": true,
+    "listing_sha256": "1125f55073b2d0c4c80077a1c10ce1a782c55a0f3b6df3ea51d57aa55a8d2e4a",
+    "member_hashes_match_expected": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/hse_phase3_claim_chain_local_artifact_archive_20260704_2317.tar.gz",
+    "scope": "HSE repo reports only: prior 6-step Phase 3 claim chain report directories plus committed local index/archive preflight report directory. No active Hermes repo, no Obsidian vault, no credentials, no .git, no remote refs.",
+    "sha256": "30ccb88c8759f40c74a7178b9ffe4224c75458ae7a0b7d211486cae7e0d1e41c"
+  },
+  "expected_file_list": {
+    "bytes": 29968,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/phase3_claim_local_archive_expected_file_list.json",
+    "sha256": "13253446b75f3b25eca26d114915039f9b9c05f60e56ce9e15463333edabd0b9"
+  },
+  "failed_preconditions": [],
+  "forbidden_surface_ledger": {
+    "active_apply_performed": false,
+    "active_runtime_mutation_performed": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "local_archive_artifact_only": true,
+    "network_calls_performed": false,
+    "overall_hse_project_completion_claimed": false,
+    "phase4_completion_claimed": false,
+    "phase5_completion_claimed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "manifest": {
+    "bytes": 11490,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/phase3_claim_local_archive_execute_manifest.json",
+    "sha256": "6edcd8e8405706835e3722bbee1fbf91c156cbecb6fe8cb701c3c297a691c342"
+  },
+  "member_hash_verification": {
+    "bytes": 652,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/phase3_claim_local_archive_member_hash_verification.json",
+    "sha256": "e1c024911e37db33f57a69c92f7e02ea7e6ce9b10b520f781e314acd4e193155"
+  },
+  "preconditions": {
+    "active_repo_clean": true,
+    "approved_packet_matches_preflight_next_packet": true,
+    "claim_emit_status_local_artifact_only": true,
+    "claim_external_publication_false": true,
+    "hse_repo_clean_before_artifact": true,
+    "official_phase3_claim_emitted_locally": true,
+    "overall_completion_not_claimed": true,
+    "phase4_not_claimed": true,
+    "phase5_not_claimed": true,
+    "preflight_archive_execution_can_be_proposed": true,
+    "preflight_archive_not_created": true,
+    "preflight_passed": true,
+    "preflight_status_ready": true
+  },
+  "rollback_plan": {
+    "after_commit": "Use git revert of the local report commit or Time Rewind surgical restore if explicitly requested; no remote rollback is needed because no remote side effects are allowed.",
+    "local_artifact_only": "If archive execution is wrong before commit, remove only this report directory/archive or rewind to the Time Rewind anchor after dry-run review.",
+    "remote_or_runtime_side_effects": "Not applicable in this packet; if detected, stop and escalate because it violates scope."
+  },
+  "schema_version": "hse-phase3-claim-local-archive-execute-evidence-v1",
+  "verification": {
+    "archive_created": true,
+    "archive_exists_nonempty": "PASS",
+    "archive_listing_matches_expected": "PASS",
+    "archive_member_hashes_match_expected": "PASS",
+    "archive_scope_guard": "PASS; all entries are reports/hse_phase3_*; archive execution dir, .git, active Hermes, Obsidian, absolute paths excluded",
+    "deterministic_invariant": "PASS",
+    "focused_strict_frontier_tests": "13 passed in 2.40s",
+    "git_diff_check": "PASS",
+    "independent_llm_qa_skipped_due_to_no_provider_spend_boundary": true,
+    "json_validation": "PASS",
+    "provider_or_model_spend_performed": false,
+    "time_rewind_inspect": "PASS; modified=0; added paths limited to local archive execute report artifacts"
+  },
+  "verification_logs": {
+    "archive_artifact_hashes_stdout": {
+      "bytes": 1519,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/archive_artifact_hashes.stdout",
+      "sha256": "f1f8c3226d3000e9ba39ad454fe65d94376ea6e6b1320ba643525e25a006087c"
+    },
+    "archive_listing_sample_stdout": {
+      "bytes": 2002,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/archive_listing_sample.stdout",
+      "sha256": "fb95ec189ff8fbf5304e707a44c5674c8e72776c473be29ebed4b9bf3d465d7b"
+    },
+    "deterministic_invariant_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/deterministic_invariant.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "deterministic_invariant_stdout": {
+      "bytes": 209,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/deterministic_invariant.stdout",
+      "sha256": "b5bd4ab011d99e62ef25040b0bb12901a8419684cc8326d71817a7930f256f00"
+    },
+    "focused_strict_frontier_tests_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/focused_strict_frontier_tests.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused_strict_frontier_tests_stdout": {
+      "bytes": 99,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/focused_strict_frontier_tests.stdout",
+      "sha256": "4e2e74983f8bf88d60ea02fa2ac08b0204dd0ce73ec8048cccc7a5d222134bff"
+    },
+    "git_diff_check_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/git_diff_check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "git_diff_check_stdout": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/git_diff_check.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "time_rewind_inspect_post_verify": {
+      "bytes": 2064,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/logs/time_rewind_inspect_post_verify.stdout",
+      "sha256": "40e606c1bbad1acd5dd933f0078cbd80d38e313a6a8bcd45769c6762ab869c8d"
+    }
+  }
+}
