@@ -1,0 +1,42 @@
+{
+  "artifacts": {
+    "evidence": {
+      "bytes": 24662,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_noop_apply_closure_reconciliation_20260704_1926_local_only/phase3_noop_apply_closure_reconciliation_evidence.json",
+      "sha256": "847135b199a849fabbfddda47d431c9d7d07041895e336ed485ea9917fe6842a"
+    },
+    "manifest": {
+      "bytes": 26505,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_noop_apply_closure_reconciliation_20260704_1926_local_only/phase3_noop_apply_closure_reconciliation_manifest.json",
+      "sha256": "2eacc6e60e0c0ad07dcc6e3f55360820f762371f11d56e6ec2dbdf074201ace9"
+    },
+    "markdown": {
+      "bytes": 11180,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_noop_apply_closure_reconciliation_20260704_1926_local_only/phase3_noop_apply_closure_reconciliation.md",
+      "sha256": "296b156b4c3dc50b2dda18e44d8f817b77d1a4764cd6f72f5e76e1d3975352ad"
+    }
+  },
+  "final_qa": {
+    "score": 0.94,
+    "session": "qa-182b0c0c",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "intermediate_qa": [
+    {
+      "note": "before audit hardening",
+      "score": 0.94,
+      "session": "qa-58af2e84",
+      "threshold": 0.9,
+      "verdict": "PASS"
+    }
+  ],
+  "quality_bar": "Phase 3 apply lane no active write required; strict frontier recheck prepared not executed; no forbidden side effects; writer limitations and fail-closed expected outcome captured; mechanical verification and active repo guard present",
+  "schema_version": "hse-phase3-noop-apply-closure-reconciliation-qa-v1"
+}
