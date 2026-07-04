@@ -1,0 +1,38 @@
+{
+  "accepted_because": "The gaps are reproducibility refinements, not blockers for the preflight/command-plan scope.",
+  "artifact_paths": {
+    "evidence": {
+      "bytes": 35936,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_evidence.json",
+      "sha256": "d021a7b74fb608bbb21dcce4d42120433dd008d874754a026f944fbc2cf7f508"
+    },
+    "manifest": {
+      "bytes": 37786,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_manifest.json",
+      "sha256": "208354b25c53dba198da149246d0b8720993edc3b7a3bb96a10516e7e0a1bf73"
+    },
+    "markdown": {
+      "bytes": 13493,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight.md",
+      "sha256": "d13e4f1f3365ef66fba731edca1e0737ceccc63a15e841b07cc1eb69195d4286"
+    }
+  },
+  "final_qa": {
+    "score": 0.93,
+    "session": "qa-143077e5",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "noted_minor_gaps": [
+    "some heredoc commands use ellipses rather than full inline Python",
+    "future red test name is still a planned placeholder"
+  ],
+  "schema_version": "hse-phase3-current-active-frontier-status-alignment-preflight-qa-v1",
+  "verdict_summary": "Preflight-only artifact identifies current-active frontier alignment gap, includes source excerpts and verification evidence, and separates internal PHASE_3_STRICT_COMPLETE status from official completion claim language."
+}

@@ -1,0 +1,698 @@
+{
+  "cleanliness_section": {
+    "active_head": "551e5af50dc6597069e57af047213f61e40246d6",
+    "active_repo_clean": true,
+    "active_repo_clean_after_verification": true,
+    "active_status_count": 0,
+    "active_status_count_after_verification": 0,
+    "hse_head_before_artifact_write": "f375eadf52ae6dacc8205d119a8c8c249ac534f4",
+    "hse_only_generated_alignment_preflight_report_files_dirty": true,
+    "hse_status_count_before_artifact_write": 0,
+    "hse_status_count_before_commit": 17
+  },
+  "code_findings": {
+    "current_frontier_function_is_phase2_only": true,
+    "phase_table_computes_phase3_after_current_frontier": true,
+    "top_level_status_uses_current_frontier_status_before_phase_table_alignment": true
+  },
+  "decision": {
+    "alignment_needed": true,
+    "code_change_performed_in_this_packet": false,
+    "implementation_recommended_next": true,
+    "official_phase3_completion_claim_allowed_now": false,
+    "official_phase3_completion_claim_emitted_in_this_packet": false,
+    "rationale": [
+      "current_active_frontier is calculated by _current_frontier before _phase_table computes phase3 integrated-chain strictness.",
+      "_current_frontier currently returns only PHASE_2_STRICT_COMPLETE/highest=2 for a matching active baseline; it has no Phase 3 input parameter.",
+      "The post-integration audit now has phase3.strict_complete=true in phases.phase3, but top-level status and current_active_frontier remain Phase 2/highest=2.",
+      "Closure review therefore correctly refused official claim promotion; a deterministic alignment rule is required before claim language can be considered."
+    ],
+    "recommended_next_exact_packet_name": "phase3_current_active_frontier_status_alignment_implementation_go_no_github_write_no_active_apply_no_deploy_no_official_claim"
+  },
+  "forbidden_boundaries": {
+    "active_apply_performed": false,
+    "code_change_performed": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "network_calls_performed": false,
+    "official_phase3_completion_claim_emitted": false,
+    "overall_hse_project_completion_claimed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "implementation_command_plan": {
+    "packet_name": "phase3_current_active_frontier_status_alignment_implementation_go_no_github_write_no_active_apply_no_deploy_no_official_claim",
+    "planned_code_changes": [
+      {
+        "changes": [
+          "Add PHASE_3_STRICT_COMPLETE constant.",
+          "Add helper such as _align_current_frontier_with_phase_table(current_frontier, phases) or equivalent post-phase-table derivation.",
+          "Change write_strict_frontier_audit flow so phases are computed before final top-level/current-active frontier is finalized, or recompute aligned_frontier after _phase_table.",
+          "When Phase 3 is strict and current Phase 1/2 baseline is already strict, return current_active_frontier.status=PHASE_3_STRICT_COMPLETE and highest_strict_complete_phase=3.",
+          "Preserve claim flags as false; claim emission remains a separate closure/claim packet.",
+          "Update summary wording to distinguish local aligned frontier from official claim emission."
+        ],
+        "path": "evolution/local_completion/strict_frontier_audit.py"
+      },
+      {
+        "changes": [
+          "Add integrated-chain alignment test expecting top-level status/current_active_frontier to become PHASE_3_STRICT_COMPLETE/highest=3 when optional chain passes.",
+          "Add legacy regression: without optional integrated-chain inputs, current frontier remains PHASE_2_STRICT_COMPLETE and phase3 remains not strict.",
+          "Add fail-closed regression: baseline mismatch keeps CURRENT_BASELINE_REVALIDATION_REQUIRED even if Phase 3 artifacts are supplied.",
+          "Add forbidden-boundary regression: any true GitHub/provider/active apply/deploy/claim flag blocks Phase 3 alignment.",
+          "Add no accidental Phase 4/5 promotion regression.",
+          "Add CLI optional flags coverage for aligned output."
+        ],
+        "path": "tests/local_completion/test_strict_frontier_audit.py"
+      }
+    ],
+    "planned_commands": [
+      "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q tests/local_completion/test_strict_frontier_audit.py::test_<new_alignment_red_test>  # expect RED before patch",
+      "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q tests/local_completion/test_strict_frontier_audit.py",
+      "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m evolution.local_completion.strict_frontier_audit ... --phase3-local-real-smoke ... --phase3-gepa-execution ... --phase3-noop-apply-closure ... --phase3-post-noop-recheck ... --output-dir reports/<post_patch_alignment_recheck>",
+      "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q",
+      "git diff --check && git diff --cached --check"
+    ],
+    "post_patch_expected_result": {
+      "official_claim": "still false until a separate claim closure packet is approved and passes",
+      "with_integrated_chain": "top-level status PHASE_3_STRICT_COMPLETE; current_active_frontier.highest_strict_complete_phase=3; phase3.strict_complete=true; claim flags false",
+      "without_integrated_chain": "legacy Phase 2 fail-closed behavior preserved"
+    },
+    "scope": "Patch HSE repo only: evolution/local_completion/strict_frontier_audit.py and tests/local_completion/test_strict_frontier_audit.py."
+  },
+  "manifest": {
+    "bytes": 37991,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_manifest.json",
+    "sha256": "904148541bbd9741d871653bb49add293bcd5aa72668ea785a2a3a07850f948d"
+  },
+  "markdown": {
+    "bytes": 13493,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight.md",
+    "sha256": "d13e4f1f3365ef66fba731edca1e0737ceccc63a15e841b07cc1eb69195d4286"
+  },
+  "markdown_includes_inline_excerpts_and_command_table": true,
+  "preconditions": {
+    "closure_review_fail_closed": true,
+    "closure_review_next_packet_matches_current_request": true,
+    "source_claim_flags_false": true,
+    "source_code_pattern_confirms_alignment_gap": true,
+    "source_forbidden_boundaries_false": true,
+    "source_phase3_integrated_chain_complete_true": true,
+    "source_phase3_phase_table_strict_complete_true": true,
+    "source_top_level_current_frontier_still_phase2": true
+  },
+  "proposed_alignment_contract": {
+    "allowed_when": [
+      "recorded Phase 1/2 complete is true",
+      "current baseline matches the closed benchmark subject",
+      "phases.phase3.strict_complete is true",
+      "phases.phase3.blockers is empty",
+      "forbidden boundary flags remain false across integrated-chain artifacts",
+      "phase4/phase5 are not accidentally promoted unless separately proven by their own strict gates"
+    ],
+    "must_not_do": [
+      "must not emit official Phase 3 completion claim in implementation packet",
+      "must not infer active apply or deploy from local audit evidence",
+      "must not weaken legacy fail-closed behavior when optional integrated-chain inputs are absent",
+      "must not promote Phase 4/5 or overall HSE completion as part of Phase 3 alignment"
+    ],
+    "new_status_constant": "PHASE_3_STRICT_COMPLETE",
+    "status_semantics": {
+      "PHASE_3_STRICT_COMPLETE": "proposed internal strict-frontier audit/current-active-frontier status only",
+      "claim_separation": "A later explicit claim/closure packet must decide whether and how to emit official completion language after aligned audit evidence exists.",
+      "not_a_claim": "This status must not be interpreted as an official Phase 3 completion claim, deployment, active apply, publication, or overall HSE completion."
+    },
+    "suggested_code_shape": [
+      "compute current Phase 1/2 frontier as today",
+      "compute phases including integrated Phase 3 evidence",
+      "derive an aligned current_active_frontier from current Phase 1/2 frontier plus phases.phase3",
+      "set top-level status to aligned_current_frontier.status",
+      "keep recorded_subject_frontier separate and unchanged unless recorded-subject semantics are intentionally expanded later"
+    ]
+  },
+  "qa": {
+    "bytes": 2012,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/phase3_current_active_frontier_status_alignment_preflight_qa.json",
+    "sha256": "d44ec0223d4a8529bb0f011c3fd16c5a416c0d4d20d8547e5cbbb12706976be9"
+  },
+  "schema_version": "hse-phase3-current-active-frontier-status-alignment-preflight-evidence-v1",
+  "source_artifacts": {
+    "closure_review_evidence": {
+      "bytes": 13522,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_evidence.json",
+      "sha256": "1d52b6b58b3f3ea97a2d3d22a35e1afef52074d14281e06962539ebbcfd01bec"
+    },
+    "closure_review_manifest": {
+      "bytes": 15144,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_manifest.json",
+      "sha256": "be019f67fb7ed00da60fd51015d64252f7423fa4aeb5f5893795c5ff21cfb71a"
+    },
+    "closure_review_qa": {
+      "bytes": 1686,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_qa.json",
+      "sha256": "09fc5f9c2a6c9b4bd73a6fb08d2ad37c9c72fd85c3ae3cc3888e6352dfa7c51a"
+    },
+    "implementation_manifest": {
+      "bytes": 18649,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_phase3_integrated_chain_recheck_20260704_2054_local_only/phase3_strict_frontier_schema_integration_implementation_manifest.json",
+      "sha256": "f9403b1c42251b9cbcadc0c0294351170dd63950a379dc890ccdaa91c9162c91"
+    },
+    "integrated_chain_audit_json": {
+      "bytes": 13813,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_phase3_integrated_chain_recheck_20260704_2054_local_only/strict_frontier_audit.json",
+      "sha256": "7b628e201c6aeac6b263ad9809a31221bb357babf9eb7b252b1a5b98583c458a"
+    },
+    "strict_frontier_audit_py": {
+      "bytes": 42131,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/evolution/local_completion/strict_frontier_audit.py",
+      "sha256": "b6ac8a33f66fa7631954f310722685aed640f2b6e68b4a2de9e4986b8985b861"
+    },
+    "strict_frontier_tests_py": {
+      "bytes": 28565,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/tests/local_completion/test_strict_frontier_audit.py",
+      "sha256": "00a4728547c42f570b2e6ae488762b71e913985c7755cd11bb9102f5b529fe30"
+    }
+  },
+  "source_excerpts": {
+    "_current_frontier_lines_471_488": [
+      {
+        "line": 471,
+        "text": "def _current_frontier(recorded_complete: Mapping[str, Any], current_match: Mapping[str, Any]) -> dict[str, Any]:"
+      },
+      {
+        "line": 472,
+        "text": "    if recorded_complete.get(\"complete\") is True and current_match.get(\"matches_closure_subject\") is True:"
+      },
+      {
+        "line": 473,
+        "text": "        return {"
+      },
+      {
+        "line": 474,
+        "text": "            \"status\": PHASE_2_STRICT_COMPLETE,"
+      },
+      {
+        "line": 475,
+        "text": "            \"highest_strict_complete_phase\": 2,"
+      },
+      {
+        "line": 476,
+        "text": "            \"basis\": \"active Hermes HEAD and tool-description hashes match the closed benchmark-gate subject\","
+      },
+      {
+        "line": 477,
+        "text": "            \"blockers\": [],"
+      },
+      {
+        "line": 478,
+        "text": "        }"
+      },
+      {
+        "line": 479,
+        "text": "    blockers = list(recorded_complete.get(\"blockers\", []))"
+      },
+      {
+        "line": 480,
+        "text": "    blockers.extend(current_match.get(\"blockers\", []))"
+      },
+      {
+        "line": 481,
+        "text": "    if recorded_complete.get(\"complete\") is True:"
+      },
+      {
+        "line": 482,
+        "text": "        blockers.append(\"current_baseline_revalidation_required_before_phase1_phase2_strict_claim\")"
+      },
+      {
+        "line": 483,
+        "text": "    return {"
+      },
+      {
+        "line": 484,
+        "text": "        \"status\": CURRENT_BASELINE_REVALIDATION_REQUIRED,"
+      },
+      {
+        "line": 485,
+        "text": "        \"highest_strict_complete_phase\": 0,"
+      },
+      {
+        "line": 486,
+        "text": "        \"basis\": \"current active Hermes baseline does not match the closed benchmark-gate subject\","
+      },
+      {
+        "line": 487,
+        "text": "        \"blockers\": sorted(set(blockers)),"
+      },
+      {
+        "line": 488,
+        "text": "    }"
+      }
+    ],
+    "_phase_table_phase3_lines_491_519": [
+      {
+        "line": 491,
+        "text": "def _phase_table(data: Mapping[str, Mapping[str, Any]], recorded_complete: Mapping[str, Any], current_match: Mapping[str, Any], current_frontier: Mapping[str, Any]) -> dict[str, Any]:"
+      },
+      {
+        "line": 492,
+        "text": "    current_phase2 = current_frontier.get(\"status\") == PHASE_2_STRICT_COMPLETE"
+      },
+      {
+        "line": 493,
+        "text": "    phase1_status = \"STRICT_COMPLETE_CURRENT_ACTIVE\" if current_phase2 else \"REVALIDATION_REQUIRED_CURRENT_BASELINE_MISMATCH\""
+      },
+      {
+        "line": 494,
+        "text": "    phase2_status = phase1_status"
+      },
+      {
+        "line": 495,
+        "text": "    phase3_integrated_chain = _phase3_integrated_chain(data)"
+      },
+      {
+        "line": 496,
+        "text": "    phase3_blockers = _phase3_blockers(data[\"phase3_plan\"], data[\"phase3_readiness\"], current_phase2, phase3_integrated_chain)"
+      },
+      {
+        "line": 497,
+        "text": "    phase3_strict = not phase3_blockers"
+      },
+      {
+        "line": 498,
+        "text": "    phase4_blockers = _phase4_blockers(data[\"phase4_completion\"], phase3_strict)"
+      },
+      {
+        "line": 499,
+        "text": "    phase5_blockers = _phase5_blockers(data[\"phase5_readiness\"], data[\"phase5_formal\"])"
+      },
+      {
+        "line": 500,
+        "text": "    return {"
+      },
+      {
+        "line": 501,
+        "text": "        \"phase1\": {"
+      },
+      {
+        "line": 502,
+        "text": "            \"strict_complete\": current_phase2,"
+      },
+      {
+        "line": 503,
+        "text": "            \"recorded_subject_complete\": recorded_complete.get(\"complete\") is True,"
+      },
+      {
+        "line": 504,
+        "text": "            \"strict_status\": phase1_status,"
+      },
+      {
+        "line": 505,
+        "text": "            \"blockers\": [] if current_phase2 else [\"current_baseline_revalidation_required_before_phase1_strict_claim\"],"
+      },
+      {
+        "line": 506,
+        "text": "        },"
+      },
+      {
+        "line": 507,
+        "text": "        \"phase2\": {"
+      },
+      {
+        "line": 508,
+        "text": "            \"strict_complete\": current_phase2,"
+      },
+      {
+        "line": 509,
+        "text": "            \"recorded_subject_complete\": recorded_complete.get(\"complete\") is True,"
+      },
+      {
+        "line": 510,
+        "text": "            \"strict_status\": phase2_status,"
+      },
+      {
+        "line": 511,
+        "text": "            \"blockers\": [] if current_phase2 else [\"current_baseline_revalidation_required_before_phase2_strict_claim\"],"
+      },
+      {
+        "line": 512,
+        "text": "        },"
+      },
+      {
+        "line": 513,
+        "text": "        \"phase3\": {"
+      },
+      {
+        "line": 514,
+        "text": "            \"strict_complete\": phase3_strict,"
+      },
+      {
+        "line": 515,
+        "text": "            \"strict_status\": \"STRICT_COMPLETE_CURRENT_ACTIVE\" if phase3_strict else \"NOT_STRICT_COMPLETE_PREPARATION_ONLY\","
+      },
+      {
+        "line": 516,
+        "text": "            \"historical_claim_status\": data[\"phase3_historical\"].get(\"status\"),"
+      },
+      {
+        "line": 517,
+        "text": "            \"integrated_chain\": phase3_integrated_chain,"
+      },
+      {
+        "line": 518,
+        "text": "            \"blockers\": phase3_blockers,"
+      },
+      {
+        "line": 519,
+        "text": "        },"
+      }
+    ],
+    "write_strict_frontier_audit_top_level_emit_lines_116_124": [
+      {
+        "line": 116,
+        "text": "    report[\"schema_version\"] = STRICT_FRONTIER_AUDIT_SCHEMA_VERSION"
+      },
+      {
+        "line": 117,
+        "text": "    report.update("
+      },
+      {
+        "line": 118,
+        "text": "        {"
+      },
+      {
+        "line": 119,
+        "text": "            \"status\": current_frontier[\"status\"],"
+      },
+      {
+        "line": 120,
+        "text": "            \"summary\": _summary(recorded_frontier, current_frontier, phases),"
+      },
+      {
+        "line": 121,
+        "text": "            \"recorded_subject_frontier\": recorded_frontier,"
+      },
+      {
+        "line": 122,
+        "text": "            \"current_active_frontier\": current_frontier,"
+      },
+      {
+        "line": 123,
+        "text": "            \"current_baseline_match\": current_match,"
+      },
+      {
+        "line": 124,
+        "text": "            \"phases\": phases,"
+      }
+    ]
+  },
+  "source_line_references": {
+    "_current_frontier_def_line": 471,
+    "_current_frontier_highest_phase_line": 475,
+    "_current_frontier_phase2_status_line": 474,
+    "_current_frontier_returns_before_phase_table_line": 473,
+    "_phase_table_def_line": 491,
+    "_phase_table_integrated_chain_line": 495,
+    "_phase_table_phase3_strict_line": 497,
+    "strict_frontier_audit_py": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/evolution/local_completion/strict_frontier_audit.py",
+    "write_strict_frontier_audit_current_active_frontier_emit_line": 122,
+    "write_strict_frontier_audit_status_emit_line": 119
+  },
+  "source_state": {
+    "closure_review_claim_allowed": false,
+    "closure_review_status": "PHASE3_CLOSURE_REVIEW_FAIL_CLOSED_NOT_READY_FOR_OFFICIAL_CLAIM",
+    "source_audit_status": "PHASE_2_STRICT_COMPLETE",
+    "source_claim_flags": {
+      "overall_hse_project_completion_claimed": false,
+      "phase3_strict_completion_claimed": false
+    },
+    "source_current_active_frontier": {
+      "basis": "active Hermes HEAD and tool-description hashes match the closed benchmark-gate subject",
+      "blockers": [],
+      "highest_strict_complete_phase": 2,
+      "status": "PHASE_2_STRICT_COMPLETE"
+    },
+    "source_phase3_blockers": [],
+    "source_phase3_integrated_chain_complete": true,
+    "source_phase3_strict_complete": true,
+    "source_recorded_subject_frontier": {
+      "basis": "closed Phase 1/2 benchmark gate plus local active Phase 1/2 evidence on the recorded benchmark subject",
+      "blockers": [],
+      "highest_strict_complete_phase": 2,
+      "status": "PHASE_2_STRICT_COMPLETE"
+    }
+  },
+  "time_rewind": {
+    "post_restore_inspect_modified_count": 0,
+    "primary_anchor_id": "20260704-131120-before-hse-phase3-current-active-frontier-status",
+    "primary_anchor_label": "before HSE phase3 current active frontier status alignment preflight 20260704",
+    "primary_anchor_seal": "98e7987b623401d5c7e2958ff82e0c430936d9e4c1c346772bdb4dc4b1928fe5",
+    "rescue_anchor_id": "rescue-20260704-131342-before-rewind-to-20260704-131120-before-hse-phas",
+    "rescue_anchor_seal": "f382f68716d7d9d74e3d0d7ebad5e92ce06e008613ba23ddd7de46cc02c3a7bf",
+    "surgical_restore_dry_run_rc": 4,
+    "surgical_restore_execute_rc": 0,
+    "surgical_restore_performed": true,
+    "surgical_restore_target": "output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json"
+  },
+  "verification": {
+    "alignment_preflight_invariant": "PASS",
+    "focused_strict_frontier_tests": "9 passed in 1.59s",
+    "full_pytest": "473 passed, 11 warnings in 8.72s",
+    "git_diff_check": "PASS",
+    "json_validation": "PASS",
+    "time_rewind_surgical_restore": "PASS; generated freeze comparator output restored; post-restore inspect modified=0"
+  },
+  "verification_command_index": {
+    "artifact_write": {
+      "command": "python writer for phase3_current_active_frontier_status_alignment_preflight_manifest/evidence/md",
+      "exit_code": 0,
+      "timestamp": "2026-07-04T22:11:23+0900"
+    },
+    "focused_tests": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q tests/local_completion/test_strict_frontier_audit.py",
+      "exit_code": 0,
+      "result": "9 passed in 1.59s",
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/focused_strict_frontier_tests.stderr",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/focused_strict_frontier_tests.stdout"
+    },
+    "full_pytest": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q",
+      "exit_code": 0,
+      "result": "473 passed, 11 warnings in 8.72s",
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/full_pytest.stderr",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/full_pytest.stdout"
+    },
+    "git_diff_check": {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/git_diff_check.stderr",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/git_diff_check.stdout"
+    },
+    "invariant": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python - <<PY (alignment_preflight_invariant)",
+      "exit_code": 0,
+      "log_handle": "inline terminal output: alignment_preflight_invariant=PASS"
+    },
+    "json_validation": {
+      "command": "python -m json.tool manifest.json && python -m json.tool evidence.json",
+      "exit_code": 0,
+      "log_handle": "/tmp/hse_p3_frontier_align_preflight_manifest_final.pretty and /tmp/hse_p3_frontier_align_preflight_evidence_final.pretty"
+    },
+    "time_rewind_inspect_post_restore": {
+      "command": "python time_rewind.py --root <HSE> inspect <anchor>",
+      "exit_code": 0,
+      "result": "modified=0",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_inspect_post_restore.stdout"
+    },
+    "time_rewind_inspect_post_verify": {
+      "command": "python ~/.hermes/skills/security/time-rewind/scripts/time_rewind.py --root <HSE> inspect 20260704-131120-before-hse-phase3-current-active-frontier-status",
+      "exit_code": 0,
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_inspect_post_verify.stdout"
+    },
+    "time_rewind_surgical_restore_dry_run": {
+      "command": "python time_rewind.py --root <HSE> rewind <anchor> --mode surgical --paths output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json --dry-run",
+      "exit_code": 4,
+      "expected": "conflict detected because generated file changed outside journal; reviewed before restore",
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_dry_run.stderr",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_dry_run.stdout"
+    },
+    "time_rewind_surgical_restore_execute": {
+      "command": "python time_rewind.py --root <HSE> rewind <anchor> --mode surgical --paths output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json --allow-conflicts --yes",
+      "exit_code": 0,
+      "stderr_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_execute.stderr",
+      "stdout_log": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_execute.stdout"
+    }
+  },
+  "verification_exact_shell_commands": {
+    "artifact_write": {
+      "exact_shell": "set +e; ROOT=\"$HOME/.hermes/evolution/repos/hermes-agent-self-evolution\"; ACTIVE=\"$HOME/.hermes/hermes-agent\"; OUT=\"$ROOT/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only\"; mkdir -p \"$OUT/logs\"; python - <<'PY' ... write manifest/evidence/md ... PY; python -m json.tool \"$OUT/phase3_current_active_frontier_status_alignment_preflight_manifest.json\" >/tmp/hse_p3_frontier_align_preflight_manifest.pretty; python -m json.tool \"$OUT/phase3_current_active_frontier_status_alignment_preflight_evidence.json\" >/tmp/hse_p3_frontier_align_preflight_evidence.pretty",
+      "exit_code": 0
+    },
+    "cleanup_pytest_gepa_cache": {
+      "exact_shell": "\"$PY\" - <<'PY'\nfrom pathlib import Path\nimport shutil\nroot=Path.home()/'.hermes/evolution/repos/hermes-agent-self-evolution'\nshutil.rmtree(root/'output/phase3-system-prompt/pytest-gepa-optimizer', ignore_errors=True)\nPY",
+      "exit_code": 0
+    },
+    "focused_tests": {
+      "exact_shell": "PYTHONDONTWRITEBYTECODE=1 \"$PY\" -m pytest -q tests/local_completion/test_strict_frontier_audit.py > \"$OUT/logs/focused_strict_frontier_tests.stdout\" 2> \"$OUT/logs/focused_strict_frontier_tests.stderr\"",
+      "exit_code": 0
+    },
+    "full_pytest": {
+      "exact_shell": "PYTHONDONTWRITEBYTECODE=1 \"$PY\" -m pytest -q > \"$OUT/logs/full_pytest.stdout\" 2> \"$OUT/logs/full_pytest.stderr\"",
+      "exit_code": 0
+    },
+    "git_diff_check": {
+      "exact_shell": "git diff --check > \"$OUT/logs/git_diff_check.stdout\" 2> \"$OUT/logs/git_diff_check.stderr\"",
+      "exit_code": 0
+    },
+    "invariant": {
+      "exact_shell": "PYTHONDONTWRITEBYTECODE=1 \"$PY\" - <<'PY' ... assert alignment preflight invariant ... PY",
+      "exit_code": 0
+    },
+    "json_validation": {
+      "exact_shell": "python -m json.tool \"$OUT/phase3_current_active_frontier_status_alignment_preflight_manifest.json\" >/tmp/hse_p3_frontier_align_preflight_manifest.verify.pretty && python -m json.tool \"$OUT/phase3_current_active_frontier_status_alignment_preflight_evidence.json\" >/tmp/hse_p3_frontier_align_preflight_evidence.verify.pretty",
+      "exit_code": 0
+    },
+    "time_rewind_inspect_post_restore": {
+      "exact_shell": "python \"$TR\" --root \"$ROOT\" inspect \"$ANCHOR\" | sed -n '1,160p' > \"$OUT/logs/time_rewind_inspect_post_restore.stdout\"",
+      "exit_code": 0,
+      "result": "modified=0"
+    },
+    "time_rewind_inspect_post_verify": {
+      "exact_shell": "python \"$TR\" --root \"$ROOT\" inspect \"$ANCHOR\" | sed -n '1,160p' > \"$OUT/logs/time_rewind_inspect_post_verify.stdout\"",
+      "exit_code": 0
+    },
+    "time_rewind_record_restore": {
+      "exact_shell": "python \"$TR\" --root \"$ROOT\" record-shell \"surgical restore pytest-generated freeze comparator artifact during phase3 frontier alignment preflight\" --exit-code \"$restore_rc\" > \"$OUT/logs/time_rewind_record_restore.stdout\" 2> \"$OUT/logs/time_rewind_record_restore.stderr\"",
+      "exit_code": 0
+    },
+    "time_rewind_surgical_restore_dry_run": {
+      "exact_shell": "python \"$TR\" --root \"$ROOT\" rewind \"$ANCHOR\" --mode surgical --paths \"$TARGET\" --dry-run > \"$OUT/logs/time_rewind_surgical_restore_dry_run.stdout\" 2> \"$OUT/logs/time_rewind_surgical_restore_dry_run.stderr\"",
+      "exit_code": 4,
+      "expected": "reviewed conflict; generated file changed outside journal"
+    },
+    "time_rewind_surgical_restore_execute": {
+      "exact_shell": "python \"$TR\" --root \"$ROOT\" rewind \"$ANCHOR\" --mode surgical --paths \"$TARGET\" --allow-conflicts --yes > \"$OUT/logs/time_rewind_surgical_restore_execute.stdout\" 2> \"$OUT/logs/time_rewind_surgical_restore_execute.stderr\"",
+      "exit_code": 0
+    }
+  },
+  "verification_logs": {
+    "focused_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/focused_strict_frontier_tests.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused_stdout": {
+      "bytes": 98,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/focused_strict_frontier_tests.stdout",
+      "sha256": "6dc8ed9f494495eefb1982620eb963205e141fe2286e4ae6b5f7e47ef4ca2fa7"
+    },
+    "full_pytest_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/full_pytest.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "full_pytest_stdout": {
+      "bytes": 5231,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/full_pytest.stdout",
+      "sha256": "1c1439e89d893ed4124bd231859fd9b2ba56a3662f91e1d9c57faf07f8a4262a"
+    },
+    "git_diff_check_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/git_diff_check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "git_diff_check_stdout": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/git_diff_check.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "time_rewind_inspect_post_restore": {
+      "bytes": 2769,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_inspect_post_restore.stdout",
+      "sha256": "1e35d6cb92d0380105f111b9feeecbe108083bddc88fbf46a1e4473e9c69de33"
+    },
+    "time_rewind_inspect_post_verify": {
+      "bytes": 1854,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_inspect_post_verify.stdout",
+      "sha256": "fcfe6981ba40733830807ecd2cf23289af901744424aba8672f736aed3e4145d"
+    },
+    "time_rewind_record_restore_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_record_restore.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "time_rewind_record_restore_stdout": {
+      "bytes": 92,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_record_restore.stdout",
+      "sha256": "7d036f4d19d54a9ca4e8817f44c438a150bbad0a597e966ca2fb85b4cf27d392"
+    },
+    "time_rewind_surgical_restore_dry_run_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_dry_run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "time_rewind_surgical_restore_dry_run_stdout": {
+      "bytes": 434,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_dry_run.stdout",
+      "sha256": "e5682870f47fe02f7879c90a2d1155b3b5aa12b2800269460669e14598882a0b"
+    },
+    "time_rewind_surgical_restore_execute_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_execute.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "time_rewind_surgical_restore_execute_stdout": {
+      "bytes": 895,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_current_active_frontier_status_alignment_preflight_20260704_2211_local_only/logs/time_rewind_surgical_restore_execute.stdout",
+      "sha256": "f358a82de751f29dda9884f34fbd5d1835009118add266d7f6023eb31819c39b"
+    }
+  }
+}

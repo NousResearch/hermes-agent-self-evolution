@@ -1,0 +1,21 @@
+Rewind plan for 20260704-131120-before-hse-phase3-current-active-frontier-status
+  mode: surgical
+  restore entries: 1
+  missing in anchor: 0
+  conflicts: 1
+  remove candidates: 0
+Conflicts:
+  - output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json: changed since anchor but not present in journal
+Anchor created: rescue-20260704-131342-before-rewind-to-20260704-131120-before-hse-phas
+  root: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution
+  files: 8073
+  dirs: 1880
+  symlinks: 0
+  hash-only: 64
+  skipped: 334
+  seal: f382f68716d7d9d74e3d0d7ebad5e92ce06e008613ba23ddd7de46cc02c3a7bf
+  OK restored file output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json
+Restored entries: 1
+Removed added paths: 0
+Failures: 0
+Rescue anchor: rescue-20260704-131342-before-rewind-to-20260704-131120-before-hse-phas
