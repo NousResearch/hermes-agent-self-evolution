@@ -1,0 +1,149 @@
+{
+  "archive_under_test": {
+    "bytes": 60877,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_execute_20260704_2337_local_only/hse_phase3_claim_chain_local_artifact_archive_20260704_2317.tar.gz",
+    "sha256": "30ccb88c8759f40c74a7178b9ffe4224c75458ae7a0b7d211486cae7e0d1e41c"
+  },
+  "disposable_extract": {
+    "cleanup_error": null,
+    "cleanup_performed": true,
+    "cleanup_verified": true,
+    "expected_file_count": 109,
+    "expected_listing_sha256": "1125f55073b2d0c4c80077a1c10ce1a782c55a0f3b6df3ea51d57aa55a8d2e4a",
+    "extract_parent": "/private/var/folders/cq/19k_hb4j09x9y6j96s152s4m0000gn/T",
+    "extract_root": "/private/var/folders/cq/19k_hb4j09x9y6j96s152s4m0000gn/T/hse_phase3_claim_archive_extract_verify_wsgaoqlw",
+    "extract_root_is_outside_active_repo": true,
+    "extract_root_is_outside_hse_repo": true,
+    "extracted_file_count": 109,
+    "extracted_listing_sha256": "1125f55073b2d0c4c80077a1c10ce1a782c55a0f3b6df3ea51d57aa55a8d2e4a",
+    "file_count_and_hash_parity": true,
+    "path_traversal_safe": true,
+    "safe_extraction_method": "manual member-by-member regular-file write; tarfile.extractall not used"
+  },
+  "extracted_listing": {
+    "bytes": 29740,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/phase3_claim_local_archive_disposable_extract_listing.json",
+    "sha256": "d1d2e0c28e839df13c102e91ac53f00bb337c78f50803a51b579bb5f4309b52c"
+  },
+  "failed_preconditions": [],
+  "forbidden_surface_ledger": {
+    "active_apply_performed": false,
+    "active_runtime_mutation_performed": false,
+    "cron_or_gateway_mutation_performed": false,
+    "deploy_or_publication_performed": false,
+    "github_query_performed": false,
+    "github_write_performed": false,
+    "local_disposable_extract_verify_only": true,
+    "network_calls_performed": false,
+    "overall_hse_project_completion_claimed": false,
+    "phase4_completion_claimed": false,
+    "phase5_completion_claimed": false,
+    "provider_or_model_spend_performed": false
+  },
+  "manifest": {
+    "bytes": 9644,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/phase3_claim_local_archive_disposable_extract_verify_manifest.json",
+    "sha256": "db57c86ee0849a2b90a022ed0985da3e910829c412c493e38ce358e7acf24127"
+  },
+  "parity_report": {
+    "bytes": 53613,
+    "exists": true,
+    "is_file": true,
+    "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/phase3_claim_local_archive_disposable_extract_parity.json",
+    "sha256": "576bcaf82f1c62c0c7ce213cecb5ee2f3fc9ade4e006a8b2171a0ac51ae33d37"
+  },
+  "preconditions": {
+    "active_repo_clean_before_extract": true,
+    "archive_execute_status_verified": true,
+    "archive_exists_and_hash_matches": true,
+    "archive_listing_matches_expected": true,
+    "archive_member_hashes_match_expected": true,
+    "hse_report_only_archive_scope": true,
+    "previous_member_verification_passed": true
+  },
+  "schema_version": "hse-phase3-claim-local-archive-disposable-extract-verify-evidence-v1",
+  "verification": {
+    "deterministic_invariant": "PASS",
+    "disposable_extract_cleanup": "PASS",
+    "file_count_and_hash_parity": "PASS",
+    "focused_strict_frontier_tests": "13 passed in 2.42s",
+    "git_diff_check": "PASS",
+    "independent_llm_qa_skipped_due_to_no_provider_spend_boundary": true,
+    "json_validation": "PASS",
+    "no_active_runtime_mutation": "PASS",
+    "path_traversal_safe": "PASS",
+    "provider_or_model_spend_performed": false,
+    "time_rewind_inspect": "PASS; modified=0; added paths limited to disposable extract verification report artifacts"
+  },
+  "verification_logs": {
+    "deterministic_invariant_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/deterministic_invariant.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "deterministic_invariant_stdout": {
+      "bytes": 160,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/deterministic_invariant.stdout",
+      "sha256": "c2403d49598b905d301f9588bccfb0cacd4cd491cb9eafb8e8f9f03d4e17e1d5"
+    },
+    "extract_verify_artifact_hashes_stdout": {
+      "bytes": 1127,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/extract_verify_artifact_hashes.stdout",
+      "sha256": "75861c7aed404fa01ecc1b16ea423c9b20d451697ae3a7631e7379a0c03ed7e0"
+    },
+    "extracted_listing_sample_stdout": {
+      "bytes": 2002,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/extracted_listing_sample.stdout",
+      "sha256": "fb95ec189ff8fbf5304e707a44c5674c8e72776c473be29ebed4b9bf3d465d7b"
+    },
+    "focused_strict_frontier_tests_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/focused_strict_frontier_tests.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused_strict_frontier_tests_stdout": {
+      "bytes": 99,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/focused_strict_frontier_tests.stdout",
+      "sha256": "7052fbf329a332cda269397e3060cca6b0b8019a1986f35ce17c6b7861a347bd"
+    },
+    "git_diff_check_stderr": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/git_diff_check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "git_diff_check_stdout": {
+      "bytes": 0,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/git_diff_check.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "time_rewind_inspect_post_verify": {
+      "bytes": 2129,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_claim_local_archive_disposable_extract_verify_20260704_2352_local_only/logs/time_rewind_inspect_post_verify.stdout",
+      "sha256": "876157f088baf9eca7e959fb98ce24dff37d074a2ff4579e4afea0897b913031"
+    }
+  }
+}
