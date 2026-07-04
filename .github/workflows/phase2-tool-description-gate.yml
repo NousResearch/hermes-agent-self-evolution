@@ -8,15 +8,18 @@ on:
       - "evolution/prompts/**"
       - "evolution/code/**"
       - "evolution/monitor/**"
+      - "evolution/local_completion/**"
       - "tests/tools/**"
       - "tests/code/**"
       - "tests/monitor/**"
+      - "tests/local_completion/**"
       - "datasets/golden/tool-description/**"
       - "datasets/golden/benchmarks/**"
       - "reports/phase2e_*"
       - "reports/phase3_*"
       - "reports/phase4_*"
       - "reports/phase5_*"
+      - "reports/hse_*"
       - "seeds/**"
       - ".planning/spikes/**"
       - "README.md"
@@ -31,15 +34,18 @@ on:
       - "evolution/prompts/**"
       - "evolution/code/**"
       - "evolution/monitor/**"
+      - "evolution/local_completion/**"
       - "tests/tools/**"
       - "tests/code/**"
       - "tests/monitor/**"
+      - "tests/local_completion/**"
       - "datasets/golden/tool-description/**"
       - "datasets/golden/benchmarks/**"
       - "reports/phase2e_*"
       - "reports/phase3_*"
       - "reports/phase4_*"
       - "reports/phase5_*"
+      - "reports/hse_*"
       - "seeds/**"
       - ".planning/spikes/**"
       - "README.md"
@@ -91,11 +97,14 @@ jobs:
             tests/code/test_phase4_code_scaffold.py \
             tests/code/test_phase4_freeze_comparator.py \
             tests/code/test_phase4_automation.py \
+            tests/code/test_phase4_strict_code_evolution_runner.py \
             tests/monitor/test_phase5_continuous_loop_readiness_manifest.py \
             tests/monitor/test_phase5_performance_monitor.py \
             tests/monitor/test_phase5_auto_triage.py \
             tests/monitor/test_phase5_scheduler_dry_run.py \
             tests/monitor/test_phase5_supervised_candidate_runner.py \
+            tests/monitor/test_phase5_strict_unattended_loop.py \
+            tests/local_completion/test_strict_frontier_audit.py \
             -q
 
       - name: Run Phase 4 code-evolution report contract smoke
@@ -111,7 +120,7 @@ jobs:
           hermes_base:
             repo: .
             base_ref: ci-smoke
-            require_clean_worktree: false
+            require_clean_worktree: true
           allowed_mutation:
             files:
               - evolution/code/phase4_code_scaffold.py
