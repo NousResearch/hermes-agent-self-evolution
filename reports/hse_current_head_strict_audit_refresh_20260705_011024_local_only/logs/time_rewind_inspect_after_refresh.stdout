@@ -1,0 +1,13 @@
+Inspecting anchor: 20260704-161019-before-hse-current-head-strict-audit-refresh-202
+modified: 1
+  - output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json
+added: 7
+  - reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only
+  - reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only/logs
+  - reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only/logs/current_head_audit_refresh_verification.log
+  - reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only/logs/time_rewind_inspect_after_refresh.stderr
+  - reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only/logs/time_rewind_inspect_after_refresh.stdout
+  - reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only/strict_frontier_audit.json
+  - reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only/strict_frontier_audit.md
+deleted: 0
+metadata: 0

@@ -1,0 +1,21 @@
+Rewind plan for 20260704-161019-before-hse-current-head-strict-audit-refresh-202
+  mode: surgical
+  restore entries: 1
+  missing in anchor: 0
+  conflicts: 1
+  remove candidates: 0
+Conflicts:
+  - output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json: changed since anchor but not present in journal
+Anchor created: rescue-20260704-161229-before-rewind-to-20260704-161019-before-hse-curr
+  root: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution
+  files: 8262
+  dirs: 1914
+  symlinks: 0
+  hash-only: 64
+  skipped: 336
+  seal: 57321097672f8c13cfc0db506af022e7b07b331361f48ad13e228e1363ef7840
+  OK restored file output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json
+Restored entries: 1
+Removed added paths: 0
+Failures: 0
+Rescue anchor: rescue-20260704-161229-before-rewind-to-20260704-161019-before-hse-curr

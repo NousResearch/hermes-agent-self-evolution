@@ -1,0 +1,93 @@
+== metadata ==
+generated_at=2026-07-05T01:10:49+0900
+hse_head=b6cf9c494baac7685825954b73b88d97b15f6526
+hse_branch=hse/phase5-continuous-loop-prep
+active_head=551e5af50dc6597069e57af047213f61e40246d6
+active_status_count=0
+== compileall ==
+compileall_rc=0
+== targeted pytest ==
+.......................                                                  [100%]
+23 passed in 2.98s
+targeted_pytest_rc=0
+== full pytest ==
+........................................................................ [ 14%]
+........................................................................ [ 29%]
+........................................................................ [ 44%]
+........................................................................ [ 59%]
+........................................................................ [ 74%]
+........................................................................ [ 88%]
+......................................................                   [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:12
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:12: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    goal: str = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:16
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:16: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    tools: list[str] = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:20
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/predict/avatar/signatures.py:20: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    action_1: Action = dspy.OutputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:30
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:30: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    instruction: str = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:34
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:34: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    actions: list[str] = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:38
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:38: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    pos_input_with_metrics: list[EvalResult] = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:42
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:42: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    neg_input_with_metrics: list[EvalResult] = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:46
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:46: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    feedback: str = dspy.OutputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:61
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:61: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    previous_instruction: str = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:65
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:65: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    feedback: str = dspy.InputField(
+
+.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:69
+  /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/.venv/lib/python3.14/site-packages/dspy/teleprompt/avatar_optimizer.py:69: DeprecationWarning: The 'prefix' argument in InputField/OutputField is deprecated and has no effect in DSPy. It will be removed in a future version.
+    new_instruction: str = dspy.OutputField(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+486 passed, 11 warnings in 10.58s
+full_pytest_rc=0
+== git diff check ==
+git_diff_check_rc=0
+== artifact invariant ==
+status_complete=True
+frontier_status_complete=True
+highest_phase_5=True
+overall_claimed_true=True
+phase1_strict=True
+phase2_strict=True
+phase3_strict=True
+phase4_strict=True
+phase5_strict=True
+phase4_mode_strict_local=True
+phase5_mode_strict_local=True
+no_github_write=True
+no_provider_spend=True
+no_active_apply=True
+no_network=True
+active_clean=True
+failed_checks=
+artifact_invariant_rc=0
+== active repo status after verification ==
+active_status_count_after=0
+== hse git status after verification ==
+?? reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only/

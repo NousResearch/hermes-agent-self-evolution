@@ -1,0 +1,78 @@
+{
+  "active_hermes_head": "551e5af50dc6597069e57af047213f61e40246d6",
+  "generated_at": "2026-07-05T01:12:52+0900",
+  "highest_strict_complete_phase": 5,
+  "hse_branch": "hse/phase5-continuous-loop-prep",
+  "hse_head": "b6cf9c494baac7685825954b73b88d97b15f6526",
+  "hse_repo": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution",
+  "not_claimed": [
+    "full_remote_benchmark",
+    "provider_api_spend",
+    "github_query_or_write",
+    "active_apply",
+    "cron_or_gateway_mutation",
+    "auto_merge_or_deploy"
+  ],
+  "overall_hse_project_completion_claimed": true,
+  "report_dir": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_current_head_strict_audit_refresh_20260705_011024_local_only",
+  "schema_version": "hse-current-head-strict-audit-refresh-manifest-v1",
+  "self_contained_files": [
+    {
+      "bytes": 6309,
+      "path": "logs/current_head_audit_refresh_verification.log",
+      "sha256": "3054c818a46e3a55b7a7df95e7ee65cf2e00cdb7c38a638e6883f88d9f2102d4"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/time_rewind_inspect_after_refresh.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 962,
+      "path": "logs/time_rewind_inspect_after_refresh.stdout",
+      "sha256": "5fbddd88c9af73aca615ed4d444e2f0e8d3ca8d15170f2bc4529dd1bf2fe16d3"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/time_rewind_inspect_after_restore.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1628,
+      "path": "logs/time_rewind_inspect_after_restore.stdout",
+      "sha256": "0833ee03fce7b9fb7442cf123a897a1f740d1bca0e6a454ee0f417006d97ebf1"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/time_rewind_restore_out_of_scope_apply.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 895,
+      "path": "logs/time_rewind_restore_out_of_scope_apply.stdout",
+      "sha256": "97e53dfce074363b102bd1189dc2c70f8141e66234ae35cd448dc5acbfcb62f4"
+    },
+    {
+      "bytes": 0,
+      "path": "logs/time_rewind_restore_out_of_scope_dry_run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 434,
+      "path": "logs/time_rewind_restore_out_of_scope_dry_run.stdout",
+      "sha256": "6828cc3b470f12ddee8951befa2148b9677505c834842d9a47474269ec980b99"
+    },
+    {
+      "bytes": 14325,
+      "path": "strict_frontier_audit.json",
+      "sha256": "4e154e3226855882bc376f1d89e63e152e726e8cbc19e6bd773312d7edfdf73a"
+    },
+    {
+      "bytes": 1112,
+      "path": "strict_frontier_audit.md",
+      "sha256": "9f4af0c08266eb0d555a8fac8f793a2983f23503c32b800e29c56757d8988c00"
+    }
+  ],
+  "self_hash_policy": "audit_refresh_manifest.json excludes itself from self_contained_files to avoid circular hash.",
+  "status": "HSE_PROJECT_STRICT_COMPLETE"
+}
