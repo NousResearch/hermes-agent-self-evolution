@@ -1,0 +1,59 @@
+{
+  "artifacts": {
+    "evidence": {
+      "bytes": 16262,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_phase3_integrated_chain_recheck_20260704_2054_local_only/phase3_strict_frontier_schema_integration_implementation_evidence.json",
+      "sha256": "84200e534bb4627775a8a02ae7bb172ebded3fd3a9fd09f44750f08edb9ce857"
+    },
+    "full_pytest_stdout": {
+      "bytes": 5231,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_phase3_integrated_chain_recheck_20260704_2054_local_only/logs/full_pytest.stdout",
+      "sha256": "f60867cd69472433729d8847f66d40cf8e4de0a17ce73ce750061429a109e3cc"
+    },
+    "implementation_diff": {
+      "bytes": 25896,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_phase3_integrated_chain_recheck_20260704_2054_local_only/logs/implementation.diff",
+      "sha256": "34d7c7c24d93b3efcc9019e354b6a3ac0c4ac235e1dbde60e8b9d1d1808ee5bb"
+    },
+    "manifest": {
+      "bytes": 18649,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_phase3_integrated_chain_recheck_20260704_2054_local_only/phase3_strict_frontier_schema_integration_implementation_manifest.json",
+      "sha256": "92e4bd1d1a40236bfeb4417743ce50fa9f9833007f50bc05217063a63b1ac6be"
+    },
+    "markdown": {
+      "bytes": 7190,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_phase3_integrated_chain_recheck_20260704_2054_local_only/phase3_strict_frontier_schema_integration_implementation.md",
+      "sha256": "cb3a57be1c564abd146300cbdcb89260ebd421ddb62d5fd628c6e1eaf99438b0"
+    },
+    "post_patch_audit_json": {
+      "bytes": 13813,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_strict_frontier_audit_phase3_integrated_chain_recheck_20260704_2054_local_only/strict_frontier_audit.json",
+      "sha256": "7b628e201c6aeac6b263ad9809a31221bb357babf9eb7b252b1a5b98583c458a"
+    }
+  },
+  "final_qa": {
+    "score": 0.93,
+    "session": "qa-34f2b68e",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "schema_version": "hse-phase3-strict-frontier-schema-integration-implementation-qa-v1",
+  "semantic_clarification": {
+    "frontier_wording": "current_active_frontier remains PHASE_2_STRICT_COMPLETE/highest=2 in the audit output; the new Phase 3 result is phase-table evidence for a later closure-review packet.",
+    "not_a_final_claim": "This packet does not claim official/final Phase 3 completion; phase3_strict_completion_claimed remains false, overall_hse_project_completion_claimed remains false, and active apply/deploy/GitHub surfaces remain blocked.",
+    "phase3_strict_complete_true_meaning": "local strict-frontier audit table now accepts the integrated Phase 3 artifact chain as complete evidence when optional inputs are explicitly supplied"
+  },
+  "suggestion_handling": "Added semantic_clarification and review_bundle_references to manifest/evidence/markdown. Raw diff, focused/targeted/full test logs, and post-patch audit JSON/Markdown are stored in the same report bundle. The committed implementation.diff log was normalized to remove trailing whitespace so git diff --check stays clean."
+}

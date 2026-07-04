@@ -59,6 +59,10 @@ def write_strict_frontier_audit(
     plan_path: str | Path,
     output_dir: str | Path,
     generated_at: str,
+    phase3_local_real_smoke_path: str | Path | None = None,
+    phase3_gepa_execution_path: str | Path | None = None,
+    phase3_noop_apply_closure_path: str | Path | None = None,
+    phase3_post_noop_recheck_path: str | Path | None = None,
 ) -> dict[str, str]:
     """Write a strict frontier audit JSON/Markdown pair."""
 
@@ -78,6 +82,15 @@ def write_strict_frontier_audit(
         "phase5_formal": Path(phase5_formal_path).expanduser(),
         "plan": Path(plan_path).expanduser(),
     }
+    optional_phase3_paths = {
+        "phase3_local_real_smoke": phase3_local_real_smoke_path,
+        "phase3_gepa_execution": phase3_gepa_execution_path,
+        "phase3_noop_apply_closure": phase3_noop_apply_closure_path,
+        "phase3_post_noop_recheck": phase3_post_noop_recheck_path,
+    }
+    for name, path in optional_phase3_paths.items():
+        if path is not None:
+            paths[name] = Path(path).expanduser()
     data = {name: _load_json_object(path, name) for name, path in paths.items() if name != "plan"}
     plan_text = paths["plan"].read_text()
 
@@ -104,7 +117,7 @@ def write_strict_frontier_audit(
     report.update(
         {
             "status": current_frontier["status"],
-            "summary": _summary(recorded_frontier, current_frontier),
+            "summary": _summary(recorded_frontier, current_frontier, phases),
             "recorded_subject_frontier": recorded_frontier,
             "current_active_frontier": current_frontier,
             "current_baseline_match": current_match,
@@ -118,11 +131,13 @@ def write_strict_frontier_audit(
             "network_calls_performed": False,
             "active_apply_performed": False,
             "full_remote_benchmark_executed": False,
+            "phase3_strict_completion_claimed": False,
             "overall_hse_project_completion_claimed": False,
             "strict_frontier_boundary_notes": [
                 "Recorded-subject completion is not automatically current-active-target completion.",
                 "A moved active Hermes baseline requires revalidation before Phase 1/2 strict-complete can be claimed for the current target.",
                 "Historical/local/waiver completion reports for Phase 3+ are treated as evidence, not current strict completion, unless current PLAN gates and current baseline checks pass.",
+                "Phase 3 integrated-chain acceptance is local audit evidence only; it does not approve active apply, publication, cron/gateway mutation, provider spend, or overall HSE completion.",
             ],
             "not_claimed": [
                 "overall_HSE_project_completion",
@@ -477,7 +492,8 @@ def _phase_table(data: Mapping[str, Mapping[str, Any]], recorded_complete: Mappi
     current_phase2 = current_frontier.get("status") == PHASE_2_STRICT_COMPLETE
     phase1_status = "STRICT_COMPLETE_CURRENT_ACTIVE" if current_phase2 else "REVALIDATION_REQUIRED_CURRENT_BASELINE_MISMATCH"
     phase2_status = phase1_status
-    phase3_blockers = _phase3_blockers(data["phase3_plan"], data["phase3_readiness"], current_phase2)
+    phase3_integrated_chain = _phase3_integrated_chain(data)
+    phase3_blockers = _phase3_blockers(data["phase3_plan"], data["phase3_readiness"], current_phase2, phase3_integrated_chain)
     phase3_strict = not phase3_blockers
     phase4_blockers = _phase4_blockers(data["phase4_completion"], phase3_strict)
     phase5_blockers = _phase5_blockers(data["phase5_readiness"], data["phase5_formal"])
@@ -498,6 +514,7 @@ def _phase_table(data: Mapping[str, Mapping[str, Any]], recorded_complete: Mappi
             "strict_complete": phase3_strict,
             "strict_status": "STRICT_COMPLETE_CURRENT_ACTIVE" if phase3_strict else "NOT_STRICT_COMPLETE_PREPARATION_ONLY",
             "historical_claim_status": data["phase3_historical"].get("status"),
+            "integrated_chain": phase3_integrated_chain,
             "blockers": phase3_blockers,
         },
         "phase4": {
@@ -516,10 +533,18 @@ def _phase_table(data: Mapping[str, Mapping[str, Any]], recorded_complete: Mappi
     }
 
 
-def _phase3_blockers(phase3_plan: Mapping[str, Any], phase3_readiness: Mapping[str, Any], current_phase2_complete: bool) -> list[str]:
+def _phase3_blockers(
+    phase3_plan: Mapping[str, Any],
+    phase3_readiness: Mapping[str, Any],
+    current_phase2_complete: bool,
+    phase3_integrated_chain: Mapping[str, Any],
+) -> list[str]:
     blockers: list[str] = []
     if not current_phase2_complete:
         blockers.append("phase3_blocked_until_phase1_phase2_strict_complete_current")
+    if phase3_integrated_chain.get("available") is True:
+        blockers.extend(str(blocker) for blocker in phase3_integrated_chain.get("blockers", []) if blocker)
+        return sorted(set(blockers))
     if phase3_plan.get("status") == "planned_not_executed" or phase3_plan.get("execution_started") is False:
         blockers.append("phase3_current_plan_status_planned_not_executed")
     if phase3_readiness.get("real_benchmarks_executed") is not True:
@@ -530,6 +555,97 @@ def _phase3_blockers(phase3_plan: Mapping[str, Any], phase3_readiness: Mapping[s
     ready_state: Mapping[str, Any] = ready_state_raw if isinstance(ready_state_raw, Mapping) else {}
     if ready_state.get("real_benchmark_ready_now") is not True:
         blockers.append("phase3_real_benchmark_ready_now_false")
+    return sorted(set(blockers))
+
+
+def _phase3_integrated_chain(data: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    required = {
+        "local_real_smoke": "phase3_local_real_smoke",
+        "gepa_execution": "phase3_gepa_execution",
+        "noop_apply_closure": "phase3_noop_apply_closure",
+        "post_noop_recheck": "phase3_post_noop_recheck",
+    }
+    present = {label: data[key] for label, key in required.items() if key in data}
+    if not present:
+        return {
+            "available": False,
+            "complete": False,
+            "mode": "legacy_phase3_inputs_only",
+            "checks": {},
+            "blockers": ["phase3_integrated_chain_not_provided"],
+        }
+
+    blockers = [f"phase3_integrated_chain_missing_{label}" for label, key in required.items() if key not in data]
+    local_real_smoke = data.get("phase3_local_real_smoke", {})
+    gepa_execution = data.get("phase3_gepa_execution", {})
+    noop_apply_closure = data.get("phase3_noop_apply_closure", {})
+    post_noop_recheck = data.get("phase3_post_noop_recheck", {})
+
+    checks = {
+        "local_real_smoke_passed": local_real_smoke.get("status") == "PHASE3_LOCAL_REAL_SMOKE_EXECUTION_PASSED_SEPARATE_GEPA_DSPY_APPROVAL_STILL_REQUIRED"
+        and local_real_smoke.get("local_real_smoke_passed") is True,
+        "bounded_local_gepa_dspy_execution_passed": gepa_execution.get("status")
+        == "PHASE3_GEPA_DSPY_CANDIDATE_OPTIMIZATION_EXECUTION_PASSED_NO_ACTIVE_APPLY"
+        and gepa_execution.get("boundary_ledger", {}).get("bounded_local_dspy_gepa_optimizer_executed") is True
+        and gepa_execution.get("boundary_ledger", {}).get("candidate_optimization_command_executed") is True,
+        "semantic_noop_apply_closure_satisfies_active_write_gate": noop_apply_closure.get("reconciliation_passed") is True
+        and noop_apply_closure.get("closure_reconciliation", {}).get("apply_lane_closed") is True
+        and noop_apply_closure.get("closure_reconciliation", {}).get("apply_lane_status") == "NO_ACTIVE_WRITE_REQUIRED"
+        and noop_apply_closure.get("closure_reconciliation", {}).get("semantic_noop_confirmed") is True
+        and noop_apply_closure.get("closure_reconciliation", {}).get("active_apply_needed") is False
+        and noop_apply_closure.get("closure_reconciliation", {}).get("active_apply_recommended") is False
+        and noop_apply_closure.get("closure_reconciliation", {}).get("active_apply_performed") is False,
+        "post_noop_recheck_confirms_phase2_fail_closed": post_noop_recheck.get("recheck_passed") is True
+        and post_noop_recheck.get("decision", {}).get("current_active_frontier_confirmed") == PHASE_2_STRICT_COMPLETE
+        and post_noop_recheck.get("decision", {}).get("phase3_strict_complete") is False
+        and post_noop_recheck.get("decision", {}).get("phase3_strict_completion_ready_to_claim") is False,
+    }
+    blocker_by_check = {
+        "local_real_smoke_passed": "phase3_integrated_chain_local_real_smoke_not_passed",
+        "bounded_local_gepa_dspy_execution_passed": "phase3_integrated_chain_gepa_execution_not_passed",
+        "semantic_noop_apply_closure_satisfies_active_write_gate": "phase3_integrated_chain_noop_apply_closure_not_passed",
+        "post_noop_recheck_confirms_phase2_fail_closed": "phase3_integrated_chain_post_noop_recheck_not_passed",
+    }
+    blockers.extend(blocker_by_check[name] for name, passed in checks.items() if passed is not True)
+    for label, artifact in present.items():
+        blockers.extend(_phase3_forbidden_boundary_blockers(label, artifact))
+
+    return {
+        "available": True,
+        "complete": not blockers,
+        "mode": "phase3_integrated_artifact_chain",
+        "checks": checks,
+        "blockers": sorted(set(blockers)),
+        "source_statuses": {label: artifact.get("status") for label, artifact in present.items()},
+    }
+
+
+def _phase3_forbidden_boundary_blockers(label: str, artifact: Mapping[str, Any]) -> list[str]:
+    forbidden_true_keys = {
+        "github_query_performed",
+        "github_write_performed",
+        "provider_or_model_spend_performed",
+        "network_calls_performed",
+        "external_llm_calls_performed",
+        "active_apply_performed",
+        "active_runtime_mutation_performed",
+        "cron_or_gateway_mutation_performed",
+        "deploy_or_publication_performed",
+        "phase3_strict_completion_claimed",
+        "overall_hse_project_completion_claimed",
+    }
+    blockers: list[str] = []
+
+    def collect(mapping: Mapping[str, Any], prefix: str) -> None:
+        for key in forbidden_true_keys:
+            if mapping.get(key) is True:
+                blockers.append(f"phase3_integrated_chain_forbidden_boundary_{label}.{prefix}{key}")
+
+    collect(artifact, "")
+    for section in ("boundary_ledger", "closure_reconciliation", "decision", "github", "safety_invariants"):
+        value = artifact.get(section)
+        if isinstance(value, Mapping):
+            collect(value, f"{section}.")
     return sorted(set(blockers))
 
 
@@ -582,7 +698,10 @@ def _source_artifacts(paths: Mapping[str, Path]) -> dict[str, dict[str, Any]]:
     return artifacts
 
 
-def _summary(recorded_frontier: Mapping[str, Any], current_frontier: Mapping[str, Any]) -> str:
+def _summary(recorded_frontier: Mapping[str, Any], current_frontier: Mapping[str, Any], phases: Mapping[str, Any]) -> str:
+    phase3 = phases.get("phase3", {}) if isinstance(phases.get("phase3"), Mapping) else {}
+    if phase3.get("strict_complete") is True:
+        return "Phase 2 is strict-complete for the current active Hermes target and the Phase 3 integrated artifact chain passes local strict-frontier audit checks; final Phase 3 completion claim remains separate."
     if current_frontier.get("status") == PHASE_2_STRICT_COMPLETE:
         return "Phase 2 is strict-complete for both recorded subject and current active Hermes target; Phase 3+ remain blocked."
     if recorded_frontier.get("status") == PHASE_2_STRICT_COMPLETE:
@@ -672,6 +791,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--phase3-plan", required=True, type=Path)
     parser.add_argument("--phase3-readiness", required=True, type=Path)
     parser.add_argument("--phase3-historical", required=True, type=Path)
+    parser.add_argument("--phase3-local-real-smoke", type=Path)
+    parser.add_argument("--phase3-gepa-execution", type=Path)
+    parser.add_argument("--phase3-noop-apply-closure", type=Path)
+    parser.add_argument("--phase3-post-noop-recheck", type=Path)
     parser.add_argument("--phase4-completion", required=True, type=Path)
     parser.add_argument("--phase5-readiness", required=True, type=Path)
     parser.add_argument("--phase5-formal", required=True, type=Path)
@@ -688,6 +811,10 @@ def main(argv: list[str] | None = None) -> int:
         phase3_plan_path=args.phase3_plan,
         phase3_readiness_path=args.phase3_readiness,
         phase3_historical_path=args.phase3_historical,
+        phase3_local_real_smoke_path=args.phase3_local_real_smoke,
+        phase3_gepa_execution_path=args.phase3_gepa_execution,
+        phase3_noop_apply_closure_path=args.phase3_noop_apply_closure,
+        phase3_post_noop_recheck_path=args.phase3_post_noop_recheck,
         phase4_completion_path=args.phase4_completion,
         phase5_readiness_path=args.phase5_readiness,
         phase5_formal_path=args.phase5_formal,

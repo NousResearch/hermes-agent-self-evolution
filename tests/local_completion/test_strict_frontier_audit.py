@@ -7,6 +7,7 @@ import subprocess
 from hashlib import sha256
 from pathlib import Path
 
+from evolution.local_completion import strict_frontier_audit
 from evolution.local_completion.strict_frontier_audit import (
     CURRENT_BASELINE_REVALIDATION_REQUIRED,
     PHASE_2_STRICT_COMPLETE,
@@ -154,6 +155,109 @@ def _fixture_inputs(tmp_path: Path, active_repo: Path, subject: dict[str, str]) 
     }
 
 
+def _phase3_integrated_chain_inputs(tmp_path: Path) -> dict[str, Path]:
+    local_real_smoke = _write_json(
+        tmp_path / "reports" / "phase3_local_real_smoke.json",
+        {
+            "schema_version": "hse-phase3-local-real-smoke-execution-v1",
+            "status": "PHASE3_LOCAL_REAL_SMOKE_EXECUTION_PASSED_SEPARATE_GEPA_DSPY_APPROVAL_STILL_REQUIRED",
+            "local_real_smoke_passed": True,
+            "decision": {
+                "phase3_execution_ready_now": False,
+                "active_apply_ready_now": False,
+                "do_not_claim": ["phase3_strict_completion", "overall_HSE_project_completion"],
+            },
+        },
+    )
+    gepa_execution = _write_json(
+        tmp_path / "reports" / "phase3_gepa_execution.json",
+        {
+            "schema_version": "hse-phase3-gepa-dspy-candidate-optimization-execution-v1",
+            "status": "PHASE3_GEPA_DSPY_CANDIDATE_OPTIMIZATION_EXECUTION_PASSED_NO_ACTIVE_APPLY",
+            "passed": True,
+            "boundary_ledger": {
+                "bounded_local_dspy_gepa_optimizer_executed": True,
+                "candidate_optimization_command_executed": True,
+                "external_llm_calls_performed": False,
+                "github_query_performed": False,
+                "github_write_performed": False,
+                "provider_or_model_spend_performed": False,
+                "network_calls_performed": False,
+                "active_apply_performed": False,
+                "cron_or_gateway_mutation_performed": False,
+                "deploy_or_publication_performed": False,
+                "phase3_strict_completion_claimed": False,
+                "overall_hse_project_completion_claimed": False,
+            },
+            "decision": {"phase3_strict_completion_ready_to_claim": False, "active_apply_performed": False},
+        },
+    )
+    noop_apply_closure = _write_json(
+        tmp_path / "reports" / "phase3_noop_apply_closure.json",
+        {
+            "schema_version": "hse-phase3-noop-apply-closure-reconciliation-v1",
+            "status": "PHASE3_NOOP_APPLY_CLOSURE_RECONCILED_STRICT_FRONTIER_RECHECK_PREPARED_NOT_EXECUTED",
+            "reconciliation_passed": True,
+            "boundary_ledger": {
+                "github_query_performed": False,
+                "github_write_performed": False,
+                "provider_or_model_spend_performed": False,
+                "network_calls_performed": False,
+                "active_apply_performed": False,
+                "active_runtime_mutation_performed": False,
+                "cron_or_gateway_mutation_performed": False,
+                "deploy_or_publication_performed": False,
+                "phase3_strict_completion_claimed": False,
+                "overall_hse_project_completion_claimed": False,
+                "strict_frontier_recheck_executed": False,
+                "strict_frontier_recheck_prepared": True,
+                "apply_lane_closed_no_active_write_required": True,
+            },
+            "closure_reconciliation": {
+                "apply_lane_closed": True,
+                "apply_lane_status": "NO_ACTIVE_WRITE_REQUIRED",
+                "semantic_noop_confirmed": True,
+                "active_apply_needed": False,
+                "active_apply_recommended": False,
+                "active_apply_performed": False,
+                "active_runtime_mutation_performed": False,
+            },
+            "decision": {"phase3_strict_completion_ready_to_claim": False, "active_apply_performed": False},
+        },
+    )
+    post_noop_recheck = _write_json(
+        tmp_path / "reports" / "phase3_post_noop_recheck.json",
+        {
+            "schema_version": "hse-phase3-post-noop-apply-strict-frontier-recheck-execution-v1",
+            "status": "PHASE3_POST_NOOP_APPLY_STRICT_FRONTIER_RECHECK_EXECUTED_FAIL_CLOSED_PHASE2_FRONTIER_CONFIRMED",
+            "recheck_passed": True,
+            "boundary_ledger": {
+                "github_query_performed": False,
+                "github_write_performed": False,
+                "provider_or_model_spend_performed": False,
+                "network_calls_performed": False,
+                "active_apply_performed": False,
+                "active_runtime_mutation_performed": False,
+                "cron_or_gateway_mutation_performed": False,
+                "deploy_or_publication_performed": False,
+                "phase3_strict_completion_claimed": False,
+                "overall_hse_project_completion_claimed": False,
+            },
+            "decision": {
+                "current_active_frontier_confirmed": PHASE_2_STRICT_COMPLETE,
+                "phase3_strict_complete": False,
+                "phase3_strict_completion_ready_to_claim": False,
+            },
+        },
+    )
+    return {
+        "phase3_local_real_smoke_path": local_real_smoke,
+        "phase3_gepa_execution_path": gepa_execution,
+        "phase3_noop_apply_closure_path": noop_apply_closure,
+        "phase3_post_noop_recheck_path": post_noop_recheck,
+    }
+
+
 def _run_audit(tmp_path: Path, active_repo: Path, inputs: dict[str, Path]) -> dict:
     result = write_strict_frontier_audit(
         active_hermes_repo=active_repo,
@@ -164,6 +268,47 @@ def _run_audit(tmp_path: Path, active_repo: Path, inputs: dict[str, Path]) -> di
     report = json.loads(Path(result["report_path"]).read_text())
     assert Path(result["markdown_path"]).exists()
     return report
+
+
+def _audit_cli_args(tmp_path: Path, active_repo: Path, inputs: dict[str, Path]) -> list[str]:
+    return [
+        "--active-hermes-repo",
+        str(active_repo),
+        "--benchmark-closure",
+        str(inputs["benchmark_closure_path"]),
+        "--phase2-active-apply",
+        str(inputs["phase2_active_apply_path"]),
+        "--post-phase2-audit",
+        str(inputs["post_phase2_audit_path"]),
+        "--phase2-review",
+        str(inputs["phase2_review_path"]),
+        "--phase3-plan",
+        str(inputs["phase3_plan_path"]),
+        "--phase3-readiness",
+        str(inputs["phase3_readiness_path"]),
+        "--phase3-historical",
+        str(inputs["phase3_historical_path"]),
+        "--phase3-local-real-smoke",
+        str(inputs["phase3_local_real_smoke_path"]),
+        "--phase3-gepa-execution",
+        str(inputs["phase3_gepa_execution_path"]),
+        "--phase3-noop-apply-closure",
+        str(inputs["phase3_noop_apply_closure_path"]),
+        "--phase3-post-noop-recheck",
+        str(inputs["phase3_post_noop_recheck_path"]),
+        "--phase4-completion",
+        str(inputs["phase4_completion_path"]),
+        "--phase5-readiness",
+        str(inputs["phase5_readiness_path"]),
+        "--phase5-formal",
+        str(inputs["phase5_formal_path"]),
+        "--plan",
+        str(inputs["plan_path"]),
+        "--output-dir",
+        str(tmp_path / "audit-cli"),
+        "--generated-at",
+        "2026-07-04T02:41:00+09:00",
+    ]
 
 
 def test_strict_frontier_audit_marks_phase2_current_complete_when_active_matches_closure_subject(tmp_path: Path):
@@ -223,11 +368,82 @@ def test_strict_frontier_audit_does_not_accept_historical_phase3_or_phase5_compl
     assert report["phases"]["phase3"]["historical_claim_status"] == "completed_with_local_active_source_apply_and_bounded_smoke_validation"
     assert report["phases"]["phase3"]["strict_complete"] is False
     assert "phase3_current_plan_status_planned_not_executed" in report["phases"]["phase3"]["blockers"]
+    assert report["phases"]["phase3"]["integrated_chain"]["available"] is False
     assert report["phases"]["phase4"]["strict_complete"] is False
     assert "phase4_blocked_until_phase3_strict_complete_current" in report["phases"]["phase4"]["blockers"]
     assert report["phases"]["phase5"]["historical_claim_status"] == "FORMAL_PHASE5_COMPLETE_LOCAL_WITH_EXPLICIT_WAIVER"
     assert report["phases"]["phase5"]["strict_complete"] is False
     assert "production_continuous_loop_not_enabled" in report["phases"]["phase5"]["blockers"]
+
+
+def test_strict_frontier_audit_accepts_phase3_integrated_chain_when_current_phase2_and_noop_apply_closure_pass(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    phase3 = report["phases"]["phase3"]
+    assert phase3["strict_complete"] is True
+    assert phase3["strict_status"] == "STRICT_COMPLETE_CURRENT_ACTIVE"
+    assert phase3["integrated_chain"]["available"] is True
+    assert phase3["integrated_chain"]["complete"] is True
+    assert phase3["integrated_chain"]["checks"]["semantic_noop_apply_closure_satisfies_active_write_gate"] is True
+    assert "phase3_current_plan_status_planned_not_executed" not in phase3["blockers"]
+    assert "phase3_active_apply_not_approved_current_readiness" not in phase3["blockers"]
+    assert report["source_artifacts"]["phase3_noop_apply_closure"]["sha256"] == _sha(inputs["phase3_noop_apply_closure_path"])
+    assert report["phase3_strict_completion_claimed"] is False
+    assert report["github_query_performed"] is False
+    assert report["github_write_performed"] is False
+    assert report["active_apply_performed"] is False
+    assert report["overall_hse_project_completion_claimed"] is False
+
+
+def test_strict_frontier_audit_keeps_phase3_fail_closed_when_integrated_chain_missing(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    phase3 = report["phases"]["phase3"]
+    assert phase3["strict_complete"] is False
+    assert phase3["integrated_chain"]["available"] is False
+    assert phase3["integrated_chain"]["complete"] is False
+    assert "phase3_current_plan_status_planned_not_executed" in phase3["blockers"]
+
+
+def test_strict_frontier_audit_rejects_phase3_integrated_chain_with_forbidden_side_effects(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+    gepa_payload = json.loads(inputs["phase3_gepa_execution_path"].read_text())
+    gepa_payload["boundary_ledger"]["github_write_performed"] = True
+    _write_json(inputs["phase3_gepa_execution_path"], gepa_payload)
+
+    report = _run_audit(tmp_path, active_repo, inputs)
+
+    phase3 = report["phases"]["phase3"]
+    assert phase3["strict_complete"] is False
+    assert phase3["integrated_chain"]["available"] is True
+    assert phase3["integrated_chain"]["complete"] is False
+    assert "phase3_integrated_chain_forbidden_boundary_gepa_execution.boundary_ledger.github_write_performed" in phase3["blockers"]
+
+
+def test_strict_frontier_audit_cli_accepts_phase3_integrated_chain_flags(tmp_path: Path):
+    active_repo = tmp_path / "active-hermes"
+    subject = _init_active_hermes_repo(active_repo)
+    inputs = _fixture_inputs(tmp_path, active_repo, subject)
+    inputs.update(_phase3_integrated_chain_inputs(tmp_path))
+
+    assert strict_frontier_audit.main(_audit_cli_args(tmp_path, active_repo, inputs)) == 0
+    report = json.loads((tmp_path / "audit-cli" / "strict_frontier_audit.json").read_text())
+
+    assert report["phases"]["phase3"]["strict_complete"] is True
+    assert report["phases"]["phase3"]["integrated_chain"]["complete"] is True
+    assert report["phase3_strict_completion_claimed"] is False
 
 
 def _current_baseline_closure_inputs(tmp_path: Path, active_repo: Path, subject: dict[str, str]) -> dict[str, Path]:
