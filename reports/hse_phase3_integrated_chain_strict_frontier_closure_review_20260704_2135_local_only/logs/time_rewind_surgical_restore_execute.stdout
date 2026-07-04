@@ -1,0 +1,21 @@
+Rewind plan for 20260704-123549-before-hse-phase3-integrated-chain-closure-revie
+  mode: surgical
+  restore entries: 1
+  missing in anchor: 0
+  conflicts: 1
+  remove candidates: 0
+Conflicts:
+  - output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json: changed since anchor but not present in journal
+Anchor created: rescue-20260704-123748-before-rewind-to-20260704-123549-before-hse-phas
+  root: /Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution
+  files: 8055
+  dirs: 1878
+  symlinks: 0
+  hash-only: 64
+  skipped: 334
+  seal: 5e2099eef788ab19e7ae8d290da3972291a9b53fe5315ab06df35cfb046264ec
+  OK restored file output/phase4-code-evolution/pytest-freeze-comparator/cli-pass/freeze_comparison_report.json
+Restored entries: 1
+Removed added paths: 0
+Failures: 0
+Rescue anchor: rescue-20260704-123748-before-rewind-to-20260704-123549-before-hse-phas

@@ -1,0 +1,33 @@
+{
+  "artifact_paths": {
+    "evidence": {
+      "bytes": 13133,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_evidence.json",
+      "sha256": "0e2de5a17de90a7d400c454a9843779b62d9b4027c3efa272c334fcb2d9e8c2e"
+    },
+    "manifest": {
+      "bytes": 14633,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review_manifest.json",
+      "sha256": "ad61a0c6239261597afbc09d6fcd6c3bc32e657ac8ec7f614929ac6932986790"
+    },
+    "markdown": {
+      "bytes": 3011,
+      "exists": true,
+      "is_file": true,
+      "path": "/Users/snw/.hermes/evolution/repos/hermes-agent-self-evolution/reports/hse_phase3_integrated_chain_strict_frontier_closure_review_20260704_2135_local_only/phase3_integrated_chain_strict_frontier_closure_review.md",
+      "sha256": "ca54450440ec8c869748810e5ef1637fbde8453166e27ddbd1c4ec6abb70c709"
+    }
+  },
+  "final_qa": {
+    "score": 0.97,
+    "session": "qa-8ac77d1c",
+    "threshold": 0.9,
+    "verdict": "PASS"
+  },
+  "schema_version": "hse-phase3-integrated-chain-strict-frontier-closure-review-qa-v1",
+  "verdict_summary": "Closure review correctly blocks official Phase 3 claim promotion because top-level/current-active frontier remains Phase 2/highest=2 while accepting the integrated chain as local audit evidence."
+}
