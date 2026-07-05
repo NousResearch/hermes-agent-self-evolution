@@ -40,3 +40,32 @@ def test_instruction_identical_to_baseline_falls_back():
         baseline_instr
     )
     assert _extract_evolved_body(m) == "ORIGINAL BODY 123"
+
+
+def test_collapsed_instruction_falls_back_to_baseline():
+    """Overfit/collapse guard: when the optimizer rewrites the instruction into
+    something far shorter than the baseline body (a narrow task recipe overfit to
+    the synthetic eval set), we must NOT substitute it — that would replace a rich
+    reference skill with a stub. Reproduces the observed biofigure failure: a large
+    skill body collapsing to a tiny task-specific procedure."""
+    big_body = "RICH SKILL BODY. " * 500  # ~8.5KB, like a real reference skill
+    m = SkillModule(big_body)
+    m.predictor.predict.signature = m.predictor.predict.signature.with_instructions(
+        "Embed one WikiPathways SVG and export a PDF with credit."  # tiny overfit
+    )
+    # evolved instruction is <60% of baseline body -> guard rejects it
+    assert _extract_evolved_body(m) == big_body
+
+
+def test_substantial_rewrite_is_accepted():
+    """A rewrite that preserves most of the body (genuine refinement, not a
+    collapse) is still accepted — the shrink guard must not block real evolution."""
+    body = "STEP ONE do X. STEP TWO do Y. STEP THREE do Z. " * 20
+    m = SkillModule(body)
+    rewritten = "STEP ONE do X carefully. STEP TWO do Y then verify. STEP THREE do Z and log. " * 20
+    m.predictor.predict.signature = m.predictor.predict.signature.with_instructions(
+        rewritten
+    )
+    out = _extract_evolved_body(m)
+    assert out == rewritten.strip()
+    assert out != body

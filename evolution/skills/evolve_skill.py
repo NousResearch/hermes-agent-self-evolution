@@ -83,6 +83,21 @@ def _extract_evolved_body(optimized_module) -> str:
     if evolved == _baseline_instruction():
         return baseline_body
 
+    # Collapse / overfit guard. GEPA/MIPRO optimize the signature instruction
+    # against a small synthetic eval set. For a knowledge-dense reference skill
+    # (many sections, tables, pitfalls) the optimizer will happily rewrite that
+    # instruction into a narrow, task-specific procedure that scores well on the
+    # eval examples but throws away the bulk of the skill. Substituting it would
+    # replace a rich skill with an overfit stub (observed: a 15KB biofigure skill
+    # collapsed to a 2KB "embed one WikiPathways SVG" recipe, -86% body). Only
+    # accept the evolved instruction when it preserves a substantial fraction of
+    # the baseline body; otherwise fall back and let a human review the saved
+    # variant. `SHRINK_FLOOR` is deliberately conservative — genuine instruction
+    # refinements on short procedural skills stay well above it.
+    SHRINK_FLOOR = 0.6
+    if baseline_body and len(evolved) < SHRINK_FLOOR * len(baseline_body):
+        return baseline_body
+
     return evolved
 
 
