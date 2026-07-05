@@ -33,6 +33,59 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def _baseline_instruction() -> str:
+    """The un-optimized signature instruction (TaskWithSkill docstring).
+
+    Built fresh so we can detect whether the optimizer actually changed the
+    instruction. Kept as a function (not a constant) so it tracks the real
+    signature if the module definition changes.
+    """
+    return SkillModule("").predictor.predict.signature.instructions.strip()
+
+
+def _extract_evolved_body(optimized_module) -> str:
+    """Extract the evolved skill body from a compiled DSPy module.
+
+    GEPA/MIPRO optimize the predictor's *signature instructions*, not the
+    module's ``skill_text`` input field (which is passed verbatim on every
+    forward pass and is therefore never mutated). Reading ``skill_text`` was the
+    original bug: it returned the ORIGINAL body unchanged, so every evolved
+    skill came out byte-identical to the baseline.
+
+    We prefer the optimized instruction, but ONLY when it actually differs from
+    the un-optimized ``TaskWithSkill`` docstring. When the optimizer left the
+    instruction unchanged (or produced only the generic wrapper), we fall back
+    to ``skill_text`` so a real run never overwrites a good skill with generic
+    boilerplate or an empty diff.
+    """
+    baseline_body = getattr(optimized_module, "skill_text", "") or ""
+
+    # Canonical DSPy access: iterate compiled predictors, read optimized
+    # signature instructions.
+    instructions = None
+    try:
+        for _name, predictor in optimized_module.named_predictors():
+            sig = getattr(predictor, "signature", None)
+            instr = getattr(sig, "instructions", None) if sig is not None else None
+            if instr:
+                instructions = instr
+                break
+    except Exception:
+        instructions = None
+
+    if not instructions:
+        return baseline_body
+
+    evolved = instructions.strip()
+
+    # If the optimizer didn't change the instruction from the stock docstring,
+    # there's no real evolution — keep the original body.
+    if evolved == _baseline_instruction():
+        return baseline_body
+
+    return evolved
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -153,9 +206,13 @@ def evolve(
     start_time = time.time()
 
     try:
+        # dspy >=3 renamed the GEPA budget arg: `max_steps` was removed in
+        # favour of `max_metric_calls` (and `auto=`). Passing `max_steps` raises
+        # TypeError and silently drops every run into the MIPROv2 fallback. Use
+        # the current arg so GEPA actually runs when it's available.
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_metric_calls=max(iterations, 2),
         )
 
         optimized_module = optimizer.compile(
@@ -179,8 +236,14 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # GEPA/MIPRO optimize the predictor's *signature instructions*, not the
+    # `skill_text` input field (which is passed verbatim on every forward pass
+    # and is therefore never mutated). Reading `optimized_module.skill_text`
+    # here returns the ORIGINAL body unchanged — so the evolved skill always
+    # came out byte-identical to the baseline. Pull the compiled instruction
+    # from the optimized predictor instead, and fall back to skill_text only if
+    # no optimized instruction is available.
+    evolved_body = _extract_evolved_body(optimized_module)
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
