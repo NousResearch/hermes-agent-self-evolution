@@ -227,6 +227,8 @@ def evolve(
     improvement = avg_evolved - avg_baseline
 
     # ── 9. Report results ───────────────────────────────────────────────
+    material_diff = evolved_full != skill["raw"]
+
     table = Table(title="Evolution Results")
     table.add_column("Metric", style="bold")
     table.add_column("Baseline", justify="right")
@@ -248,6 +250,7 @@ def evolve(
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
+    table.add_row("Material Diff", "", "yes" if material_diff else "no", "")
 
     console.print()
     console.print(table)
@@ -280,14 +283,18 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "material_diff": material_diff,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if improvement > 0 and material_diff:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif improvement > 0 and not material_diff:
+        console.print(f"\n[yellow]⚠ Eval score improved by {improvement:+.3f}, but the saved skill text is identical to baseline.[/yellow]")
+        console.print("  Treat this as optimizer-instruction improvement only; do not deploy as a skill change.")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
