@@ -33,6 +33,16 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def has_material_diff(baseline_full: str, evolved_full: str) -> bool:
+    """Return whether the saved SKILL.md candidate differs from baseline.
+
+    Scores can improve because optimizer state changed without producing a
+    deployable skill-file diff. Treat that as non-material so callers do not
+    advertise a deployable improvement when the written artifact is identical.
+    """
+    return evolved_full != baseline_full
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -118,7 +128,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -155,7 +165,8 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_metric_calls=iterations,
+            reflection_lm=dspy.LM(optimizer_model),
         )
 
         optimized_module = optimizer.compile(
@@ -185,7 +196,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -226,6 +237,8 @@ def evolve(
     improvement = avg_evolved - avg_baseline
 
     # ── 9. Report results ───────────────────────────────────────────────
+    material_diff = has_material_diff(skill["raw"], evolved_full)
+
     table = Table(title="Evolution Results")
     table.add_column("Metric", style="bold")
     table.add_column("Baseline", justify="right")
@@ -247,6 +260,7 @@ def evolve(
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
+    table.add_row("Material Diff", "", "yes" if material_diff else "no", "")
 
     console.print()
     console.print(table)
@@ -279,14 +293,18 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "material_diff": material_diff,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if improvement > 0 and material_diff:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif improvement > 0 and not material_diff:
+        console.print(f"\n[yellow]⚠ Eval score improved by {improvement:+.3f}, but the saved skill text is identical to baseline.[/yellow]")
+        console.print("  Treat this as optimizer-instruction improvement only; do not deploy as a skill change.")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
