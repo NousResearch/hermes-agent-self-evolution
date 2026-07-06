@@ -104,11 +104,13 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None, pred_name=None, pred_trace=None):
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    Supports both classic DSPy metrics (example, prediction, trace) and the
+    current GEPA feedback-metric shape
+    (gold, pred, trace, pred_name, pred_trace). For GEPA, return structured
+    feedback so reflection has something useful to optimize against.
     """
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
@@ -116,24 +118,34 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     task = getattr(example, "task_input", "") or ""
 
     if not agent_output.strip():
-        return 0.0
+        score = 0.0
+    else:
+        # Quick heuristic scoring (for speed during optimization)
+        # Full LLM-as-judge scoring is expensive — use it selectively
+        score = 0.5  # Base score for non-empty output
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
+        # Check if key phrases from expected behavior appear
+        expected_lower = expected.lower()
+        output_lower = agent_output.lower()
 
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
-    output_lower = agent_output.lower()
+        # Simple keyword overlap as a fast proxy
+        expected_words = set(expected_lower.split())
+        output_words = set(output_lower.split())
+        if expected_words:
+            overlap = len(expected_words & output_words) / len(expected_words)
+            score = 0.3 + (0.7 * overlap)
 
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
-    if expected_words:
-        overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
+        score = min(1.0, max(0.0, score))
 
-    return min(1.0, max(0.0, score))
+    if pred_name is not None or pred_trace is not None:
+        feedback = (
+            f"Score {score:.3f} for task: {task[:300]}\n"
+            f"Expected behavior: {expected[:600]}\n"
+            f"Observed output: {agent_output[:600]}"
+        )
+        return score, feedback
+
+    return score
 
 
 def _parse_score(value) -> float:
