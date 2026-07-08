@@ -21,7 +21,8 @@ from rich.table import Table
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
-from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.fitness import make_skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.preference import load_preference_book
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -140,6 +141,16 @@ def evolve(
     lm = dspy.LM(eval_model)
     dspy.configure(lm=lm)
 
+    # Alpha-imprint preference signal — auto-discovers 👍/👎 feedback (imprints)
+    # under HERMES_HOME. When present, the fitness metric rewards variants that
+    # match what users approved and avoid what they rejected; when absent the
+    # metric is exactly the rubric heuristic as before.
+    pref_paths = [Path(config.preference_source)] if config.preference_source else None
+    preference_book = load_preference_book(paths=pref_paths)
+    if not preference_book.is_empty:
+        console.print(f"  Preference signal: {len(preference_book)} user 👍/👎 imprints loaded")
+    metric = make_skill_fitness_metric(preference_book, influence=config.preference_influence)
+
     # Create the baseline skill module
     baseline_module = SkillModule(skill["body"])
 
@@ -154,7 +165,7 @@ def evolve(
 
     try:
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
+            metric=metric,
             max_steps=iterations,
         )
 
@@ -167,7 +178,7 @@ def evolve(
         # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
+            metric=metric,
             auto="light",
         )
         optimized_module = optimizer.compile(
@@ -214,11 +225,11 @@ def evolve(
         # Score baseline
         with dspy.context(lm=lm):
             baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
+            baseline_score = metric(ex, baseline_pred)
             baseline_scores.append(baseline_score)
 
             evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
+            evolved_score = metric(ex, evolved_pred)
             evolved_scores.append(evolved_score)
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))

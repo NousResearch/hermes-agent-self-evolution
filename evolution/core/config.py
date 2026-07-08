@@ -31,6 +31,15 @@ class EvolutionConfig:
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
 
+    # Alpha-imprint preference signal (evolution.core.preference). When user
+    # feedback (👍/👎 imprints) is available, the critic blends how well a
+    # variant matches that revealed taste into fitness. preference_influence
+    # caps how far it can move any score; 0.0 disables the signal entirely.
+    # preference_source optionally points at a specific feedback JSONL; when
+    # unset, feedback is auto-discovered under HERMES_HOME.
+    preference_influence: float = 0.35
+    preference_source: Optional[str] = None
+
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate
     train_ratio: float = 0.5

@@ -663,6 +663,21 @@ Best Candidate → PR with full metrics
 
 ---
 
+## Human preference as a fitness signal (the alpha imprint)
+
+GEPA is only as good as its critic. Today the critic scores a candidate against a *synthetic* rubric ("expected_behavior") that the system invented — a guess at what "good" means that every phase (skills, tools, prompts, code) inherits. The highest-leverage improvement to the whole pipeline is not another target to optimize; it is a better critic.
+
+The best available signal is the one hermes-agent now collects for free: real users tapping 👍 / 👎 on Hermes' replies ("imprints", `memories/imprints.jsonl`). Aggregated, those taps are a standing model of what the community approves of — the same role Max Pollard's imprinting theory gives the "alpha imprint": the internalized voice of the tribe that rates the self. Here it rates the *evolving* self, so variants are selected by how well they match what users approved and avoid what they rejected.
+
+`evolution/core/preference.py` turns feedback into a `PreferenceBook`. For each eval example it retrieves the approved/rejected replies relevant to that task (token overlap × recency decay), and the fitness metric blends how well a candidate matches that revealed taste into the score. Two rules keep it sound:
+
+- **It only speaks when the tribe has spoken.** With no relevant feedback the weight is 0 and fitness is byte-for-byte what it is today.
+- **It nudges, never overrides.** A capped `preference_influence` (default 0.35) bounds how far preference can move any score, so sparse or noisy feedback cannot hijack evolution. A neutral verdict never moves the score at all.
+
+This also answers Open Question 2 (eval data for skills without much history): the signal accrues from real use instead of synthetic guessing, and it is the concrete first brick of the Phase 5 feedback loop.
+
+---
+
 ## Constraints & Guardrails
 
 Every candidate variant must pass ALL of these before it can be considered valid. Variants that fail any constraint are discarded — GEPA/MIPROv2 never see them as successful.
@@ -773,6 +788,7 @@ See the **Constraints & Guardrails** section above for the full enforcement list
    - Option A: LLM-generated synthetic test cases
    - Option B: Manual curation by skill authors
    - Option C: Community-contributed eval sets
+   - Option D: Real 👍/👎 preference signals as they accrue from use — see "Human preference as a fitness signal (the alpha imprint)"
 
 3. Should evolved skills be versioned separately from the main repo?
    - Recommendation: Git branches per evolution run, merge winning variants to main
