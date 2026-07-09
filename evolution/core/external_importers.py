@@ -118,25 +118,35 @@ def _validate_eval_example(
     }
 
 
-def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
-    """Quick heuristic check if a message might be relevant to a skill.
+def _relevance_score(text: str, skill_name: str, skill_text: str) -> int:
+    """Heuristic relevance strength between a message and a skill.
 
-    Uses keyword overlap between the message and skill description/name.
-    This is a cheap pre-filter before the LLM does proper relevance scoring.
-    Returns True if the message shares enough vocabulary with the skill.
+    Returns an integer score (0 = no signal). Used both as a boolean
+    pre-filter (score > 0) and to RANK candidates so the LLM scoring budget
+    is spent on the strongest matches first — an unranked cap was observed
+    to send the chronologically-first N candidates to the LLM while stronger
+    matches beyond the cap were never scored.
+
+    Scoring:
+      +10  exact full skill-name phrase match
+      +3   per skill-name word (>3 chars) found in the message
+      +1   per keyword (from the skill's first 500 chars) found in the message
+           (only counts when >= 2 keywords match, mirroring the old boolean rule)
     """
     text_lower = text.lower()
     skill_lower = skill_name.lower().replace("-", " ").replace("_", " ")
 
+    score = 0
+
     # Exact full skill name match (handles short names like "mcp", "tdd", "git")
     if skill_lower in text_lower:
-        return True
+        score += 10
 
     # Individual word match (only words > 3 chars to avoid false positives
     # from short fragments like "run", "use", etc.)
     for word in skill_lower.split():
         if len(word) > 3 and word in text_lower:
-            return True
+            score += 3
 
     # Extract meaningful keywords from skill text (first 500 chars)
     skill_keywords = set()
@@ -145,10 +155,22 @@ def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
         if len(word) > 4:
             skill_keywords.add(word)
 
-    # Require at least 2 keyword matches
+    # Require at least 2 keyword matches before keywords contribute
     message_words = set(re.sub(r'[^a-z\s]', '', text_lower).split())
     overlap = message_words & skill_keywords
-    return len(overlap) >= 2
+    if len(overlap) >= 2:
+        score += len(overlap)
+
+    return score
+
+
+def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
+    """Quick heuristic check if a message might be relevant to a skill.
+
+    Thin boolean wrapper over :func:`_relevance_score` (kept for API
+    compatibility with existing callers/tests).
+    """
+    return _relevance_score(text, skill_name, skill_text) > 0
 
 
 # ── Importers ─────────────────────────────────────────────────────────────
@@ -469,11 +491,18 @@ class RelevanceFilter:
         # Stage 0: drop messages missing required fields
         messages = [m for m in messages if m.get("task_input") and m.get("source")]
 
-        # Stage 1: cheap heuristic pre-filter
-        candidates = [
-            m for m in messages
-            if _is_relevant_to_skill(m["task_input"], skill_name, skill_text)
+        # Stage 1: cheap heuristic pre-filter, RANKED by relevance strength so
+        # the LLM scoring budget (the cap below) goes to the strongest matches
+        # instead of the chronologically-first ones.
+        scored = [
+            (m, _relevance_score(m["task_input"], skill_name, skill_text))
+            for m in messages
         ]
+        candidates = [m for m, s in sorted(
+            (pair for pair in scored if pair[1] > 0),
+            key=lambda pair: pair[1],
+            reverse=True,
+        )]
 
         # If heuristics found too few, sample remaining messages
         if len(candidates) < max_examples:
