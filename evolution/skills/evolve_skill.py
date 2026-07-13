@@ -137,7 +137,12 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = dspy.LM(eval_model, think=False) if eval_model.startswith("ollama_chat/") else dspy.LM(eval_model)
+    reflection_lm = (
+        dspy.LM(optimizer_model, think=False)
+        if optimizer_model.startswith("ollama_chat/")
+        else dspy.LM(optimizer_model)
+    )
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -152,28 +157,16 @@ def evolve(
 
     start_time = time.time()
 
-    try:
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
-        )
-
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-            valset=valset,
-        )
-    except Exception as e:
-        # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
-        console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
-        optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
-            auto="light",
-        )
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-        )
+    optimizer = dspy.GEPA(
+        metric=skill_fitness_metric,
+        max_full_evals=iterations,
+        reflection_lm=reflection_lm,
+    )
+    optimized_module = optimizer.compile(
+        baseline_module,
+        trainset=trainset,
+        valset=valset,
+    )
 
     elapsed = time.time() - start_time
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
@@ -185,7 +178,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill")
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"

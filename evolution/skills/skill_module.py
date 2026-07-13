@@ -103,12 +103,16 @@ class SkillModule(dspy.Module):
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        signature = dspy.Signature("task_input -> output", instructions=skill_text)
+        self.predictor = dspy.Predict(signature)
+
+    @property
+    def skill_text(self) -> str:
+        """Return the instruction text that DSPy optimizers can mutate."""
+        return self.predictor.signature.instructions
 
     def forward(self, task_input: str) -> dspy.Prediction:
         result = self.predictor(
-            skill_instructions=self.skill_text,
             task_input=task_input,
         )
         return dspy.Prediction(output=result.output)
