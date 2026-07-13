@@ -8,6 +8,7 @@ C) Golden sets — hand-curated JSONL files
 
 import json
 import random
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -133,16 +134,33 @@ class SyntheticDatasetBuilder:
             )
 
         # Parse the generated test cases
+        response = result.test_cases.strip()
+        if response.startswith("```"):
+            fence, newline, fenced_body = response.partition("\n")
+            if fence.lower() not in {"```", "```json"} or not newline or not fenced_body.endswith("```"):
+                raise ValueError(f"Could not parse fenced test cases from LLM output: {response[:200]}")
+            response = fenced_body[:-3].strip()
         try:
-            cases_raw = json.loads(result.test_cases)
+            cases_raw = json.loads(response)
         except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+            start = response.find("[")
+            if start < 0:
+                raise ValueError(f"Could not parse test cases from LLM output: {response[:200]}")
+            try:
+                cases_raw, end = json.JSONDecoder().raw_decode(response[start:])
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Could not parse test cases from LLM output: {response[:200]}") from e
+
+            trailing = response[start + end:].strip()
+            completion = re.fullmatch(
+                r"\[\[ ## completed ## \]\](?:\s+Generation finished for [A-Za-z0-9_.-]+ skill cases\.)?",
+                trailing,
+            )
+            if not completion:
+                raise ValueError(f"Unexpected text after test-case JSON: {trailing[:200]}")
+
+        if not isinstance(cases_raw, list):
+            raise ValueError("Test-case JSON must be an array")
 
         examples = [
             EvalExample(
