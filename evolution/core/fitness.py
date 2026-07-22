@@ -115,6 +115,13 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
 
+    # Dataset generators may emit rubrics as a list of bullet strings —
+    # coerce to text before keyword-overlap scoring.
+    if isinstance(expected, list):
+        expected = "\n".join(str(item) for item in expected)
+    if isinstance(agent_output, list):
+        agent_output = "\n".join(str(item) for item in agent_output)
+
     if not agent_output.strip():
         return 0.0
 

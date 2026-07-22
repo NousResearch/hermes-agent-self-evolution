@@ -118,7 +118,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -152,10 +152,17 @@ def evolve(
 
     start_time = time.time()
 
+    # GEPA (dspy>=3.2) requires a 5-arg metric (gold, pred, trace, pred_name,
+    # pred_trace). It must return a plain float: dspy.Evaluate aggregates
+    # metric results with sum(), so dict/Prediction returns break full evals.
+    def _gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+        return skill_fitness_metric(gold, pred)
+
     try:
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=_gepa_metric,
+            max_full_evals=iterations,
+            reflection_lm=dspy.LM(optimizer_model, temperature=1.0, max_tokens=32000),
         )
 
         optimized_module = optimizer.compile(
@@ -179,13 +186,15 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # GEPA evolves the predictor's instruction (which is where SkillModule
+    # installs the skill body), so pull the mutated instruction back out of
+    # the optimized predictor's signature.
+    evolved_body = optimized_module.predictor.predict.signature.instructions
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
