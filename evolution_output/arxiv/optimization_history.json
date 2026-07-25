@@ -1,0 +1,20 @@
+[
+  {
+    "iteration": 1,
+    "best_mutator": "<lambda>",
+    "best_score": 1.0,
+    "content_length": 10171
+  },
+  {
+    "iteration": 2,
+    "best_mutator": "<lambda>",
+    "best_score": 1.0,
+    "content_length": 10273
+  },
+  {
+    "iteration": 3,
+    "best_mutator": "add_clarity_instruction",
+    "best_score": 1.0,
+    "content_length": 10340
+  }
+]

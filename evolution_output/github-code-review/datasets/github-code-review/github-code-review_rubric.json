@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    "Identifies security vulnerabilities (SQL injection, XSS, path traversal)",
+    "Checks for proper error handling and null checks",
+    "Verifies tests exist for new/changed functionality",
+    "Code style and consistency",
+    "Performance considerations noted",
+    "Documentation/comments adequacy"
+  ],
+  "weight_per_criterion": 1.0,
+  "must_catch_patterns": [
+    "security",
+    "error handling",
+    "testing"
+  ],
+  "bonus_criteria": [
+    "Suggests improvements",
+    "Notes duplicate code",
+    "API design feedback"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "criteria": [
+    "Forms correct hypothesis before acting",
+    "Uses minimal reproduction steps",
+    "Uses debugging tools effectively (logs, breakpoints, prints)",
+    "Identifies root cause, not just symptoms",
+    "Verifies fix works and doesn't regress",
+    "Documents the fix and reasoning"
+  ],
+  "weight_per_criterion": 1.0
+}

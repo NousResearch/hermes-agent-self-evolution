@@ -1,146 +1,194 @@
-"""Fitness functions for evaluating evolved artifacts.
+"""
+Fitness Evaluation for Hermes Agent Self-Evolution.
 
-Uses LLM-as-judge with rubrics to score agent outputs.
-Supports length penalties and multi-dimensional scoring.
+Implements LLM-as-Judge scoring with skill-specific rubrics.
+Used by GEPA to evaluate candidate skill variants.
 """
 
+import json
 import dspy
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
-from typing import Optional
+from pathlib import Path
 
-from evolution.core.config import EvolutionConfig
+from .dataset_builder import EvaluationExample, EvaluationDataset
+from typing import Dict, Any
+SkillRubric = Dict[str, Any]
 
 
 @dataclass
 class FitnessScore:
-    """Multi-dimensional fitness score."""
-    correctness: float = 0.0  # Did the agent produce correct output? (0-1)
-    procedure_following: float = 0.0  # Did it follow the skill's procedure? (0-1)
-    conciseness: float = 0.0  # Was it appropriately concise? (0-1)
-    length_penalty: float = 0.0  # Penalty for being too verbose (0-1, 0 = no penalty)
-    feedback: str = ""  # Textual feedback for GEPA's reflective analysis
-
-    @property
-    def composite(self) -> float:
-        """Weighted composite score."""
-        raw = (
-            0.5 * self.correctness
-            + 0.3 * self.procedure_following
-            + 0.2 * self.conciseness
-        )
-        return max(0.0, raw - self.length_penalty)
+    """Result of fitness evaluation."""
+    overall_score: float  # 0.0 - 1.0
+    criterion_scores: Dict[str, float]
+    reasoning: str
+    failures: List[str]
+    metadata: Dict[str, Any]
 
 
-class LLMJudge:
-    """LLM-as-judge scorer with rubric-based evaluation.
-
-    Scores agent outputs on multiple dimensions and provides
-    textual feedback that GEPA can use for reflective mutation.
+class FitnessEvaluator:
     """
-
-    class JudgeSignature(dspy.Signature):
-        """Evaluate an agent's response against an expected behavior rubric.
-
-        Score the response on three dimensions (0.0 to 1.0 each):
-        1. correctness: Did the response correctly address the task?
-        2. procedure_following: Did it follow the expected approach/procedure?
-        3. conciseness: Was it appropriately concise without omitting important info?
-
-        Also provide specific, actionable feedback on what could be improved.
-        """
-        task_input: str = dspy.InputField(desc="The task the agent was given")
-        expected_behavior: str = dspy.InputField(desc="Rubric describing what a good response looks like")
-        agent_output: str = dspy.InputField(desc="The agent's actual response")
-        skill_text: str = dspy.InputField(desc="The skill/instructions the agent was following")
-        correctness: float = dspy.OutputField(desc="Score 0.0-1.0: Did the response correctly address the task?")
-        procedure_following: float = dspy.OutputField(desc="Score 0.0-1.0: Did it follow the expected procedure?")
-        conciseness: float = dspy.OutputField(desc="Score 0.0-1.0: Appropriately concise?")
-        feedback: str = dspy.OutputField(desc="Specific, actionable feedback on what could be improved")
-
-    def __init__(self, config: EvolutionConfig):
-        self.config = config
-        self.judge = dspy.ChainOfThought(self.JudgeSignature)
-
-    def score(
+    Evaluates agent outputs against skill rubrics using LLM-as-Judge.
+    
+    Can be configured with different judge models for speed vs quality tradeoff.
+    """
+    
+    def __init__(
         self,
-        task_input: str,
-        expected_behavior: str,
-        agent_output: str,
-        skill_text: str,
-        artifact_size: Optional[int] = None,
-        max_size: Optional[int] = None,
-    ) -> FitnessScore:
-        """Score an agent output using LLM-as-judge."""
-
-        lm = dspy.LM(self.config.eval_model)
-
-        with dspy.context(lm=lm):
-            result = self.judge(
-                task_input=task_input,
-                expected_behavior=expected_behavior,
-                agent_output=agent_output,
-                skill_text=skill_text,
-            )
-
-        # Parse scores (clamp to 0-1)
-        correctness = _parse_score(result.correctness)
-        procedure_following = _parse_score(result.procedure_following)
-        conciseness = _parse_score(result.conciseness)
-
-        # Length penalty
-        length_penalty = 0.0
-        if artifact_size is not None and max_size is not None:
-            ratio = artifact_size / max_size
-            if ratio > 0.9:
-                # Penalty ramps from 0 at 90% to 0.3 at 100%+
-                length_penalty = min(0.3, (ratio - 0.9) * 3.0)
-
-        return FitnessScore(
-            correctness=correctness,
-            procedure_following=procedure_following,
-            conciseness=conciseness,
-            length_penalty=length_penalty,
-            feedback=str(result.feedback),
+        judge_model: str = "anthropic/claude-sonnet-4",
+        rubric: Optional[SkillRubric] = None
+    ):
+        self.judge_model = judge_model
+        self.rubric = rubric or {}
+        self.judge = dspy.Predict(self._judge_signature)
+    
+    @property
+    def _judge_signature(self):
+        return dspy.Signature(
+            "task, agent_response, skill_content, rubric, skill_name -> overall_score, criterion_scores, reasoning, failures",
+            instructions="""You are an expert evaluator scoring an AI agent's response against a skill rubric.
+            
+            Score each criterion 0.0-1.0. The overall_score is the weighted average.
+            failures should list specific things the agent missed or did wrong.
+            Be strict but fair - the rubric defines what 'good' looks like for this skill."""
         )
+    
+    def evaluate(
+        self,
+        example: EvaluationExample,
+        agent_response: str,
+        skill_content: str
+    ) -> FitnessScore:
+        """Evaluate a single agent response against the rubric."""
+        rubric_json = json.dumps(self.rubric.get(example.skill_name, example.expected_behavior))
+        
+        result = self.judge(
+            task=example.task_input,
+            agent_response=agent_response,
+            skill_content=skill_content[:6000],
+            rubric=rubric_json,
+            skill_name=example.skill_name
+        )
+        
+        # Parse results
+        try:
+            overall = float(getattr(result, 'overall_score', 0.5))
+        except:
+            overall = 0.5
+            
+        try:
+            criteria = json.loads(getattr(result, 'criterion_scores', '{}'))
+        except:
+            criteria = {}
+        
+        reasoning = getattr(result, 'reasoning', '')
+        failures = getattr(result, 'failures', [])
+        if isinstance(failures, str):
+            try:
+                failures = json.loads(failures)
+            except:
+                failures = [failures] if failures else []
+        
+        return FitnessScore(
+            overall_score=overall,
+            criterion_scores=criteria,
+            reasoning=reasoning,
+            failures=failures,
+            metadata={
+                "skill_name": example.skill_name,
+                "example_source": example.source,
+                "judge_model": self.judge_model
+            }
+        )
+    
+    def evaluate_batch(
+        self,
+        examples: List[EvaluationExample],
+        agent_responses: List[str],
+        skill_content: str
+    ) -> List[FitnessScore]:
+        """Evaluate multiple responses (for batch_runner parallel evaluation)."""
+        return [
+            self.evaluate(ex, resp, skill_content)
+            for ex, resp in zip(examples, agent_responses)
+        ]
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
-    """DSPy-compatible metric function for skill optimization.
-
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+class SkillFitnessAggregator:
     """
-    # The prediction should have an 'output' field with the agent's response
-    agent_output = getattr(prediction, "output", "") or ""
-    expected = getattr(example, "expected_behavior", "") or ""
-    task = getattr(example, "task_input", "") or ""
+    Aggregates fitness scores across a dataset split.
+    Computes mean, std, and pass rates for reporting.
+    """
+    
+    @staticmethod
+    def aggregate(scores: List[FitnessScore]) -> Dict[str, Any]:
+        if not scores:
+            return {"mean": 0.0, "std": 0.0, "pass_rate": 0.0, "n": 0}
+        
+        overall_scores = [s.overall_score for s in scores]
+        mean_score = sum(overall_scores) / len(overall_scores)
+        std_score = (sum((x - mean_score)**2 for x in overall_scores) / len(overall_scores))**0.5
+        pass_rate = sum(1 for x in overall_scores if x >= 0.7) / len(overall_scores)
+        
+        # Aggregate criterion scores
+        all_criteria = {}
+        for s in scores:
+            for criterion, score in s.criterion_scores.items():
+                if criterion not in all_criteria:
+                    all_criteria[criterion] = []
+                all_criteria[criterion].append(score)
+        
+        criterion_means = {
+            c: sum(v)/len(v) for c, v in all_criteria.items()
+        }
+        
+        # Common failures
+        all_failures = []
+        for s in scores:
+            all_failures.extend(s.failures)
+        from collections import Counter
+        failure_counts = Counter(all_failures).most_common(10)
+        
+        return {
+            "mean": mean_score,
+            "std": std_score,
+            "pass_rate": pass_rate,
+            "n": len(scores),
+            "criterion_means": criterion_means,
+            "top_failures": failure_counts
+        }
+    
+    @staticmethod
+    def compare(baseline_scores: List[FitnessScore], evolved_scores: List[FitnessScore]) -> Dict[str, Any]:
+        """Compare baseline vs evolved aggregate scores."""
+        base_agg = SkillFitnessAggregator.aggregate(baseline_scores)
+        evo_agg = SkillFitnessAggregator.aggregate(evolved_scores)
+        
+        improvement = evo_agg["mean"] - base_agg["mean"]
+        pct_improvement = improvement / base_agg["mean"] if base_agg["mean"] > 0 else 0
+        
+        return {
+            "baseline": base_agg,
+            "evolved": evo_agg,
+            "absolute_improvement": improvement,
+            "percent_improvement": pct_improvement,
+            "statistically_significant": pct_improvement > 0.1 and evo_agg["pass_rate"] > base_agg["pass_rate"]
+        }
 
-    if not agent_output.strip():
-        return 0.0
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
-
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
-    output_lower = agent_output.lower()
-
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
-    if expected_words:
-        overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
-
-    return min(1.0, max(0.0, score))
-
-
-def _parse_score(value) -> float:
-    """Parse a score value, handling various LLM output formats."""
-    if isinstance(value, (int, float)):
-        return min(1.0, max(0.0, float(value)))
-    try:
-        return min(1.0, max(0.0, float(str(value).strip())))
-    except (ValueError, TypeError):
-        return 0.5  # Default to neutral on parse failure
+def make_fitness_function(
+    evaluator: FitnessEvaluator,
+    skill_content: str,
+    skill_name: str
+):
+    """
+    Creates a DSPy-compatible fitness function for GEPA.
+    
+    GEPA expects a function: (example, prediction) -> float
+    where prediction is the agent's output on that example.
+    """
+    def fitness(example: EvaluationExample, prediction: str) -> float:
+        score = evaluator.evaluate(example, prediction, skill_content)
+        return score.overall_score
+    
+    return fitness

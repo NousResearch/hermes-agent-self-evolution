@@ -1,0 +1,20 @@
+[
+  {
+    "iteration": 1,
+    "best_mutator": "add_clarity_instruction",
+    "best_score": 1.0,
+    "content_length": 14087
+  },
+  {
+    "iteration": 2,
+    "best_mutator": "add_conciseness_instruction",
+    "best_score": 1.0,
+    "content_length": 14160
+  },
+  {
+    "iteration": 3,
+    "best_mutator": "add_edge_case_handling",
+    "best_score": 1.0,
+    "content_length": 14245
+  }
+]

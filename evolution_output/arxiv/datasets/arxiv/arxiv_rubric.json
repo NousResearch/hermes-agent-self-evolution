@@ -1,0 +1,10 @@
+{
+  "criteria": [
+    "Finds relevant papers for the query",
+    "Extracts key information (method, results, limitations)",
+    "Synthesizes across multiple papers",
+    "Cites papers correctly with links",
+    "Identifies gaps/future work"
+  ],
+  "weight_per_criterion": 1.0
+}

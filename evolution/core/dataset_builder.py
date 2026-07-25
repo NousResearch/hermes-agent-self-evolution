@@ -1,201 +1,458 @@
-"""Evaluation dataset generation for hermes-agent-self-evolution.
+"""
+Evaluation Dataset Builder for Hermes Agent Self-Evolution.
 
-Sources:
-A) Synthetic generation — LLM reads a skill/tool/prompt and generates test cases
-B) SessionDB mining — extract real usage patterns and score with LLM-as-judge
-C) Golden sets — hand-curated JSONL files
+Builds train/val/holdout datasets from multiple sources:
+- Synthetic generation (primary bootstrapping)
+- SessionDB mining (real usage, LLM-as-judge scored)
+- Hand-curated golden sets (high-value skills)
+- Skill-specific auto-evaluation (where applicable)
 """
 
 import json
 import random
 from pathlib import Path
-from dataclasses import dataclass, field
-from typing import Optional
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass, asdict
+from abc import ABC, abstractmethod
 
 import dspy
 
-from evolution.core.config import EvolutionConfig
-
 
 @dataclass
-class EvalExample:
-    """A single evaluation example."""
-    task_input: str  # What the user asks
-    expected_behavior: str  # Rubric — what a good response looks like
-    difficulty: str = "medium"  # easy, medium, hard
-    category: str = "general"  # Category for stratified eval
-    source: str = "synthetic"  # synthetic, sessiondb, golden
+class EvaluationExample:
+    """Single evaluation example with task input and expected behavior rubric."""
+    task_input: str
+    expected_behavior: Dict[str, Any]  # Rubric, not exact text
+    metadata: Dict[str, Any]
+    source: str  # "synthetic", "sessiondb", "golden", "autoeval"
+    skill_name: str
 
-    def to_dict(self) -> dict:
+
+@dataclass 
+class EvaluationDataset:
+    """Train/validation/holdout split for a skill."""
+    skill_name: str
+    train: List[EvaluationExample]
+    val: List[EvaluationExample]
+    holdout: List[EvaluationExample]
+    rubric: Dict[str, Any]  # Skill-specific scoring rubric
+    
+    def to_jsonl(self, output_dir: Path) -> None:
+        """Save dataset splits as JSONL files."""
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for split_name, examples in [("train", self.train), ("val", self.val), ("holdout", self.holdout)]:
+            path = output_dir / f"{self.skill_name}_{split_name}.jsonl"
+            with open(path, 'w') as f:
+                for ex in examples:
+                    f.write(json.dumps(asdict(ex)) + "\n")
+        # Save rubric
+        rubric_path = output_dir / f"{self.skill_name}_rubric.json"
+        with open(rubric_path, 'w') as f:
+            json.dump(self.rubric, f, indent=2)
+    
+    @classmethod
+    def from_jsonl(cls, skill_name: str, input_dir: Path) -> "EvaluationDataset":
+        """Load dataset from JSONL files."""
+        splits = {}
+        for split_name in ["train", "val", "holdout"]:
+            path = input_dir / f"{skill_name}_{split_name}.jsonl"
+            examples = []
+            if path.exists():
+                with open(path) as f:
+                    for line in f:
+                        data = json.loads(line)
+                        examples.append(EvaluationExample(**data))
+            splits[split_name] = examples
+        
+        rubric_path = input_dir / f"{skill_name}_rubric.json"
+        rubric = {}
+        if rubric_path.exists():
+            with open(rubric_path) as f:
+                rubric = json.load(f)
+        
+        return cls(
+            skill_name=skill_name,
+            train=splits["train"],
+            val=splits["val"], 
+            holdout=splits["holdout"],
+            rubric=rubric
+        )
+
+
+class DatasetSource(ABC):
+    """Abstract base for dataset generation sources."""
+    
+    @abstractmethod
+    def generate(self, skill_name: str, skill_content: str, n_examples: int) -> List[EvaluationExample]:
+        """Generate evaluation examples for a skill."""
+        pass
+
+
+class SyntheticDatasetSource(DatasetSource):
+    """
+    Source A: Synthetic generation using a strong model.
+    
+    Reads the skill file → understands what it does → generates 15-30 
+    realistic (task_input, expected_behavior) pairs.
+    Expected_behavior is a rubric, not exact text.
+    """
+    
+    def __init__(self, generator_model: str = "anthropic/claude-opus-4"):
+        self.generator_model = generator_model
+        self.generator = dspy.Predict(self._generate_signature)
+    
+    @property
+    def _generate_signature(self):
+        return dspy.Signature(
+            "skill_name, skill_content -> task_input, expected_behavior_rubric",
+            instructions="""Generate a realistic evaluation example for the given skill.
+            The skill helps the agent perform a specific task. Create a task that would
+            require this skill, and a rubric describing what correct behavior looks like.
+            
+            The rubric should be a JSON object with scoring criteria, not exact expected output.
+            Example for github-code-review:
+            {
+                "criteria": [
+                    "Identifies security issues (SQL injection, XSS, etc.)",
+                    "Checks for proper error handling",
+                    "Verifies tests exist for new functionality",
+                    "Code style consistency",
+                    "Performance considerations noted"
+                ],
+                "must_catch": ["SQL injection on line 42", "Missing null check on line 15"],
+                "nice_to_have": ["Suggests using parameterized queries", "Notes duplicate code"]
+            }"""
+        )
+    
+    def generate(self, skill_name: str, skill_content: str, n_examples: int) -> List[EvaluationExample]:
+        examples = []
+        for i in range(n_examples):
+            # Use DSPy to generate examples
+            result = self.generator(
+                skill_name=skill_name,
+                skill_content=skill_content[:8000]  # Truncate if needed
+            )
+            try:
+                expected = json.loads(result.expected_behavior_rubric)
+            except:
+                expected = {"criteria": ["Follows skill procedure"], "raw": result.expected_behavior_rubric}
+            
+            examples.append(EvaluationExample(
+                task_input=result.task_input,
+                expected_behavior=expected,
+                metadata={"generation_index": i},
+                source="synthetic",
+                skill_name=skill_name
+            ))
+        return examples
+
+
+class SessionDBDatasetSource(DatasetSource):
+    """
+    Source B: SessionDB mining — real usage with LLM-as-judge scoring.
+    
+    Queries SessionDB for sessions where the skill was loaded.
+    Extracts task and agent response.
+    Uses LLM-as-judge to score on rubric.
+    High-scoring → "good" examples; low-scoring → failure cases for GEPA reflection.
+    """
+    
+    def __init__(self, hermes_agent_repo: Path, judge_model: str = "anthropic/claude-sonnet-4"):
+        self.hermes_agent_repo = Path(hermes_agent_repo)
+        self.judge_model = judge_model
+        self.judge = dspy.Predict(self._judge_signature)
+    
+    @property
+    def _judge_signature(self):
+        return dspy.Signature(
+            "task, agent_response, skill_content, rubric -> score, reasoning, failures",
+            instructions="""Score the agent's response on the skill rubric (0-1).
+            Output: score (float), reasoning (str), failures (list of what was missed)."""
+        )
+    
+    def _query_session_db(self, skill_name: str) -> List[Dict[str, Any]]:
+        """Query the session database for skill usage."""
+        # Import hermes session db
+        import sys
+        sys.path.insert(0, str(self.hermes_agent_repo))
+        from hermes_state import SessionStore
+        
+        store = SessionStore(self.hermes_agent_repo / "sessions")
+        sessions = store.list_sessions()
+        
+        skill_sessions = []
+        for session in sessions:
+            # Check if skill was loaded in this session
+            for msg in session.messages:
+                if skill_name.lower() in msg.content.lower():
+                    skill_sessions.append({
+                        "session_id": session.id,
+                        "messages": session.messages
+                    })
+                    break
+        return skill_sessions
+    
+    def _extract_task_response_pairs(self, sessions: List[Dict]) -> List[Tuple[str, str]]:
+        """Extract (task, response) pairs from sessions."""
+        pairs = []
+        for sess in sessions:
+            msgs = sess["messages"]
+            for i, msg in enumerate(msgs):
+                if msg.role == "user":
+                    # Find next assistant response
+                    for j in range(i+1, len(msgs)):
+                        if msgs[j].role == "assistant":
+                            pairs.append((msg.content, msgs[j].content))
+                            break
+        return pairs
+    
+    def generate(self, skill_name: str, skill_content: str, n_examples: int) -> List[EvaluationExample]:
+        # Get sessions where skill was used
+        sessions = self._query_session_db(skill_name)
+        if not sessions:
+            return []
+        
+        pairs = self._extract_task_response_pairs(sessions)
+        if not pairs:
+            return []
+        
+        # Use LLM-as-judge to score
+        examples = []
+        rubric = self._default_rubric(skill_name)
+        
+        for task, response in pairs[:n_examples * 2]:  # Get extra, filter by score
+            result = self.judge(
+                task=task,
+                agent_response=response,
+                skill_content=skill_content[:4000],
+                rubric=json.dumps(rubric)
+            )
+            
+            score = float(result.score) if hasattr(result, 'score') else 0.5
+            expected = rubric.copy()
+            expected["judge_score"] = score
+            expected["judge_reasoning"] = getattr(result, 'reasoning', '')
+            expected["judge_failures"] = getattr(result, 'failures', [])
+            
+            examples.append(EvaluationExample(
+                task_input=task,
+                expected_behavior=expected,
+                metadata={"session_source": True, "judge_score": score},
+                source="sessiondb",
+                skill_name=skill_name
+            ))
+        
+        # Sort by score, take top as "good" examples
+        examples.sort(key=lambda x: x.metadata.get("judge_score", 0), reverse=True)
+        return examples[:n_examples]
+    
+    def _default_rubric(self, skill_name: str) -> Dict[str, Any]:
         return {
-            "task_input": self.task_input,
-            "expected_behavior": self.expected_behavior,
-            "difficulty": self.difficulty,
-            "category": self.category,
-            "source": self.source,
+            "criteria": [
+                "Follows the skill's procedure",
+                "Produces correct/useful output",
+                "Stays within token budget",
+                "Handles edge cases appropriately"
+            ]
         }
 
-    @classmethod
-    def from_dict(cls, d: dict) -> "EvalExample":
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
-
-@dataclass
-class EvalDataset:
-    """Train/val/holdout split of evaluation examples."""
-    train: list[EvalExample] = field(default_factory=list)
-    val: list[EvalExample] = field(default_factory=list)
-    holdout: list[EvalExample] = field(default_factory=list)
-
-    @property
-    def all_examples(self) -> list[EvalExample]:
-        return self.train + self.val + self.holdout
-
-    def save(self, path: Path):
-        """Save dataset splits to JSONL files."""
-        path.mkdir(parents=True, exist_ok=True)
-        for split_name, split_data in [("train", self.train), ("val", self.val), ("holdout", self.holdout)]:
-            with open(path / f"{split_name}.jsonl", "w") as f:
-                for ex in split_data:
-                    f.write(json.dumps(ex.to_dict()) + "\n")
-
-    @classmethod
-    def load(cls, path: Path) -> "EvalDataset":
-        """Load dataset splits from JSONL files."""
-        dataset = cls()
-        for split_name in ["train", "val", "holdout"]:
-            split_file = path / f"{split_name}.jsonl"
-            if split_file.exists():
-                examples = []
-                with open(split_file) as f:
-                    for line in f:
-                        if line.strip():
-                            examples.append(EvalExample.from_dict(json.loads(line)))
-                setattr(dataset, split_name, examples)
-        return dataset
-
-    def to_dspy_examples(self, split: str = "train") -> list[dspy.Example]:
-        """Convert a split to DSPy Example objects."""
-        data = getattr(self, split)
-        return [
-            dspy.Example(
-                task_input=ex.task_input,
-                expected_behavior=ex.expected_behavior,
-            ).with_inputs("task_input")
-            for ex in data
-        ]
-
-
-class SyntheticDatasetBuilder:
-    """Generate evaluation datasets using a strong LLM.
-
-    Reads the target artifact (skill file, tool description, etc.)
-    and generates realistic (task_input, expected_behavior) pairs.
+class GoldenDatasetSource(DatasetSource):
     """
-
-    class GenerateTestCases(dspy.Signature):
-        """Generate realistic evaluation test cases for an agent skill or tool.
-
-        Given the full text of a skill/tool description, generate diverse test cases
-        that would exercise different aspects of the skill. Each test case should include:
-        - A realistic task_input (what a user would actually ask)
-        - An expected_behavior rubric (what a good response should contain/do, NOT exact text)
-        - A difficulty level (easy, medium, hard)
-        - A category (what aspect of the skill this tests)
-        """
-        artifact_text: str = dspy.InputField(desc="The full text of the skill/tool/prompt being tested")
-        artifact_type: str = dspy.InputField(desc="Type: 'skill', 'tool_description', or 'prompt_section'")
-        num_cases: int = dspy.InputField(desc="Number of test cases to generate")
-        test_cases: str = dspy.OutputField(desc="JSON array of test cases, each with: task_input, expected_behavior, difficulty, category")
-
-    def __init__(self, config: EvolutionConfig):
-        self.config = config
-        self.generator = dspy.ChainOfThought(self.GenerateTestCases)
-
-    def generate(
-        self,
-        artifact_text: str,
-        artifact_type: str = "skill",
-        num_cases: Optional[int] = None,
-    ) -> EvalDataset:
-        """Generate a full eval dataset with train/val/holdout splits."""
-
-        n = num_cases or self.config.eval_dataset_size
-
-        # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
-
-        with dspy.context(lm=lm):
-            result = self.generator(
-                artifact_text=artifact_text,
-                artifact_type=artifact_type,
-                num_cases=n,
-            )
-
-        # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
-
-        examples = [
-            EvalExample(
-                task_input=c.get("task_input", ""),
-                expected_behavior=c.get("expected_behavior", ""),
-                difficulty=c.get("difficulty", "medium"),
-                category=c.get("category", "general"),
-                source="synthetic",
-            )
-            for c in cases_raw
-            if c.get("task_input") and c.get("expected_behavior")
-        ]
-
-        # Shuffle and split
-        random.shuffle(examples)
-        n_total = len(examples)
-        n_train = max(1, int(n_total * self.config.train_ratio))
-        n_val = max(1, int(n_total * self.config.val_ratio))
-
-        return EvalDataset(
-            train=examples[:n_train],
-            val=examples[n_train:n_train + n_val],
-            holdout=examples[n_train + n_val:],
-        )
-
-
-class GoldenDatasetLoader:
-    """Load hand-curated evaluation datasets from JSONL files."""
-
-    @staticmethod
-    def load(path: Path) -> EvalDataset:
-        """Load a golden dataset. If no splits exist, auto-split the single file."""
-        if (path / "train.jsonl").exists():
-            return EvalDataset.load(path)
-
-        # Single file — auto-split
-        golden_file = path if path.suffix == ".jsonl" else path / "golden.jsonl"
-        if not golden_file.exists():
-            raise FileNotFoundError(f"No golden dataset found at {golden_file}")
-
+    Source C: Hand-curated golden sets (optional, high-value skills).
+    
+    Manually written test cases with expected outputs.
+    Stored as JSONL in ~/.hermes/evolution/datasets/<skill-name>/golden.jsonl
+    """
+    
+    def __init__(self, datasets_dir: Path):
+        self.datasets_dir = Path(datasets_dir)
+    
+    def generate(self, skill_name: str, skill_content: str, n_examples: int) -> List[EvaluationExample]:
+        golden_path = self.datasets_dir / skill_name / "golden.jsonl"
+        if not golden_path.exists():
+            return []
+        
         examples = []
-        with open(golden_file) as f:
+        with open(golden_path) as f:
             for line in f:
-                if line.strip():
-                    examples.append(EvalExample.from_dict(json.loads(line)))
+                data = json.loads(line)
+                examples.append(EvaluationExample(
+                    task_input=data["task"],
+                    expected_behavior=data["expected"],
+                    metadata={"golden": True},
+                    source="golden",
+                    skill_name=skill_name
+                ))
+                if len(examples) >= n_examples:
+                    break
+        return examples
 
-        random.shuffle(examples)
-        n = len(examples)
-        n_train = max(1, int(n * 0.5))
-        n_val = max(1, int(n * 0.25))
 
-        return EvalDataset(
-            train=examples[:n_train],
-            val=examples[n_train:n_train + n_val],
-            holdout=examples[n_train + n_val:],
+class AutoEvalDatasetSource(DatasetSource):
+    """
+    Source D: Skill-specific auto-evaluation (where applicable).
+    
+    - systematic-debugging: Plant a bug, run skill, check if tests pass after
+    - arxiv: Search for known papers, check if found
+    - github-code-review: Create PR with planted issues, check if caught
+    """
+    
+    def __init__(self, hermes_agent_repo: Path):
+        self.hermes_agent_repo = Path(hermes_agent_repo)
+    
+    def generate(self, skill_name: str, skill_content: str, n_examples: int) -> List[EvaluationExample]:
+        # Skill-specific generators
+        if skill_name == "systematic-debugging":
+            return self._generate_debugging_examples(n_examples)
+        elif skill_name == "arxiv":
+            return self._generate_arxiv_examples(n_examples)
+        elif skill_name == "github-code-review":
+            return self._generate_code_review_examples(n_examples)
+        return []
+    
+    def _generate_debugging_examples(self, n: int) -> List[EvaluationExample]:
+        # Would plant bugs in test projects, run skill, verify fix
+        return []
+    
+    def _generate_arxiv_examples(self, n: int) -> List[EvaluationExample]:
+        # Would search for known papers
+        return []
+    
+    def _generate_code_review_examples(self, n: int) -> List[EvaluationExample]:
+        # Would create PRs with planted issues
+        return []
+
+
+class EvaluationDatasetBuilder:
+    """
+    Main dataset builder orchestrating all sources.
+    
+    Creates train/val/holdout splits from multiple sources.
+    Default split: 60% train / 20% val / 20% holdout
+    """
+    
+    def __init__(
+        self,
+        hermes_agent_repo: Path,
+        datasets_dir: Path,
+        generator_model: str = "anthropic/claude-opus-4",
+        judge_model: str = "anthropic/claude-sonnet-4"
+    ):
+        self.hermes_agent_repo = Path(hermes_agent_repo)
+        self.datasets_dir = Path(datasets_dir)
+        
+        # Initialize sources
+        self.sources = {
+            "synthetic": SyntheticDatasetSource(generator_model),
+            "sessiondb": SessionDBDatasetSource(hermes_agent_repo, judge_model),
+            "golden": GoldenDatasetSource(datasets_dir),
+            "autoeval": AutoEvalDatasetSource(hermes_agent_repo),
+        }
+    
+    def build_dataset(
+        self,
+        skill_name: str,
+        skill_content: str,
+        n_total: int = 30,
+        source_weights: Optional[Dict[str, float]] = None
+    ) -> EvaluationDataset:
+        """
+        Build evaluation dataset for a skill from multiple sources.
+        
+        Args:
+            skill_name: Name of the skill (e.g., "github-code-review")
+            skill_content: Full text of the SKILL.md file
+            n_total: Total examples desired
+            source_weights: Relative weights for each source (default: synthetic heavy)
+        
+        Returns:
+            EvaluationDataset with train/val/holdout splits
+        """
+        if source_weights is None:
+            source_weights = {"synthetic": 0.6, "sessiondb": 0.3, "golden": 0.1, "autoeval": 0.0}
+        
+        # Normalize weights
+        total_weight = sum(source_weights.values())
+        source_weights = {k: v/total_weight for k, v in source_weights.items()}
+        
+        # Generate from each source
+        all_examples = []
+        for source_name, weight in source_weights.items():
+            n_from_source = max(1, int(n_total * weight))
+            source = self.sources[source_name]
+            try:
+                examples = source.generate(skill_name, skill_content, n_from_source)
+                all_examples.extend(examples)
+            except Exception as e:
+                print(f"Warning: Source {source_name} failed: {e}")
+        
+        # Shuffle and split
+        random.shuffle(all_examples)
+        all_examples = all_examples[:n_total]
+        
+        n_train = int(0.6 * len(all_examples))
+        n_val = int(0.2 * len(all_examples))
+        
+        train = all_examples[:n_train]
+        val = all_examples[n_train:n_train + n_val]
+        holdout = all_examples[n_train + n_val:]
+        
+        # Default rubric (can be overridden per-skill)
+        rubric = self._get_skill_rubric(skill_name)
+        
+        return EvaluationDataset(
+            skill_name=skill_name,
+            train=train,
+            val=val,
+            holdout=holdout,
+            rubric=rubric
         )
+    
+    def _get_skill_rubric(self, skill_name: str) -> Dict[str, Any]:
+        """Get skill-specific scoring rubric."""
+        rubrics = {
+            "github-code-review": {
+                "criteria": [
+                    "Identifies security vulnerabilities (SQL injection, XSS, path traversal)",
+                    "Checks for proper error handling and null checks",
+                    "Verifies tests exist for new/changed functionality", 
+                    "Code style and consistency",
+                    "Performance considerations noted",
+                    "Documentation/comments adequacy"
+                ],
+                "weight_per_criterion": 1.0,
+                "must_catch_patterns": ["security", "error handling", "testing"],
+                "bonus_criteria": ["Suggests improvements", "Notes duplicate code", "API design feedback"]
+            },
+            "systematic-debugging": {
+                "criteria": [
+                    "Forms correct hypothesis before acting",
+                    "Uses minimal reproduction steps",
+                    "Uses debugging tools effectively (logs, breakpoints, prints)",
+                    "Identifies root cause, not just symptoms",
+                    "Verifies fix works and doesn't regress",
+                    "Documents the fix and reasoning"
+                ],
+                "weight_per_criterion": 1.0
+            },
+            "arxiv": {
+                "criteria": [
+                    "Finds relevant papers for the query",
+                    "Extracts key information (method, results, limitations)",
+                    "Synthesizes across multiple papers",
+                    "Cites papers correctly with links",
+                    "Identifies gaps/future work"
+                ],
+                "weight_per_criterion": 1.0
+            }
+        }
+        return rubrics.get(skill_name, {
+            "criteria": [
+                "Follows the skill's procedure",
+                "Produces correct/useful output",
+                "Stays within token budget",
+                "Handles edge cases"
+            ],
+            "weight_per_criterion": 1.0
+        })

@@ -1,0 +1,13 @@
+{
+  "title": "[Evolved] systematic-debugging",
+  "branch_name": "evolve/systematic-debugging-20260725-155957",
+  "base_branch": "main",
+  "labels": [
+    "evolved",
+    "skill",
+    "needs-review"
+  ],
+  "files_changed": [
+    "skills/systematic-debugging.md"
+  ]
+}

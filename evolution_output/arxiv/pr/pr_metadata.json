@@ -1,0 +1,13 @@
+{
+  "title": "[Evolved] arxiv",
+  "branch_name": "evolve/arxiv-20260725-155836",
+  "base_branch": "main",
+  "labels": [
+    "evolved",
+    "skill",
+    "needs-review"
+  ],
+  "files_changed": [
+    "skills/arxiv.md"
+  ]
+}

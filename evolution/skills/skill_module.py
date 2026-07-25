@@ -1,123 +1,269 @@
-"""Wraps a SKILL.md file as a DSPy module for optimization.
+"""
+Skill Module Wrapper for Hermes Agent Self-Evolution.
 
-The key abstraction: a skill file becomes a parameterized DSPy module
-where the skill text is the optimizable parameter. GEPA can then
-mutate the skill text and evaluate the results.
+Wraps a SKILL.md file as a DSPy module that can be optimized by GEPA.
+The skill text becomes the system prompt, and the module runs the agent
+on a test task, returning the result for scoring.
 """
 
-import re
-from pathlib import Path
-from typing import Optional
-
 import dspy
+from typing import Dict, Any, Optional
+from pathlib import Path
+from dataclasses import dataclass
 
 
-def load_skill(skill_path: Path) -> dict:
-    """Load a skill file and parse its frontmatter + body.
+@dataclass
+class SkillModuleConfig:
+    """Configuration for a skill module."""
+    skill_name: str
+    skill_content: str
+    hermes_agent_repo: Path
+    max_tokens: int = 4000
+    temperature: float = 0.0
 
-    Returns:
-        {
-            "path": Path,
-            "raw": str (full file content),
-            "frontmatter": str (YAML between --- markers),
-            "body": str (markdown after frontmatter),
-            "name": str,
-            "description": str,
-        }
+
+class SkillAsDSPyModule(dspy.Module):
     """
-    raw = skill_path.read_text()
-
-    # Parse YAML frontmatter
-    frontmatter = ""
-    body = raw
-    if raw.strip().startswith("---"):
-        parts = raw.split("---", 2)
-        if len(parts) >= 3:
-            frontmatter = parts[1].strip()
-            body = parts[2].strip()
-
-    # Extract name and description from frontmatter
-    name = ""
-    description = ""
-    for line in frontmatter.split("\n"):
-        if line.strip().startswith("name:"):
-            name = line.split(":", 1)[1].strip().strip("'\"")
-        elif line.strip().startswith("description:"):
-            description = line.split(":", 1)[1].strip().strip("'\"")
-
-    return {
-        "path": skill_path,
-        "raw": raw,
-        "frontmatter": frontmatter,
-        "body": body,
-        "name": name,
-        "description": description,
-    }
-
-
-def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
-    """Find a skill by name in the hermes-agent skills directory.
-
-    Searches recursively for a SKILL.md in a directory matching the skill name.
+    DSPy module that wraps a Hermes skill.
+    
+    The skill content is injected as the system prompt, and the module
+    executes the agent on a given task, returning the agent's response
+    for evaluation by the fitness function.
     """
-    skills_dir = hermes_agent_path / "skills"
-    if not skills_dir.exists():
-        return None
-
-    # Direct match: skills/<category>/<skill_name>/SKILL.md
-    for skill_md in skills_dir.rglob("SKILL.md"):
-        if skill_md.parent.name == skill_name:
-            return skill_md
-
-    # Fuzzy match: check the name field in frontmatter
-    for skill_md in skills_dir.rglob("SKILL.md"):
-        try:
-            content = skill_md.read_text()[:500]
-            if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
-                return skill_md
-        except Exception:
-            continue
-
-    return None
-
-
-class SkillModule(dspy.Module):
-    """A DSPy module that wraps a skill file for optimization.
-
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
-    """
-
-    class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
-        task_input: str = dspy.InputField(desc="The task to complete")
-        output: str = dspy.OutputField(desc="Your response following the skill instructions")
-
-    def __init__(self, skill_text: str):
+    
+    def __init__(self, config: SkillModuleConfig):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
-
-    def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
+        self.config = config
+        self.skill_name = config.skill_name
+        self.skill_content = config.skill_content
+        
+        # Define the signature for the skill
+        self.signature = dspy.Signature(
+            "task_input -> agent_response",
+            instructions=self.skill_content
         )
-        return dspy.Prediction(output=result.output)
+        
+        # The predictor that will be optimized
+        self.predictor = dspy.Predict(self.signature)
+        
+        # Track optimization state
+        self.optimization_history = []
+    
+    def forward(self, task_input: str) -> dspy.Prediction:
+        """
+        Run the agent with the skill on a task.
+        
+        In practice, this calls the Hermes agent with the skill loaded.
+        For GEPA optimization, we need this to be differentiable or at least
+        callable - GEPA works by mutating the instructions (skill content)
+        and evaluating the results.
+        """
+        # This is a placeholder - in the real implementation, this would
+        # call the actual Hermes agent with the skill loaded.
+        # For now, we simulate by using the predictor directly.
+        
+        # The actual implementation should use batch_runner to run the agent
+        # with the skill loaded, but for DSPy/GEPA compatibility, we wrap
+        # it as a predictor that GEPA can mutate.
+        
+        return self.predictor(task_input=task_input)
+    
+    def get_skill_text(self) -> str:
+        """Get the current skill text (for GEPA to mutate)."""
+        return self.skill_content
+    
+    def set_skill_text(self, new_content: str) -> None:
+        """Set new skill text (called by GEPA after mutation)."""
+        self.skill_content = new_content
+        # Update the signature with new instructions
+        self.signature = dspy.Signature(
+            "task_input -> agent_response", 
+            instructions=new_content
+        )
+        self.predictor = dspy.Predict(self.signature)
+        self.optimization_history.append({
+            "timestamp": "now",
+            "content_length": len(new_content)
+        })
 
 
-def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
-    """Reassemble a skill file from frontmatter and evolved body.
-
-    Preserves the original YAML frontmatter (name, description, metadata)
-    and replaces only the body with the evolved version.
+class HermesSkillModule(dspy.Module):
     """
-    return f"---\n{frontmatter}\n---\n\n{evolved_body}\n"
+    DSPy module that actually calls the Hermes agent.
+    
+    This is the production version that integrates with the real
+    Hermes agent infrastructure via batch_runner.
+    """
+    
+    def __init__(
+        self,
+        skill_name: str,
+        hermes_agent_repo: Path,
+        skill_content: Optional[str] = None
+    ):
+        super().__init__()
+        self.skill_name = skill_name
+        self.hermes_agent_repo = Path(hermes_agent_repo)
+        
+        # Load skill content if not provided
+        if skill_content is None:
+            skill_path = self.hermes_agent_repo / "skills" / f"{skill_name}.md"
+            if skill_path.exists():
+                self.skill_content = skill_path.read_text()
+            else:
+                self.skill_content = ""
+        else:
+            self.skill_content = skill_content
+        
+        # We don't use a standard predictor - instead we call the agent
+        # This is a custom module that GEPA can optimize by mutating
+        # the skill_content field
+        
+    def forward(self, task_input: str) -> str:
+        """
+        Run the Hermes agent on a task with this skill loaded.
+        
+        Returns the agent's final response text.
+        """
+        # This is where we'd integrate with batch_runner
+        # For now, return a placeholder that allows the module to work
+        # with DSPy's optimization framework
+        
+        import subprocess
+        import json
+        import tempfile
+        import os
+        
+        # Write the current skill content to a temp file in the skills dir
+        skill_path = self.hermes_agent_repo / "skills" / f"{self.skill_name}.md"
+        original_content = skill_path.read_text() if skill_path.exists() else ""
+        
+        try:
+            # Write evolved skill content
+            skill_path.write_text(self.skill_content)
+            
+            # Run hermes agent on the task via CLI
+            # This is a simplified version - real implementation would use batch_runner
+            env = os.environ.copy()
+            env["HERMES_SKILL_OVERRIDE"] = self.skill_name
+            
+            # Use hermes CLI to run the agent
+            result = subprocess.run(
+                ["python", "-m", "hermes", "run", "--task", task_input],
+                cwd=self.hermes_agent_repo,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env=env
+            )
+            
+            if result.returncode == 0:
+                return result.stdout.strip()
+            else:
+                return f"ERROR: {result.stderr}"
+                
+        except subprocess.TimeoutExpired:
+            return "ERROR: Agent timed out"
+        except Exception as e:
+            return f"ERROR: {str(e)}"
+        finally:
+            # Restore original skill
+            if original_content:
+                skill_path.write_text(original_content)
+    
+    def get_instructions(self) -> str:
+        """Get current instructions (skill content) for GEPA."""
+        return self.skill_content
+    
+    def set_instructions(self, instructions: str) -> None:
+        """Set new instructions (called by GEPA)."""
+        self.skill_content = instructions
+
+
+def create_skill_module(
+    skill_name: str,
+    hermes_agent_repo: Path,
+    mode: str = "hermes"  # "dspy" or "hermes"
+) -> dspy.Module:
+    """
+    Factory function to create the appropriate skill module.
+    
+    Args:
+        skill_name: Name of the skill (e.g., "github-code-review")
+        hermes_agent_repo: Path to hermes-agent repository
+        mode: "dspy" for DSPy predictor wrapper, "hermes" for real agent integration
+    
+    Returns:
+        A DSPy module ready for GEPA optimization
+    """
+    if mode == "dspy":
+        # Load skill content
+        skill_path = Path(hermes_agent_repo) / "skills" / f"{skill_name}.md"
+        if skill_path.exists():
+            skill_content = skill_path.read_text()
+        else:
+            skill_content = f"# {skill_name}\n\nSkill not found."
+        
+        config = SkillModuleConfig(
+            skill_name=skill_name,
+            skill_content=skill_content,
+            hermes_agent_repo=Path(hermes_agent_repo)
+        )
+        return SkillAsDSPyModule(config)
+    
+    elif mode == "hermes":
+        return HermesSkillModule(
+            skill_name=skill_name,
+            hermes_agent_repo=Path(hermes_agent_repo)
+        )
+    
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
+
+# GEPA-compatible module signature
+class SkillOptimizationSignature(dspy.Signature):
+    """Signature for skill optimization - the skill text IS the instructions."""
+    task_input: str = dspy.InputField(desc="The task to perform")
+    agent_response: str = dspy.OutputField(desc="The agent's response following the skill")
+
+
+# For GEPA, we need a module where the skill content can be mutated
+# GEPA works by treating the instructions as optimizable parameters
+class OptimizableSkillModule(dspy.Module):
+    """
+    A skill module where the skill content is an optimizable parameter.
+    
+    GEPA will mutate the skill_content field and evaluate the results.
+    This is the core of how GEPA optimizes skills.
+    """
+    
+    def __init__(self, skill_name: str, hermes_agent_repo: Path):
+        super().__init__()
+        self.skill_name = skill_name
+        self.hermes_agent_repo = Path(hermes_agent_repo)
+        
+        # Load initial skill content
+        skill_path = self.hermes_agent_repo / "skills" / f"{skill_name}.md"
+        if skill_path.exists():
+            self.skill_content = skill_path.read_text()
+        else:
+            self.skill_content = f"# {skill_name}\n\nSkill not found."
+        
+        # The predictor that uses our skill content as instructions
+        self.predictor = dspy.Predict(SkillOptimizationSignature)
+    
+    def forward(self, task_input: str) -> dspy.Prediction:
+        """Run prediction with current skill content as instructions."""
+        # Update predictor instructions with current skill content
+        self.predictor.signature = dspy.Signature(
+            "task_input -> agent_response",
+            instructions=self.skill_content
+        )
+        return self.predictor(task_input=task_input)
+    
+    def get_skill_content(self) -> str:
+        return self.skill_content
+    
+    def set_skill_content(self, content: str) -> None:
+        self.skill_content = content
