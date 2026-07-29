@@ -187,9 +187,42 @@ def evolve(
 
     start_time = time.time()
 
+    # GEPA requires a five-argument metric that returns a score *and* textual
+    # feedback — the feedback is what it reflects on to propose mutations. The
+    # plain skill_fitness_metric returns a bare float from keyword overlap, which
+    # gives GEPA nothing to reason about, so route through LLMJudge instead (it
+    # already produces feedback for exactly this purpose) and fall back to the
+    # heuristic if the judge call fails.
+    _judge = LLMJudge(config)
+
+    def gepa_skill_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+        agent_output = getattr(pred, "output", "") or ""
+        # Predictions only carry `output`, so score against the skill body the
+        # module was built from rather than reading a field that never exists.
+        skill_text = skill["body"]
+        try:
+            fs = _judge.score(
+                task_input=getattr(gold, "task_input", "") or "",
+                expected_behavior=getattr(gold, "expected_behavior", "") or "",
+                agent_output=agent_output,
+                skill_text=skill_text,
+                artifact_size=len(skill_text),
+                max_size=config.max_skill_size,
+            )
+            return dspy.Prediction(score=fs.composite, feedback=fs.feedback)
+        except Exception as judge_error:  # noqa: BLE001 — never fail the whole run
+            score = skill_fitness_metric(gold, pred, trace)
+            return dspy.Prediction(
+                score=score,
+                feedback=f"Judge unavailable ({judge_error}); heuristic score only.",
+            )
+
     try:
+        # DSPy >=3.1 replaced max_steps with a metric-call budget, and requires an
+        # explicit reflection LM — that's the model that reads execution traces and
+        # proposes mutations, so it's what --optimizer-model is for.
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
+            metric=gepa_skill_metric,
             max_full_evals=iterations,
             reflection_lm=reflection_lm,
         )
