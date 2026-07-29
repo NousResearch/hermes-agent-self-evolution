@@ -46,6 +46,9 @@ class EvolutionConfig:
     output_dir: Path = field(default_factory=lambda: Path("./output"))
     create_pr: bool = True
 
+    # Deployment
+    auto_deploy: bool = False  # Automatically write evolved skill back to source
+
 
 def _discover_hermes_agent_path() -> Optional[Path]:
     """Best-effort hermes-agent repo discovery that never raises.

@@ -43,6 +43,7 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    auto_deploy: bool = False,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -53,6 +54,7 @@ def evolve(
         eval_model=eval_model,
         judge_model=eval_model,  # Use same model for dataset generation
         run_pytest=run_tests,
+        auto_deploy=auto_deploy,
     )
 
     # ── 1. Find and load the skill ──────────────────────────────────────
@@ -118,7 +120,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -138,6 +140,7 @@ def evolve(
 
     # Configure DSPy
     lm = dspy.LM(eval_model)
+    reflection_lm = dspy.LM(optimizer_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -153,9 +156,22 @@ def evolve(
     start_time = time.time()
 
     try:
+        # GEPAFeedbackMetric wrapper for new dspy 3.2.x GEPA API
+        class _GEPASkillMetric(dspy.teleprompt.gepa.gepa.GEPAFeedbackMetric):
+            """Wraps skill_fitness_metric for new GEPA API compatibility."""
+            def __call__(self, gold, pred, trace=None, pred_name=None, pred_trace=None):
+                score = skill_fitness_metric(gold, pred, trace)
+                from dspy.teleprompt.gepa.gepa import ScoreWithFeedback
+                return ScoreWithFeedback(
+                    score=float(score),
+                    feedback=f"Skill output score: {score:.3f}"
+                )
+
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=_GEPASkillMetric(),
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
+            candidate_selection_strategy="pareto",
         )
 
         optimized_module = optimizer.compile(
@@ -185,7 +201,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -286,7 +302,13 @@ def evolve(
 
     if improvement > 0:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
-        console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+
+        if config.auto_deploy:
+            # Deploy: overwrite the original SKILL.md
+            skill_path.write_text(evolved_full)
+            console.print(f"  [bold green]→ Auto-deployed to {skill_path}[/bold green]")
+        else:
+            console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
@@ -303,7 +325,8 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--auto-deploy", is_flag=True, help="Automatically deploy improved skill to source")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, auto_deploy):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -315,6 +338,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        auto_deploy=auto_deploy,
     )
 
 

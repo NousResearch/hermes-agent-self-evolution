@@ -1,0 +1,17 @@
+{
+  "skill_name": "github-code-review",
+  "timestamp": "20260729_083305",
+  "iterations": 2,
+  "optimizer_model": "openai/deepseek-chat",
+  "eval_model": "openai/deepseek-chat",
+  "baseline_score": 0.5523586206896551,
+  "evolved_score": 0.5563080459770114,
+  "improvement": 0.003949425287356312,
+  "baseline_size": 13216,
+  "evolved_size": 13216,
+  "train_examples": 10,
+  "val_examples": 5,
+  "holdout_examples": 5,
+  "elapsed_seconds": 207.4618420600891,
+  "constraints_passed": true
+}
