@@ -1,0 +1,17 @@
+{
+  "skill_name": "systematic-debugging",
+  "timestamp": "20260729_090139",
+  "iterations": 5,
+  "optimizer_model": "openai/deepseek-chat",
+  "eval_model": "openai/deepseek-chat",
+  "baseline_score": 0.5527653037653038,
+  "evolved_score": 0.6263227073227073,
+  "improvement": 0.07355740355740359,
+  "baseline_size": 13608,
+  "evolved_size": 13608,
+  "train_examples": 10,
+  "val_examples": 5,
+  "holdout_examples": 5,
+  "elapsed_seconds": 405.22496128082275,
+  "constraints_passed": true
+}
