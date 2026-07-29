@@ -118,7 +118,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -138,6 +138,7 @@ def evolve(
 
     # Configure DSPy
     lm = dspy.LM(eval_model)
+    reflection_lm = dspy.LM(optimizer_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -153,9 +154,22 @@ def evolve(
     start_time = time.time()
 
     try:
+        # GEPAFeedbackMetric wrapper for new dspy 3.2.x GEPA API
+        class _GEPASkillMetric(dspy.teleprompt.gepa.gepa.GEPAFeedbackMetric):
+            """Wraps skill_fitness_metric for new GEPA API compatibility."""
+            def __call__(self, gold, pred, trace=None, pred_name=None, pred_trace=None):
+                score = skill_fitness_metric(gold, pred, trace)
+                from dspy.teleprompt.gepa.gepa import ScoreWithFeedback
+                return ScoreWithFeedback(
+                    score=float(score),
+                    feedback=f"Skill output score: {score:.3f}"
+                )
+
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=_GEPASkillMetric(),
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
+            candidate_selection_strategy="pareto",
         )
 
         optimized_module = optimizer.compile(
@@ -185,7 +199,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
