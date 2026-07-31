@@ -32,8 +32,15 @@ class ConstraintValidator:
         artifact_text: str,
         artifact_type: str,
         baseline_text: Optional[str] = None,
+        improvement: Optional[float] = None,
     ) -> list[ConstraintResult]:
-        """Run all applicable constraints. Returns list of results."""
+        """Run all applicable constraints. Returns list of results.
+
+        ``improvement`` is the measured valset score delta of the evolved
+        artifact over the baseline (0-1 metric scale). When provided and
+        material, it can waive the soft growth cap (see ``_check_growth``);
+        None keeps the strict pre-waiver behavior.
+        """
         results = []
 
         # 1. Size limits
@@ -41,7 +48,7 @@ class ConstraintValidator:
 
         # 2. Growth limit (if baseline provided)
         if baseline_text:
-            results.append(self._check_growth(artifact_text, baseline_text, artifact_type))
+            results.append(self._check_growth(artifact_text, baseline_text, artifact_type, improvement=improvement))
 
         # 3. Non-empty
         results.append(self._check_non_empty(artifact_text))
@@ -116,17 +123,61 @@ class ConstraintValidator:
                 message=f"Size exceeded: {size}/{limit} chars ({size - limit} over)",
             )
 
-    def _check_growth(self, text: str, baseline: str, artifact_type: str) -> ConstraintResult:
+    def _check_growth(
+        self,
+        text: str,
+        baseline: str,
+        artifact_type: str,
+        improvement: Optional[float] = None,
+    ) -> ConstraintResult:
+        """Check growth vs baseline, with a quality-based waiver.
+
+        The soft cap ``max_prompt_growth`` rejects bloated artifacts. A
+        candidate that grows past the soft cap may still pass when it
+        demonstrates a *material* improvement (>= ``growth_waiver_min_improvement``
+        absolute score delta on the 0-1 metric scale) AND stays under the hard
+        absolute cap ``max_prompt_growth_hard`` — i.e. the extra size buys
+        measurable quality. Without ``improvement`` the check is strict.
+        """
         growth = (len(text) - len(baseline)) / max(1, len(baseline))
         max_growth = self.config.max_prompt_growth
 
+        waiver_applied = False
+        if growth > max_growth:
+            waiver_applied = (
+                improvement is not None
+                and improvement >= self.config.growth_waiver_min_improvement
+            )
+            if waiver_applied:
+                max_growth = self.config.max_prompt_growth_hard
+
         if growth <= max_growth:
+            if waiver_applied:
+                return ConstraintResult(
+                    passed=True,
+                    constraint_name="growth_limit",
+                    message=(
+                        f"Growth OK with waiver: {growth:+.1%} (soft cap {self.config.max_prompt_growth:+.1%} "
+                        f"exceeded but improvement {improvement:+.3f} >= "
+                        f"{self.config.growth_waiver_min_improvement:+.3f}; hard cap {self.config.max_prompt_growth_hard:+.1%})"
+                    ),
+                )
             return ConstraintResult(
                 passed=True,
                 constraint_name="growth_limit",
                 message=f"Growth OK: {growth:+.1%} (max {max_growth:+.1%})",
             )
         else:
+            if improvement is not None:
+                return ConstraintResult(
+                    passed=False,
+                    constraint_name="growth_limit",
+                    message=(
+                        f"Growth exceeded: {growth:+.1%} (soft cap {self.config.max_prompt_growth:+.1%}, "
+                        f"hard cap {self.config.max_prompt_growth_hard:+.1%}, improvement {improvement:+.3f} "
+                        f"< waiver threshold {self.config.growth_waiver_min_improvement:+.3f})"
+                    ),
+                )
             return ConstraintResult(
                 passed=False,
                 constraint_name="growth_limit",

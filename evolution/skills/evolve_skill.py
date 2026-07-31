@@ -78,8 +78,10 @@ def run_holdout_evaluation(
     return baseline_scores, evolved_scores
 
 
-def write_text_guarded(path: Path, text: str, label: str) -> None:
+def write_text_guarded(path, text: str, label: str) -> None:
     """Write text, converting FD exhaustion into an explicit, classified exit.
+
+    ``path`` is any object with ``.write_text`` (Path or a test fake).
 
     The 'error 1' escalations were bare ``OSError: [Errno 24] Too many open
     files`` crashes on artifact writes (and the holdout loop) that surfaced as

@@ -23,13 +23,27 @@ class EvolutionConfig:
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
 
     # Constraints
-    max_skill_size: int = 15_000  # 15KB default
+    max_skill_size: int = 20_000  # 20KB default (was 15KB — NLAH frontmatter adds size)
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.5  # 50% max growth over baseline (was 0.2)
+    # Hard absolute growth cap — never exceeded, even with a waiver. Prevents
+    # unbounded bloat: an artifact may only grow past max_prompt_growth when a
+    # material valset improvement (growth_waiver_min_improvement) justifies it.
+    max_prompt_growth_hard: float = 1.0  # 100% max growth, absolute ceiling
+    # Minimum absolute score delta (on the 0-1 metric scale) an evolved
+    # artifact must beat the baseline by to earn a growth waiver.
+    growth_waiver_min_improvement: float = 0.03
+
+    # Random seed for reproducibility
+    random_seed: int = 42
 
     # Eval dataset
-    eval_dataset_size: int = 20  # Total examples to generate
+    eval_dataset_size: int = 60  # Base examples for small skills; auto-scaled up
+    base_eval_dataset_size: int = 60  # Minimum examples before scaling by skill size
+    dataset_size_per_10k_chars: int = 10  # Extra examples per 10K chars beyond first 5K
+    max_eval_dataset_size: int = 150  # Cap on total scaled dataset size
+    eval_temperature: float = 0.0  # 0 = deterministic generation for stable scoring
     train_ratio: float = 0.5
     val_ratio: float = 0.25
     holdout_ratio: float = 0.25
