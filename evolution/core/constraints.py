@@ -33,6 +33,7 @@ class ConstraintValidator:
         artifact_type: str,
         baseline_text: Optional[str] = None,
         improvement: Optional[float] = None,
+        growth_text: Optional[str] = None,
     ) -> list[ConstraintResult]:
         """Run all applicable constraints. Returns list of results.
 
@@ -40,6 +41,13 @@ class ConstraintValidator:
         artifact over the baseline (0-1 metric scale). When provided and
         material, it can waive the soft growth cap (see ``_check_growth``);
         None keeps the strict pre-waiver behavior.
+
+        ``growth_text`` is the text used for the growth comparison (defaults
+        to ``artifact_text``). For skills, pass the evolved BODY here while
+        ``artifact_text`` stays the full reassembled artifact (frontmatter +
+        body): the growth gate must compare body-vs-body, otherwise the
+        static frontmatter inflates the ratio and a real improvement is
+        rejected (gmail-monitor: +100.5% full-vs-body vs +69.8% body-vs-body).
         """
         results = []
 
@@ -48,7 +56,10 @@ class ConstraintValidator:
 
         # 2. Growth limit (if baseline provided)
         if baseline_text:
-            results.append(self._check_growth(artifact_text, baseline_text, artifact_type, improvement=improvement))
+            results.append(self._check_growth(
+                artifact_text, baseline_text, artifact_type,
+                improvement=improvement, growth_text=growth_text,
+            ))
 
         # 3. Non-empty
         results.append(self._check_non_empty(artifact_text))
@@ -129,6 +140,7 @@ class ConstraintValidator:
         baseline: str,
         artifact_type: str,
         improvement: Optional[float] = None,
+        growth_text: Optional[str] = None,
     ) -> ConstraintResult:
         """Check growth vs baseline, with a quality-based waiver.
 
@@ -138,8 +150,14 @@ class ConstraintValidator:
         absolute score delta on the 0-1 metric scale) AND stays under the hard
         absolute cap ``max_prompt_growth_hard`` — i.e. the extra size buys
         measurable quality. Without ``improvement`` the check is strict.
+
+        ``growth_text`` defaults to ``text``; pass the evolved BODY explicitly
+        when ``text`` is a full artifact with static frontmatter so the growth
+        ratio measures the actual instruction growth (body-vs-body), not
+        frontmatter inflation.
         """
-        growth = (len(text) - len(baseline)) / max(1, len(baseline))
+        growth_base = growth_text if growth_text is not None else text
+        growth = (len(growth_base) - len(baseline)) / max(1, len(baseline))
         max_growth = self.config.max_prompt_growth
 
         waiver_applied = False

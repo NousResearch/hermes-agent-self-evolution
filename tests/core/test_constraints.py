@@ -113,6 +113,46 @@ class TestGrowthConstraints:
         assert result.passed
         assert "waiver" in result.message
 
+    def test_growth_text_compares_body_not_full_artifact(self, validator):
+        # gmail-monitor regression (t_63240783): the growth gate compared the
+        # evolved FULL artifact (frontmatter + body) against the baseline BODY
+        # only → +100.5% > +100% hard cap → rejected a real improvement by
+        # 0.5%. Comparing body-vs-body is +69.8%, under the hard cap, and the
+        # +0.045 waiver improvement grants it.
+        baseline_body = "x" * 2719
+        # Realistic frontmatter size (~836 chars for gmail-monitor): big
+        # enough that full-vs-body growth crosses the +100% hard cap, exactly
+        # like the ticket's evolved_FAILED.md (5452 raw = 836 fm + 4616 body).
+        frontmatter = "---\nname: gmail-monitor\ndescription: " + ("y" * 800) + "\n---\n\n"
+        evolved_body = "x" * 4616  # +69.8% body-vs-body
+        evolved_full = frontmatter + evolved_body
+
+        # Old (buggy) behavior: full-vs-body → +100.5% → fails even with waiver
+        old = validator._check_growth(
+            evolved_full, baseline_body, "skill", improvement=0.045
+        )
+        assert not old.passed
+        assert "hard cap" in old.message or "Growth exceeded" in old.message
+
+        # Fixed: growth_text=evolved_body → +69.8% → waiver grants (hard cap OK)
+        fixed = validator._check_growth(
+            evolved_full, baseline_body, "skill",
+            improvement=0.045, growth_text=evolved_body,
+        )
+        assert fixed.passed
+        assert "waiver" in fixed.message
+
+    def test_growth_text_defaults_to_artifact_text(self, validator):
+        # Backward compat: growth_text=None must behave exactly like before.
+        baseline = "x" * 1000
+        evolved = "x" * 1700
+        assert not validator._check_growth(evolved, baseline, "skill").passed
+        result = validator._check_growth(
+            evolved, baseline, "skill", improvement=0.05, growth_text=None
+        )
+        assert result.passed
+        assert "waiver" in result.message
+
 
 class TestNonEmpty:
     def test_non_empty_passes(self, validator):
