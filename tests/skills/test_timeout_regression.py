@@ -1,6 +1,6 @@
 """Regression tests for the 480s evolution timeout budget (t_316c92c4).
 
-Covers the three fixes from the web-research root-cause analysis
+Covers the fixes from the web-research root-cause analysis
 (workspace/evolution/root-cause-web-research-20260731.md):
 
 1. make_lm() bounds per-call LLM timeout/retries — a stalled API call can no
@@ -10,17 +10,26 @@ Covers the three fixes from the web-research root-cause analysis
    SIGKILLing the process with no output at all.
 3. Holdout score caching makes warm runs skip the 144-call holdout phase
    (24 examples x 3 samples x 2 programs) entirely.
+4. The in-process budget watchdog + checkpoint write give a diagnosable,
+   timeout-compatible (exit 124) partial exit when GEPA consumes the budget
+   (verified failure: cold-cache GEPA phase took 439s of 480s).
 """
 
+import json
 import time
 from types import SimpleNamespace
 
 from evolution.skills.evolve_skill import (
+    BUDGET_EXIT_CODE,
     DEFAULT_LLM_RETRIES,
     DEFAULT_LLM_TIMEOUT_SECONDS,
+    HOLDOUT_HEADROOM_SECONDS,
+    HOLDOUT_SKIP_THRESHOLD_SECONDS,
+    WATCHDOG_LEAD_SECONDS,
     _holdout_cache_key,
     evaluate_holdout,
     make_lm,
+    write_checkpoint,
 )
 
 
@@ -107,6 +116,27 @@ class TestHoldoutBudgetGuard:
         assert result["examples_evaluated"] == 0
         assert result["baseline_scores"] == []
         assert result["evolved_scores"] == []
+
+
+class TestBudgetWatchdog:
+    def test_exit_code_is_timeout_compatible(self):
+        # 124 == gtimeout's exit code: cron-evolve.sh auto-retries on it
+        # instead of misclassifying the run as an API error.
+        assert BUDGET_EXIT_CODE == 124
+
+    def test_layering_is_sane(self):
+        # Watchdog fires (max_budget - lead) before gtimeout; holdout skip
+        # kicks in with more headroom than the watchdog lead, so the graceful
+        # path always wins before the hard exit.
+        assert WATCHDOG_LEAD_SECONDS < HOLDOUT_SKIP_THRESHOLD_SECONDS
+        assert HOLDOUT_HEADROOM_SECONDS < HOLDOUT_SKIP_THRESHOLD_SECONDS
+
+    def test_write_checkpoint_persists(self, tmp_path):
+        p = tmp_path / "output" / "web-research" / "budget_checkpoint.json"
+        write_checkpoint({"phase": "gepa", "timed_out": False}, p)
+        saved = json.loads(p.read_text())
+        assert saved["phase"] == "gepa"
+        assert saved["timed_out"] is False
 
 
 class TestHoldoutScoreCache:

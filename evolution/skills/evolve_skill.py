@@ -7,7 +7,9 @@ Usage:
 
 import hashlib
 import json
+import os
 import sys
+import threading
 import time
 from contextlib import nullcontext
 from pathlib import Path
@@ -249,6 +251,52 @@ def evaluate_holdout(
     }
 
 
+# ── In-process budget watchdog (t_316c92c4) ──────────────────────────────
+# The cron harness wraps evolution in `gtimeout 480` (cron-evolve.sh) and
+# SIGKILLs on expiry with NO output — verified failure: a cold-cache GEPA
+# phase consumed 439s of the 480s budget (141 rollouts x 4.14s), leaving the
+# holdout phase 71s and the process killed mid-call. GEPA's iteration loop is
+# not hookable, so the only structural guards are (a) this watchdog, which
+# exits just BEFORE gtimeout with a partial checkpoint and the SAME exit code
+# (124) so the cron harness auto-retries (and ~/.dspy_cache makes the retry
+# warm/fast), and (b) holdout skip + headroom below.
+BUDGET_EXIT_CODE = 124                # same as gtimeout: cron auto-retries
+WATCHDOG_LEAD_SECONDS = 10            # exit before gtimeout fires, checkpoint first
+HOLDOUT_SKIP_THRESHOLD_SECONDS = 60   # below this remaining budget: skip holdout
+HOLDOUT_HEADROOM_SECONDS = 30         # reserve for metrics/report write after holdout
+
+
+def write_checkpoint(checkpoint: dict, path: Path) -> None:
+    """Persist the budget checkpoint dict (best-effort; never crash the run)."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(checkpoint, indent=2))
+    except OSError as e:
+        console.print(f"[yellow]⚠ Could not write budget checkpoint: {e}[/yellow]")
+
+
+def start_budget_watchdog(max_budget: int, checkpoint: dict, checkpoint_path: Path) -> threading.Thread:
+    """Daemon that terminates the process at max_budget with a partial checkpoint.
+
+    Exits at ``max_budget - WATCHDOG_LEAD_SECONDS`` with exit code
+    ``BUDGET_EXIT_CODE`` (124, matching gtimeout) so cron-evolve.sh treats it
+    as a timeout and auto-retries — but the checkpoint and the incremental
+    ~/.dspy_cache writes survive, making the retry warm and fast instead of a
+    zero-output SIGKILL. The checkpoint dict is updated by evolve() at phase
+    boundaries (dataset / gepa / validate / holdout).
+    """
+
+    def _watch() -> None:
+        time.sleep(max(1, max_budget - WATCHDOG_LEAD_SECONDS))
+        checkpoint["timed_out"] = True
+        write_checkpoint(checkpoint, checkpoint_path)
+        os._exit(BUDGET_EXIT_CODE)
+
+    t = threading.Thread(target=_watch, daemon=True, name="budget-watchdog")
+    t.start()
+    return t
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -266,6 +314,18 @@ def evolve(
     """Main evolution function — orchestrates the full optimization loop."""
     _seed = seed if seed is not None else 42
     run_start = time.time()
+
+    # Budget watchdog: exits 10s before the cron gtimeout with a partial
+    # checkpoint and exit 124 (timeout-compatible → cron auto-retries).
+    checkpoint_path = Path("output") / skill_name / "budget_checkpoint.json"
+    checkpoint = {
+        "skill": skill_name,
+        "phase": "start",
+        "started_at": datetime.now().isoformat(),
+        "max_budget_seconds": max_budget,
+        "timed_out": False,
+    }
+    start_budget_watchdog(max_budget, checkpoint, checkpoint_path)
 
     config = EvolutionConfig(
         iterations=iterations,
@@ -388,6 +448,8 @@ def evolve(
     console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
 
     start_time = time.time()
+    checkpoint["phase"] = "gepa"
+    write_checkpoint(checkpoint, checkpoint_path)
 
     # GEPA requires 5-arg metric: (gold, pred, trace, pred_name, pred_trace)
     def gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
@@ -418,6 +480,9 @@ def evolve(
 
     elapsed = time.time() - start_time
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
+    checkpoint["phase"] = "validate"
+    checkpoint["elapsed_seconds"] = round(time.time() - run_start, 1)
+    write_checkpoint(checkpoint, checkpoint_path)
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
     # The optimized module's instructions contain the evolved skill text
@@ -492,69 +557,98 @@ def evolve(
 
     # ── 8. Evaluate on holdout set (budget-guarded + score-cached) ──────
     holdout_examples = dataset.to_dspy_examples("holdout")
-    holdout_budget = max(0.0, max_budget - (time.time() - run_start))
-    console.print(f"\n[bold]Evaluating on holdout set ({len(holdout_examples)} examples, {holdout_samples} samples each)[/bold]")
+    remaining = max_budget - (time.time() - run_start)
+    checkpoint["phase"] = "holdout"
+    checkpoint["remaining_seconds"] = round(remaining, 1)
+    write_checkpoint(checkpoint, checkpoint_path)
 
-    # Persistent score cache (checkpointing for the 480s budget): keyed by
-    # (eval model, skill-body hash, program, example, sample) so warm runs
-    # skip the 144-call holdout phase entirely. The skill hash invalidates
-    # the cache when the skill text changes (mirrors ~/.dspy_cache semantics).
-    cache_path = Path("output") / skill_name / "holdout_scores.json"
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    score_cache: dict = {}
-    if cache_path.exists():
-        try:
-            score_cache = json.loads(cache_path.read_text())
-        except (json.JSONDecodeError, OSError):
-            score_cache = {}
-    skill_hash = hashlib.md5(skill["body"].encode("utf-8")).hexdigest()[:12]
-    cache_key_fn = lambda ex, program, sample_i: _holdout_cache_key(
-        eval_model, skill_hash, program,
-        getattr(ex, "task_input", "") or "", sample_i,
-    )
-
-    holdout_result = None
-    try:
-        holdout_result = evaluate_holdout(
-            holdout_examples,
-            baseline_module,
-            optimized_module,
-            lm=lm,
-            samples=holdout_samples,
-            metric=skill_fitness_metric,
-            max_budget_seconds=holdout_budget,
-            score_cache=score_cache,
-            cache_key=cache_key_fn,
-        )
-    except SystemExit:
-        raise
-    except Exception as e:
-        # The 'error 1' EMFILE crash hit this phase. Classify explicitly:
-        # FD exhaustion → exit 2 with a hint; anything else → eval error.
-        code, msg = classify_error(e)
-        console.print(f"[red]✗ Holdout evaluation failed: {msg}[/red]")
-        sys.exit(code)
-
-    # Persist the score cache; a failure here must not kill an otherwise
-    # successful run (worst case the next run pays the calls again).
-    try:
-        cache_path.write_text(json.dumps(score_cache))
-    except OSError as e:
-        console.print(f"[yellow]⚠ Could not persist holdout score cache: {e}[/yellow]")
-
-    baseline_scores = holdout_result["baseline_scores"]
-    evolved_scores = holdout_result["evolved_scores"]
-    if holdout_result["budget_exceeded"]:
+    if remaining < HOLDOUT_SKIP_THRESHOLD_SECONDS:
+        # Not enough budget left for a meaningful holdout (cold-cache cost is
+        # ~2 x samples x 1.5s per example). Finish cleanly: keep the baseline
+        # and report a partial (skipped) result instead of dying at 480s.
         console.print(
-            f"[yellow]⚠ Holdout budget exhausted — returning PARTIAL result "
-            f"({holdout_result['examples_evaluated']}/{holdout_result['examples_total']} "
-            f"examples; {holdout_result['cache_hits']} cache hits, "
-            f"{holdout_result['calls_made']} live calls)[/yellow]"
+            f"\n[yellow]⚠ Only {remaining:.0f}s of the {max_budget}s budget remains — "
+            f"skipping holdout eval to finish cleanly. Keeping baseline; no "
+            f"improvement claim made.[/yellow]"
+        )
+        holdout_result = {
+            "baseline_scores": [], "evolved_scores": [],
+            "examples_evaluated": 0, "examples_total": len(holdout_examples),
+            "budget_exceeded": True, "cache_hits": 0, "calls_made": 0,
+            "skipped": True,
+        }
+        baseline_scores = holdout_result["baseline_scores"]
+        evolved_scores = holdout_result["evolved_scores"]
+        avg_baseline = 0.0
+        avg_evolved = 0.0
+        improvement = 0.0
+        # Mirror the 8b guard: keep the original skill text (no evidence to deploy).
+        evolved_body = skill["body"]
+        evolved_full = skill["raw"]
+    else:
+        holdout_budget = max(0.0, remaining - HOLDOUT_HEADROOM_SECONDS)
+        console.print(f"\n[bold]Evaluating on holdout set ({len(holdout_examples)} examples, {holdout_samples} samples each, {holdout_budget:.0f}s budget)[/bold]")
+
+        # Persistent score cache (checkpointing for the 480s budget): keyed by
+        # (eval model, skill-body hash, program, example, sample) so warm runs
+        # skip the 144-call holdout phase entirely. The skill hash invalidates
+        # the cache when the skill text changes (mirrors ~/.dspy_cache semantics).
+        cache_path = Path("output") / skill_name / "holdout_scores.json"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        score_cache: dict = {}
+        if cache_path.exists():
+            try:
+                score_cache = json.loads(cache_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                score_cache = {}
+        skill_hash = hashlib.md5(skill["body"].encode("utf-8")).hexdigest()[:12]
+        cache_key_fn = lambda ex, program, sample_i: _holdout_cache_key(
+            eval_model, skill_hash, program,
+            getattr(ex, "task_input", "") or "", sample_i,
         )
 
-    avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
-    avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
-    improvement = avg_evolved - avg_baseline
+        holdout_result = None
+        try:
+            holdout_result = evaluate_holdout(
+                holdout_examples,
+                baseline_module,
+                optimized_module,
+                lm=lm,
+                samples=holdout_samples,
+                metric=skill_fitness_metric,
+                max_budget_seconds=holdout_budget,
+                score_cache=score_cache,
+                cache_key=cache_key_fn,
+            )
+        except SystemExit:
+            raise
+        except Exception as e:
+            # The 'error 1' EMFILE crash hit this phase. Classify explicitly:
+            # FD exhaustion → exit 2 with a hint; anything else → eval error.
+            code, msg = classify_error(e)
+            console.print(f"[red]✗ Holdout evaluation failed: {msg}[/red]")
+            sys.exit(code)
+
+        # Persist the score cache; a failure here must not kill an otherwise
+        # successful run (worst case the next run pays the calls again).
+        try:
+            cache_path.write_text(json.dumps(score_cache))
+        except OSError as e:
+            console.print(f"[yellow]⚠ Could not persist holdout score cache: {e}[/yellow]")
+
+        baseline_scores = holdout_result["baseline_scores"]
+        evolved_scores = holdout_result["evolved_scores"]
+        if holdout_result["budget_exceeded"]:
+            console.print(
+                f"[yellow]⚠ Holdout budget exhausted — returning PARTIAL result "
+                f"({holdout_result['examples_evaluated']}/{holdout_result['examples_total']} "
+                f"examples; {holdout_result['cache_hits']} cache hits, "
+                f"{holdout_result['calls_made']} live calls)[/yellow]"
+            )
+
+        avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
+        avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
+        improvement = avg_evolved - avg_baseline
 
     # ── 8b. Baseline-score guard — never deploy params worse than baseline ──
     # Root cause: GEPA/MIPROv2 with few iterations (default 5) can converge to
@@ -624,6 +718,7 @@ def evolve(
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
         "holdout_complete": not holdout_result["budget_exceeded"],
+        "holdout_skipped": holdout_result.get("skipped", False),
         "holdout_examples_evaluated": holdout_result["examples_evaluated"],
         "holdout_examples_total": holdout_result["examples_total"],
         "holdout_cache_hits": holdout_result["cache_hits"],
