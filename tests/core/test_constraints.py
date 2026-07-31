@@ -100,6 +100,19 @@ class TestGrowthConstraints:
         result = validator._check_growth(evolved, baseline, "skill", improvement=None)
         assert not result.passed
 
+    def test_escalation_exact_failure_mode(self, validator):
+        # esc-20260731-201857-1474 exact numbers: baseline 8,395 chars,
+        # rejected artifact 14,382 chars (+71.3% > 50% soft cap), measured
+        # valset improvement +0.035 (0.558 → 0.593). Without the improvement
+        # signal the gate rejects (the recorded 'constraints FAILED'); with it
+        # the waiver grants (stays under the +100% hard cap).
+        baseline = "x" * 8395
+        evolved = "x" * 14382
+        assert not validator._check_growth(evolved, baseline, "skill").passed
+        result = validator._check_growth(evolved, baseline, "skill", improvement=0.035)
+        assert result.passed
+        assert "waiver" in result.message
+
 
 class TestNonEmpty:
     def test_non_empty_passes(self, validator):
