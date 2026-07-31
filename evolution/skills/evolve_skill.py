@@ -63,8 +63,11 @@ def run_holdout_evaluation(
     for ex in holdout_examples:
         ex_baseline_scores = []
         ex_evolved_scores = []
-        cm = dspy.context(lm=lm) if lm is not None else nullcontext()
         for _ in range(samples):
+            # Fresh context manager per iteration: _GeneratorContextManager is
+            # one-shot (its __enter__ deletes self.args in Python >=3.14), so
+            # reusing a single `cm` across `with` blocks raises AttributeError.
+            cm = dspy.context(lm=lm) if lm is not None else nullcontext()
             with cm:
                 baseline_pred = baseline_module(task_input=ex.task_input)
                 ex_baseline_scores.append(metric(ex, baseline_pred))
@@ -495,11 +498,16 @@ def evolve(
     console.print(f"\n[bold]Validating evolved skill[/bold]")
     # Validate the full artifact (frontmatter + body), always against the
     # baseline BODY. (The old conditional compared the evolved artifact to
-    # itself when frontmatter was missing — a false pass.)
+    # itself when frontmatter was missing — a false pass.) The growth gate
+    # compares BODY-vs-BODY via growth_text: the static frontmatter must not
+    # inflate the growth ratio, or a real improvement gets rejected just
+    # past the hard cap (gmail-monitor: +100.5% full-vs-body vs +69.8%
+    # body-vs-body, hard cap +100%).
     evolved_constraints = validator.validate_all(
         evolved_full,
         "skill",
         baseline_text=skill["body"],
+        growth_text=evolved_body,
     )
     all_pass = True
     for c in evolved_constraints:
@@ -534,6 +542,7 @@ def evolve(
                 evolved_full,
                 "skill",
                 baseline_text=skill["body"],
+                growth_text=evolved_body,
                 improvement=improvement_est,
             )
             all_pass = True
@@ -548,11 +557,39 @@ def evolve(
         console.print("[red]✗ Evolved skill FAILED constraints — not deploying[/red]")
         # Still save for inspection (FD-exhaustion-safe write: the original
         # 'error 1' crashed here on OSError 24 and got mislabeled as an API
-        # error by the cron wrapper).
+        # error by the cron wrapper). Write BOTH a top-level marker AND a
+        # timestamped dir containing the baseline + failed variant so the
+        # cron pipeline can diff the CURRENT run's artifacts. Previously the
+        # failure path wrote only evolved_FAILED.md, so cron-evolve.sh's
+        # find fell back to the stale previous run's identical
+        # baseline/evolved pair → has_diff=0 even though the evolved text
+        # genuinely differs from baseline (gmail-monitor ticket).
         output_path = Path("output") / skill_name / "evolved_FAILED.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         write_text_guarded(output_path, evolved_full, "failed variant")
         console.print(f"  Saved failed variant to {output_path}")
+
+        fail_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fail_dir = Path("output") / skill_name / fail_ts
+        fail_dir.mkdir(parents=True, exist_ok=True)
+        write_text_guarded(fail_dir / "baseline_skill.md", skill["raw"], "baseline skill")
+        write_text_guarded(fail_dir / "evolved_FAILED.md", evolved_full, "failed variant")
+        write_text_guarded(
+            fail_dir / "metrics.json",
+            json.dumps({
+                "skill_name": skill_name,
+                "timestamp": fail_ts,
+                "iterations": iterations,
+                "optimizer_model": optimizer_model,
+                "eval_model": eval_model,
+                "constraints_passed": False,
+                "baseline_size": len(skill["body"]),
+                "evolved_size": len(evolved_body),
+                "elapsed_seconds": round(time.time() - run_start, 1),
+            }, indent=2),
+            "failure metrics",
+        )
+        console.print(f"  Saved failed variant + baseline to {fail_dir}/")
         return
 
     # ── 8. Evaluate on holdout set (budget-guarded + score-cached) ──────
