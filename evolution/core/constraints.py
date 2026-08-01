@@ -186,6 +186,16 @@ class ConstraintValidator:
                 message=f"Growth OK: {growth:+.1%} (max {max_growth:+.1%})",
             )
         else:
+            if waiver_applied:
+                return ConstraintResult(
+                    passed=False,
+                    constraint_name="growth_limit",
+                    message=(
+                        f"Growth exceeded: {growth:+.1%} (waiver applied: improvement {improvement:+.3f} >= "
+                        f"{self.config.growth_waiver_min_improvement:+.3f}, but hard cap "
+                        f"{self.config.max_prompt_growth_hard:+.1%} still exceeded)"
+                    ),
+                )
             if improvement is not None:
                 return ConstraintResult(
                     passed=False,

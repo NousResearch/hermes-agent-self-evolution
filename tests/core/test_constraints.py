@@ -93,6 +93,20 @@ class TestGrowthConstraints:
         result = validator._check_growth(evolved, baseline, "skill", improvement=0.05)
         assert not result.passed
 
+    def test_growth_waiver_hard_cap_message_is_accurate(self, validator):
+        # Regression (t_f8e3ec7f): when the waiver IS applied (improvement >=
+        # threshold) but growth still exceeds the hard cap, the failure message
+        # must report the hard-cap breach — not claim "improvement < waiver
+        # threshold" (which was false: e.g. gmail-monitor +0.065 improvement
+        # with +115.6% growth was reported as "0.065 < 0.030").
+        baseline = "x" * 1000
+        evolved = "x" * 2500  # +150% — over the hard cap, waiver cannot save it
+        result = validator._check_growth(evolved, baseline, "skill", improvement=0.05)
+        assert not result.passed
+        assert "waiver applied" in result.message
+        assert "hard cap" in result.message
+        assert "waiver threshold" not in result.message
+
     def test_growth_without_improvement_stays_strict(self, validator):
         # Backward compat: improvement=None must behave exactly like before
         baseline = "x" * 1000
