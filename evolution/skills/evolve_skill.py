@@ -278,6 +278,97 @@ def write_checkpoint(checkpoint: dict, path: Path) -> None:
         console.print(f"[yellow]⚠ Could not write budget checkpoint: {e}[/yellow]")
 
 
+def handle_holdout_skip(
+    skill: dict,
+    evolved_body: str,
+    evolved_full: str,
+    holdout_examples: list,
+    remaining: float,
+):
+    """Budget-guard holdout skip (remaining < HOLDOUT_SKIP_THRESHOLD_SECONDS).
+
+    Returns ``(holdout_result, avg_baseline, avg_evolved, improvement,
+    evolved_body, evolved_full, candidate_full)``.
+
+    Two invariants (t_ac619234):
+    1. GEPA's candidate is preserved in ``candidate_full`` BEFORE the baseline
+       overwrite — the skip path used to destroy it by copying the baseline
+       over it, making the run unreproducible for a later budget-raised retry.
+    2. The deployed artifact stays the baseline text (byte-identical →
+       has_diff=0 downstream), mirroring the 8b regression guard. The avg
+       scores are 0.0 PLACEHOLDERS — callers must render them as N/A (null in
+       metrics.json) whenever ``holdout_result["skipped"]`` is True.
+    """
+    holdout_result = {
+        "baseline_scores": [], "evolved_scores": [],
+        "examples_evaluated": 0, "examples_total": len(holdout_examples),
+        "budget_exceeded": True, "cache_hits": 0, "calls_made": 0,
+        "skipped": True,
+    }
+    candidate_full = evolved_full
+    # Mirror the 8b guard: keep the original skill text (no evidence to deploy).
+    evolved_body = skill["body"]
+    evolved_full = skill["raw"]
+    return (
+        holdout_result, 0.0, 0.0, 0.0,
+        evolved_body, evolved_full, candidate_full,
+    )
+
+
+def build_metrics(
+    skill_name: str,
+    timestamp: str,
+    iterations: int,
+    optimizer_model: str,
+    eval_model: str,
+    avg_baseline: float,
+    avg_evolved: float,
+    improvement: float,
+    baseline_size: int,
+    evolved_size: int,
+    train_examples: int,
+    val_examples: int,
+    holdout_examples: int,
+    elapsed: float,
+    all_pass: bool,
+    holdout_result: dict,
+    candidate_full: Optional[str],
+    max_budget: int,
+) -> dict:
+    """Build the metrics dict written to metrics.json.
+
+    A skipped holdout is a NON-measurement: baseline_score / evolved_score /
+    improvement are written as null (N/A downstream), never 0.0 — a fabricated
+    "+0.000 (+0.0%)" must never be misread as "no improvement" (t_ac619234).
+    """
+    holdout_skipped = holdout_result.get("skipped", False)
+    return {
+        "skill_name": skill_name,
+        "timestamp": timestamp,
+        "iterations": iterations,
+        "optimizer_model": optimizer_model,
+        "eval_model": eval_model,
+        "baseline_score": None if holdout_skipped else avg_baseline,
+        "evolved_score": None if holdout_skipped else avg_evolved,
+        "improvement": None if holdout_skipped else improvement,
+        "baseline_size": baseline_size,
+        "evolved_size": evolved_size,
+        "train_examples": train_examples,
+        "val_examples": val_examples,
+        "holdout_examples": holdout_examples,
+        "elapsed_seconds": elapsed,
+        "constraints_passed": all_pass,
+        "holdout_complete": not holdout_result["budget_exceeded"],
+        "holdout_skipped": holdout_skipped,
+        "holdout_candidate_preserved": holdout_skipped and bool(candidate_full),
+        "holdout_examples_evaluated": holdout_result["examples_evaluated"],
+        "holdout_examples_total": holdout_result["examples_total"],
+        "holdout_cache_hits": holdout_result["cache_hits"],
+        "holdout_calls_made": holdout_result["calls_made"],
+        "max_budget_seconds": max_budget,
+    }
+
+
 def start_budget_watchdog(max_budget: int, checkpoint: dict, checkpoint_path: Path) -> threading.Thread:
     """Daemon that terminates the process at max_budget with a partial checkpoint.
 
@@ -599,6 +690,10 @@ def evolve(
     checkpoint["remaining_seconds"] = round(remaining, 1)
     write_checkpoint(checkpoint, checkpoint_path)
 
+    # candidate_full is set only by handle_holdout_skip (budget guard); it is
+    # None on the normal path where the 8b guard keeps GEPA's candidate.
+    candidate_full = None
+
     if remaining < HOLDOUT_SKIP_THRESHOLD_SECONDS:
         # Not enough budget left for a meaningful holdout (cold-cache cost is
         # ~2 x samples x 1.5s per example). Finish cleanly: keep the baseline
@@ -608,20 +703,11 @@ def evolve(
             f"skipping holdout eval to finish cleanly. Keeping baseline; no "
             f"improvement claim made.[/yellow]"
         )
-        holdout_result = {
-            "baseline_scores": [], "evolved_scores": [],
-            "examples_evaluated": 0, "examples_total": len(holdout_examples),
-            "budget_exceeded": True, "cache_hits": 0, "calls_made": 0,
-            "skipped": True,
-        }
+        (holdout_result, avg_baseline, avg_evolved, improvement,
+         evolved_body, evolved_full, candidate_full) = handle_holdout_skip(
+             skill, evolved_body, evolved_full, holdout_examples, remaining)
         baseline_scores = holdout_result["baseline_scores"]
         evolved_scores = holdout_result["evolved_scores"]
-        avg_baseline = 0.0
-        avg_evolved = 0.0
-        improvement = 0.0
-        # Mirror the 8b guard: keep the original skill text (no evidence to deploy).
-        evolved_body = skill["body"]
-        evolved_full = skill["raw"]
     else:
         holdout_budget = max(0.0, remaining - HOLDOUT_HEADROOM_SECONDS)
         console.print(f"\n[bold]Evaluating on holdout set ({len(holdout_examples)} examples, {holdout_samples} samples each, {holdout_budget:.0f}s budget)[/bold]")
@@ -709,13 +795,20 @@ def evolve(
     table.add_column("Evolved", justify="right")
     table.add_column("Change", justify="right")
 
-    change_color = "green" if improvement > 0 else "red"
-    table.add_row(
-        "Holdout Score",
-        f"{avg_baseline:.3f}",
-        f"{avg_evolved:.3f}",
-        f"[{change_color}]{improvement:+.3f}[/{change_color}]",
-    )
+    if holdout_result.get("skipped"):
+        # Skipped holdout = NO measurement taken. Render N/A — a fabricated
+        # "+0.000 (+0.0%)" must never be misread as "no improvement"
+        # (t_ac619234). cron-evolve.sh's parse_score regex finds no digits
+        # here and falls back to N/A as well.
+        table.add_row("Holdout Score", "N/A", "N/A", "—")
+    else:
+        change_color = "green" if improvement > 0 else "red"
+        table.add_row(
+            "Holdout Score",
+            f"{avg_baseline:.3f}",
+            f"{avg_evolved:.3f}",
+            f"[{change_color}]{improvement:+.3f}[/{change_color}]",
+        )
     table.add_row(
         "Skill Size",
         f"{len(skill['body']):,} chars",
@@ -736,37 +829,27 @@ def evolve(
     # Save evolved skill / baseline / metrics (FD-exhaustion-safe writes)
     write_text_guarded(output_dir / "evolved_skill.md", evolved_full, "evolved skill")
     write_text_guarded(output_dir / "baseline_skill.md", skill["raw"], "baseline skill")
+    if holdout_result.get("skipped") and candidate_full:
+        # The skip path overwrote evolved_skill.md with the baseline copy —
+        # write GEPA's real candidate alongside it so a later budget-raised
+        # re-run can diff/reuse it (t_ac619234).
+        write_text_guarded(output_dir / "evolved_candidate.md", candidate_full, "evolved candidate (holdout skipped)")
 
     # Save metrics
-    metrics = {
-        "skill_name": skill_name,
-        "timestamp": timestamp,
-        "iterations": iterations,
-        "optimizer_model": optimizer_model,
-        "eval_model": eval_model,
-        "baseline_score": avg_baseline,
-        "evolved_score": avg_evolved,
-        "improvement": improvement,
-        "baseline_size": len(skill["body"]),
-        "evolved_size": len(evolved_body),
-        "train_examples": len(dataset.train),
-        "val_examples": len(dataset.val),
-        "holdout_examples": len(dataset.holdout),
-        "elapsed_seconds": elapsed,
-        "constraints_passed": all_pass,
-        "holdout_complete": not holdout_result["budget_exceeded"],
-        "holdout_skipped": holdout_result.get("skipped", False),
-        "holdout_examples_evaluated": holdout_result["examples_evaluated"],
-        "holdout_examples_total": holdout_result["examples_total"],
-        "holdout_cache_hits": holdout_result["cache_hits"],
-        "holdout_calls_made": holdout_result["calls_made"],
-        "max_budget_seconds": max_budget,
-    }
+    metrics = build_metrics(
+        skill_name, timestamp, iterations, optimizer_model, eval_model,
+        avg_baseline, avg_evolved, improvement,
+        len(skill["body"]), len(evolved_body),
+        len(dataset.train), len(dataset.val), len(dataset.holdout),
+        elapsed, all_pass, holdout_result, candidate_full, max_budget,
+    )
     write_text_guarded(output_dir / "metrics.json", json.dumps(metrics, indent=2), "metrics")
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if holdout_result.get("skipped"):
+        console.print("\n[yellow]⚠ Holdout skipped — no score measured (budget guard). GEPA candidate preserved to evolved_candidate.md[/yellow]")
+    elif improvement > 0:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
     else:
