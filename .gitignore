@@ -24,3 +24,7 @@ snapshots/
 .vscode/
 *.swp
 *.swo
+
+# Local evolution output and reports
+output/
+TRIAL_REPORT.md

@@ -104,16 +104,33 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(*args, **kwargs) -> float:
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    GEPA calls with 5 args: (inputs, outputs, trace, pred_name, ...).
+    MIPROv2 calls with 3 args: (example, prediction, trace).
+    This flexible signature handles both.
     """
-    # The prediction should have an 'output' field with the agent's response
-    agent_output = getattr(prediction, "output", "") or ""
-    expected = getattr(example, "expected_behavior", "") or ""
-    task = getattr(example, "task_input", "") or ""
+    # Normalize arguments — GEPA passes (inputs, outputs, trace, pred_name, ...)
+    # MIPROv2 passes (example, prediction, trace)
+    if len(args) >= 2:
+        arg0 = args[0]  # example (MIPROv2) or inputs (GEPA)
+        arg1 = args[1]  # prediction (MIPROv2) or outputs (GEPA)
+    else:
+        return 0.0
+
+    # Extract output text — handle both dspy.Example and dict
+    if hasattr(arg1, 'output'):
+        agent_output = getattr(arg1, 'output', '') or ''
+    elif isinstance(arg1, dict):
+        agent_output = arg1.get('output', '')
+    else:
+        agent_output = str(arg1)
+
+    # Extract expected behavior and task input
+    expected = getattr(arg0, 'expected_behavior', '') or ''
+    if not expected and isinstance(arg0, dict):
+        expected = arg0.get('expected_behavior', '')
 
     if not agent_output.strip():
         return 0.0

@@ -79,6 +79,33 @@ Every evolved variant must pass:
 
 See [PLAN.md](PLAN.md) for the complete architecture, evaluation data strategy, constraints, benchmarks integration, and phased timeline.
 
+## Using custom OpenAI-compatible APIs
+
+By default, this tool uses the OpenAI API directly. You can point it at any
+OpenAI-compatible API (OmniRoute, vLLM, LiteLLM, Ollama, etc.) by setting
+two environment variables:
+
+```bash
+export OPENAI_BASE_URL=https://your-api-endpoint.com/v1
+export OPENAI_API_KEY=your-api-key
+
+# Then run as usual — model names are passed through to your endpoint
+python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --iterations 10 \
+    --eval-source synthetic \
+    --optimizer-model openai/gpt-4.1 \
+    --eval-model openai/gpt-4.1-mini
+```
+
+When `OPENAI_BASE_URL` is set, it is passed as `api_base` to `dspy.LM()`.
+When `OPENAI_API_KEY` is set, it is passed as `api_key`. Both are optional —
+if unset, DSPy's defaults are used.
+
+You can also override models per-run via CLI args:
+- `--optimizer-model` — model used for GEPA reflections
+- `--eval-model` — model used for LLM-as-judge scoring and dataset generation
+
 ## License
 
 MIT — © 2026 Nous Research
