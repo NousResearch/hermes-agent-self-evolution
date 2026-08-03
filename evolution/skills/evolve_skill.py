@@ -136,8 +136,17 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy — supports any OpenAI-compatible API via env vars
+    # Set OPENAI_BASE_URL and OPENAI_API_KEY to use OmniRoute, vLLM, etc.
+    import os
+    _api_base = os.environ.get('OPENAI_BASE_URL')
+    _api_key = os.environ.get('OPENAI_API_KEY')
+    _lm_kwargs = {}
+    if _api_base:
+        _lm_kwargs['api_base'] = _api_base
+    if _api_key:
+        _lm_kwargs['api_key'] = _api_key
+    lm = dspy.LM(eval_model, **_lm_kwargs)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -155,7 +164,8 @@ def evolve(
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
+            reflection_lm=lm,
         )
 
         optimized_module = optimizer.compile(

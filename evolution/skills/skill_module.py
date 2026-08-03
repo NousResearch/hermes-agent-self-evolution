@@ -55,12 +55,8 @@ def load_skill(skill_path: Path) -> dict:
     }
 
 
-def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
-    """Find a skill by name in the hermes-agent skills directory.
-
-    Searches recursively for a SKILL.md in a directory matching the skill name.
-    """
-    skills_dir = hermes_agent_path / "skills"
+def _search_skills_dir(skills_dir: Path, skill_name: str) -> Optional[Path]:
+    """Search a single skills directory for a skill by name."""
     if not skills_dir.exists():
         return None
 
@@ -77,6 +73,30 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
                 return skill_md
         except Exception:
             continue
+
+    return None
+
+
+def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
+    """Find a skill by name in the hermes-agent or profile skills directory.
+
+    Searches the hermes-agent repo's skills/ directory first, then falls back
+    to the active Hermes profile's skills/ directory (~/.hermes/profiles/*/skills/).
+    """
+    # 1. hermes-agent repo skills
+    result = _search_skills_dir(hermes_agent_path / "skills", skill_name)
+    if result:
+        return result
+
+    # 2. Active profile skills: ~/.hermes/profiles/<profile>/skills/
+    profiles_root = Path.home() / ".hermes" / "profiles"
+    if profiles_root.exists():
+        for profile_dir in profiles_root.iterdir():
+            if not profile_dir.is_dir():
+                continue
+            result = _search_skills_dir(profile_dir / "skills", skill_name)
+            if result:
+                return result
 
     return None
 
