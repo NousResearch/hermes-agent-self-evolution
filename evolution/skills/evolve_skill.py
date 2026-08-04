@@ -155,9 +155,13 @@ def evolve(
     start_time = time.time()
 
     try:
+        # dspy.GEPA requires exactly one budget parameter (auto /
+        # max_full_evals / max_metric_calls) — there is no `max_steps` —
+        # and a reflection LM for proposing mutations.
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
+            reflection_lm=dspy.LM(optimizer_model),
         )
 
         optimized_module = optimizer.compile(
