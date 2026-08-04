@@ -46,10 +46,11 @@ The architecture doc uses mythological names. Here's what they map to in the act
 | KAIROS Dream Mode | `CrystalVault.perform_dream_cycle()` | Stub — promotes short-term to deep core on keyword match |
 | Baal Chaos Metric | Mentioned in doc, not coded | Not implemented |
 | Sephirotic Routing | Not in codebase | Pure spec |
-| Ouroboros 2.0 (WAL) | Not in codebase | Spec — see implementation steps below |
-| Sanctuary 2.0 (EWMA) | Not in codebase | Spec — see implementation steps below |
-| Akashic 2.0 (AST) | Not in codebase | Spec — see implementation steps below |
-| Speculative Cerebellum | Not in codebase | Spec — Sandlock/forkd not on Android |
+| Ouroboros 2.0 (WAL) | `evolution/core/ouroboros_memory.py` (deployed 2026-08-04, also ~/.nssp/lib/) | Working — WAL + busy_timeout + fuzzy semver + staged writes, verified concurrent R/W |
+| Sanctuary 2.0 (EWMA) | `evolution/core/sanctuary_router.py` (deployed 2026-08-04, also ~/.nssp/lib/) | Working — Android RAM adaptation (MemAvailable, %-based thresholds), 90s lock verified |
+| Akashic 2.0 (AST) | `evolution/core/akashic_pruner.py` (deployed 2026-08-04, also ~/.nssp/lib/) | Working — 64.8% token reduction, goal-hint bodies, state-mutation overlay, regex fallback |
+| Speculative Cerebellum | Not in codebase | Spec — Sandlock/forkd not on Android (kernel 4.19: no Landlock, no KVM, no CAP_SYS_PTRACE) |
+| KAIROS Dream Mode | `~/.nssp/bin/kairos-dream` + hermes cron `kairos-dream-cycle` (03:00 daily) | Working — 22-28 engrams/cycle, nomic-embed-text via Ollama, Baal noise check, oblivion prune |
 | GEPA Evolution Engine | `evolution/skills/evolve_skill.py` | Working — Phase 1 complete, heuristic scoring only |
 | Mutation Strategies | `evolution/skills/mutation_strategies.py` | Working — 3 skill-specific + 6 generic mutators |
 | Fitness Evaluator | `evolution/core/fitness.py` | Working — LLM-as-judge via DSPy, placeholder scoring in runs |
