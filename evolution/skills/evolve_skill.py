@@ -43,6 +43,8 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    max_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -138,8 +140,17 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy. Generation kwargs are only passed when explicitly set,
+    # so the default behavior is unchanged. Reasoning models served by local
+    # OpenAI-compatible endpoints (low server-side max_tokens defaults) need
+    # an explicit budget or the thinking phase consumes it and content comes
+    # back empty.
+    lm_kwargs = {}
+    if max_tokens is not None:
+        lm_kwargs["max_tokens"] = max_tokens
+    if temperature is not None:
+        lm_kwargs["temperature"] = temperature
+    lm = dspy.LM(eval_model, **lm_kwargs)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -161,7 +172,7 @@ def evolve(
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
             max_full_evals=iterations,
-            reflection_lm=dspy.LM(optimizer_model),
+            reflection_lm=dspy.LM(optimizer_model, **lm_kwargs),
         )
 
         optimized_module = optimizer.compile(
@@ -311,7 +322,10 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--max-tokens", default=None, type=int,
+              help="Generation budget per LM call (needed for reasoning models on local endpoints)")
+@click.option("--temperature", default=None, type=float, help="Sampling temperature for LM calls")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, max_tokens, temperature):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -323,6 +337,8 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        max_tokens=max_tokens,
+        temperature=temperature,
     )
 
 
