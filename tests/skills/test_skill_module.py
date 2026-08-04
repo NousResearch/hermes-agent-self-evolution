@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from evolution.skills.skill_module import load_skill, reassemble_skill
+from evolution.skills.skill_module import SkillModule, load_skill, reassemble_skill
 
 
 SAMPLE_SKILL = """---
@@ -90,3 +90,30 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModuleOptimizable:
+    """The skill text must live where GEPA mutates: signature.instructions.
+
+    GEPA's candidate space is {name: pred.signature.instructions} over
+    named_predictors() (dspy.teleprompt.gepa). A plain module attribute is
+    invisible to it, so the evolved text could never reach the saved artifact.
+    """
+
+    def test_skill_text_lives_in_signature_instructions(self):
+        text = "# My Skill\nAlways verify before concluding."
+        module = SkillModule(text)
+
+        predictors = list(module.named_predictors())
+        assert len(predictors) == 1
+        _, predictor = predictors[0]
+        assert predictor.signature.instructions == text
+
+    def test_skill_text_property_reflects_mutation(self):
+        module = SkillModule("# Original")
+
+        # Mutate the way GEPA applies candidates: rewrite the instructions.
+        for _, predictor in module.named_predictors():
+            predictor.signature = predictor.signature.with_instructions("# Evolved")
+
+        assert module.skill_text == "# Evolved"
