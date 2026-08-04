@@ -45,6 +45,9 @@ def evolve(
     dry_run: bool = False,
     max_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
+    num_threads: Optional[int] = None,
+    lm_timeout: Optional[float] = None,
+    lm_retries: Optional[int] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -150,6 +153,10 @@ def evolve(
         lm_kwargs["max_tokens"] = max_tokens
     if temperature is not None:
         lm_kwargs["temperature"] = temperature
+    if lm_timeout is not None:
+        lm_kwargs["timeout"] = lm_timeout
+    if lm_retries is not None:
+        lm_kwargs["num_retries"] = lm_retries
     lm = dspy.LM(eval_model, **lm_kwargs)
     dspy.configure(lm=lm)
 
@@ -169,10 +176,17 @@ def evolve(
         # dspy.GEPA requires exactly one budget parameter (auto /
         # max_full_evals / max_metric_calls) — there is no `max_steps` —
         # and a reflection LM for proposing mutations.
+        # num_threads matters on serial local endpoints: parallel rollouts
+        # queue behind each other and time out in cascade once queue depth
+        # times per-request latency exceeds the client timeout.
+        gepa_kwargs = {}
+        if num_threads is not None:
+            gepa_kwargs["num_threads"] = num_threads
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
             max_full_evals=iterations,
             reflection_lm=dspy.LM(optimizer_model, **lm_kwargs),
+            **gepa_kwargs,
         )
 
         optimized_module = optimizer.compile(
@@ -325,7 +339,11 @@ def evolve(
 @click.option("--max-tokens", default=None, type=int,
               help="Generation budget per LM call (needed for reasoning models on local endpoints)")
 @click.option("--temperature", default=None, type=float, help="Sampling temperature for LM calls")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, max_tokens, temperature):
+@click.option("--num-threads", default=None, type=int,
+              help="Parallel rollouts for GEPA evaluation (use 1 for serial local endpoints)")
+@click.option("--lm-timeout", default=None, type=float, help="Per-request LM timeout in seconds")
+@click.option("--lm-retries", default=None, type=int, help="LM retry count on failures")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, max_tokens, temperature, num_threads, lm_timeout, lm_retries):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -339,6 +357,9 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         dry_run=dry_run,
         max_tokens=max_tokens,
         temperature=temperature,
+        num_threads=num_threads,
+        lm_timeout=lm_timeout,
+        lm_retries=lm_retries,
     )
 
 
