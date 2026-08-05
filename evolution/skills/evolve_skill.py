@@ -33,6 +33,33 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def _build_gepa_optimizer(metric, iterations: int):
+    """Build a GEPA optimizer using the current DSPy 3.x API."""
+    if not hasattr(dspy, "GEPA"):
+        raise AttributeError("DSPy GEPA optimizer is not available")
+
+    return dspy.GEPA(
+        metric=metric,
+        max_metric_calls=iterations,
+    )
+
+
+def _validate_skill_constraints(
+    validator: ConstraintValidator,
+    skill: dict,
+    body_text: str,
+    baseline_text: Optional[str] = None,
+):
+    """Validate a complete SKILL.md, not just the body.
+
+    Structural validation requires YAML frontmatter, while DSPy optimizes only
+    the markdown body. Reassemble the full file before applying constraints.
+    """
+    full_text = reassemble_skill(skill["frontmatter"], body_text)
+    baseline_full = baseline_text or skill.get("raw")
+    return validator.validate_all(full_text, "skill", baseline_text=baseline_full)
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -73,7 +100,7 @@ def evolve(
         console.print(f"\n[bold green]DRY RUN — setup validated successfully.[/bold green]")
         console.print(f"  Would generate eval dataset (source: {eval_source})")
         console.print(f"  Would run GEPA optimization ({iterations} iterations)")
-        console.print(f"  Would validate constraints and create PR")
+        console.print(f"  Would validate constraints and save local output for review")
         return
 
     # ── 2. Build or load evaluation dataset ─────────────────────────────
@@ -118,7 +145,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -153,27 +180,22 @@ def evolve(
     start_time = time.time()
 
     try:
-        optimizer = dspy.GEPA(
+        optimizer = _build_gepa_optimizer(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            iterations=iterations,
         )
-
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-            valset=valset,
-        )
-    except Exception as e:
-        # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
+    except (AttributeError, TypeError) as e:
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
             metric=skill_fitness_metric,
             auto="light",
         )
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-        )
+
+    optimized_module = optimizer.compile(
+        baseline_module,
+        trainset=trainset,
+        valset=valset,
+    )
 
     elapsed = time.time() - start_time
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
@@ -185,7 +207,11 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = _validate_skill_constraints(
+        validator,
+        skill,
+        evolved_body,
+    )
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -202,6 +228,18 @@ def evolve(
         output_path.write_text(evolved_full)
         console.print(f"  Saved failed variant to {output_path}")
         return
+
+    if run_tests:
+        console.print(f"\n[bold]Running test suite gate[/bold]")
+        test_result = validator.run_test_suite(config.hermes_agent_path)
+        icon = "✓" if test_result.passed else "✗"
+        color = "green" if test_result.passed else "red"
+        console.print(f"  [{color}]{icon} {test_result.constraint_name}[/{color}]: {test_result.message}")
+        if test_result.details:
+            console.print(f"  {test_result.details}")
+        if not test_result.passed:
+            console.print("[red]✗ Test suite gate FAILED — not saving evolved output[/red]")
+            return
 
     # ── 8. Evaluate on holdout set ──────────────────────────────────────
     console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
