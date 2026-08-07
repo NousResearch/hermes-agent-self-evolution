@@ -118,7 +118,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -168,11 +168,17 @@ def evolve(
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
             metric=skill_fitness_metric,
-            auto="light",
+            auto=None,
+            num_candidates=max(3, min(10, iterations // 3)),
+            num_threads=1,
         )
         optimized_module = optimizer.compile(
             baseline_module,
             trainset=trainset,
+            valset=valset,
+            num_trials=iterations,
+            minibatch=False,
+            requires_permission_to_run=False,
         )
 
     elapsed = time.time() - start_time
@@ -181,11 +187,24 @@ def evolve(
     # ── 6. Extract evolved skill text ───────────────────────────────────
     # The optimized module's instructions contain the evolved skill text
     evolved_body = optimized_module.skill_text
+    # MIPROv2 does not mutate skill_text; it rewrites the predictor instruction.
+    # Recover the evolved instruction so the run produces a real change.
+    try:
+        _instr = optimized_module.predictor.signature.instructions
+        if _instr and _instr.strip() and _instr.strip() not in evolved_body:
+            evolved_body = (
+                evolved_body.rstrip()
+                + "\n\n## Optimizer-Evolved Guidance\n\n"
+                + _instr.strip()
+                + "\n"
+            )
+    except Exception as _e:
+        console.print(f"[yellow]Could not extract evolved instruction: {_e}[/yellow]")
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"

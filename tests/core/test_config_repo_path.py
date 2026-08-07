@@ -47,6 +47,10 @@ def test_resolve_expands_user_home(monkeypatch):
     from evolution.core.config import resolve_hermes_agent_path
 
     monkeypatch.setenv("HOME", "/home/example")
+    # Windows' expanduser prefers USERPROFILE/HOMEDRIVE+HOMEPATH over HOME.
+    monkeypatch.setenv("USERPROFILE", "/home/example")
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
     assert resolve_hermes_agent_path("~/code/hermes-agent") == Path("/home/example/code/hermes-agent")
 
 
