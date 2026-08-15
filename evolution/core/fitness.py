@@ -104,18 +104,33 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name=None,
+    pred_trace=None,
+):
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    This is what gets passed to dspy.GEPA(metric=...). GEPA's
+    GEPAFeedbackMetric protocol calls it with (gold, pred, trace, pred_name,
+    pred_trace); MIPROv2 and direct holdout scoring call it with the first
+    two or three arguments only, so the extra parameters default to None.
+
+    Returns a float 0-1 score — except when GEPA requests predictor-level
+    feedback (pred_name is not None), where it returns
+    dspy.Prediction(score=..., feedback=...) with a deterministic hint about
+    which expected-behavior terms are missing, giving the reflection LM
+    something concrete to act on.
     """
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
-    task = getattr(example, "task_input", "") or ""
 
     if not agent_output.strip():
+        if pred_name is not None:
+            return dspy.Prediction(score=0.0, feedback="The response was empty.")
         return 0.0
 
     # Quick heuristic scoring (for speed during optimization)
@@ -129,11 +144,27 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     # Simple keyword overlap as a fast proxy
     expected_words = set(expected_lower.split())
     output_words = set(output_lower.split())
+    missing: list[str] = []
     if expected_words:
         overlap = len(expected_words & output_words) / len(expected_words)
         score = 0.3 + (0.7 * overlap)
+        missing = sorted(
+            w for w in (expected_words - output_words) if len(w) > 4
+        )[:8]
 
-    return min(1.0, max(0.0, score))
+    score = min(1.0, max(0.0, score))
+
+    if pred_name is not None:
+        if missing:
+            feedback = (
+                f"Score {score:.2f}. The response does not address these "
+                f"expected-behavior elements: {', '.join(missing)}."
+            )
+        else:
+            feedback = f"Score {score:.2f}. The response covers the expected behavior."
+        return dspy.Prediction(score=score, feedback=feedback)
+
+    return score
 
 
 def _parse_score(value) -> float:

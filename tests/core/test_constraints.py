@@ -96,3 +96,25 @@ class TestValidateAll:
         results = validator.validate_all("", "skill")
         failed = [r for r in results if not r.passed]
         assert len(failed) > 0
+
+
+class TestValidateFullFileNotBody:
+    """Regression: skill_structure must be checked on the full file.
+
+    load_skill() strips frontmatter into a separate field; validating the
+    bare body always fails skill_structure and blocks every deploy.
+    """
+
+    def test_realistic_full_file_passes(self, validator):
+        raw = (
+            "---\nname: real-skill\ndescription: Does something real\n---\n\n"
+            "# Procedure\n1. Step"
+        )
+        results = validator.validate_all(raw, "skill")
+        assert all(r.passed for r in results)
+
+    def test_bare_body_fails_structure(self, validator):
+        body = "# Procedure\n1. Step"
+        results = validator.validate_all(body, "skill")
+        structure = [r for r in results if r.constraint_name == "skill_structure"][0]
+        assert not structure.passed
