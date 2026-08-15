@@ -33,6 +33,76 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def _compile_optimizer(
+    *,
+    metric,
+    iterations: int,
+    reflection_lm,
+    baseline_module,
+    trainset,
+    valset,
+    num_threads: Optional[int] = None,
+):
+    """Build and compile GEPA, falling back only for API incompatibility.
+
+    The compatibility boundary deliberately covers construction only. Runtime
+    failures from ``compile`` (provider errors, judge failures, timeouts, and
+    optimizer bugs) propagate instead of silently changing the optimizer.
+    """
+    gepa_kwargs = {}
+    if num_threads is not None:
+        gepa_kwargs["num_threads"] = num_threads
+
+    try:
+        optimizer = dspy.GEPA(
+            metric=metric,
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
+            **gepa_kwargs,
+        )
+        optimizer_name = "GEPA"
+    except (AttributeError, TypeError) as exc:
+        console.print(
+            f"[yellow]GEPA API is unavailable ({exc}), falling back to MIPROv2[/yellow]"
+        )
+        optimizer = dspy.MIPROv2(metric=metric, auto="light")
+        optimizer_name = "MIPROv2"
+
+    # Keep this outside the compatibility try/except. A runtime failure is not
+    # evidence that GEPA is unavailable and must never trigger a silent retry
+    # with a different optimizer. Both optimizers receive the same valset.
+    optimized_module = optimizer.compile(
+        baseline_module,
+        trainset=trainset,
+        valset=valset,
+    )
+    return optimized_module, optimizer_name
+
+
+def _run_test_suite_gate(validator: ConstraintValidator, hermes_repo: Path) -> bool:
+    """Run and report the requested test gate, returning its hard verdict."""
+    console.print("\n[bold]Running test suite gate[/bold]")
+    result = validator.run_test_suite(hermes_repo)
+    icon = "✓" if result.passed else "✗"
+    color = "green" if result.passed else "red"
+    console.print(
+        f"  [{color}]{icon} {result.constraint_name}[/{color}]: {result.message}"
+    )
+    if result.details:
+        console.print(f"  {result.details}")
+    return result.passed
+
+
+def _has_material_diff(baseline_body: str, evolved_body: str) -> bool:
+    """Whether the optimizer changed the deployable skill body."""
+    return evolved_body != baseline_body
+
+
+def _evolution_succeeded(improvement: float, material_diff: bool) -> bool:
+    """A score delta is deployable only when the saved artifact changed."""
+    return improvement > 0 and material_diff
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -172,39 +242,21 @@ def evolve(
 
     start_time = time.time()
 
-    try:
-        # dspy.GEPA requires exactly one budget parameter (auto /
-        # max_full_evals / max_metric_calls) — there is no `max_steps` —
-        # and a reflection LM for proposing mutations.
-        # num_threads matters on serial local endpoints: parallel rollouts
-        # queue behind each other and time out in cascade once queue depth
-        # times per-request latency exceeds the client timeout.
-        gepa_kwargs = {}
-        if num_threads is not None:
-            gepa_kwargs["num_threads"] = num_threads
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_full_evals=iterations,
-            reflection_lm=dspy.LM(optimizer_model, **lm_kwargs),
-            **gepa_kwargs,
-        )
-
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-            valset=valset,
-        )
-    except Exception as e:
-        # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
-        console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
-        optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
-            auto="light",
-        )
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-        )
+    # dspy.GEPA requires exactly one budget parameter (auto /
+    # max_full_evals / max_metric_calls) — there is no `max_steps` —
+    # and a reflection LM for proposing mutations. Construct the reflection LM
+    # before the compatibility boundary so its own configuration errors cannot
+    # masquerade as an unavailable GEPA API.
+    reflection_lm = dspy.LM(optimizer_model, **lm_kwargs)
+    optimized_module, optimizer_name = _compile_optimizer(
+        metric=skill_fitness_metric,
+        iterations=iterations,
+        reflection_lm=reflection_lm,
+        baseline_module=baseline_module,
+        trainset=trainset,
+        valset=valset,
+        num_threads=num_threads,
+    )
 
     elapsed = time.time() - start_time
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
@@ -213,6 +265,7 @@ def evolve(
     # The optimized module's instructions contain the evolved skill text
     evolved_body = optimized_module.skill_text
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
+    material_diff = _has_material_diff(skill["body"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
@@ -235,6 +288,9 @@ def evolve(
         output_path.write_text(evolved_full)
         console.print(f"  Saved failed variant to {output_path}")
         return
+
+    if run_tests and not _run_test_suite_gate(validator, config.hermes_agent_path):
+        raise click.ClickException("Test suite gate failed; candidate rejected")
 
     # ── 8. Evaluate on holdout set ──────────────────────────────────────
     console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
@@ -278,6 +334,12 @@ def evolve(
         f"{len(evolved_body):,} chars",
         f"{len(evolved_body) - len(skill['body']):+,} chars",
     )
+    table.add_row(
+        "Material Diff",
+        "",
+        "yes" if material_diff else "no",
+        "" if material_diff else "score delta ignored",
+    )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
 
@@ -300,11 +362,14 @@ def evolve(
         "skill_name": skill_name,
         "timestamp": timestamp,
         "iterations": iterations,
+        "optimizer": optimizer_name,
         "optimizer_model": optimizer_model,
         "eval_model": eval_model,
         "baseline_score": avg_baseline,
         "evolved_score": avg_evolved,
         "improvement": improvement,
+        "material_diff": material_diff,
+        "success": _evolution_succeeded(improvement, material_diff),
         "baseline_size": len(skill["body"]),
         "evolved_size": len(evolved_body),
         "train_examples": len(dataset.train),
@@ -317,9 +382,14 @@ def evolve(
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if _evolution_succeeded(improvement, material_diff):
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif not material_diff:
+        console.print(
+            "\n[yellow]⚠ Optimizer produced no material skill diff; "
+            "any score delta is ignored[/yellow]"
+        )
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
