@@ -18,11 +18,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from evolution.core.admission import AdmissionVerdict, evaluate_admission
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
+from evolution.core.verifier import get_verifier, verifier_metric
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -31,6 +33,42 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+
+def _is_correct(verifier, example, prediction) -> bool:
+    """Whether the objective verifier judged this answer fully correct.
+
+    The declared threshold is full correctness. Partial credit exists for
+    hedging across candidates and for paraphrased titles, and it is the right
+    signal for reflection, but an admission gate on ground truth should count
+    an example as solved only when the fact was actually right.
+    """
+    fitness = verifier.score(
+        getattr(example, "task_input", "") or "",
+        getattr(prediction, "output", "") or "",
+    )
+    return fitness.correctness >= 1.0
+
+
+def _admission_verdict(
+    baseline_scores,
+    evolved_scores,
+    *,
+    baseline_correct=None,
+    candidate_correct=None,
+) -> AdmissionVerdict:
+    """Apply the declared paired admission rule to a holdout comparison.
+
+    A single decision point, so the run reports the rule it actually used.
+    Whether the deployable artifact changed is a separate gate that this
+    command does not yet check, so it is left unasserted rather than assumed.
+    """
+    return evaluate_admission(
+        baseline_scores,
+        evolved_scores,
+        baseline_correct=baseline_correct,
+        candidate_correct=candidate_correct,
+    )
 
 
 def evolve(
@@ -43,6 +81,7 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    fitness: str = "auto",
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -69,17 +108,42 @@ def evolve(
     console.print(f"  Size: {len(skill['raw']):,} chars")
     console.print(f"  Description: {skill['description'][:80]}...")
 
+    # Resolve the fitness signal. An objective verifier grades outputs
+    # against checkable ground truth; keyword overlap is the fallback.
+    verifier = None
+    if fitness in ("auto", "verifier"):
+        verifier = get_verifier(skill_name) or get_verifier(skill["name"])
+        if fitness == "verifier" and verifier is None:
+            console.print(f"[red]✗ No verifier registered for skill '{skill_name}'[/red]")
+            sys.exit(1)
+    metric_fn = verifier_metric(verifier) if verifier else skill_fitness_metric
+    fitness_label = "objective verifier" if verifier else "keyword overlap"
+
     if dry_run:
         console.print(f"\n[bold green]DRY RUN — setup validated successfully.[/bold green]")
-        console.print(f"  Would generate eval dataset (source: {eval_source})")
-        console.print(f"  Would run GEPA optimization ({iterations} iterations)")
+        console.print(f"  Would generate eval dataset (source: {'verifier' if verifier else eval_source})")
+        console.print(f"  Would run GEPA optimization ({iterations} iterations, fitness: {fitness_label})")
         console.print(f"  Would validate constraints and create PR")
         return
 
     # ── 2. Build or load evaluation dataset ─────────────────────────────
-    console.print(f"\n[bold]Building evaluation dataset[/bold] (source: {eval_source})")
+    console.print(f"\n[bold]Building evaluation dataset[/bold] (source: {'verifier' if verifier else eval_source})")
 
-    if eval_source == "golden" and dataset_path:
+    if verifier is not None:
+        # Verifier tasks carry their own ground truth, so the dataset and
+        # the fitness function must come from the same place.
+        if dataset_path or eval_source != "synthetic":
+            console.print(
+                "[yellow]  Note: the objective verifier supplies its own dataset; "
+                "--eval-source/--dataset-path are ignored. "
+                "Use --fitness keyword to evolve against a custom dataset.[/yellow]"
+            )
+        dataset = verifier.build_dataset()
+        save_path = Path("datasets") / "skills" / f"{skill_name}-verifier"
+        dataset.save(save_path)
+        console.print(f"  Built {len(dataset.all_examples)} verified examples (objective ground truth)")
+        console.print(f"  Saved to {save_path}/")
+    elif eval_source == "golden" and dataset_path:
         dataset = GoldenDatasetLoader.load(Path(dataset_path))
         console.print(f"  Loaded golden dataset: {len(dataset.all_examples)} examples")
     elif eval_source == "sessiondb":
@@ -135,6 +199,7 @@ def evolve(
     console.print(f"  Optimizer: GEPA ({iterations} iterations)")
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
+    console.print(f"  Fitness: {fitness_label}")
 
     # Configure DSPy
     lm = dspy.LM(eval_model)
@@ -154,7 +219,7 @@ def evolve(
 
     try:
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
+            metric=metric_fn,
             max_steps=iterations,
         )
 
@@ -167,7 +232,7 @@ def evolve(
         # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
+            metric=metric_fn,
             auto="light",
         )
         optimized_module = optimizer.compile(
@@ -210,20 +275,36 @@ def evolve(
 
     baseline_scores = []
     evolved_scores = []
+    # Objective correctness per example, kept alongside the scores so the
+    # admission gate can use McNemar's exact test rather than a threshold
+    # invented for the occasion. Only a verifier can supply it.
+    baseline_correct = [] if verifier is not None else None
+    evolved_correct = [] if verifier is not None else None
     for ex in holdout_examples:
         # Score baseline
         with dspy.context(lm=lm):
             baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
+            baseline_score = metric_fn(ex, baseline_pred)
             baseline_scores.append(baseline_score)
 
             evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
+            evolved_score = metric_fn(ex, evolved_pred)
             evolved_scores.append(evolved_score)
+
+        if verifier is not None:
+            baseline_correct.append(_is_correct(verifier, ex, baseline_pred))
+            evolved_correct.append(_is_correct(verifier, ex, evolved_pred))
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
+
+    verdict = _admission_verdict(
+        baseline_scores,
+        evolved_scores,
+        baseline_correct=baseline_correct,
+        candidate_correct=evolved_correct,
+    )
 
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
@@ -245,11 +326,24 @@ def evolve(
         f"{len(evolved_body):,} chars",
         f"{len(evolved_body) - len(skill['body']):+,} chars",
     )
+    table.add_row(
+        "Admission",
+        "",
+        "admitted" if verdict.admitted else "refused",
+        f"p={verdict.p_improvement:.3f} at alpha {verdict.alpha}",
+    )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
 
     console.print()
     console.print(table)
+
+    # The mean delta above is descriptive; this is the decision, and the power
+    # line says what this many examples could ever have resolved.
+    console.print(f"\n  {verdict.describe()}")
+    console.print(
+        f"  [{'yellow' if verdict.underpowered else 'dim'}]{verdict.power_note}[/]"
+    )
 
     # ── 10. Save output ─────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -272,6 +366,10 @@ def evolve(
         "baseline_score": avg_baseline,
         "evolved_score": avg_evolved,
         "improvement": improvement,
+        # `improvement` is the descriptive mean delta. `admitted` is the
+        # decision, and it requires paired evidence rather than a sign.
+        "admitted": verdict.admitted,
+        "admission": verdict.to_dict(),
         "baseline_size": len(skill["body"]),
         "evolved_size": len(evolved_body),
         "train_examples": len(dataset.train),
@@ -279,14 +377,23 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "fitness": fitness_label,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if verdict.admitted:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
+        console.print(f"  {verdict.reason}")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif improvement > 0:
+        # The mean moved the right way but the paired test cannot separate it
+        # from noise. Reporting "did not improve" would misstate that, so name
+        # the real reason and the sample size behind it.
+        console.print(f"\n[yellow]⚠ Not admitted: {verdict.reason}[/yellow]")
+        console.print(f"  {verdict.power_note}")
+        console.print("  Try: a larger holdout, more iterations, or a different optimizer model")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
@@ -303,7 +410,10 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--fitness", default="auto", type=click.Choice(["auto", "verifier", "keyword"]),
+              help="Fitness signal: auto uses an objective verifier when one is registered "
+                   "for the skill, verifier requires one, keyword forces the overlap heuristic")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, fitness):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -315,6 +425,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        fitness=fitness,
     )
 
 
