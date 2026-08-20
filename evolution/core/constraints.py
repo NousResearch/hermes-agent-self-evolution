@@ -5,6 +5,7 @@ considered valid. Failed constraints = immediate rejection.
 """
 
 import subprocess
+import sys
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
@@ -56,7 +57,7 @@ class ConstraintValidator:
         """Run the full hermes-agent test suite. Must pass 100%."""
         try:
             result = subprocess.run(
-                ["python", "-m", "pytest", "tests/", "-q", "--tb=no"],
+                [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no"],
                 capture_output=True,
                 text=True,
                 timeout=300,
