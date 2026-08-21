@@ -449,6 +449,11 @@ class RelevanceFilter:
       2. LLM scoring for final relevance + eval metadata generation
     """
 
+    # Class-level defaults so instances built without __init__ (e.g. tests that
+    # use RelevanceFilter.__new__ to skip DSPy setup) still resolve these.
+    api_base: Optional[str] = None
+    api_key: Optional[str] = None
+
     class ScoreRelevance(dspy.Signature):
         """Score whether a user message is relevant to a specific agent skill.
 
