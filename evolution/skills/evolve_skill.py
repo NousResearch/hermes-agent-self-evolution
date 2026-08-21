@@ -139,7 +139,10 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    # Validate the full file, not the body. skill_structure requires YAML
+    # frontmatter, which load_skill() splits off into skill["frontmatter"] —
+    # so validating skill["body"] reported a false violation on every run.
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
