@@ -33,6 +33,7 @@ import dspy
 from rich.console import Console
 from rich.progress import Progress
 
+from evolution.core.dspy_lm import make_dspy_lm
 from evolution.core.dataset_builder import EvalExample, EvalDataset
 
 console = Console()
@@ -526,7 +527,7 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(
+        lm = make_dspy_lm(
             self.model,
             api_base=self.api_base,
             api_key=self.api_key,

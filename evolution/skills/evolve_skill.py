@@ -25,6 +25,7 @@ from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset,
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
+from evolution.core.dspy_lm import make_dspy_lm
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -161,12 +162,12 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(
+    lm = make_dspy_lm(
         eval_model,
         api_base=config.api_base,
         api_key=config.api_key,
     )
-    reflection_lm = dspy.LM(
+    reflection_lm = make_dspy_lm(
         optimizer_model,
         temperature=1.0,
         max_tokens=3000,
@@ -378,8 +379,10 @@ def evolve(
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
+@click.option("--optimizer-model", default="openai/gpt-4.1",
+              help="Model for GEPA reflections. Use openai-codex/<model> to route via Hermes Codex OAuth.")
+@click.option("--eval-model", default="openai/gpt-4.1-mini",
+              help="Model for evaluations. Use openai-codex/<model> to route via Hermes Codex OAuth.")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
