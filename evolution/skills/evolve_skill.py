@@ -253,12 +253,11 @@ def evolve(
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
-    # PATCH 2026-06-10 (WayneOS): validate the REASSEMBLED full text
-    # (`evolved_full`), not just the optimized body. The body alone has
-    # no YAML frontmatter (the optimizer never sees it), so the
-    # `skill_structure` constraint always rejected every evolution
-    # result on Wayne's stack — even when the LLM-as-judge found a real
-    # improvement. The fix is to validate what we'd actually deploy.
+    # Validate the reassembled file (`evolved_full`), not the optimized body.
+    # The body alone has no YAML frontmatter — the optimizer never sees it — so
+    # the skill_structure constraint rejected every evolution result, even when
+    # the judge found a real improvement. Validate what we would deploy, and
+    # compare growth against the full baseline file so both sides match.
     console.print(f"\n[bold]Validating evolved skill[/bold]")
     evolved_constraints = validator.validate_all(
         evolved_full, "skill", baseline_text=skill["raw"]
