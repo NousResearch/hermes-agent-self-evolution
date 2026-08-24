@@ -153,9 +153,17 @@ def evolve(
     start_time = time.time()
 
     try:
+        # dspy.GEPA (bundled with DSPy >= 3.x) has no `max_steps` — that kwarg is
+        # from an older standalone gepa API. Use max_metric_calls to bound the run.
+        # dspy.GEPA also requires a 5-arg metric: (gold, pred, trace, pred_name,
+        # pred_trace). Adapt our 3-arg DSPy metric to that signature.
+        def _gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+            return skill_fitness_metric(gold, pred, trace)
+
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=_gepa_metric,
+            max_metric_calls=max(12, iterations * 6),
+            reflection_lm=dspy.LM(optimizer_model, temperature=1.0, max_tokens=8000),
         )
 
         optimized_module = optimizer.compile(
@@ -179,13 +187,25 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # GEPA optimizes the PREDICTOR's instruction (ChainOfThought signature), not
+    # the self.skill_text attribute. ChainOfThought wraps its inner predictor, so
+    # reach the signature through named_predictors().
+    try:
+        evolved_instructions = next(iter(
+            pred.signature.instructions
+            for _, pred in optimized_module.predictor.named_predictors()
+        ))
+    except StopIteration:
+        evolved_instructions = optimized_module.predictor.signature.instructions
+    evolved_body = evolved_instructions
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    # The evolved artifact is body-only (frontmatter is reassembled separately),
+    # so validate the REASSEMBLED file — the raw body would always fail the
+    # frontmatter structure check by construction.
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
