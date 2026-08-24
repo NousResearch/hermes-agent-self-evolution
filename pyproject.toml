@@ -30,6 +30,11 @@ dev = [
 darwinian = [
     "darwinian-evolver",
 ]
+# The MIPROv2 fallback in evolve_skill.py needs optuna; without it a GEPA
+# failure turns into ImportError instead of a working fallback.
+mipro = [
+    "optuna>=3.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"
