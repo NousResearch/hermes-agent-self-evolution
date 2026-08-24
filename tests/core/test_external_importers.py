@@ -15,6 +15,7 @@ Tests cover:
 """
 
 import json
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
@@ -468,6 +469,14 @@ class TestCopilotHelpers:
 
 
 class TestHermesSessionImporter:
+    @pytest.fixture(autouse=True)
+    def _isolate_state_db(self, tmp_path):
+        """Pin STATE_DB to a nonexistent file so these legacy-JSON tests never
+        pick up a real Hermes install's ``state.db`` on the machine running
+        them."""
+        with patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "absent-state.db"):
+            yield
+
     def test_parses_session_json(self, tmp_path):
         session = {
             "session_id": "test-session",
@@ -554,6 +563,149 @@ class TestHermesSessionImporter:
         with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
             msgs = HermesSessionImporter.extract_messages(limit=3)
         assert len(msgs) == 3
+
+
+def _make_state_db(path, rows):
+    """Build a minimal Hermes-shaped state.db containing ``rows``.
+
+    ``rows`` is a list of ``(session_id, role, content)`` tuples, inserted in
+    order so the ``id`` column reflects conversation order.
+    """
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE messages ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  session_id TEXT,"
+        "  role TEXT,"
+        "  content TEXT,"
+        "  compacted INTEGER DEFAULT 0"
+        ")"
+    )
+    conn.executemany(
+        "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)", rows
+    )
+    conn.commit()
+    conn.close()
+    return path
+
+
+class TestHermesSessionImporterSQLite:
+    """Modern Hermes keeps transcripts in a single SQLite ``state.db``."""
+
+    def test_reads_user_assistant_pairs(self, tmp_path):
+        db = _make_state_db(tmp_path / "state.db", [
+            ("sess-1", "user", "Fix the bug in auth.py"),
+            ("sess-1", "assistant", "I found the issue and fixed it."),
+            ("sess-1", "user", "Now run the tests please"),
+            ("sess-1", "assistant", "All 42 tests passed."),
+        ])
+
+        with patch.object(HermesSessionImporter, "STATE_DB", db):
+            msgs = HermesSessionImporter.extract_messages()
+
+        assert len(msgs) == 2
+        assert msgs[0]["source"] == "hermes"
+        assert msgs[0]["session_id"] == "sess-1"
+        assert msgs[0]["task_input"] == "Fix the bug in auth.py"
+        assert msgs[0]["assistant_response"] == "I found the issue and fixed it."
+        assert msgs[1]["assistant_response"] == "All 42 tests passed."
+
+    def test_pairs_within_session_only(self, tmp_path):
+        """A user turn must not borrow the next session's assistant reply."""
+        db = _make_state_db(tmp_path / "state.db", [
+            ("sess-a", "user", "Question asked in session A"),
+            ("sess-b", "assistant", "Answer that belongs to session B"),
+        ])
+
+        with patch.object(HermesSessionImporter, "STATE_DB", db):
+            msgs = HermesSessionImporter.extract_messages()
+
+        assert len(msgs) == 1
+        assert msgs[0]["session_id"] == "sess-a"
+        assert msgs[0]["assistant_response"] == ""
+
+    def test_skips_short_messages(self, tmp_path):
+        db = _make_state_db(tmp_path / "state.db", [
+            ("s", "user", "hi"),
+            ("s", "assistant", "Hello!"),
+        ])
+
+        with patch.object(HermesSessionImporter, "STATE_DB", db):
+            msgs = HermesSessionImporter.extract_messages()
+
+        assert msgs == []
+
+    def test_filters_secrets(self, tmp_path):
+        db = _make_state_db(tmp_path / "state.db", [
+            ("s", "user", "Set ANTHROPIC_API_KEY=sk-ant-0123456789abcdef in the env"),
+            ("s", "assistant", "Done."),
+        ])
+
+        with patch.object(HermesSessionImporter, "STATE_DB", db):
+            msgs = HermesSessionImporter.extract_messages()
+
+        assert msgs == []
+
+    def test_skips_cron_preamble(self, tmp_path):
+        """Cron-injected prompts are agent scaffolding, not user tasks."""
+        db = _make_state_db(tmp_path / "state.db", [
+            ("cron-1", "user", HermesSessionImporter._CRON_PREAMBLE + " ... do the thing]"),
+            ("cron-1", "assistant", "Report delivered."),
+            ("sess-1", "user", "A genuine question from the user"),
+            ("sess-1", "assistant", "A genuine answer."),
+        ])
+
+        with patch.object(HermesSessionImporter, "STATE_DB", db):
+            msgs = HermesSessionImporter.extract_messages()
+
+        assert len(msgs) == 1
+        assert msgs[0]["session_id"] == "sess-1"
+
+    def test_respects_limit(self, tmp_path):
+        rows = []
+        for i in range(10):
+            rows.append(("s", "user", f"Message number {i} with enough text"))
+            rows.append(("s", "assistant", f"Reply number {i}"))
+        db = _make_state_db(tmp_path / "state.db", rows)
+
+        with patch.object(HermesSessionImporter, "STATE_DB", db):
+            msgs = HermesSessionImporter.extract_messages(limit=3)
+
+        assert len(msgs) == 3
+
+    def test_missing_db_falls_back_to_legacy_json(self, tmp_path):
+        """No SQLite store → the legacy JSON layout still works."""
+        session = {
+            "session_id": "legacy",
+            "messages": [
+                {"role": "user", "content": "A legacy question from JSON"},
+                {"role": "assistant", "content": "A legacy answer."},
+            ],
+        }
+        legacy_dir = tmp_path / "sessions"
+        legacy_dir.mkdir()
+        (legacy_dir / "s.json").write_text(json.dumps(session))
+
+        with patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "absent.db"), \
+             patch.object(HermesSessionImporter, "SESSION_DIR", legacy_dir):
+            msgs = HermesSessionImporter.extract_messages()
+
+        assert len(msgs) == 1
+        assert msgs[0]["task_input"] == "A legacy question from JSON"
+
+    def test_unrelated_schema_is_ignored(self, tmp_path):
+        """A state.db without the expected columns must not raise."""
+        db = tmp_path / "state.db"
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE messages (id INTEGER, unrelated TEXT)")
+        conn.commit()
+        conn.close()
+
+        with patch.object(HermesSessionImporter, "STATE_DB", db), \
+             patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path / "nope"):
+            msgs = HermesSessionImporter.extract_messages()
+
+        assert msgs == []
 
 
 # ── Skill Name Matching ──────────────────────────────────────────────────────

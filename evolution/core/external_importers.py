@@ -9,7 +9,8 @@ already use.
 Supported sources:
   - Claude Code (~/.claude/history.jsonl) — user inputs only
   - GitHub Copilot (~/.copilot/session-state/*/events.jsonl) — full conversations
-  - Hermes Agent (~/.hermes/sessions/*.json) — user + assistant + tool context
+  - Hermes Agent (state.db, or legacy ~/.hermes/sessions/*.json) — user +
+    assistant + tool context
 
 Usage as standalone CLI:
     python -m evolution.core.external_importers \\
@@ -23,8 +24,10 @@ Usage from evolve_skill.py:
 """
 
 import json
+import os
 import re
 import random
+import sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -332,22 +335,150 @@ def _parse_copilot_events(
 
 
 class HermesSessionImporter:
-    """Import conversations from Hermes Agent session files.
+    """Import conversations from the Hermes Agent session store.
 
-    Hermes stores session transcripts as JSON files in ~/.hermes/sessions/.
-    Each file contains an OpenAI-format message list with user, assistant,
-    and tool messages — providing richer signal than Claude Code (user-only)
-    or Copilot (user+assistant without tool context).
+    Modern Hermes (>= v0.15) stores every transcript in a single SQLite
+    database (``state.db``) with ``sessions`` and ``messages`` tables — not as
+    one JSON file per session. Older builds used ``~/.hermes/sessions/*.json``.
+    This importer prefers the SQLite store and falls back to the legacy JSON
+    layout so both generations keep working.
 
     This mines user messages paired with the assistant's final response,
     giving the LLM judge both the task and how it was actually handled.
     """
 
+    # Legacy layout (pre-SQLite Hermes builds).
     SESSION_DIR = Path.home() / ".hermes" / "sessions"
+
+    # Explicit SQLite store override. ``None`` means auto-discover; set it to a
+    # concrete path to pin the database (and to isolate tests from whatever
+    # Hermes install happens to exist on the machine running them).
+    STATE_DB: Optional[Path] = None
+
+    # Cron-injected preamble — agent-generated scaffolding, not a user task.
+    _CRON_PREAMBLE = "[IMPORTANT: You are running as a scheduled cron job"
+
+    @staticmethod
+    def _candidate_db_paths() -> list[Path]:
+        """Return plausible locations of the Hermes ``state.db``, best first.
+
+        An explicit :attr:`STATE_DB` short-circuits discovery. Otherwise honors
+        ``HERMES_HOME``, then the per-platform defaults (Windows
+        ``%LOCALAPPDATA%\\hermes``, XDG data dir, macOS Application Support,
+        ``~/.hermes``).
+        """
+        override = HermesSessionImporter.STATE_DB
+        if override is not None:
+            override = Path(override).expanduser()
+            return [override] if override.is_file() else []
+
+        candidates: list[Path] = []
+
+        hermes_home = os.environ.get("HERMES_HOME")
+        if hermes_home:
+            candidates.append(Path(hermes_home).expanduser())
+
+        home = Path.home()
+        local_appdata = os.environ.get("LOCALAPPDATA")
+        if local_appdata:
+            candidates.append(Path(local_appdata) / "hermes")
+        candidates.append(home / "AppData" / "Local" / "hermes")  # Windows
+        candidates.append(home / ".local" / "share" / "hermes")   # XDG
+        candidates.append(home / "Library" / "Application Support" / "hermes")  # macOS
+        candidates.append(home / ".hermes")                       # legacy / custom
+
+        seen: set[Path] = set()
+        paths: list[Path] = []
+        for base in candidates:
+            db = base / "state.db"
+            if db in seen:
+                continue
+            seen.add(db)
+            if db.is_file():
+                paths.append(db)
+        return paths
+
+    @staticmethod
+    def _extract_from_sqlite(db_path: Path, limit: int = 0) -> list[dict]:
+        """Mine user/assistant pairs out of a Hermes ``state.db``."""
+        messages: list[dict] = []
+
+        # Read-only URI so a live Hermes process is never disturbed.
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        except sqlite3.Error:
+            return []
+
+        try:
+            conn.row_factory = sqlite3.Row
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(messages)")}
+            if not {"session_id", "role", "content"} <= cols:
+                return []
+
+            order_col = "id" if "id" in cols else "rowid"
+            # Only real transcript turns; skip compacted/summary rows when the
+            # column exists so we don't train on compression artifacts.
+            where = "role IN ('user','assistant')"
+            if "compacted" in cols:
+                where += " AND COALESCE(compacted, 0) = 0"
+
+            rows = conn.execute(
+                f"SELECT session_id, role, content FROM messages "
+                f"WHERE {where} ORDER BY session_id, {order_col}"
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+        finally:
+            conn.close()
+
+        # Group by session, preserving order, then pair user -> next assistant.
+        by_session: dict[str, list[sqlite3.Row]] = {}
+        for row in rows:
+            by_session.setdefault(row["session_id"], []).append(row)
+
+        for session_id, msg_list in by_session.items():
+            for i, msg in enumerate(msg_list):
+                if msg["role"] != "user":
+                    continue
+                user_text = msg["content"] or ""
+                if not isinstance(user_text, str) or len(user_text) < 10:
+                    continue
+                if user_text.lstrip().startswith(HermesSessionImporter._CRON_PREAMBLE):
+                    continue
+                if _contains_secret(user_text):
+                    continue
+
+                assistant_text = ""
+                for j in range(i + 1, len(msg_list)):
+                    if msg_list[j]["role"] == "assistant":
+                        content = msg_list[j]["content"] or ""
+                        if content:
+                            assistant_text = content
+                            break
+                    elif msg_list[j]["role"] == "user":
+                        break
+
+                if assistant_text and _contains_secret(assistant_text):
+                    continue
+
+                messages.append({
+                    "source": "hermes",
+                    "task_input": user_text,
+                    "assistant_response": assistant_text,
+                    "session_id": session_id,
+                })
+
+                if limit and len(messages) >= limit:
+                    return messages
+
+        return messages
 
     @staticmethod
     def extract_messages(limit: int = 0) -> list[dict]:
-        """Read user/assistant pairs from Hermes session files.
+        """Read user/assistant pairs from the Hermes session store.
+
+        Tries the SQLite ``state.db`` first (modern Hermes), then the legacy
+        ``~/.hermes/sessions/*.json`` layout.
 
         Args:
             limit: Maximum messages to return (0 = no limit).
@@ -356,6 +487,11 @@ class HermesSessionImporter:
             List of dicts with keys: source, task_input, assistant_response,
             session_id.
         """
+        for db_path in HermesSessionImporter._candidate_db_paths():
+            found = HermesSessionImporter._extract_from_sqlite(db_path, limit=limit)
+            if found:
+                return found
+
         if not HermesSessionImporter.SESSION_DIR.exists():
             return []
 
