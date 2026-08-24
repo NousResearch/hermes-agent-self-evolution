@@ -84,33 +84,33 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 class SkillModule(dspy.Module):
     """A DSPy module that wraps a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
+    The skill text is the *instructions* of the predictor's signature — not an
+    input field — because GEPA/MIPRO only mutate predictor instructions. Any
+    part of the skill passed as an input field is invisible to the optimizer
+    and would silently freeze, leaving `.skill_text` stuck at its baseline
+    value while the optimizer mutates a disconnected wrapper prompt instead.
     On each forward pass, the module:
-    1. Uses the skill text as instructions
+    1. Uses the skill text as the predictor's instructions
     2. Processes the task input
     3. Returns the agent's response
     """
 
     class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
         task_input: str = dspy.InputField(desc="The task to complete")
         output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        signature = self.TaskWithSkill.with_instructions(skill_text)
+        self.predictor = dspy.ChainOfThought(signature)
+
+    @property
+    def skill_text(self) -> str:
+        """The current skill instructions — mutated in place by GEPA/MIPRO."""
+        return self.predictor.predict.signature.instructions
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
 
 
