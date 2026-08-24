@@ -33,6 +33,21 @@ from evolution.skills.skill_module import (
 console = Console()
 
 
+def _gepa_metric(*args, **kwargs) -> float:
+    """Arity-tolerant wrapper around :func:`skill_fitness_metric`.
+
+    DSPy optimizers call metrics with varying signatures — GEPA passes
+    ``(gold, pred, trace, pred_name, pred_trace)`` while Evaluate passes
+    ``(gold, pred)``. ``skill_fitness_metric`` only accepts three positional
+    args, so calling it directly raises ``TypeError`` under GEPA. Normalize
+    here instead of changing the metric's public signature.
+    """
+    example = args[0] if len(args) > 0 else kwargs.get("example") or kwargs.get("gold")
+    prediction = args[1] if len(args) > 1 else kwargs.get("prediction") or kwargs.get("pred")
+    trace = args[2] if len(args) > 2 else kwargs.get("trace")
+    return skill_fitness_metric(example, prediction, trace)
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -118,8 +133,13 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    # Validate the FULL skill file, not just the body: _check_skill_structure
+    # asserts YAML frontmatter exists, and load_skill() has already stripped it
+    # from skill["body"] — passing the body guarantees a false failure, which
+    # would later block a perfectly good evolved skill from deploying.
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
+
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
         color = "green" if c.passed else "red"
@@ -153,9 +173,14 @@ def evolve(
     start_time = time.time()
 
     try:
+        # dspy>=3.x GEPA has no `max_steps`; `max_full_evals` is the closest
+        # analogue to "iterations" (budgeted full passes over the valset), and
+        # it requires an explicit reflection LM to propose mutations.
+        reflection_lm = dspy.LM(optimizer_model, temperature=1.0, max_tokens=8000)
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=_gepa_metric,
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -167,7 +192,7 @@ def evolve(
         # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
+            metric=_gepa_metric,
             auto="light",
         )
         optimized_module = optimizer.compile(
@@ -185,7 +210,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"

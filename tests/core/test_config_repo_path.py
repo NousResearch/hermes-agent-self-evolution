@@ -46,8 +46,16 @@ def test_resolve_honors_explicit_path_without_default(tmp_path, monkeypatch):
 def test_resolve_expands_user_home(monkeypatch):
     from evolution.core.config import resolve_hermes_agent_path
 
-    monkeypatch.setenv("HOME", "/home/example")
-    assert resolve_hermes_agent_path("~/code/hermes-agent") == Path("/home/example/code/hermes-agent")
+    # Path.expanduser() reads HOME on POSIX but USERPROFILE on Windows, so set
+    # both — otherwise this test only exercises tilde expansion on POSIX and
+    # fails on Windows against the real user profile.
+    fake_home = Path("/home/example")
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("USERPROFILE", str(fake_home))
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
+
+    assert resolve_hermes_agent_path("~/code/hermes-agent") == fake_home / "code" / "hermes-agent"
 
 
 def test_resolve_falls_back_to_env_var_when_no_override(tmp_path, monkeypatch):

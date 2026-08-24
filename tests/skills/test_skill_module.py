@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from evolution.skills.skill_module import load_skill, reassemble_skill
+from evolution.skills.skill_module import SkillModule, load_skill, reassemble_skill
 
 
 SAMPLE_SKILL = """---
@@ -90,3 +90,44 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModuleIsOptimizable:
+    """The skill text must be the parameter DSPy optimizers actually mutate.
+
+    DSPy optimizers (GEPA, MIPROv2) rewrite a predictor's **signature
+    instructions**; they never touch InputField *values*. If the skill text is
+    wired as an InputField, optimization silently no-ops: GEPA proposes better
+    variants and the caller reads back the unchanged original.
+    """
+
+    BODY = "# Test Skill\n\n## Procedure\n1. Do the thing\n"
+
+    def test_skill_text_seeds_predictor_instructions(self):
+        module = SkillModule(self.BODY)
+
+        instructions = [
+            predictor.signature.instructions
+            for _, predictor in module.named_predictors()
+        ]
+        assert instructions, "module exposes no optimizable predictors"
+        assert any(self.BODY.strip() == text.strip() for text in instructions), (
+            "skill text is not in any predictor's instructions, so no DSPy "
+            "optimizer can mutate it"
+        )
+
+    def test_skill_text_reflects_optimizer_mutation(self):
+        module = SkillModule(self.BODY)
+
+        # Simulate what GEPA/MIPROv2 do when they accept a candidate.
+        for _, predictor in module.named_predictors():
+            predictor.signature = predictor.signature.with_instructions("# EVOLVED")
+
+        assert module.skill_text.strip() == "# EVOLVED", (
+            "mutating predictor instructions did not change skill_text — the "
+            "evolved variant would be discarded"
+        )
+
+    def test_skill_text_roundtrips_unmutated(self):
+        module = SkillModule(self.BODY)
+        assert module.skill_text.strip() == self.BODY.strip()
