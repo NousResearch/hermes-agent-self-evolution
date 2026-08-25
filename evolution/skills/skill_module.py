@@ -84,9 +84,15 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 class SkillModule(dspy.Module):
     """A DSPy module that wraps a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
+    The skill text is the parameter that GEPA optimizes. Critically, it must
+    live in the predictor's **signature instructions**, not in an InputField:
+    DSPy optimizers mutate signature instructions and leave input *values*
+    alone. Wiring the skill as an InputField (the original design) meant GEPA
+    happily proposed improved variants that were then silently discarded,
+    producing an "evolved" skill byte-identical to the baseline.
+
     On each forward pass, the module:
-    1. Uses the skill text as instructions
+    1. Uses the skill text as the predictor's instructions
     2. Processes the task input
     3. Returns the agent's response
     """
@@ -94,23 +100,37 @@ class SkillModule(dspy.Module):
     class TaskWithSkill(dspy.Signature):
         """Complete a task following the provided skill instructions.
 
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
+        You are an AI agent following specific skill instructions to complete a
+        task. Read the skill instructions carefully and follow the procedure
+        described.
         """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
         task_input: str = dspy.InputField(desc="The task to complete")
         output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        # Seed the signature's instructions with the skill body so it becomes
+        # the optimizable parameter GEPA mutates.
+        self.predictor = dspy.ChainOfThought(
+            self.TaskWithSkill.with_instructions(skill_text)
+        )
+
+    @property
+    def skill_text(self) -> str:
+        """Current skill text, read back out of the signature instructions.
+
+        After ``optimizer.compile(...)`` this returns the *evolved* text, which
+        is what callers persist to disk.
+        """
+        # dspy.ChainOfThought wraps an inner Predict as `.predict`; GEPA names
+        # the component "predictor.predict". Fall back to the outer signature
+        # for other module shapes / DSPy versions.
+        inner = getattr(self.predictor, "predict", None)
+        sig = getattr(inner, "signature", None) or getattr(self.predictor, "signature", None)
+        return getattr(sig, "instructions", "") or ""
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
 
 
