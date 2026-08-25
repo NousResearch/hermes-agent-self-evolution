@@ -104,36 +104,68 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+_judge_predictor: Optional[dspy.Module] = None
+
+
+def _get_judge_predictor() -> dspy.Module:
+    global _judge_predictor
+    if _judge_predictor is None:
+        _judge_predictor = dspy.ChainOfThought(LLMJudge.JudgeSignature)
+    return _judge_predictor
+
+
+def _skill_text_from_trace(pred_trace) -> str:
+    """Pull the skill text the module was actually run with out of the trace.
+
+    ``pred_trace`` is a list of ``(predictor, predictor_inputs, prediction)`` tuples.
+    ``SkillModule`` bakes the skill text into the predictor's signature instructions
+    (not an input field — see skill_module.py) so it's read off the predictor itself.
+    """
+    if not pred_trace:
+        return ""
+    for item in pred_trace:
+        predictor = item[0] if len(item) > 0 else None
+        signature = getattr(predictor, "signature", None)
+        if signature is not None and getattr(signature, "instructions", None):
+            return signature.instructions
+    return ""
+
+
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name=None,
+    pred_trace=None,
+) -> dspy.Prediction:
     """DSPy-compatible metric function for skill optimization.
 
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+    This is what gets passed to dspy.GEPA(metric=...). GEPA requires this exact
+    five-argument signature (gold, pred, trace, pred_name, pred_trace) and uses
+    the returned feedback text for its reflective mutation step — a bare float
+    works but gives GEPA nothing to reason about *why* a candidate scored low.
     """
-    # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
 
     if not agent_output.strip():
-        return 0.0
+        return dspy.Prediction(score=0.0, feedback="The skill produced an empty response for this task.")
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
+    judge = _get_judge_predictor()
+    result = judge(
+        task_input=task,
+        expected_behavior=expected,
+        agent_output=agent_output,
+        skill_text=_skill_text_from_trace(pred_trace),
+    )
 
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
-    output_lower = agent_output.lower()
+    correctness = _parse_score(result.correctness)
+    procedure_following = _parse_score(result.procedure_following)
+    conciseness = _parse_score(result.conciseness)
+    score = min(1.0, max(0.0, 0.5 * correctness + 0.3 * procedure_following + 0.2 * conciseness))
 
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
-    if expected_words:
-        overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
-
-    return min(1.0, max(0.0, score))
+    return dspy.Prediction(score=score, feedback=str(result.feedback))
 
 
 def _parse_score(value) -> float:

@@ -369,7 +369,7 @@ class HermesSessionImporter:
         for session_file in session_files:
             try:
                 data = json.loads(session_file.read_text())
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 continue
 
             msg_list = data.get("messages", [])
