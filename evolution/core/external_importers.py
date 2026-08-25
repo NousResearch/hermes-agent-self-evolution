@@ -492,6 +492,13 @@ class HermesSessionImporter:
             if found:
                 return found
 
+        # An explicit existing STATE_DB pins the source (especially in tests). If
+        # that DB yields no usable messages, do not fall through into the user's
+        # real legacy session directory and contaminate the result. A missing
+        # override still allows legacy fallback for compatibility.
+        if HermesSessionImporter.STATE_DB is not None and Path(HermesSessionImporter.STATE_DB).expanduser().is_file():
+            return []
+
         if not HermesSessionImporter.SESSION_DIR.exists():
             return []
 
@@ -505,7 +512,7 @@ class HermesSessionImporter:
         for session_file in session_files:
             try:
                 data = json.loads(session_file.read_text())
-            except (json.JSONDecodeError, OSError):
+            except (UnicodeDecodeError, json.JSONDecodeError, OSError):
                 continue
 
             msg_list = data.get("messages", [])
