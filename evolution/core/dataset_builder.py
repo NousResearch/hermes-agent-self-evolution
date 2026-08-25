@@ -136,13 +136,20 @@ class SyntheticDatasetBuilder:
         try:
             cases_raw = json.loads(result.test_cases)
         except json.JSONDecodeError:
-            # Try to extract JSON from the response
+            # Try to extract JSON from the response; strip JS-style comments and
+            # repair invalid escape sequences LLMs emit (e.g. \w, \d inside strings).
             import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
+            candidate = re.sub(r"^\s*//.*$", "", result.test_cases, flags=re.MULTILINE)
+            match = re.search(r'\[.*\]', candidate, re.DOTALL)
+            if not match:
                 raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+            raw = match.group()
+            try:
+                cases_raw = json.loads(raw)
+            except json.JSONDecodeError:
+                # Escape backslashes that aren't valid JSON escapes (e.g. \w, \d).
+                repaired = re.sub(r'\\([^\s"\\/bfnrtu])', lambda m: '\\\\' + m.group(1), raw)
+                cases_raw = json.loads(repaired)
 
         examples = [
             EvalExample(

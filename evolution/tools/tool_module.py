@@ -146,8 +146,23 @@ class ToolRouterModule(dspy.Module):
 
     @property
     def descriptions(self) -> dict[str, str]:
-        """Current per-tool descriptions — mutated in place by GEPA/MIPRO."""
-        return parse_router_instructions(self.predictor.predict.signature.instructions, self.tool_names)
+        """Current per-tool descriptions — mutated in place by GEPA/MIPRO.
+
+        If GEPA rewrote the block and dropped the `### TOOL:` markers (common
+        once the optimizer starts restructuring prose), fall back to keeping
+        the whole evolved block as a single entry keyed by the first tool name.
+        The block is still fully usable as routing instructions; only per-tool
+        splitting is lost, which downstream consumers must handle gracefully.
+        """
+        parsed = parse_router_instructions(self.predictor.predict.signature.instructions, self.tool_names)  # type: ignore[attr-defined]
+        if parsed:
+            return parsed
+        return {self.tool_names[0]: self.predictor.predict.signature.instructions}  # type: ignore[attr-defined]
+
+    @property
+    def raw_instructions(self) -> str:
+        """The full (possibly evolved) instructions block, markers or not."""
+        return self.predictor.predict.signature.instructions  # type: ignore[attr-defined]
 
     def forward(self, task_input: str) -> dspy.Prediction:
         result = self.predictor(task_input=task_input)

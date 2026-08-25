@@ -39,11 +39,56 @@ class GenerateToolSelectionCases(dspy.Signature):
     - Confusing tasks where a DIFFERENT tool in the list could plausibly be
       picked instead, to test whether descriptions clearly disambiguate
     Do not include tasks for tools outside the given list.
+
+    HARD REQUIREMENTS — the dataset is only useful if it produces errors:
+    - At least 70% of cases must be 'hard': boundary cases where two tools in
+      the list genuinely overlap and either could plausibly be argued for.
+      Examples of real overlaps: searching file contents (search_files) vs
+      running grep/rg via terminal; reading a file (read_file) vs cat/head/tail
+      or sed -n via terminal; creating/editing a file (write_file) vs shell
+      redirection or patch via terminal; structured multi-file search
+      (search_files) vs a one-off find command.
+    - For each hard case, the correct answer must be decided by a SPECIFIC,
+      defensible criterion stated in the task itself (e.g. "needs line numbers
+      and regex with lookaheads" favors grep in terminal; "results will be
+      re-read programmatically many times" favors search_files). Do not write
+      trick questions whose answer is arbitrary — write cases where the right
+      choice follows from what the descriptions SHOULD say.
+    - Vary phrasing: some tasks terse, some verbose, some with context noise.
     """
     tool_descriptions_block: str = dspy.InputField(desc="All candidate tools and their current descriptions")
     tool_names: str = dspy.InputField(desc="Comma-separated list of valid tool names — every correct_tool value must be one of these, verbatim")
     cases_per_tool: int = dspy.InputField(desc="How many test cases to generate per tool")
     test_cases: str = dspy.OutputField(desc="JSON array of objects: {task_input, correct_tool, difficulty}")
+
+
+# Curated adversarial seed cases for the read_file/write_file/search_files/terminal
+# group. These are always mixed into the synthetic dataset so the run never
+# depends solely on LLM-generated cases being hard enough. Each answer follows
+# from a defensible criterion, not arbitrariness.
+CURATED_SEED_CASES: dict[str, list[dict]] = {
+    "read_file,write_file,search_files,terminal": [
+        # search_files vs terminal(grep)
+        {"task_input": "Show every line in the repo matching the regex 'def \\w+_schema' with line numbers and 2 lines of context after", "correct_tool": "terminal", "difficulty": "hard"},
+        {"task_input": "Find all call sites of the helper function build_payload across src/ — we'll iterate over the matches programmatically afterwards", "correct_tool": "search_files", "difficulty": "hard"},
+        {"task_input": "Count how many TODO comments exist in the project and produce a sorted per-file breakdown", "correct_tool": "terminal", "difficulty": "hard"},
+        {"task_input": "Locate where the constant MAX_RETRIES is defined or referenced; I just need to know if it exists and roughly where", "correct_tool": "search_files", "difficulty": "hard"},
+        # read_file vs terminal(cat/head/sed)
+        {"task_input": "Print the first 40 lines of build.log to see why compilation started failing", "correct_tool": "terminal", "difficulty": "hard"},
+        {"task_input": "I need to review pyproject.toml in full before editing it — show me everything including any long sections", "correct_tool": "read_file", "difficulty": "hard"},
+        {"task_input": "Extract only lines 500-560 of the generated report.md without loading the rest", "correct_tool": "terminal", "difficulty": "hard"},
+        # write_file vs terminal redirection/patch
+        {"task_input": "Replace the version string '1.2.0' with '1.3.0' everywhere it appears in setup.cfg — surgical edit, nothing else changes", "correct_tool": "terminal", "difficulty": "hard"},
+        {"task_input": "Write a brand-new CONTRIBUTING.md from this outline I'm giving you", "correct_tool": "write_file", "difficulty": "hard"},
+        {"task_input": "Append one line 'generated-by-ci: true' to the end of .gitignore", "correct_tool": "terminal", "difficulty": "hard"},
+    ],
+}
+
+
+def _curated_seed_cases(tool_names: list[str]) -> list[dict]:
+    """Return curated seed cases matching this tool group, if any."""
+    key = ",".join(tool_names)
+    return CURATED_SEED_CASES.get(key, [])
 
 
 def _generate_tool_selection_dataset(
@@ -67,7 +112,10 @@ def _generate_tool_selection_dataset(
         cases_raw = json.loads(result.test_cases)
     except json.JSONDecodeError:
         import re
-        match = re.search(r"\[.*\]", result.test_cases, re.DOTALL)
+        candidate = result.test_cases
+        # LLMs sometimes emit JS-style comments inside the JSON array — strip them.
+        candidate = re.sub(r"^\s*//.*$", "", candidate, flags=re.MULTILINE)
+        match = re.search(r"\[.*\]", candidate, re.DOTALL)
         if not match:
             raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
         cases_raw = json.loads(match.group())
@@ -88,6 +136,20 @@ def _generate_tool_selection_dataset(
     dropped = len(cases_raw) - len(examples)
     if dropped:
         console.print(f"  [yellow]Dropped {dropped}/{len(cases_raw)} generated cases (missing fields or unknown tool name)[/yellow]")
+
+    seed = _curated_seed_cases(list(descriptions.keys()))
+    if seed:
+        examples.extend(
+            EvalExample(
+                task_input=c["task_input"],
+                expected_behavior=c["correct_tool"],
+                difficulty=c.get("difficulty", "hard"),
+                category="curated_seed",
+                source="golden",
+            )
+            for c in seed
+        )
+        console.print(f"  Added {len(seed)} curated adversarial seed cases")
 
     import random
     random.shuffle(examples)
@@ -186,9 +248,12 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     evolved_descriptions = optimized_module.descriptions
-    missing = set(tool_names) - evolved_descriptions.keys()
-    if missing:
-        console.print(f"[red]✗ Lost marker for tool(s) {sorted(missing)} during optimization — structure did not survive[/red]")
+    evolved_block = optimized_module.raw_instructions
+    markers_lost = set(tool_names) - evolved_descriptions.keys()
+    if markers_lost and evolved_block.strip():
+        console.print(f"[yellow]! GEPA dropped the ### TOOL: markers for {sorted(markers_lost)} — keeping the full evolved block as one unit[/yellow]")
+    elif markers_lost:
+        console.print(f"[red]✗ Lost marker for tool(s) {sorted(markers_lost)} during optimization — structure did not survive[/red]")
 
     console.print("\n[bold]Evolved description sizes[/bold]")
     per_tool_ok = {}
@@ -235,6 +300,7 @@ def evolve(
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "baseline_descriptions.json").write_text(json.dumps(descriptions, indent=2))
     (output_dir / "evolved_descriptions.json").write_text(json.dumps(evolved_descriptions, indent=2))
+    (output_dir / "evolved_block.md").write_text(evolved_block)
     (output_dir / "metrics.json").write_text(json.dumps({
         "tools": tool_names,
         "iterations": iterations,
@@ -244,6 +310,7 @@ def evolve(
         "evolved_accuracy": evolved_acc,
         "improvement": change,
         "per_tool_constraints_passed": per_tool_ok,
+        "markers_survived": not markers_lost,
         "elapsed_seconds": elapsed,
     }, indent=2))
     console.print(f"\n  Output saved to {output_dir}/")
