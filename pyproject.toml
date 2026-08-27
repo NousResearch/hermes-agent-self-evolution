@@ -20,6 +20,9 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.0",
     "rich>=13.0",
+    # MIPROv2 (the fallback path in evolve_skill.py when GEPA is unavailable)
+    # imports optuna. Without it the fallback dies with ModuleNotFoundError.
+    "optuna>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +33,12 @@ dev = [
 darwinian = [
     "darwinian-evolver",
 ]
+
+[project.scripts]
+evolve-skill = "evolution.skills.evolve_skill:main"
+evolve-tool = "evolution.tools.evolve_tool:main"
+evolve-prompt = "evolution.prompts.evolve_prompt:main"
+evolve-rotation = "evolution.monitor.run_rotation:main"
 
 [project.urls]
 Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"

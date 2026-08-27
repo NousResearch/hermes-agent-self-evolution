@@ -33,41 +33,21 @@ import dspy
 from rich.console import Console
 from rich.progress import Progress
 
+from evolution.core.dspy_lm import make_dspy_lm
 from evolution.core.dataset_builder import EvalExample, EvalDataset
+from evolution.core.hermes_paths import HermesInstall, try_find_hermes_install
+from evolution.core.redact import SECRET_PATTERNS as _SECRET_PATTERNS
+from evolution.core.redact import contains_secret as _shared_contains_secret
+from evolution.core.state_db import HermesStateImporter
 
 console = Console()
 
 # ── Secret Detection ──────────────────────────────────────────────────────
 
-# Patterns that indicate secrets — NEVER include these in datasets.
-# Each pattern is intentionally anchored to known key formats to minimize
-# false positives on normal prose.
-SECRET_PATTERNS = re.compile(
-    r'('
-    r'sk-ant-api\S+'           # Anthropic API keys
-    r'|sk-or-v1-\S+'          # OpenRouter API keys
-    r'|sk-\S{20,}'            # Generic OpenAI-style keys (20+ chars after sk-)
-    r'|ghp_\S+'               # GitHub personal access tokens
-    r'|ghu_\S+'               # GitHub user tokens
-    r'|xoxb-\S+'              # Slack bot tokens
-    r'|xapp-\S+'              # Slack app tokens
-    r'|ntn_\S+'               # Notion integration tokens
-    r'|AKIA[0-9A-Z]{16}'      # AWS access key IDs
-    r'|Bearer\s+\S{20,}'      # Bearer auth headers (20+ char tokens)
-    r'|-----BEGIN\s+(RSA\s+)?PRIVATE\sKEY-----'  # PEM private keys
-    r'|ANTHROPIC_API_KEY'      # Known env var names (exact match)
-    r'|OPENAI_API_KEY'
-    r'|OPENROUTER_API_KEY'
-    r'|SLACK_BOT_TOKEN'
-    r'|GITHUB_TOKEN'
-    r'|AWS_SECRET_ACCESS_KEY'
-    r'|DATABASE_URL'
-    r'|\bpassword\s*[=:]\s*\S+' # password assignments (password=xxx, password: xxx)
-    r'|\bsecret\s*[=:]\s*\S+'   # secret assignments (secret=xxx, secret: xxx)
-    r'|\btoken\s*[=:]\s*\S{10,}' # token assignments with 10+ char values
-    r')',
-    re.IGNORECASE,
-)
+# Secret patterns live in evolution.core.redact so both the file importers and
+# the state.db importer can share them without an import cycle. Re-exported
+# under the original names for callers that already import them from here.
+SECRET_PATTERNS = _SECRET_PATTERNS
 
 
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
@@ -77,7 +57,7 @@ MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
 
 def _contains_secret(text: str) -> bool:
     """Check if text contains potential API keys or tokens."""
-    return bool(SECRET_PATTERNS.search(text))
+    return _shared_contains_secret(text)
 
 
 def _validate_eval_example(
@@ -118,25 +98,35 @@ def _validate_eval_example(
     }
 
 
-def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
-    """Quick heuristic check if a message might be relevant to a skill.
+def _relevance_score(text: str, skill_name: str, skill_text: str) -> int:
+    """Heuristic relevance strength between a message and a skill.
 
-    Uses keyword overlap between the message and skill description/name.
-    This is a cheap pre-filter before the LLM does proper relevance scoring.
-    Returns True if the message shares enough vocabulary with the skill.
+    Returns an integer score (0 = no signal). Used both as a boolean
+    pre-filter (score > 0) and to RANK candidates so the LLM scoring budget
+    is spent on the strongest matches first — an unranked cap was observed
+    to send the chronologically-first N candidates to the LLM while stronger
+    matches beyond the cap were never scored.
+
+    Scoring:
+      +10  exact full skill-name phrase match
+      +3   per skill-name word (>3 chars) found in the message
+      +1   per keyword (from the skill's first 500 chars) found in the message
+           (only counts when >= 2 keywords match, mirroring the old boolean rule)
     """
     text_lower = text.lower()
     skill_lower = skill_name.lower().replace("-", " ").replace("_", " ")
 
+    score = 0
+
     # Exact full skill name match (handles short names like "mcp", "tdd", "git")
     if skill_lower in text_lower:
-        return True
+        score += 10
 
     # Individual word match (only words > 3 chars to avoid false positives
     # from short fragments like "run", "use", etc.)
     for word in skill_lower.split():
         if len(word) > 3 and word in text_lower:
-            return True
+            score += 3
 
     # Extract meaningful keywords from skill text (first 500 chars)
     skill_keywords = set()
@@ -145,10 +135,22 @@ def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
         if len(word) > 4:
             skill_keywords.add(word)
 
-    # Require at least 2 keyword matches
+    # Require at least 2 keyword matches before keywords contribute
     message_words = set(re.sub(r'[^a-z\s]', '', text_lower).split())
     overlap = message_words & skill_keywords
-    return len(overlap) >= 2
+    if len(overlap) >= 2:
+        score += len(overlap)
+
+    return score
+
+
+def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
+    """Quick heuristic check if a message might be relevant to a skill.
+
+    Thin boolean wrapper over :func:`_relevance_score` (kept for API
+    compatibility with existing callers/tests).
+    """
+    return _relevance_score(text, skill_name, skill_text) > 0
 
 
 # ── Importers ─────────────────────────────────────────────────────────────
@@ -368,8 +370,11 @@ class HermesSessionImporter:
 
         for session_file in session_files:
             try:
-                data = json.loads(session_file.read_text())
-            except (json.JSONDecodeError, OSError):
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                # UnicodeDecodeError is neither of the other two, and a single
+                # non-UTF8 file in the legacy directory used to abort the whole
+                # import. Credit: NousResearch/hermes-agent-self-evolution#179.
                 continue
 
             msg_list = data.get("messages", [])
@@ -427,6 +432,11 @@ class RelevanceFilter:
       2. LLM scoring for final relevance + eval metadata generation
     """
 
+    # Class-level defaults so instances built without __init__ (e.g. tests that
+    # use RelevanceFilter.__new__ to skip DSPy setup) still resolve these.
+    api_base: Optional[str] = None
+    api_key: Optional[str] = None
+
     class ScoreRelevance(dspy.Signature):
         """Score whether a user message is relevant to a specific agent skill.
 
@@ -442,9 +452,11 @@ class RelevanceFilter:
         assistant_response: str = dspy.InputField(desc="The assistant's actual response (may be empty)")
         scoring: str = dspy.OutputField(desc="JSON object with: relevant, expected_behavior, difficulty, category")
 
-    def __init__(self, model: str):
+    def __init__(self, model: str, api_base: Optional[str] = None, api_key: Optional[str] = None):
         self.scorer = dspy.ChainOfThought(self.ScoreRelevance)
         self.model = model
+        self.api_base = api_base
+        self.api_key = api_key
 
     def filter_and_score(
         self,
@@ -469,11 +481,18 @@ class RelevanceFilter:
         # Stage 0: drop messages missing required fields
         messages = [m for m in messages if m.get("task_input") and m.get("source")]
 
-        # Stage 1: cheap heuristic pre-filter
-        candidates = [
-            m for m in messages
-            if _is_relevant_to_skill(m["task_input"], skill_name, skill_text)
+        # Stage 1: cheap heuristic pre-filter, RANKED by relevance strength so
+        # the LLM scoring budget (the cap below) goes to the strongest matches
+        # instead of the chronologically-first ones.
+        scored = [
+            (m, _relevance_score(m["task_input"], skill_name, skill_text))
+            for m in messages
         ]
+        candidates = [m for m, s in sorted(
+            (pair for pair in scored if pair[1] > 0),
+            key=lambda pair: pair[1],
+            reverse=True,
+        )]
 
         # If heuristics found too few, sample remaining messages
         if len(candidates) < max_examples:
@@ -490,7 +509,11 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(self.model)
+        lm = make_dspy_lm(
+            self.model,
+            api_base=self.api_base,
+            api_key=self.api_key,
+        )
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))
@@ -603,6 +626,162 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
 # ── Orchestration ─────────────────────────────────────────────────────────
 
 
+class SourceReport:
+    """What one dataset source actually yielded, and why if nothing.
+
+    A source that produces nothing must say so out loud. The original pipeline
+    treated "this directory does not exist" and "this directory held nothing
+    relevant" identically — both surfaced as an empty dataset and a generic
+    exit — which is how a weekly job stayed broken for months while reporting
+    only "No relevant examples found from session history".
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+        self.messages = 0
+        self.available = False
+        self.detail = ""
+
+    def render(self) -> str:
+        if not self.available:
+            return f"  [yellow]{self.name}: unavailable — {self.detail}[/yellow]"
+        if not self.messages:
+            return f"  {self.name}: 0 messages ({self.detail})" if self.detail else f"  {self.name}: 0 messages"
+        suffix = f" ({self.detail})" if self.detail else ""
+        return f"  {self.name}: {self.messages} messages{suffix}"
+
+
+def _collect_one(
+    label: str,
+    extract,
+    locate,
+    sink: list[dict],
+) -> SourceReport:
+    """Run one file-backed importer and describe what it produced.
+
+    Extraction comes first and the path is consulted only to *explain* an empty
+    result. Probing the path first looked equivalent and was not: it made our
+    guess about where the data lives authoritative over the importer itself, so
+    a source that could actually produce messages was skipped whenever the
+    guess was wrong — and any test that substituted the importer was skipped
+    with it.
+    """
+    report = SourceReport(label)
+    try:
+        msgs = extract()
+    except Exception as exc:  # noqa: BLE001 — one bad source must not end the run
+        report.detail = f"{type(exc).__name__}: {exc}"
+        return report
+
+    if msgs:
+        report.available = True
+        report.messages = len(msgs)
+        sink.extend(msgs)
+        return report
+
+    # Empty. Distinguish "the source is not here" from "it is here and idle" —
+    # they need different fixes, and conflating them is what let a broken
+    # weekly job look the same as a quiet one.
+    try:
+        path = locate()
+        report.available = bool(path) and path.exists()
+        report.detail = "" if report.available else f"{path} not present"
+    except Exception:  # noqa: BLE001
+        report.available = False
+        report.detail = "location could not be determined"
+    return report
+
+
+def collect_external_messages(
+    sources: list[str],
+    skill_name: str = "",
+    skill_text: str = "",
+    install: Optional[HermesInstall] = None,
+    profiles: Optional[list[str]] = None,
+) -> tuple[list[dict], list[SourceReport]]:
+    """Pull raw messages from every requested source, reporting each one.
+
+    Returns the messages plus a per-source report so the caller can tell the
+    difference between "no data here" and "this source is not even present".
+    """
+    reports: list[SourceReport] = []
+    all_messages: list[dict] = []
+
+    for source in sources:
+        if source == "hermes":
+            report = SourceReport("Hermes Agent (state.db)")
+            resolved = install or try_find_hermes_install()
+            if resolved is None:
+                report.detail = (
+                    "no Hermes data dir found; set HERMES_DATA_DIR to the "
+                    "directory containing state.db"
+                )
+                reports.append(report)
+                continue
+
+            importer = HermesStateImporter(resolved, profiles=profiles)
+            dbs = importer.describe_sources()
+            if not dbs:
+                report.detail = f"no profile has a state.db under {resolved.root}"
+                reports.append(report)
+                continue
+
+            report.available = True
+            msgs = importer.extract_messages(skill_name=skill_name, skill_text=skill_text)
+            # FTS narrowing can be too aggressive on a skill whose vocabulary
+            # does not appear verbatim in transcripts. Retry unfiltered rather
+            # than reporting an empty source.
+            if not msgs and skill_name:
+                msgs = importer.extract_messages(use_fts=False)
+                report.detail = f"{len(dbs)} profile(s), full scan (no FTS matches)"
+            else:
+                report.detail = f"{len(dbs)} profile(s)"
+            report.messages = len(msgs)
+            all_messages.extend(msgs)
+            reports.append(report)
+            continue
+
+        if source == "hermes-legacy":
+            report = _collect_one(
+                "Hermes Agent (legacy JSON)",
+                HermesSessionImporter.extract_messages,
+                lambda: HermesSessionImporter.SESSION_DIR,
+                all_messages,
+            )
+            reports.append(report)
+            continue
+
+        if source == "claude-code":
+            report = _collect_one(
+                "Claude Code",
+                ClaudeCodeImporter.extract_messages,
+                lambda: ClaudeCodeImporter.HISTORY_PATH,
+                all_messages,
+            )
+            reports.append(report)
+            continue
+
+        if source == "copilot":
+            report = _collect_one(
+                "Copilot",
+                CopilotImporter.extract_messages,
+                lambda: CopilotImporter.SESSION_DIR,
+                all_messages,
+            )
+            reports.append(report)
+            continue
+
+    return all_messages, reports
+
+
+class NoSessionDataError(RuntimeError):
+    """Raised when no configured source has any data at all.
+
+    Distinct from "sources had data but none was relevant" — the two need
+    different fixes and must not surface as the same message.
+    """
+
+
 def build_dataset_from_external(
     skill_name: str,
     skill_text: str,
@@ -610,8 +789,12 @@ def build_dataset_from_external(
     output_path: Path,
     model: str,
     max_examples: int = 50,
+    api_base: Optional[str] = None,
+    api_key: Optional[str] = None,
+    install: Optional[HermesInstall] = None,
+    profiles: Optional[list[str]] = None,
 ) -> EvalDataset:
-    """Extract messages from external tools, filter for relevance, and save.
+    """Extract messages from real session stores, filter, and save.
 
     This is the main entry point called by both the standalone CLI and
     evolve_skill.py when --eval-source sessiondb is used.
@@ -619,39 +802,48 @@ def build_dataset_from_external(
     Args:
         skill_name: Name of the target skill.
         skill_text: Full text of the SKILL.md file.
-        sources: List of source names ("claude-code", "copilot").
+        sources: Source names — "hermes", "claude-code", "copilot",
+            "hermes-legacy".
         output_path: Directory to write train/val/holdout JSONL files.
         model: LiteLLM model string for relevance scoring.
         max_examples: Maximum eval examples to generate.
+        api_base: Optional API base URL for custom endpoints.
+        api_key: Optional API key for custom endpoints.
+        install: Pre-resolved Hermes install (avoids re-discovery).
+        profiles: Restrict Hermes mining to these profiles.
 
-    Returns:
-        EvalDataset with train/val/holdout splits.
+    Raises:
+        NoSessionDataError: When every source is unavailable or empty.
     """
-    all_messages = []
-
-    importers = {
-        "claude-code": ("Claude Code", ClaudeCodeImporter),
-        "copilot": ("Copilot", CopilotImporter),
-        "hermes": ("Hermes Agent", HermesSessionImporter),
-    }
-
-    for source in sources:
-        if source not in importers:
-            continue
-        label, importer_cls = importers[source]
-        console.print(f"\n[bold]Importing from {label}...[/bold]")
-        msgs = importer_cls.extract_messages()
-        console.print(f"  Found {len(msgs)} messages")
-        all_messages.extend(msgs)
+    console.print("\n[bold]Session sources[/bold]")
+    all_messages, reports = collect_external_messages(
+        sources=sources,
+        skill_name=skill_name,
+        skill_text=skill_text,
+        install=install,
+        profiles=profiles,
+    )
+    for report in reports:
+        console.print(report.render())
 
     if not all_messages:
-        console.print("[red]No messages found from any source.[/red]")
-        return EvalDataset()
+        available = [r for r in reports if r.available]
+        if not available:
+            raise NoSessionDataError(
+                "None of the requested session sources exist on this machine "
+                f"({', '.join(sources)}). Evolution runs inside the Hermes "
+                "container read HERMES_DATA_DIR, not $HOME — check that it "
+                "points at the directory containing state.db."
+            )
+        raise NoSessionDataError(
+            "Session sources are present but hold no usable messages: "
+            + ", ".join(f"{r.name} ({r.detail or 'empty'})" for r in reports)
+        )
 
     console.print(f"\n[bold]Total messages: {len(all_messages)}[/bold]")
     console.print(f"[bold]Filtering for relevance to skill: {skill_name}[/bold]")
 
-    relevance_filter = RelevanceFilter(model=model)
+    relevance_filter = RelevanceFilter(model=model, api_base=api_base, api_key=api_key)
     examples = relevance_filter.filter_and_score(
         all_messages, skill_name, skill_text, max_examples=max_examples,
     )
@@ -659,8 +851,10 @@ def build_dataset_from_external(
     console.print(f"\n[bold green]Found {len(examples)} relevant examples[/bold green]")
 
     if not examples:
-        console.print("[yellow]No relevant examples found. Try a different skill or broader sources.[/yellow]")
-        return EvalDataset()
+        raise NoSessionDataError(
+            f"Mined {len(all_messages)} messages but none were relevant to "
+            f"'{skill_name}'. Try --eval-source synthetic, or widen the sources."
+        )
 
     if len(examples) < MIN_DATASET_SIZE:
         console.print(
@@ -691,6 +885,7 @@ def build_dataset_from_external(
         console.print(f"  {src}: {count}")
 
     return dataset
+
 
 
 def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tuple[str, str]:
@@ -740,7 +935,11 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
               help="LiteLLM model string for relevance scoring")
 @click.option("--max-examples", default=50, help="Max eval examples to generate")
 @click.option("--dry-run", is_flag=True, help="Show message counts without LLM scoring")
-def main(source, skill, output, model, max_examples, dry_run):
+@click.option("--api-base", default=None,
+              help="Optional API base URL for custom endpoints")
+@click.option("--api-key", default=None,
+              help="Optional API key for custom endpoints")
+def main(source, skill, output, model, max_examples, dry_run, api_base, api_key):
     """Import external session data into golden eval datasets for self-evolution."""
     console.print(f"\n[bold cyan]External Session Importer[/bold cyan] — skill: [bold]{skill}[/bold]\n")
 
@@ -778,6 +977,8 @@ def main(source, skill, output, model, max_examples, dry_run):
         output_path=output,
         model=model,
         max_examples=max_examples,
+        api_base=api_base,
+        api_key=api_key,
     )
 
 

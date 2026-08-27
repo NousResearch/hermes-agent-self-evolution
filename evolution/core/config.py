@@ -1,9 +1,13 @@
 """Configuration and hermes-agent repo discovery."""
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
+
+from evolution.core.objectives import ObjectiveWeights
 
 
 @dataclass
@@ -16,6 +20,15 @@ class EvolutionConfig:
     # an explicit override should win, or get_hermes_agent_path() to require one.
     hermes_agent_path: Optional[Path] = field(default_factory=lambda: _discover_hermes_agent_path())
 
+    # Hermes *data* directory (~/.hermes or the container's bind mount). This is
+    # separate from the repo: the repo holds code and shipped skills, the data
+    # dir holds state.db, profiles, cron and the user's own skills. Resolved by
+    # evolution.core.hermes_paths, never from Path.home() at the call site.
+    hermes_data_dir: Optional[str] = None
+
+    # Restrict mining to specific profiles. None means every profile found.
+    profiles: Optional[list[str]] = None
+
     # Optimization parameters
     iterations: int = 10
     population_size: int = 5
@@ -25,11 +38,21 @@ class EvolutionConfig:
     eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
 
-    # Constraints
-    max_skill_size: int = 15_000  # 15KB default
+    # Custom base URL for local models (e.g., vLLM, Ollama)
+    api_base: Optional[str] = None  # e.g., "http://localhost:8000/v1"
+    api_key: Optional[str] = None  # e.g., "sk_test_key"
+
+    # Constraints. max_skill_size is only the fallback — the real budget is
+    # derived from the installed skill corpus, because a fixed 15KB cap
+    # rejects 27 of the 201 shipped skills at their own baseline.
+    max_skill_size: int = 15_000
+    size_percentile: int = 90  # corpus percentile used as the budget
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
+
+    # Objective weights for the multi-objective scalarization.
+    objective_weights: ObjectiveWeights = field(default_factory=ObjectiveWeights)
 
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate
@@ -37,14 +60,30 @@ class EvolutionConfig:
     val_ratio: float = 0.25
     holdout_ratio: float = 0.25
 
-    # Benchmark gating
-    run_pytest: bool = True
-    run_tblite: bool = False  # Expensive — opt-in
-    tblite_regression_threshold: float = 0.02  # Max 2% regression allowed
+    # Agent-in-the-loop evaluation. When enabled, candidates are scored by
+    # running the real Hermes AIAgent rather than a single completion.
+    agent_eval: bool = False
+    agent_eval_reps: int = 1
+    agent_toolsets: tuple[str, ...] = ("file", "terminal", "search")
+
+    # Gating
+    run_pytest: bool = False  # run the hermes-agent test suite before deploy
+    test_timeout_s: int = 300
+
+    # Deployment
+    create_pr: bool = False
+    pr_base_branch: str = "main"
+    pr_draft: bool = True
 
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
-    create_pr: bool = True
+
+    def resolved_output_dir(self) -> Path:
+        """Output root, honoring EVOLUTION_OUTPUT_DIR when set."""
+        env = os.getenv("EVOLUTION_OUTPUT_DIR")
+        if env:
+            return Path(env).expanduser()
+        return Path(self.output_dir)
 
 
 def _discover_hermes_agent_path() -> Optional[Path]:
@@ -65,14 +104,16 @@ def get_hermes_agent_path() -> Path:
 
     Priority:
     1. HERMES_AGENT_REPO env var
-    2. ~/.hermes/hermes-agent (standard install location)
-    3. ../hermes-agent (sibling directory)
+    2. HERMES_AGENT_SOURCE_REPO env var (set by the containerized runner)
+    3. ~/.hermes/hermes-agent (standard install location)
+    4. ../hermes-agent (sibling directory)
     """
-    env_path = os.getenv("HERMES_AGENT_REPO")
-    if env_path:
-        p = Path(env_path).expanduser()
-        if p.exists():
-            return p
+    for env_var in ("HERMES_AGENT_REPO", "HERMES_AGENT_SOURCE_REPO"):
+        env_path = os.getenv(env_var)
+        if env_path:
+            p = Path(env_path).expanduser()
+            if p.exists():
+                return p
 
     home_path = Path.home() / ".hermes" / "hermes-agent"
     if home_path.exists():
@@ -100,3 +141,40 @@ def resolve_hermes_agent_path(hermes_repo: Optional[str] = None) -> Path:
     if hermes_repo:
         return Path(hermes_repo).expanduser()
     return get_hermes_agent_path()
+
+
+def skill_search_roots(
+    config: EvolutionConfig,
+    install=None,
+    profile: Optional[str] = None,
+) -> list[Path]:
+    """Every directory that might hold the skill being evolved.
+
+    Order matters: profile-specific skills win over user-tree skills, which
+    win over the ones shipped in the repo, because that is the precedence the
+    running agent applies.
+    """
+    roots: list[Path] = []
+
+    if install is not None:
+        try:
+            if profile:
+                roots.append(install.profile(profile).skills_dir)
+            else:
+                for prof in install.profiles():
+                    roots.append(prof.skills_dir)
+        except Exception:  # noqa: BLE001 — a bad profile name must not break discovery
+            pass
+        roots.append(install.skills_dir)
+
+    if config.hermes_agent_path:
+        roots.append(Path(config.hermes_agent_path) / "skills")
+        roots.append(Path(config.hermes_agent_path) / "optional-skills")
+
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for root in roots:
+        if root and root.is_dir() and root not in seen:
+            seen.add(root)
+            unique.append(root)
+    return unique

@@ -96,3 +96,55 @@ class TestValidateAll:
         results = validator.validate_all("", "skill")
         failed = [r for r in results if not r.passed]
         assert len(failed) > 0
+
+    def test_evolved_full_reassembled_text_passes_skill_structure(self, validator):
+        """Regression test for the bug where `validate_all` was called with
+        `evolved_body` (the body slice with frontmatter already stripped by
+        `load_skill()`) and the `skill_structure` constraint falsely failed.
+
+        `reassemble_skill(frontmatter, evolved_body)` produces a complete
+        skill file with valid frontmatter. Validating the reassembled text
+        should pass all four constraints; validating the body alone should
+        not. This test pins the contract that the call site in
+        `evolution/skills/evolve_skill.py:189` depends on.
+        """
+        # Reassembled text — what the patched call site actually validates
+        reassembled = (
+            "---\n"
+            "name: evolved-skill\n"
+            "description: An evolved skill produced by the self-evolution pipeline\n"
+            "---\n"
+            "\n"
+            "# Procedure\n"
+            "1. Read the contract from the system prompt.\n"
+            "2. Verify the bridge is healthy.\n"
+            "3. Report pass/fail with evidence.\n"
+        )
+        results = validator.validate_all(reassembled, "skill")
+        skill_structure_result = next(r for r in results if r.constraint_name == "skill_structure")
+        assert skill_structure_result.passed, (
+            f"Reassembled skill text should pass skill_structure constraint, "
+            f"got: {skill_structure_result.message}"
+        )
+
+    def test_evolved_body_alone_fails_skill_structure(self, validator):
+        """Confirms the root cause: the body alone (no frontmatter) cannot
+        ever pass the skill_structure check. This is what the upstream bug
+        did — it validated the body, which structurally cannot pass.
+
+        This test exists so a future refactor that re-introduces
+        `validate_all(evolved_body, ...)` would fail loudly, with the
+        `skill_structure` constraint as the smoking gun.
+        """
+        body_only = (
+            "# Procedure\n"
+            "1. Read the contract from the system prompt.\n"
+            "2. Verify the bridge is healthy.\n"
+        )
+        results = validator.validate_all(body_only, "skill")
+        skill_structure_result = next(r for r in results if r.constraint_name == "skill_structure")
+        assert not skill_structure_result.passed, (
+            "Body-only text should fail skill_structure (no frontmatter) — "
+            "if this assertion fails, the constraint has changed shape and "
+            "the upstream call site may need a different fix."
+        )
