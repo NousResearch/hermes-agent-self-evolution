@@ -25,6 +25,7 @@ producing empty datasets.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -134,6 +135,35 @@ def _looks_like_hermes_root(path: Path) -> bool:
     return path.is_dir() and any((path / marker).exists() for marker in _ROOT_MARKERS)
 
 
+def _platform_candidates() -> list[tuple[Path, str]]:
+    """Default install locations, in the order Hermes itself would use them.
+
+    ``~/.hermes`` is the common case, but a Windows install lands under
+    ``%LOCALAPPDATA%`` and an XDG-configured Linux install under
+    ``$XDG_DATA_HOME``. Checking only the POSIX default made discovery fail on
+    those machines with a message that pointed at the wrong directory.
+    Locations contributed by NousResearch/hermes-agent-self-evolution#178.
+    """
+    home = Path.home()
+    found: list[tuple[Path, str]] = [(home / ".hermes", "~/.hermes")]
+
+    local_appdata = os.getenv("LOCALAPPDATA")
+    if local_appdata:
+        found.append((Path(local_appdata) / "hermes", "%LOCALAPPDATA%/hermes"))
+
+    xdg_data = os.getenv("XDG_DATA_HOME")
+    if xdg_data:
+        found.append((Path(xdg_data) / "hermes", "$XDG_DATA_HOME/hermes"))
+
+    if sys.platform == "darwin":
+        found.append(
+            (home / "Library" / "Application Support" / "hermes",
+             "~/Library/Application Support/hermes")
+        )
+
+    return found
+
+
 def find_hermes_install(explicit: Optional[str | Path] = None) -> HermesInstall:
     """Locate the Hermes data directory.
 
@@ -164,7 +194,7 @@ def find_hermes_install(explicit: Optional[str | Path] = None) -> HermesInstall:
         if raw:
             candidates.append((Path(raw).expanduser(), f"${env_var}"))
 
-    candidates.append((Path.home() / ".hermes", "~/.hermes"))
+    candidates.extend(_platform_candidates())
 
     tried = []
     for path, source in candidates:

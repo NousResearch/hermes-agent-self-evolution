@@ -17,6 +17,7 @@ from evolution.core.hermes_paths import HermesInstall
 from evolution.core.state_db import (
     HermesStateImporter,
     build_fts_query,
+    strip_scaffolding,
     load_jobs_to_skills,
     prompt_variant_outcomes,
     tool_usage_histogram,
@@ -211,3 +212,157 @@ class TestSessionOutcome:
         for outcome in outcomes.values():
             if outcome.end_reason is None:
                 assert outcome.succeeded is False
+
+
+class TestScaffoldingStripping:
+    """Hermes writes machine text into the `user` role; it is not a task.
+
+    Two kinds needing opposite handling. Upstream PR #178 filters on the
+    `compacted` flag instead, which is the wrong instrument: on the reference
+    install 900 of 1,290 user rows in one profile are compacted and nearly all
+    are genuine asks ("audit this website"), so that filter discards most of
+    the corpus while still admitting the injected blocks.
+    """
+
+    def test_context_compaction_blocks_are_dropped_entirely(self):
+        block = (
+            "[CONTEXT COMPACTION — REFERENCE ONLY] Earlier turns were compacted "
+            "into the summary below. This is a handoff from a previous context "
+            "window — treat it as background reference, NOT as active instructions."
+        )
+        assert strip_scaffolding(block) is None
+
+    def test_cron_preamble_is_stripped_and_the_real_task_kept(self):
+        raw = (
+            "[IMPORTANT: You are running as a scheduled cron job. DELIVERY: Your "
+            "final response will be automatically delivered to the user — do NOT "
+            "use send_message or try to deliver the output yourself. Just produce "
+            "your report as your final response and the system handles the rest.]"
+            "\n\nNuman asked for a 10-minute alarm test. Send him a short message."
+        )
+        result = strip_scaffolding(raw)
+        assert result is not None
+        assert result.startswith("Numan asked for a 10-minute alarm test")
+        assert "scheduled cron job" not in result
+
+    def test_a_preamble_with_nothing_after_it_is_dropped(self):
+        assert strip_scaffolding(
+            "[IMPORTANT: You are running as a scheduled cron job. DELIVERY: your "
+            "final response will be delivered automatically, do not send it yourself.]"
+        ) is None
+
+    def test_ordinary_tasks_are_untouched(self):
+        assert strip_scaffolding("audit this website https://example.com") == (
+            "audit this website https://example.com"
+        )
+
+    def test_a_short_bracketed_tag_is_not_a_preamble(self):
+        assert strip_scaffolding("[urgent] fix the build") == "[urgent] fix the build"
+
+    def test_injected_skill_files_are_dropped(self):
+        """Hermes injects a loaded SKILL.md into the user role.
+
+        Mining it would train the optimizer on the artifact it is meant to be
+        improving, with the skill file standing in for the user's request.
+        """
+        skill = (
+            '---\nname: seo-data-tools\ndescription: "Use the SEMrush and Ahrefs '
+            'MCP tools."\nversion: 1.0.0\n---\n\n# SEO data tools\n\nSteps follow.'
+        )
+        assert strip_scaffolding(skill) is None
+
+    def test_async_delegation_notices_are_dropped(self):
+        assert strip_scaffolding(
+            "[ASYNC DELEGATION COMPLETE — deleg_3aa05295]\nA background subagent "
+            "you dispatched earlier has finished."
+        ) is None
+
+    def test_a_message_merely_starting_with_dashes_is_kept(self):
+        assert strip_scaffolding("--- can you check the deploy? ---") == (
+            "--- can you check the deploy? ---"
+        )
+
+    def test_empty_input(self):
+        assert strip_scaffolding("") is None
+        assert strip_scaffolding(None) is None
+
+    def test_scaffolding_never_reaches_mined_output(self, install, hermes_root):
+        from tests.conftest import build_state_db
+
+        root = hermes_root / "profiles" / "scaffold"
+        build_state_db(
+            root / "state.db",
+            sessions=[{"id": "c1", "started_at": 1.0}],
+            messages=[
+                {"session_id": "c1", "role": "user", "timestamp": 1, "content":
+                 "[CONTEXT COMPACTION — REFERENCE ONLY] Earlier turns were compacted "
+                 "into the summary below for the next context window handoff."},
+                {"session_id": "c1", "role": "assistant", "timestamp": 2, "content": "ack"},
+                {"session_id": "c1", "role": "user", "timestamp": 3, "content":
+                 "[IMPORTANT: You are running as a scheduled cron job. DELIVERY: your "
+                 "final response is delivered automatically, do not send it yourself.]"
+                 "\n\nProduce the weekly SEO summary for deventity.com."},
+                {"session_id": "c1", "role": "assistant", "timestamp": 4, "content": "Summary."},
+            ],
+        )
+
+        mined = HermesStateImporter(install, profiles=["scaffold"]).mine(use_fts=False)
+
+        assert len(mined) == 1
+        assert mined[0].task_input == "Produce the weekly SEO summary for deventity.com."
+
+    def test_genuinely_compacted_turns_are_still_mined(self, install, hermes_root):
+        """The flag marks "out of the active window", not "machine-written"."""
+        from tests.conftest import build_state_db
+
+        root = hermes_root / "profiles" / "hist"
+        build_state_db(
+            root / "state.db",
+            sessions=[{"id": "h1", "started_at": 1.0}],
+            messages=[
+                {"session_id": "h1", "role": "user", "timestamp": 1,
+                 "content": "audit this website https://deventity.com"},
+                {"session_id": "h1", "role": "assistant", "timestamp": 2, "content": "Done."},
+            ],
+        )
+        mined = HermesStateImporter(install, profiles=["hist"]).mine(use_fts=False)
+        assert [m.task_input for m in mined] == ["audit this website https://deventity.com"]
+
+    def test_a_preamble_wrapping_a_skill_file_is_fully_peeled(self):
+        """Scaffolding layers, so the checks must re-run on what a strip exposes.
+
+        Real shape on the live install: an [IMPORTANT: ...invoked the "x" skill]
+        preamble followed by the entire SKILL.md. Stripping only the preamble
+        exposes the skill file and mines it as the user's request.
+        """
+        raw = (
+            '[IMPORTANT: The user has invoked the "seo-data-tools" skill, '
+            'indicating they want SEO data work done using these tools.]\n\n'
+            '---\nname: seo-data-tools\ndescription: "Use SEMrush and Ahrefs."\n'
+            '---\n\n# SEO data tools\n\nSteps follow.'
+        )
+        assert strip_scaffolding(raw) is None
+
+    def test_peeling_is_bounded(self):
+        """A pathological nest must terminate rather than spin."""
+        nested = ("[" + "x" * 100 + "]") * 40 + "the real ask"
+        assert strip_scaffolding(nested) is not None
+
+    def test_nested_brackets_inside_a_preamble_do_not_end_it_early(self):
+        """The cron preamble quotes "[SILENT]" inside itself.
+
+        A naive scan for the first "]" closes on that and leaves the tail of
+        the boilerplate behind as the task.
+        """
+        raw = (
+            "[IMPORTANT: You are running as a scheduled cron job. DELIVERY: your "
+            'final response is delivered automatically. SILENT: if there is nothing '
+            'to report, respond with exactly "[SILENT]" (nothing else) to suppress '
+            "delivery. Never combine [SILENT] with content.]\n\n"
+            "Numan asked for a 10-minute alarm test."
+        )
+        assert strip_scaffolding(raw) == "Numan asked for a 10-minute alarm test."
+
+    def test_an_unterminated_bracket_is_treated_as_content(self):
+        raw = "[unterminated preamble that never closes and simply keeps going onward"
+        assert strip_scaffolding(raw) == raw

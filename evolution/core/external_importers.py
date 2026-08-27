@@ -370,8 +370,11 @@ class HermesSessionImporter:
 
         for session_file in session_files:
             try:
-                data = json.loads(session_file.read_text())
-            except (json.JSONDecodeError, OSError):
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                # UnicodeDecodeError is neither of the other two, and a single
+                # non-UTF8 file in the legacy directory used to abort the whole
+                # import. Credit: NousResearch/hermes-agent-self-evolution#179.
                 continue
 
             msg_list = data.get("messages", [])

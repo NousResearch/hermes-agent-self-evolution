@@ -38,6 +38,41 @@ _ASSISTANT_ROLE = "assistant"
 # Below this length a message is a greeting or an acknowledgement, not a task.
 _MIN_TASK_CHARS = 10
 
+# Hermes injects machine-written text into the `user` role. Two kinds, and they
+# need opposite handling — which is why filtering on the `compacted` flag is the
+# wrong instrument. On the reference install 900 of 1,290 user rows in one
+# profile are compacted, and nearly all of them are genuine historical asks
+# ("audit this website"); dropping them would discard most of the corpus.
+#
+# Pure scaffolding: the whole message is machine-generated, never a task.
+_SCAFFOLD_ONLY_MARKERS = (
+    "[context compaction",
+    "[conversation compacted",
+    "[async delegation complete",
+    "[subagent complete",
+)
+
+# Injected preambles: boilerplate wrapper with the real task after it. The
+# cron preamble is ~500 characters of delivery instructions followed by what
+# the user actually asked for, so it is stripped rather than skipped.
+_SCAFFOLD_PREFIX_MARKERS = (
+    "important: you are running as a scheduled cron job",
+    "important: you are running as a scheduled",
+)
+
+# A leading [...] block longer than this is a preamble, not a short tag.
+_PREAMBLE_MIN_CHARS = 80
+
+# Hermes injects the full text of a loaded skill into the user role. Mining
+# that as a task is worse than useless: the optimizer would be trained on the
+# artifact it is supposed to be improving, with the skill file itself as the
+# "user request".
+_SKILL_FRONTMATTER_SCAN = 600
+
+# Scaffolding layers: a preamble can wrap a skill file, which can itself be
+# followed by more. Bounded so a pathological message cannot spin.
+_MAX_PEEL_PASSES = 4
+
 # How many best-ranked messages an FTS query may select per profile. An OR of
 # a dozen terms matches most of a real corpus, so without a cap "narrowing"
 # narrows nothing. Sized generously against what the LLM relevance filter will
@@ -417,6 +452,76 @@ class HermesStateImporter:
         return mined
 
 
+def strip_scaffolding(text: str) -> Optional[str]:
+    """Return the human-authored part of a turn, or None if there is none.
+
+    Hermes writes into the ``user`` role itself: cron runs get a delivery
+    preamble prepended to the real instruction, skill invocations get the whole
+    SKILL.md appended after a preamble, context compaction injects a summary
+    block, and finished subagents post completion notices. Mining any of it
+    verbatim turns agent plumbing into evaluation tasks — and in the skill case
+    it would train the optimizer on the very artifact it is meant to improve.
+
+    Peeling is iterative because these layer: a real message can be a preamble
+    wrapping a skill file, so the checks have to run again on whatever a strip
+    exposes rather than trusting the first pass.
+    """
+    current = (text or "").strip()
+
+    for _ in range(_MAX_PEEL_PASSES):
+        if not current:
+            return None
+
+        lowered = current.lower()
+        if any(lowered.startswith(m) for m in _SCAFFOLD_ONLY_MARKERS):
+            return None
+        if _looks_like_skill_file(current):
+            return None
+
+        if not current.startswith("["):
+            return current
+
+        close = _matching_bracket(current)
+        if close is None or close <= _PREAMBLE_MIN_CHARS:
+            # A short bracketed tag like "[urgent]" is content, not a preamble.
+            return current
+
+        remainder = current[close + 1:].strip()
+        if not remainder:
+            return None
+        current = remainder
+
+    return current or None
+
+
+def _matching_bracket(text: str) -> Optional[int]:
+    """Index of the ``]`` that closes the leading ``[``, honoring nesting.
+
+    Taking the first ``]`` is wrong on real data: the cron preamble quotes
+    ``"[SILENT]"`` inside itself, so a naive scan closes on that and leaves the
+    tail of the boilerplate behind as the "task".
+    """
+    if not text.startswith("["):
+        return None
+    depth = 0
+    for i, ch in enumerate(text):
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
+
+
+def _looks_like_skill_file(text: str) -> bool:
+    """True when the message is an injected SKILL.md rather than a request."""
+    if not text.startswith("---"):
+        return False
+    head = text[:_SKILL_FRONTMATTER_SCAN]
+    return "name:" in head and "description:" in head
+
+
 def _pair_within_session(
     msgs: Iterable[sqlite3.Row],
     match_ids: Optional[set[int]] = None,
@@ -433,8 +538,8 @@ def _pair_within_session(
             continue
         if match_ids is not None and msg["id"] not in match_ids:
             continue
-        user_text = (msg["content"] or "").strip()
-        if len(user_text) < _MIN_TASK_CHARS:
+        user_text = strip_scaffolding(msg["content"])
+        if not user_text or len(user_text) < _MIN_TASK_CHARS:
             continue
 
         assistant_text = ""
