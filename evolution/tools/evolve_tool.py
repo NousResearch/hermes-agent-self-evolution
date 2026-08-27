@@ -32,7 +32,6 @@ import dspy
 from rich.console import Console
 from rich.table import Table
 
-from evolution.core.config import EvolutionConfig
 from evolution.core.dspy_lm import make_dspy_lm
 from evolution.core.hermes_paths import try_find_hermes_install
 from evolution.core.objectives import ObjectiveVector, ObjectiveWeights

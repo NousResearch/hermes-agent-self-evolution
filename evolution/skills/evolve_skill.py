@@ -30,13 +30,17 @@ import click
 import dspy
 import litellm
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from evolution.core.config import (
     EvolutionConfig,
     resolve_hermes_agent_path,
     skill_search_roots,
+)
+from evolution.core.agent_runner import (
+    AgentEvaluator,
+    HermesAgentBackend,
+    tasks_from_examples,
 )
 from evolution.core.corpus import derive_size_budget, measure_corpus
 from evolution.core.dataset_builder import (
@@ -53,9 +57,11 @@ from evolution.core.constraints import ConstraintValidator
 from evolution.core.dspy_lm import make_dspy_lm
 from evolution.core.hermes_paths import HermesInstallNotFound, try_find_hermes_install
 from evolution.core.notify import Notifier, RunSummary
-from evolution.core.objectives import ObjectiveVector, select_best
-from evolution.core.report import ABReport, arm_from_scores
+from evolution.core.outcome_signals import skill_production_health
+from evolution.core.objectives import ObjectiveVector, select_best, summarize_front
+from evolution.core.report import ABReport, arm_from_eval_run, arm_from_scores
 from evolution.core.skill_bundle import load_bundle
+from evolution.deploy.canary import CanaryLedger, deploy_canary
 from evolution.deploy.pr import PRPublisher, build_pr_body
 from evolution.skills.skill_module import (
     SkillModule,
@@ -96,6 +102,9 @@ def evolve(
     hermes_data_dir: Optional[str] = None,
     profile: Optional[str] = None,
     run_tests: bool = False,
+    canary: bool = False,
+    agent_eval: bool = False,
+    agent_eval_reps: int = 1,
     dry_run: bool = False,
     api_base: Optional[str] = None,
     api_key: Optional[str] = None,
@@ -122,6 +131,8 @@ def evolve(
         eval_model=eval_model,
         judge_model=eval_model,  # Use same model for dataset generation
         run_pytest=run_tests,
+        agent_eval=agent_eval,
+        agent_eval_reps=agent_eval_reps,
         api_base=api_base,
         api_key=api_key,
         size_percentile=size_percentile,
@@ -175,6 +186,11 @@ def evolve(
     console.print(f"  Bundle: {bundle.describe()}")
     if skill["description"]:
         console.print(f"  Description: {skill['description'][:80]}...")
+
+    if install:
+        health = skill_production_health(install, skill_name)
+        if health.has_evidence:
+            console.print(f"  Production health: {health.describe()}")
 
     # ── 2. Derive the size budget from the real corpus ──────────────────
     corpus_roots = [r for r in roots]
@@ -294,13 +310,31 @@ def evolve(
     evolved_frontmatter = bump_version(skill["frontmatter"])
     evolved_full = reassemble_skill(evolved_frontmatter, evolved_body)
 
-    # ── 8. Holdout evaluation — same metric as the search ───────────────
+    # ── 8. Holdout evaluation ───────────────────────────────────────────
     holdout = dataset.to_dspy_examples("holdout") or dataset.to_dspy_examples("val")
     console.print(f"\n[bold]Evaluating on holdout set ({len(holdout)} examples)[/bold]")
 
-    baseline_scores, evolved_scores = _score_arms(
-        holdout, baseline_module, optimized_module, metric, lm
-    )
+    baseline_arm = evolved_arm = None
+    baseline_scores: list[float] = []
+    evolved_scores: list[float] = []
+
+    if config.agent_eval:
+        # Run the real agent with each skill loaded, rather than scoring a bare
+        # completion. Strictly better evidence, and strictly more expensive.
+        baseline_run, evolved_run = _score_arms_with_agent(
+            config=config,
+            holdout=holdout,
+            baseline_text=skill["body"],
+            evolved_text=evolved_body,
+        )
+        baseline_arm = arm_from_eval_run("baseline", baseline_run, len(skill["raw"]))
+        evolved_arm = arm_from_eval_run("evolved", evolved_run, len(evolved_full))
+        baseline_scores = baseline_arm.scores
+        evolved_scores = evolved_arm.scores
+    else:
+        baseline_scores, evolved_scores = _score_arms(
+            holdout, baseline_module, optimized_module, metric, lm
+        )
 
     improvement = (
         (sum(evolved_scores) / len(evolved_scores) if evolved_scores else 0.0)
@@ -340,9 +374,13 @@ def evolve(
     # ── 10. Report against a noise band ─────────────────────────────────
     report = ABReport(
         subject=skill_name,
-        baseline=arm_from_scores("baseline", baseline_scores, len(skill["raw"])),
-        evolved=arm_from_scores("evolved", evolved_scores, len(evolved_full)),
-        metric_name="judge composite × size objective (identical to the search metric)",
+        baseline=baseline_arm or arm_from_scores("baseline", baseline_scores, len(skill["raw"])),
+        evolved=evolved_arm or arm_from_scores("evolved", evolved_scores, len(evolved_full)),
+        metric_name=(
+            "graded agent runs (real AIAgent, real toolsets)"
+            if config.agent_eval
+            else "judge composite × size objective (identical to the search metric)"
+        ),
         constraints_passed=not failures,
         constraint_failures=failures,
         extra={
@@ -356,6 +394,9 @@ def evolve(
         best_idx = select_best(search_vectors, config.objective_weights)
         if best_idx is not None:
             report.extra["best search vector"] = search_vectors[best_idx].as_dict()
+        # The front, not just the winner: it shows what was traded away.
+        front = summarize_front(search_vectors)
+        report.extra["pareto front"] = f"{len(front)} of {len(search_vectors)} evaluations"
 
     verdict, reason = report.verdict()
     console.print()
@@ -416,6 +457,15 @@ def evolve(
         console.print(f"[yellow]⚠ Verdict is {verdict} — not deploying[/yellow]")
         return result
 
+    if canary:
+        result["canary"] = _deploy_canary(
+            install=install,
+            skill_name=skill_name,
+            skill_path=skill_path,
+            evolved_full=evolved_full,
+            output_dir=output_dir,
+        )
+
     if create_pr:
         result["pr"] = _open_pr(
             config=config,
@@ -427,7 +477,7 @@ def evolve(
             timestamp=timestamp,
             push=push,
         )
-    else:
+    elif not canary:
         console.print(
             "  [dim]Review the diff: "
             f"diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md[/dim]"
@@ -492,6 +542,48 @@ def _build_dataset(
     raise EvolutionError("Specify --dataset-path or use --eval-source synthetic")
 
 
+
+def _score_arms_with_agent(config, holdout, baseline_text: str, evolved_text: str):
+    """Score both arms by running the real Hermes agent with each skill loaded.
+
+    Fails loudly when the agent is unreachable. Quietly falling back to
+    completion-level scoring would report a number the operator believes came
+    from real agent runs, which is worse than not running at all.
+
+    Both arms see the identical task list, built once — re-deriving tasks per
+    arm would let sampling differences masquerade as a result.
+    """
+    backend = HermesAgentBackend(
+        hermes_repo=Path(config.hermes_agent_path) if config.hermes_agent_path else Path("."),
+        model=config.eval_model,
+    )
+    available, detail = backend.available()
+    if not available:
+        raise EvolutionError(
+            f"--agent-eval was requested but the Hermes agent is unavailable: {detail}. "
+            "Point --hermes-repo at a checkout whose run_agent module imports, or "
+            "drop --agent-eval to score completions instead."
+        )
+
+    tasks = tasks_from_examples(holdout)
+    if not tasks:
+        raise EvolutionError("--agent-eval needs holdout examples; none were usable.")
+
+    for task in tasks:
+        task.toolsets = tuple(config.agent_toolsets)
+
+    evaluator = AgentEvaluator(backend, reps=config.agent_eval_reps)
+    console.print(
+        f"  Agent evaluation: {len(tasks)} task(s) x {config.agent_eval_reps} rep(s) "
+        f"per arm, toolsets {', '.join(config.agent_toolsets)}"
+    )
+    console.print(f"  Backend: {detail}")
+
+    baseline_run = evaluator.evaluate(baseline_text, tasks, label="baseline")
+    evolved_run = evaluator.evaluate(evolved_text, tasks, label="evolved")
+    return baseline_run, evolved_run
+
+
 def _score_arms(holdout, baseline_module, evolved_module, metric, lm):
     """Score both arms with the same metric, same examples, same order."""
     baseline_scores: list[float] = []
@@ -554,6 +646,54 @@ def _results_table(skill, evolved_body, report: ABReport, elapsed, iterations) -
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
     return table
+
+
+
+def _deploy_canary(install, skill_name, skill_path, evolved_full, output_dir) -> dict:
+    """Install the variant over the live skill, keeping a backup for rollback.
+
+    Only skills get this. A skill change shows up in cron outcomes and can be
+    reverted before much depends on it; evolved *code* is already executing
+    inside the agent before any outcome signal exists, which is why Phase 4
+    stops at a pull request.
+    """
+    if install is None:
+        console.print(
+            "[yellow]⚠ --canary needs a Hermes data directory to record the "
+            "deployment against; none was found. Not deploying.[/yellow]"
+        )
+        return {"deployed": False, "detail": "no Hermes data dir"}
+
+    ledger = CanaryLedger(Path(install.root) / "evolution" / "canary-ledger.json")
+    try:
+        record = deploy_canary(
+            install=install,
+            ledger=ledger,
+            skill_name=skill_name,
+            target_path=Path(skill_path),
+            variant_text=evolved_full,
+            backup_dir=Path(output_dir) / "canary-backup",
+        )
+    except OSError as exc:
+        console.print(f"[red]✗ Canary deployment failed: {exc}[/red]")
+        return {"deployed": False, "detail": str(exc)}
+
+    console.print(f"\n[bold green]✓ Canary deployed[/bold green] to {skill_path}")
+    console.print(
+        f"  baseline backed up to {record.backup_path}\n"
+        f"  pre-deploy success rate: "
+        + (f"{record.baseline_success_rate:.0%} over {record.baseline_observations} runs"
+           if record.baseline_success_rate is not None else "no prior evidence")
+    )
+    console.print(
+        "  [dim]Check it later: python -m evolution.deploy.canary_cli --evaluate[/dim]"
+    )
+    return {
+        "deployed": True,
+        "variant_sha": record.variant_sha,
+        "backup": record.backup_path,
+        "ledger": str(ledger.path),
+    }
 
 
 def _open_pr(
@@ -635,6 +775,14 @@ def _git_root(path: Path) -> Optional[Path]:
 @click.option("--size-percentile", default=90, type=int,
               help="Corpus percentile used as the size budget (default 90)")
 @click.option("--run-tests", is_flag=True, help="Run the hermes-agent pytest suite as a gate")
+@click.option("--agent-eval", is_flag=True,
+              help="Score the holdout by running the real Hermes agent with each skill "
+                   "loaded, instead of a single completion. Slower and far better evidence.")
+@click.option("--agent-eval-reps", default=1, type=int,
+              help="Repetitions per task per arm. >1 gives a measured noise band.")
+@click.option("--canary", is_flag=True,
+              help="On a SHIP verdict, install the variant over the live skill with a "
+                   "backup, and record it for later evaluation and auto-rollback.")
 @click.option("--create-pr", is_flag=True, help="Open a pull request when the verdict is SHIP")
 @click.option("--pr-base", default="main", help="Base branch for the pull request")
 @click.option("--no-draft", is_flag=True, help="Open a ready-for-review PR instead of a draft")
@@ -645,8 +793,9 @@ def _git_root(path: Path) -> Optional[Path]:
 @click.option("--api-base", default=None, help="API base URL (for custom endpoints like vLLM)")
 @click.option("--api-key", default=None, help="API key (for custom endpoints)")
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model,
-         hermes_repo, hermes_data_dir, profile, size_percentile, run_tests, create_pr,
-         pr_base, no_draft, no_push, output_root, notify, dry_run, api_base, api_key):
+         hermes_repo, hermes_data_dir, profile, size_percentile, run_tests, agent_eval,
+         agent_eval_reps, canary, create_pr, pr_base, no_draft, no_push, output_root, notify,
+         dry_run, api_base, api_key):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     summary = RunSummary(subject=f"Hermes self-evolution — {skill}")
 
@@ -662,6 +811,9 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
             hermes_data_dir=hermes_data_dir,
             profile=profile,
             run_tests=run_tests,
+            canary=canary,
+            agent_eval=agent_eval,
+            agent_eval_reps=agent_eval_reps,
             dry_run=dry_run,
             api_base=api_base,
             api_key=api_key,
@@ -692,6 +844,10 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
 
     if result.get("output_dir"):
         summary.notes.append(f"Output: {result['output_dir']}")
+    canary_info = result.get("canary") or {}
+    if canary_info.get("deployed"):
+        summary.notes.append(f"Canary deployed; ledger {canary_info.get('ledger')}")
+
     pr = result.get("pr") or {}
     if pr.get("created"):
         summary.notes.append(f"PR: {pr.get('url') or pr.get('branch')}")

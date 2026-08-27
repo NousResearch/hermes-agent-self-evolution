@@ -19,7 +19,7 @@ import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Sequence
 
 # A delta must clear this multiple of the pooled noise band to count as real.
 # 1.0 means "larger than the spread we see between identical repetitions".

@@ -243,20 +243,3 @@ class RunSummary:
             lines.append("")
             lines.extend(self.notes)
         return "\n".join(lines)
-
-
-def report_run(
-    summary: RunSummary,
-    notifier: Optional[Notifier] = None,
-    status_dir: Optional[Path] = None,
-) -> tuple[int, NotificationOutcome]:
-    """Deliver a run summary and return (exit_code, delivery_outcome).
-
-    The exit code reflects the *run*, not the notification — a delivered
-    message about a failed run still exits non-zero, and an undelivered
-    message about a successful run still exits zero. The caller is expected to
-    print the delivery outcome either way.
-    """
-    notifier = notifier or Notifier.from_env(status_dir)
-    outcome = notifier.send(summary.subject, summary.render())
-    return summary.exit_code, outcome

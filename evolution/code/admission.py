@@ -11,6 +11,13 @@ The gate has three properties that a plain "mutate and run pytest" loop lacks.
 materialised copy of the candidate. The working tree the operator is sitting in
 is never the thing under test.
 
+This is a *safety* boundary, not a *security* one, and the distinction matters
+because the code being run was written by a model. Credentials and proxy
+variables are stripped from the environment, but the process still has the
+operator's filesystem access and working network. It protects the checkout from
+an accidental bad edit; it does not contain deliberately hostile code. Run
+Phase 4 somewhere you would be willing to run an untrusted pull request.
+
 **Ground truth outranks opinion.** Alongside the test suite, the gate replays
 commands Hermes actually ran and recorded in ``verification_evidence.db``, with
 their real exit codes. A candidate that breaks something a human verified for
@@ -335,18 +342,77 @@ def materialize_candidate(
         ),
     )
 
+    _write_candidate_files(dest, file_contents)
+    return dest
+
+
+def _write_candidate_files(dest: Path, file_contents: dict[str, str]) -> None:
+    """Write a candidate's files into an existing sandbox, refusing escapes."""
     for rel, content in file_contents.items():
         target = dest / rel
         # Refuse to write outside the sandbox — a candidate's file map is
         # attacker-adjacent input once a model is generating it.
         try:
             target.resolve().relative_to(dest.resolve())
-        except ValueError:
-            raise ValueError(f"candidate path escapes the sandbox: {rel}")
+        except ValueError as exc:
+            raise ValueError(f"candidate path escapes the sandbox: {rel}") from exc
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
 
-    return dest
+
+class CandidateSandbox:
+    """One materialised repo, reused across candidates in a run.
+
+    Copying the baseline per candidate is correct but expensive: hermes-agent
+    is 164 MB across ~9,000 files, so a default run spent gigabytes of I/O
+    re-copying an identical tree twenty times.
+
+    Hardlinking the copy would be the obvious speed-up and is *unsafe here*:
+    the checks execute the candidate's code, and anything that writes through
+    a hardlink modifies the operator's real file. So the tree is copied once,
+    for real, and only the candidate's own files are swapped between runs.
+
+    Only the target files are restored between candidates. A check that leaves
+    other artifacts behind (a log, a cache) will leak into the next candidate;
+    that is the trade being made for not re-copying the tree, and it is why
+    ``reset()`` exists for callers who need a pristine start.
+    """
+
+    def __init__(self, baseline_repo: Path, root: Path):
+        self.baseline_repo = Path(baseline_repo)
+        self.root = Path(root)
+        self._applied: set[str] = set()
+
+    def __enter__(self) -> "CandidateSandbox":
+        materialize_candidate(self.baseline_repo, {}, self.root)
+        return self
+
+    def __exit__(self, *exc) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def apply(self, file_contents: dict[str, str]) -> Path:
+        """Put one candidate in the sandbox and return the repo path."""
+        # Restore anything a previous candidate overwrote, so a file that this
+        # candidate does not touch is the baseline's version and not the last
+        # candidate's.
+        for rel in self._applied - set(file_contents):
+            source = self.baseline_repo / rel
+            target = self.root / rel
+            if source.is_file():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
+            elif target.exists():
+                target.unlink()
+
+        _write_candidate_files(self.root, file_contents)
+        self._applied = set(file_contents)
+        return self.root
+
+    def reset(self) -> None:
+        """Rebuild the tree from the baseline, discarding any check artifacts."""
+        shutil.rmtree(self.root, ignore_errors=True)
+        materialize_candidate(self.baseline_repo, {}, self.root)
+        self._applied = set()
 
 
 def build_default_gate(

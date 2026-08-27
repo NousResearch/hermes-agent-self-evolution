@@ -16,7 +16,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import sys
 import time
 from datetime import datetime
@@ -39,7 +38,6 @@ from evolution.core.report import ABReport, arm_from_scores
 from evolution.core.state_db import prompt_variant_outcomes
 from evolution.prompts.prompt_sections import (
     DEFAULT_PROMPT_GROWTH,
-    SystemPrompt,
     load_live_prompts,
     load_prompt_file,
     prompt_cost_note,

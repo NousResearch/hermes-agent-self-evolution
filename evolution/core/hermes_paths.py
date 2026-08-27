@@ -1,7 +1,9 @@
 """Hermes install layout discovery.
 
 Every path the evolution system reads out of a Hermes install is resolved
-here, and none of it goes through ``Path.home()``.
+here, so that no caller derives one from ``Path.home()`` on its own. Home is
+consulted in exactly one place — the last-resort platform defaults below — and
+an explicit path or environment variable always wins over it.
 
 That distinction is not cosmetic. Evolution runs inside the ``hermes``
 container via ``docker exec``, where ``HOME`` is ``/root`` but the Hermes data

@@ -290,3 +290,82 @@ class TestDefaultGate:
         gate = build_default_gate(tmp_path)
         assert gate.visible == []
         assert gate.hidden, "the full suite must still be enforced"
+
+
+class TestCandidateSandbox:
+    """One tree per run, not per candidate — without candidates leaking."""
+
+    def test_a_candidate_is_applied(self, baseline_repo, tmp_path):
+        from evolution.code.admission import CandidateSandbox
+
+        with CandidateSandbox(baseline_repo, tmp_path / "sb") as sb:
+            repo = sb.apply({"agent/tool.py": "CANDIDATE A\n"})
+            assert (repo / "agent" / "tool.py").read_text() == "CANDIDATE A\n"
+
+    def test_the_previous_candidate_does_not_leak_into_the_next(self, baseline_repo, tmp_path):
+        """Reusing the tree is only safe if each candidate starts from baseline."""
+        from evolution.code.admission import CandidateSandbox
+
+        original = (baseline_repo / "agent" / "tool.py").read_text()
+        with CandidateSandbox(baseline_repo, tmp_path / "sb") as sb:
+            sb.apply({"agent/tool.py": "CANDIDATE A\n"})
+            # The next candidate touches a different file entirely.
+            repo = sb.apply({"tests/test_tool.py": "def test_ok():\n    assert True\n"})
+            assert (repo / "agent" / "tool.py").read_text() == original
+
+    def test_a_file_a_candidate_invented_is_removed_for_the_next(self, baseline_repo, tmp_path):
+        from evolution.code.admission import CandidateSandbox
+
+        with CandidateSandbox(baseline_repo, tmp_path / "sb") as sb:
+            sb.apply({"agent/brand_new.py": "x = 1\n"})
+            repo = sb.apply({"agent/tool.py": "y = 2\n"})
+            assert not (repo / "agent" / "brand_new.py").exists()
+
+    def test_the_real_repo_is_never_touched(self, baseline_repo, tmp_path):
+        from evolution.code.admission import CandidateSandbox
+
+        original = (baseline_repo / "agent" / "tool.py").read_text()
+        with CandidateSandbox(baseline_repo, tmp_path / "sb") as sb:
+            sb.apply({"agent/tool.py": "MUTATED\n"})
+        assert (baseline_repo / "agent" / "tool.py").read_text() == original
+
+    def test_an_escaping_path_is_still_refused(self, baseline_repo, tmp_path):
+        from evolution.code.admission import CandidateSandbox
+
+        with CandidateSandbox(baseline_repo, tmp_path / "sb") as sb:
+            with pytest.raises(ValueError, match="escapes the sandbox"):
+                sb.apply({"../../escaped.py": "pwned"})
+
+    def test_reset_discards_check_artifacts(self, baseline_repo, tmp_path):
+        from evolution.code.admission import CandidateSandbox
+
+        with CandidateSandbox(baseline_repo, tmp_path / "sb") as sb:
+            repo = sb.apply({"agent/tool.py": "x = 1\n"})
+            (repo / "artifact.log").write_text("left behind by a check")
+            sb.reset()
+            assert not (repo / "artifact.log").exists()
+
+    def test_the_tree_is_copied_once_not_per_candidate(self, baseline_repo, tmp_path, monkeypatch):
+        import evolution.code.admission as mod
+
+        calls = []
+        real = mod.materialize_candidate
+
+        def counting(baseline, files, dest):
+            calls.append(dest)
+            return real(baseline, files, dest)
+
+        monkeypatch.setattr(mod, "materialize_candidate", counting)
+        with mod.CandidateSandbox(baseline_repo, tmp_path / "sb") as sb:
+            for i in range(5):
+                sb.apply({"agent/tool.py": f"x = {i}\n"})
+        assert len(calls) == 1, "the baseline tree should be copied once per run"
+
+    def test_the_sandbox_is_removed_on_exit(self, baseline_repo, tmp_path):
+        from evolution.code.admission import CandidateSandbox
+
+        root = tmp_path / "sb"
+        with CandidateSandbox(baseline_repo, root) as sb:
+            sb.apply({})
+            assert root.exists()
+        assert not root.exists()

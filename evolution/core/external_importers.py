@@ -947,7 +947,7 @@ def main(source, skill, output, model, max_examples, dry_run, api_base, api_key)
         skill_name, skill_text = _load_skill_text(skill)
     except FileNotFoundError as e:
         console.print(f"[red]{e}[/red]")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     console.print(f"  Loaded skill: {skill_name} ({len(skill_text):,} chars)")
 

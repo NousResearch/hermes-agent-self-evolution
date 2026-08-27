@@ -23,9 +23,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import shutil
 import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -37,8 +35,8 @@ from rich.table import Table
 from evolution.code.admission import (
     AdmissionGate,
     AdmissionVerdict,
+    CandidateSandbox,
     build_default_gate,
-    materialize_candidate,
 )
 from evolution.code.sidecar import (
     CodeCandidate,
@@ -55,7 +53,7 @@ from evolution.code.targets import (
     resolve_targets,
     suggest_targets,
 )
-from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
+from evolution.core.config import resolve_hermes_agent_path
 from evolution.core.hermes_paths import try_find_hermes_install
 from evolution.core.objectives import ObjectiveVector, ObjectiveWeights, select_best
 from evolution.core.report import ABReport, arm_from_scores
@@ -172,11 +170,16 @@ def evolve_code(
     # candidate will look like an improvement for the wrong reason, and the run
     # is measuring a broken starting point rather than the mutation.
     console.print("\n[bold]Checking the baseline against the gate[/bold]")
-    baseline_verdict = _gate_candidate(gate, repo, baseline_files, output_dir / "sandbox-baseline")
+    # One sandbox for the whole run. Copying the repo per candidate cost
+    # gigabytes of I/O on a tree this size for no benefit.
+    sandbox_cm = CandidateSandbox(repo, output_dir / "sandbox")
+    sandbox = sandbox_cm.__enter__()
+    baseline_verdict = _gate_in(sandbox, gate, baseline_files)
     for check in baseline_verdict.visible + baseline_verdict.hidden:
         style = "green" if check.passed else "red"
         console.print(f"  [{style}]{check.render()}[/{style}]")
     if not baseline_verdict.admitted:
+        sandbox_cm.__exit__(None, None, None)
         raise CodeEvolutionError(
             "The baseline does not pass its own admission gate "
             f"({baseline_verdict.reason}). Fix the repo before evolving it — "
@@ -211,13 +214,13 @@ def evolve_code(
     rejected: list[tuple[CodeCandidate, AdmissionVerdict]] = []
 
     for candidate in result.candidates:
-        verdict = _gate_candidate(
-            gate, repo, candidate.files, output_dir / f"sandbox-{candidate.id}"
-        )
+        verdict = _gate_in(sandbox, gate, candidate.files)
         (admitted if verdict.admitted else rejected).append((candidate, verdict))
         style = "green" if verdict.admitted else "yellow"
         changed = ", ".join(candidate.changed_paths(baseline_files)) or "(no change)"
         console.print(f"  [{style}]{candidate.id}[/{style}] {verdict.summary()} — {changed}")
+
+    sandbox_cm.__exit__(None, None, None)
 
     if not admitted:
         console.print(
@@ -234,37 +237,51 @@ def evolve_code(
         }
 
     # ── select among survivors ───────────────────────────────────────────
+    # Both arms are scored by the same function on the same axes. Admission is
+    # pass/fail, so everything that got this far has quality 1.0 and size does
+    # the discriminating. The previous version pinned the baseline arm at a
+    # hardcoded 0.0, which made the "delta" just the winner's own score and the
+    # verdict SHIP for anything admitted — a comparison in shape only.
     baseline_chars = sum(len(c) for c in baseline_files.values())
-    vectors = [
-        ObjectiveVector(
-            quality=max(0.0, min(1.0, cand.score)),
-            size_chars=cand.total_chars(),
-            size_budget=int(baseline_chars * 1.25),
+    weights = ObjectiveWeights(quality=1.0, size=0.6)
+    size_budget = int(baseline_chars * 1.25)
+
+    def vector_for(total_chars: int) -> ObjectiveVector:
+        return ObjectiveVector(
+            quality=1.0,  # admitted; the gate is the quality signal
+            size_chars=total_chars,
+            size_budget=size_budget,
             baseline_chars=baseline_chars,
             max_growth=0.25,
         )
-        for cand, _ in admitted
-    ]
-    best_index = select_best(vectors, ObjectiveWeights(quality=1.0, size=0.6)) or 0
+
+    vectors = [vector_for(cand.total_chars()) for cand, _ in admitted]
+    best_index = select_best(vectors, weights)
+    if best_index is None:
+        best_index = 0
     winner, winner_verdict = admitted[best_index]
+
+    baseline_score = vector_for(baseline_chars).scalarize(weights)
+    evolved_score = vectors[best_index].scalarize(weights)
 
     report = ABReport(
         subject=f"code — {target.label}",
-        baseline=arm_from_scores("baseline", [0.0], baseline_chars),
-        evolved=arm_from_scores("evolved", [winner.score], winner.total_chars()),
-        metric_name="sidecar fitness, gated by admission",
+        baseline=arm_from_scores("baseline", [baseline_score], baseline_chars),
+        evolved=arm_from_scores("evolved", [evolved_score], winner.total_chars()),
+        metric_name="admission (pass/fail) x size, identical on both arms",
         constraints_passed=True,
         extra={
             "target files": ", ".join(target.paths),
             "candidates": f"{len(admitted)} admitted / {len(rejected)} rejected",
             "held-out checks": len(gate.hidden),
+            "sidecar fitness (winner)": f"{winner.score:.3f}",
             "sidecar elapsed": f"{result.elapsed_s:.0f}s",
         },
     )
     report.caveats.append(
-        "The baseline arm is a fixed reference, not a re-measured sample: the "
-        "sidecar scores candidates against the baseline it was given. Treat the "
-        "delta as directional and read the diff."
+        "Behaviour is not scored, only admitted. Both arms passed the same "
+        "gate, so the delta reflects size alone — it says the change is no "
+        "worse, not that it is better. Read the diff."
     )
 
     console.print(f"\n[bold]Winner:[/bold] {winner.id} (score {winner.score:.3f})")
@@ -307,22 +324,19 @@ def evolve_code(
 # ── helpers ─────────────────────────────────────────────────────────────
 
 
-def _gate_candidate(
+def _gate_in(
+    sandbox: CandidateSandbox,
     gate: AdmissionGate,
-    repo: Path,
     files: dict[str, str],
-    sandbox: Path,
 ) -> AdmissionVerdict:
-    """Materialise a candidate and run the gate against it, then clean up."""
+    """Swap a candidate into the shared sandbox and run the gate against it."""
     try:
-        materialize_candidate(repo, files, sandbox)
+        repo_path = sandbox.apply(files)
     except (OSError, ValueError) as exc:
-        return AdmissionVerdict(admitted=False, reason=f"could not build sandbox: {exc}")
-
-    try:
-        return gate.admit(sandbox)
-    finally:
-        shutil.rmtree(sandbox, ignore_errors=True)
+        # A path that escapes the sandbox lands here. Reject rather than raise:
+        # one malformed candidate must not end the run.
+        return AdmissionVerdict(admitted=False, reason=f"could not stage candidate: {exc}")
+    return gate.admit(repo_path)
 
 
 def _write_outputs(
@@ -403,29 +417,27 @@ def _open_pr(repo, target, winner, verdict, report, timestamp, pr_base, push) ->
         "line before merging.\n"
     )
 
-    # Multi-file publish: write each changed file, then commit once.
+    # One branch, one commit, all files. A change spanning files is atomic;
+    # publishing it file-by-file produced one branch per file, each holding a
+    # fraction of the change and all labelled as the whole.
     console.print(f"\n[bold]Opening pull request[/bold] against {repo}")
-    first = True
-    result = None
-    for rel in changed:
-        result = publisher.publish(
-            skill_name=f"{target.label}-{rel.replace('/', '-')}",
-            target_path=repo / rel,
-            content=winner.files[rel],
-            title=f"evolve(code): {target.label} — {len(changed)} file(s)",
-            body=body,
-            timestamp=timestamp,
-            push=push and first,
-        )
-        first = False
+    result = publisher.publish_many(
+        skill_name=target.label,
+        files={repo / rel: winner.files[rel] for rel in changed},
+        title=f"evolve(code): {target.label} — {len(changed)} file(s)",
+        body=body,
+        timestamp=timestamp,
+        push=push,
+    )
 
-    style = "green" if result and result.created else "yellow"
-    console.print(f"  [{style}]{result.render() if result else 'no files changed'}[/{style}]")
+    style = "green" if result.created else "yellow"
+    console.print(f"  [{style}]{result.render()}[/{style}]")
     return {
-        "created": bool(result and result.created),
-        "branch": result.branch if result else "",
-        "url": result.url if result else "",
-        "detail": result.detail if result else "",
+        "created": result.created,
+        "branch": result.branch,
+        "url": result.url,
+        "detail": result.detail,
+        "files": changed,
     }
 
 

@@ -27,7 +27,7 @@ vectors for final selection among survivors.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Iterable, Optional, Sequence
+from typing import Optional, Sequence
 
 # Size pressure starts here, as a fraction of the budget, and reaches full
 # strength at the budget itself. Starting below 1.0 means the optimizer feels

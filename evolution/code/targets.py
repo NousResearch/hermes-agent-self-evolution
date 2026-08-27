@@ -94,8 +94,8 @@ def resolve_targets(
 
         try:
             rel = str(candidate.relative_to(hermes_repo))
-        except ValueError:
-            raise TargetError(f"{raw} is outside the repo {hermes_repo}")
+        except ValueError as exc:
+            raise TargetError(f"{raw} is outside the repo {hermes_repo}") from exc
 
         if not candidate.is_file():
             raise TargetError(f"{rel} is not a file in {hermes_repo}")
@@ -266,6 +266,4 @@ def _is_replayable(command: str) -> bool:
     if _UNSAFE_REPLAY.search(command):
         return False
     # Shell metacharacters that chain into something else.
-    if any(tok in command for tok in ("&&", "||", ";", "|", ">", "<", "`", "$(")):
-        return False
-    return True
+    return not any(tok in command for tok in ("&&", "||", ";", "|", ">", "<", "`", "$("))

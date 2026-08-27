@@ -156,7 +156,7 @@ class PRPublisher:
         push: bool = True,
         dry_run: bool = False,
     ) -> PRResult:
-        """Write the artifact on a new branch, commit, push, and open a PR.
+        """Write one artifact on a new branch, commit, push, and open a PR.
 
         Args:
             target_path: Absolute path of the file to write, inside the repo.
@@ -164,17 +164,51 @@ class PRPublisher:
                 inspecting the branch before anything leaves the machine.
             dry_run: Report what would happen and change nothing.
         """
+        return self.publish_many(
+            skill_name=skill_name,
+            files={target_path: content},
+            title=title,
+            body=body,
+            timestamp=timestamp,
+            push=push,
+            dry_run=dry_run,
+        )
+
+    def publish_many(
+        self,
+        skill_name: str,
+        files: dict[Path, str],
+        title: str,
+        body: str,
+        timestamp: str,
+        push: bool = True,
+        dry_run: bool = False,
+    ) -> PRResult:
+        """Write several files as ONE branch and ONE commit.
+
+        A change that spans files is atomic, and publishing it file-by-file is
+        not a smaller version of the same thing — it produces one branch per
+        file, each holding a fraction of the change, all labelled as if they
+        held the whole. The first is pushed, the rest are stranded locally, and
+        the branch reported back is the one that never left the machine.
+        """
         log: list[str] = []
         branch = safe_branch_name(skill_name, timestamp)
 
-        try:
-            rel = target_path.resolve().relative_to(self.repo.resolve())
-        except ValueError:
-            return PRResult(
-                created=False,
-                branch=branch,
-                detail=f"{target_path} is outside the repo {self.repo}",
-            )
+        if not files:
+            return PRResult(created=False, branch=branch, detail="no files to publish")
+
+        rels: list[str] = []
+        for target_path in files:
+            try:
+                rels.append(str(Path(target_path).resolve().relative_to(self.repo.resolve())))
+            except ValueError:
+                return PRResult(
+                    created=False,
+                    branch=branch,
+                    detail=f"{target_path} is outside the repo {self.repo}",
+                )
+        rel = ", ".join(rels)
 
         if dry_run:
             return PRResult(
@@ -186,7 +220,10 @@ class PRPublisher:
                 ),
                 commands=[
                     f"git checkout -b {branch}",
-                    f"write {rel} ({len(content):,} chars)",
+                    *(
+                        f"write {r} ({len(c):,} chars)"
+                        for r, c in zip(rels, files.values(), strict=True)
+                    ),
                     f"git commit -m {title!r}",
                     f"git push -u {self.remote} {branch}",
                     "gh pr create …",
@@ -204,9 +241,11 @@ class PRPublisher:
             ).stdout.strip()
 
             _run(["git", "checkout", "-b", branch], self.repo, log)
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_text(content)
-            _run(["git", "add", str(rel)], self.repo, log)
+            for target_path, content in files.items():
+                path = Path(target_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            _run(["git", "add", *rels], self.repo, log)
 
             # Nothing staged means the optimizer produced a byte-identical
             # file; opening an empty PR would waste a reviewer's time.
@@ -217,7 +256,7 @@ class PRPublisher:
                 return PRResult(
                     created=False,
                     branch=branch,
-                    detail="evolved artifact is identical to the current file",
+                    detail="evolved artifact is identical to the current file(s)",
                     commands=log,
                 )
 

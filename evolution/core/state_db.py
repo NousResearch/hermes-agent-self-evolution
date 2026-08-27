@@ -84,12 +84,7 @@ _FTS_TOKEN = re.compile(r"[A-Za-z0-9_]{3,}")
 
 # Words that match everything and therefore rank nothing.
 _STOPWORDS = frozenset(
-    """
-    the and for with that this from your you are was were will would should
-    can could have has had not but all any our their its it's use used using
-    when what which who whom how why into onto over under about above below
-    skill agent hermes claude user assistant markdown yaml name description
-    """.split()
+    ["the", "and", "for", "with", "that", "this", "from", "your", "you", "are", "was", "were", "will", "would", "should", "can", "could", "have", "has", "had", "not", "but", "all", "any", "our", "their", "its", "it's", "use", "used", "using", "when", "what", "which", "who", "whom", "how", "why", "into", "onto", "over", "under", "about", "above", "below", "skill", "agent", "hermes", "claude", "user", "assistant", "markdown", "yaml", "name", "description"]
 )
 
 

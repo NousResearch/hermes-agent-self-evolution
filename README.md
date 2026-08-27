@@ -70,6 +70,16 @@ python -m evolution.skills.evolve_skill \
 | **Phase 5** | Continuous improvement loop | Evidence-prioritized rotation | ✅ Implemented |
 
 ```bash
+# Score the holdout by running the real agent, not a single completion
+python -m evolution.skills.evolve_skill --skill my-skill --agent-eval --agent-eval-reps 3
+
+# Ship to the live install behind a canary, then judge it later
+python -m evolution.skills.evolve_skill --skill my-skill --canary
+python -m evolution.deploy.canary_cli --evaluate --apply
+
+# Sweep more than skills
+python -m evolution.monitor.run_rotation --phases skills,tools,prompts
+
 # Phase 4 — tool implementation code (needs the AGPL sidecar; see below)
 python -m evolution.code.evolve_code --suggest
 python -m evolution.code.evolve_code --target agent/tool_executor.py --iterations 5
@@ -149,7 +159,7 @@ pip install -e ./hermes-evolver-problems     # needs Python >= 3.11
 
 A bad skill edit produces a worse answer; a bad code edit ships a defect into every agent that loads the tool. So a candidate is not scored until it is admitted:
 
-- **Sandboxed.** Checks run against a copy, never the real checkout, with credentials stripped from the environment.
+- **Sandboxed.** Checks run against a copy, never the real checkout, with credentials and proxy variables stripped. This is a *safety* boundary, not a security one: the process still has your filesystem access and working network, so run Phase 4 somewhere you would be willing to run an untrusted pull request.
 - **Held-out checks.** Visible failures go back to the mutator, because that is how it improves. The full suite and replayed real commands are sealed — they gate admission but their names and output never reach the mutator, so it cannot learn to satisfy the specific checks it can see.
 - **Ground truth.** Commands recorded in `verification_evidence.db` are replayed with their real exit codes. Unsafe ones are never replayed.
 - **Tests are not evolvable.** `tests/`, `setup.py`, `__init__.py` and migrations are refused as targets — a mutator that can edit the tests can pass any gate it likes.

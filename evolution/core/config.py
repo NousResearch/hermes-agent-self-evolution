@@ -31,7 +31,6 @@ class EvolutionConfig:
 
     # Optimization parameters
     iterations: int = 10
-    population_size: int = 5
 
     # LLM configuration
     optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
@@ -56,9 +55,11 @@ class EvolutionConfig:
 
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate
+    # Holdout is deliberately not a field: the split takes it as the
+    # remainder, so a holdout_ratio knob would silently do nothing whatever it
+    # was set to.
     train_ratio: float = 0.5
     val_ratio: float = 0.25
-    holdout_ratio: float = 0.25
 
     # Agent-in-the-loop evaluation. When enabled, candidates are scored by
     # running the real Hermes AIAgent rather than a single completion.
@@ -77,6 +78,15 @@ class EvolutionConfig:
 
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
+
+    def __post_init__(self) -> None:
+        # Holdout is what is left over, so ratios that sum to 1.0 or more leave
+        # nothing to evaluate on and the run reports a delta with no basis.
+        if self.train_ratio + self.val_ratio >= 1.0:
+            raise ValueError(
+                f"train_ratio ({self.train_ratio}) + val_ratio ({self.val_ratio}) "
+                "must be under 1.0 — the holdout split is the remainder."
+            )
 
     def resolved_output_dir(self) -> Path:
         """Output root, honoring EVOLUTION_OUTPUT_DIR when set."""

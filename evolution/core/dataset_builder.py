@@ -147,7 +147,9 @@ class SyntheticDatasetBuilder:
             if match:
                 cases_raw = json.loads(match.group())
             else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+                raise ValueError(
+                    f"Could not parse test cases from LLM output: {result.test_cases[:200]}"
+                ) from None
 
         examples = [
             EvalExample(

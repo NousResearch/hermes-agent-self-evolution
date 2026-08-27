@@ -596,12 +596,7 @@ def tasks_from_examples(examples: Sequence[Any]) -> list[AgentTask]:
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9_-]{3,}")
 _RUBRIC_STOPWORDS = frozenset(
-    """
-    should must will shall would could include includes including provide
-    provides response answer output result user agent skill that this with
-    from when what which have been also make sure clear concise correct
-    appropriate relevant specific general good well
-    """.split()
+    ["should", "must", "will", "shall", "would", "could", "include", "includes", "including", "provide", "provides", "response", "answer", "output", "result", "user", "agent", "skill", "that", "this", "with", "from", "when", "what", "which", "have", "been", "also", "make", "sure", "clear", "concise", "correct", "appropriate", "relevant", "specific", "general", "good", "well"]
 )
 
 

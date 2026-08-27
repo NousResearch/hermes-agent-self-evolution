@@ -37,7 +37,7 @@ import subprocess
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional
 
 # Bumped when the job/result contract changes incompatibly. The sidecar echoes
 # it back so a version mismatch is an explicit error rather than a KeyError
@@ -200,12 +200,12 @@ def run_sidecar(
                 timeout=timeout_s,
                 cwd=str(output_dir),
             )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         raise SidecarFailed(
             f"sidecar exceeded {timeout_s}s. Partial output: {log_path}"
-        )
+        ) from exc
     except OSError as exc:
-        raise SidecarNotAvailable(f"could not run {' '.join(argv)}: {exc}")
+        raise SidecarNotAvailable(f"could not run {' '.join(argv)}: {exc}") from exc
 
     elapsed = time.time() - started
 
@@ -227,7 +227,7 @@ def parse_result(
     try:
         payload = json.loads(Path(result_path).read_text())
     except (OSError, json.JSONDecodeError) as exc:
-        raise SidecarFailed(f"unreadable sidecar result {result_path}: {exc}")
+        raise SidecarFailed(f"unreadable sidecar result {result_path}: {exc}") from exc
 
     if not isinstance(payload, dict):
         raise SidecarFailed(f"sidecar result must be an object, got {type(payload).__name__}")

@@ -29,7 +29,6 @@ from evolution.core.notify import (
     Notifier,
     RunSummary,
     WebhookChannel,
-    report_run,
 )
 
 
@@ -124,15 +123,15 @@ class TestRunSummary:
     def test_delivery_never_decides_the_exit_code(self, tmp_path):
         """A delivered message about a failed run still exits non-zero."""
         summary = RunSummary(subject="s", failed=[("a", "x")])
-        code, outcome = report_run(summary, Notifier([FileChannel(tmp_path)]))
+        outcome = Notifier([FileChannel(tmp_path)]).send(summary.subject, summary.render())
         assert outcome.delivered is True
-        assert code == 1
+        assert summary.exit_code == 1
 
     def test_undelivered_success_still_exits_zero(self):
         summary = RunSummary(subject="s", succeeded=["a"])
-        code, outcome = report_run(summary, Notifier([ExplodingChannel()]))
+        outcome = Notifier([ExplodingChannel()]).send(summary.subject, summary.render())
         assert outcome.delivered is False
-        assert code == 0
+        assert summary.exit_code == 0
 
 
 # ── graders ─────────────────────────────────────────────────────────────

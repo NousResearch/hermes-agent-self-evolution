@@ -38,6 +38,11 @@ from evolution.monitor.rotation import (
 )
 from evolution.skills.evolve_skill import EvolutionError, evolve
 
+# Phase 4 is deliberately absent. Code evolution needs explicitly chosen
+# targets and ends at a pull request; sweeping it on a timer would mean
+# machine-authored code changes nobody asked for.
+SWEEPABLE_PHASES = ("skills", "tools", "prompts")
+
 console = Console()
 
 DEFAULT_STATE_FILE = "rotation_state.json"
@@ -58,6 +63,7 @@ def run_rotation(
     time_budget_min: float = 0.0,
     create_pr: bool = False,
     run_tests: bool = False,
+    phases: Optional[list[str]] = None,
     dry_run: bool = False,
     api_base: Optional[str] = None,
     api_key: Optional[str] = None,
@@ -72,7 +78,7 @@ def run_rotation(
         )
         return summary
 
-    console.print(f"\n[bold cyan]🧬 Scheduled evolution sweep[/bold cyan]")
+    console.print("\n[bold cyan]🧬 Scheduled evolution sweep[/bold cyan]")
     console.print(f"  Hermes data: {install.root} (via {install.source})")
 
     state = RotationState(
@@ -163,6 +169,19 @@ def run_rotation(
         else:
             summary.skipped.append((label, result.get("verdict_reason", verdict)))
 
+    _sweep_other_phases(
+        phases=phases or ["skills"],
+        summary=summary,
+        hermes_data_dir=hermes_data_dir,
+        hermes_repo=hermes_repo,
+        optimizer_model=optimizer_model,
+        eval_model=eval_model,
+        output_root=output_root,
+        api_base=api_base,
+        api_key=api_key,
+        dry_run=dry_run,
+    )
+
     # Persist the scheduler's memory only after the sweep, so a crash mid-run
     # leaves the queue intact for the next attempt rather than marking skills
     # as attempted when they were not.
@@ -171,6 +190,74 @@ def run_rotation(
         summary.notes.append(f"Rotation state: {state.path}")
 
     return summary
+
+
+def _sweep_other_phases(
+    phases, summary, hermes_data_dir, hermes_repo, optimizer_model,
+    eval_model, output_root, api_base, api_key, dry_run,
+) -> None:
+    """Run one Phase 2 and/or Phase 3 pass, when the sweep asks for them.
+
+    These have no rotation state: there is one tool catalogue and one system
+    prompt, so "which one next" does not arise the way it does for 324 skills.
+    """
+    if "tools" in phases:
+        try:
+            from evolution.tools.evolve_tool import evolve_tools
+
+            console.print("\n[bold]── phase 2: tool descriptions ──[/bold]")
+            result = evolve_tools(
+                hermes_data_dir=hermes_data_dir,
+                hermes_repo=hermes_repo,
+                optimizer_model=optimizer_model,
+                eval_model=eval_model,
+                api_base=api_base,
+                api_key=api_key,
+                output_root=output_root,
+                dry_run=dry_run,
+            )
+            verdict = getattr(result, "verdict", "HOLD")
+            if verdict in ("SHIP", "DRY_RUN"):
+                summary.succeeded.append(f"tool-descriptions — {verdict}")
+            else:
+                summary.skipped.append(("tool-descriptions", verdict))
+        except Exception as exc:  # noqa: BLE001 — one phase must not end the sweep
+            summary.failed.append(("tool-descriptions", f"{type(exc).__name__}: {exc}"))
+
+    if "prompts" in phases:
+        try:
+            from evolution.prompts.evolve_prompt import evolve_prompt_section
+            from evolution.prompts.prompt_sections import load_live_prompts
+            from evolution.core.hermes_paths import try_find_hermes_install
+
+            install = try_find_hermes_install(hermes_data_dir)
+            live = load_live_prompts(install) if install else []
+            if not live or not live[0].sections:
+                summary.skipped.append(("prompt-sections", "no live prompt recorded"))
+                return
+
+            # The largest section of the most-used variant: the most context
+            # budget riding on one artifact.
+            section = max(live[0].sections, key=lambda s: s.size)
+            console.print(f"\n[bold]── phase 3: prompt section '{section.title}' ──[/bold]")
+            result = evolve_prompt_section(
+                section_name=section.title,
+                hermes_data_dir=hermes_data_dir,
+                hermes_repo=hermes_repo,
+                optimizer_model=optimizer_model,
+                eval_model=eval_model,
+                output_root=output_root,
+                api_base=api_base,
+                api_key=api_key,
+                dry_run=dry_run,
+            )
+            verdict = result.get("verdict", "HOLD")
+            if verdict == "SHIP" or result.get("dry_run"):
+                summary.succeeded.append(f"prompt/{section.title} — {verdict}")
+            else:
+                summary.skipped.append((f"prompt/{section.title}", result.get("reason", verdict)))
+        except Exception as exc:  # noqa: BLE001
+            summary.failed.append(("prompt-sections", f"{type(exc).__name__}: {exc}"))
 
 
 @click.command()
@@ -191,14 +278,26 @@ def run_rotation(
               help="Stop starting new skills after this many minutes (0 = no limit)")
 @click.option("--create-pr", is_flag=True, help="Open a PR for each SHIP verdict")
 @click.option("--run-tests", is_flag=True, help="Run the hermes-agent test suite as a gate")
+@click.option("--phases", default="skills",
+              help="Comma-separated phases to sweep: skills, tools, prompts. "
+                   "Code evolution is never swept — it needs chosen targets.")
 @click.option("--notify/--no-notify", default=True, help="Deliver the sweep summary")
 @click.option("--dry-run", is_flag=True, help="Validate setup for each skill without optimizing")
 @click.option("--api-base", default=None)
 @click.option("--api-key", default=None)
 def main(skills_per_run, hermes_data_dir, hermes_repo, profile, iterations, eval_source,
          optimizer_model, eval_model, state_path, output_root, cooldown_days,
-         time_budget_min, create_pr, run_tests, notify, dry_run, api_base, api_key):
+         time_budget_min, create_pr, run_tests, phases, notify, dry_run, api_base, api_key):
     """Run one scheduled evolution sweep."""
+    selected = [p.strip() for p in phases.split(",") if p.strip()]
+    unknown = [p for p in selected if p not in SWEEPABLE_PHASES]
+    if unknown:
+        console.print(
+            f"[red]✗ Unknown phase(s): {', '.join(unknown)}. "
+            f"Choose from {', '.join(SWEEPABLE_PHASES)}.[/red]"
+        )
+        sys.exit(1)
+
     summary = run_rotation(
         skills_per_run=skills_per_run,
         hermes_data_dir=hermes_data_dir,
@@ -214,6 +313,7 @@ def main(skills_per_run, hermes_data_dir, hermes_repo, profile, iterations, eval
         time_budget_min=time_budget_min,
         create_pr=create_pr,
         run_tests=run_tests,
+        phases=selected,
         dry_run=dry_run,
         api_base=api_base,
         api_key=api_key,
