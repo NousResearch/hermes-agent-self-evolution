@@ -34,6 +34,12 @@ darwinian = [
     "darwinian-evolver",
 ]
 
+[project.scripts]
+evolve-skill = "evolution.skills.evolve_skill:main"
+evolve-tool = "evolution.tools.evolve_tool:main"
+evolve-prompt = "evolution.prompts.evolve_prompt:main"
+evolve-rotation = "evolution.monitor.run_rotation:main"
+
 [project.urls]
 Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"
 Repository = "https://github.com/NousResearch/hermes-agent-self-evolution"
