@@ -116,6 +116,44 @@ class TestFtsNarrowing:
         mined = HermesStateImporter(install).mine(skill_name="anything", skill_text="unrelated")
         assert len(mined) == 1
 
+    def test_retrieval_ranks_and_caps_rather_than_matching_everything(self, install, hermes_root):
+        """An OR of a dozen terms matches most of a real corpus.
+
+        Against the live install the unranked query returned 1,804 of 2,126
+        pairs for one skill and 1,584 for an unrelated one. BM25 ordering plus
+        a cap is what makes narrowing actually narrow.
+        """
+        from tests.conftest import build_state_db
+
+        sessions, messages = [], []
+        for i in range(30):
+            sessions.append({"id": f"n{i}", "started_at": float(i)})
+            # Every session mentions one weak term; only one is really about it.
+            body = "please review the report" if i else "ahrefs backlink domain rating audit report"
+            messages += [
+                {"session_id": f"n{i}", "role": "user", "content": body, "timestamp": 1},
+                {"session_id": f"n{i}", "role": "assistant", "content": "done", "timestamp": 2},
+            ]
+        root = hermes_root / "profiles" / "ranked"
+        build_state_db(root / "state.db", sessions=sessions, messages=messages)
+
+        importer = HermesStateImporter(install, profiles=["ranked"])
+        capped = importer.mine(
+            skill_name="ahrefs-backlinks",
+            skill_text="Ahrefs backlink domain rating audit",
+            match_cap=3,
+        )
+
+        assert 0 < len(capped) <= 3
+        # The genuinely on-topic session must survive the cap.
+        assert "n0" in {m.session_id for m in capped}
+
+    def test_a_broken_fts_query_falls_back_instead_of_crashing(self, install):
+        mined = HermesStateImporter(install)._mine_profile(
+            install.profile("ali"), fts_query='"unclosed', limit=0
+        )
+        # Malformed MATCH must degrade to a scan, not take the run down.
+        assert isinstance(mined, list)
 
 class TestResilience:
     def test_a_corrupt_profile_does_not_break_the_others(self, install, hermes_root):

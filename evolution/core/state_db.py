@@ -38,6 +38,12 @@ _ASSISTANT_ROLE = "assistant"
 # Below this length a message is a greeting or an acknowledgement, not a task.
 _MIN_TASK_CHARS = 10
 
+# How many best-ranked messages an FTS query may select per profile. An OR of
+# a dozen terms matches most of a real corpus, so without a cap "narrowing"
+# narrows nothing. Sized generously against what the LLM relevance filter will
+# actually score (a few hundred), so ranking decides the pool, not luck.
+DEFAULT_MATCH_CAP = 400
+
 # FTS5 treats a pile of punctuation as operators; strip to bare word tokens.
 _FTS_TOKEN = re.compile(r"[A-Za-z0-9_]{3,}")
 
@@ -209,6 +215,7 @@ class HermesStateImporter:
         skill_text: str = "",
         limit: int = 0,
         use_fts: bool = True,
+        match_cap: int = DEFAULT_MATCH_CAP,
     ) -> list[dict]:
         """Return user/assistant pairs, newest first.
 
@@ -221,6 +228,7 @@ class HermesStateImporter:
             skill_text=skill_text,
             limit=limit,
             use_fts=use_fts,
+            match_cap=match_cap,
         )
         return [m.to_dict() for m in mined]
 
@@ -230,6 +238,7 @@ class HermesStateImporter:
         skill_text: str = "",
         limit: int = 0,
         use_fts: bool = True,
+        match_cap: int = DEFAULT_MATCH_CAP,
     ) -> list[MinedMessage]:
         """Same as :meth:`extract_messages` but keeps the typed outcome data."""
         results: list[MinedMessage] = []
@@ -237,7 +246,7 @@ class HermesStateImporter:
 
         for prof in self._profiles():
             try:
-                results.extend(self._mine_profile(prof, query, limit))
+                results.extend(self._mine_profile(prof, query, limit, match_cap))
             except sqlite3.DatabaseError:
                 continue
             if limit and len(results) >= limit:
@@ -246,19 +255,20 @@ class HermesStateImporter:
         return results[:limit] if limit else results
 
     def _mine_profile(
-        self, prof: HermesProfile, fts_query: str, limit: int
+        self, prof: HermesProfile, fts_query: str, limit: int,
+        match_cap: int = DEFAULT_MATCH_CAP,
     ) -> list[MinedMessage]:
         with _connect_ro(prof.state_db) as conn:
             if not _has_table(conn, "messages"):
                 return []
 
             outcomes = self._profile_outcomes(conn, prof.name)
-            session_ids = self._matching_sessions(conn, fts_query)
+            match_ids = self._matching_message_ids(conn, fts_query, match_cap)
 
-            if session_ids is not None and not session_ids:
+            if match_ids is not None and not match_ids:
                 return []
 
-            return self._pair_messages(conn, prof, outcomes, session_ids, limit)
+            return self._pair_messages(conn, prof, outcomes, match_ids, limit)
 
     @staticmethod
     def _profile_outcomes(
@@ -285,23 +295,24 @@ class HermesStateImporter:
         return out
 
     @staticmethod
-    def _matching_sessions(
-        conn: sqlite3.Connection, fts_query: str
-    ) -> Optional[set[str]]:
-        """Sessions containing text that matches the skill, or None for "all".
+    def _matching_message_ids(
+        conn: sqlite3.Connection, fts_query: str, cap: int = DEFAULT_MATCH_CAP
+    ) -> Optional[set[int]]:
+        """The best-matching *message* ids, or None meaning "no filter".
 
-        Returning None (rather than every session id) lets the caller skip the
-        filter entirely when no query was requested or no index is present.
+        Filtering at message level rather than session level is what makes
+        this retrieval rather than a scan with extra steps. Sessions on a real
+        install are long — capping to the top 40 sessions still pulled ~1,370
+        of 2,127 pairs, and three unrelated skills all returned within 1% of
+        each other, which is the signature of a filter that is not filtering.
         """
         if not fts_query or not _has_table(conn, "messages_fts"):
             return None
 
-        # messages_fts is an FTS5 table whose rowid tracks messages.id. Probe
-        # that join *before* running the query, because "the index cannot be
-        # joined" and "the query matched nothing" both produce zero rows and
-        # need opposite responses: the first must fall back to a full scan,
-        # the second must return nothing. Conflating them would make an
-        # irrelevant skill silently mine the entire corpus.
+        # Probe the rowid join *before* the query: "the index cannot be
+        # joined" and "the query matched nothing" both yield zero rows and
+        # need opposite responses. Conflating them would make an irrelevant
+        # skill silently mine the entire corpus.
         try:
             joinable = conn.execute(
                 """
@@ -318,32 +329,41 @@ class HermesStateImporter:
             # Index present but its rowids do not line up with messages.id.
             return None
 
+        # bm25() is only legal in a query directly against the FTS table —
+        # SQLite flattens a ranking subquery back into a join and rejects it —
+        # so rank here and resolve afterwards.
         try:
-            rows = conn.execute(
+            ranked = conn.execute(
                 """
-                SELECT DISTINCT m.session_id AS sid
-                FROM messages_fts f
-                JOIN messages m ON m.id = f.rowid
+                SELECT rowid AS rid
+                FROM messages_fts
                 WHERE messages_fts MATCH ?
+                ORDER BY bm25(messages_fts)
+                LIMIT ?
                 """,
-                (fts_query,),
+                (fts_query, max(1, cap)),
             ).fetchall()
         except sqlite3.DatabaseError:
             # A malformed MATCH expression is our bug, not a data problem;
             # scanning is the safe response.
             return None
 
-        return {r["sid"] for r in rows if r["sid"]}
+        return {r["rid"] for r in ranked}
 
     @staticmethod
     def _pair_messages(
         conn: sqlite3.Connection,
         prof: HermesProfile,
         outcomes: dict[str, SessionOutcome],
-        session_ids: Optional[set[str]],
+        match_ids: Optional[set[int]],
         limit: int,
     ) -> list[MinedMessage]:
-        """Walk each session in order, pairing user asks with agent answers."""
+        """Walk each session in order, pairing user asks with agent answers.
+
+        ``match_ids`` restricts which *user* messages become tasks. The rest of
+        the session is still read, because the answer and the tools used are
+        what give the task its context.
+        """
         rows = conn.execute(
             """
             SELECT session_id, role, content, tool_name, timestamp, id
@@ -353,10 +373,18 @@ class HermesStateImporter:
             """
         ).fetchall()
 
+        # Keep every message of any session that contributed a match, so the
+        # matched ask can still be paired with its answer.
+        matched_sessions = None
+        if match_ids is not None:
+            matched_sessions = {
+                row["session_id"] for row in rows if row["id"] in match_ids
+            }
+
         by_session: dict[str, list[sqlite3.Row]] = {}
         for row in rows:
             sid = row["session_id"]
-            if session_ids is not None and sid not in session_ids:
+            if matched_sessions is not None and sid not in matched_sessions:
                 continue
             by_session.setdefault(sid, []).append(row)
 
@@ -369,7 +397,7 @@ class HermesStateImporter:
 
         mined: list[MinedMessage] = []
         for sid, msgs in ordered:
-            for pair in _pair_within_session(msgs):
+            for pair in _pair_within_session(msgs, match_ids):
                 user_text, assistant_text, tools = pair
                 if contains_secret(user_text) or contains_secret(assistant_text):
                     continue
@@ -391,6 +419,7 @@ class HermesStateImporter:
 
 def _pair_within_session(
     msgs: Iterable[sqlite3.Row],
+    match_ids: Optional[set[int]] = None,
 ) -> Iterable[tuple[str, str, list[str]]]:
     """Yield (user_text, assistant_text, tool_names) for each turn in a session.
 
@@ -401,6 +430,8 @@ def _pair_within_session(
     msgs = list(msgs)
     for i, msg in enumerate(msgs):
         if msg["role"] != _USER_ROLE:
+            continue
+        if match_ids is not None and msg["id"] not in match_ids:
             continue
         user_text = (msg["content"] or "").strip()
         if len(user_text) < _MIN_TASK_CHARS:
