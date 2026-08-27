@@ -296,10 +296,28 @@ class HermesStateImporter:
         if not fts_query or not _has_table(conn, "messages_fts"):
             return None
 
-        # messages_fts is a contentless-style FTS5 table whose rowid tracks
-        # messages.id. Join through it, but verify the join produced anything
-        # before trusting it — an index built with a different rowid mapping
-        # would silently return an empty set and hide all the real data.
+        # messages_fts is an FTS5 table whose rowid tracks messages.id. Probe
+        # that join *before* running the query, because "the index cannot be
+        # joined" and "the query matched nothing" both produce zero rows and
+        # need opposite responses: the first must fall back to a full scan,
+        # the second must return nothing. Conflating them would make an
+        # irrelevant skill silently mine the entire corpus.
+        try:
+            joinable = conn.execute(
+                """
+                SELECT 1
+                FROM messages_fts f
+                JOIN messages m ON m.id = f.rowid
+                LIMIT 1
+                """
+            ).fetchone()
+        except sqlite3.DatabaseError:
+            return None
+
+        if joinable is None:
+            # Index present but its rowids do not line up with messages.id.
+            return None
+
         try:
             rows = conn.execute(
                 """
@@ -311,14 +329,11 @@ class HermesStateImporter:
                 (fts_query,),
             ).fetchall()
         except sqlite3.DatabaseError:
+            # A malformed MATCH expression is our bug, not a data problem;
+            # scanning is the safe response.
             return None
 
-        sessions = {r["sid"] for r in rows if r["sid"]}
-        if sessions:
-            return sessions
-
-        # Index present but unusable for our join — fall back to scanning.
-        return None
+        return {r["sid"] for r in rows if r["sid"]}
 
     @staticmethod
     def _pair_messages(

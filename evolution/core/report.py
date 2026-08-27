@@ -105,6 +105,15 @@ class ABReport:
         return max(ASSUMED_SINGLE_REP_NOISE * max(self.baseline.mean, 0.01), 1e-6)
 
     @property
+    def noise_is_measured(self) -> bool:
+        """Whether the band came from real repetitions or was assumed."""
+        return self.baseline.stdev > 0 or self.evolved.stdev > 0
+
+    @property
+    def _band_basis(self) -> str:
+        return "measured" if self.noise_is_measured else "n=1 per arm, assumed"
+
+    @property
     def within_noise(self) -> bool:
         return abs(self.delta) < self.noise_band * NOISE_MULTIPLE
 
@@ -138,16 +147,19 @@ class ABReport:
             return (
                 "HOLD",
                 f"delta {self.delta:+.3f} is inside the ±{self.noise_band:.3f} "
-                f"noise band ({'n=1 per arm, assumed' if self.baseline.stdev == 0 and self.evolved.stdev == 0 else 'measured'})",
+                f"noise band ({self._band_basis})",
             )
 
         if self.delta < 0:
             return "HOLD", f"evolved arm is worse by {abs(self.delta):.3f}"
 
+        # A SHIP that rests on one observation per arm has to say so: the band
+        # it cleared was assumed, not measured, so the verdict is weaker than
+        # the same number backed by repetitions.
         return (
             "SHIP",
             f"{self.delta:+.3f} ({self.relative_delta:+.1%}) beyond the "
-            f"±{self.noise_band:.3f} noise band",
+            f"±{self.noise_band:.3f} noise band ({self._band_basis})",
         )
 
     def auto_caveats(self) -> list[str]:

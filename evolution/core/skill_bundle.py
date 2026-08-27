@@ -164,12 +164,42 @@ def _normalize(raw: str) -> str:
     return cleaned.split("#", 1)[0].strip()
 
 
+def resolve_reference(bundle: SkillBundle, ref: str) -> Optional[str]:
+    """The supporting file a reference identifies, or None if it matches none.
+
+    Matching is by full relative path first, then by bare filename. The
+    leniency is deliberate: the question these checks answer is "does the
+    skill still point the agent at this document", and an optimizer that
+    rewrites ``references/api.md`` to ``api.md`` has kept the pointer even
+    though it changed the path. Treating that as a deletion would fail
+    perfectly good rewrites.
+    """
+    if not ref:
+        return None
+    for f in bundle.supporting:
+        if f.relpath == ref:
+            return f.relpath
+    basename = Path(ref).name
+    for f in bundle.supporting:
+        if Path(f.relpath).name == basename:
+            return f.relpath
+    return None
+
+
+def _resolved_set(bundle: SkillBundle, text: str) -> set[str]:
+    resolved = set()
+    for ref in extract_references(text):
+        target = resolve_reference(bundle, ref)
+        if target:
+            resolved.add(target)
+    return resolved
+
+
 def mark_references(bundle: SkillBundle, text: str) -> None:
     """Flag which supporting files the given text actually links to."""
-    refs = extract_references(text)
+    resolved = _resolved_set(bundle, text)
     for f in bundle.supporting:
-        basename = Path(f.relpath).name
-        f.referenced = f.relpath in refs or basename in refs
+        f.referenced = f.relpath in resolved
 
 
 def broken_references(bundle: SkillBundle, evolved_text: str) -> list[str]:
@@ -179,15 +209,9 @@ def broken_references(bundle: SkillBundle, evolved_text: str) -> list[str]:
     document the skill no longer points it at. It reads as a size *win* to
     every other check, which is exactly why it needs its own.
     """
-    baseline_refs = extract_references(bundle.entry_text)
-    evolved_refs = extract_references(evolved_text)
-
-    known = {f.relpath for f in bundle.supporting} | {
-        Path(f.relpath).name for f in bundle.supporting
-    }
-
-    lost = (baseline_refs - evolved_refs) & known
-    return sorted(lost)
+    baseline = _resolved_set(bundle, bundle.entry_text)
+    evolved = _resolved_set(bundle, evolved_text)
+    return sorted(baseline - evolved)
 
 
 def invented_references(bundle: SkillBundle, evolved_text: str) -> list[str]:
@@ -196,14 +220,9 @@ def invented_references(bundle: SkillBundle, evolved_text: str) -> list[str]:
     An optimizer asked to be helpful will happily invent ``references/api.md``.
     Shipping that sends the agent after a file that was never written.
     """
-    evolved_refs = extract_references(evolved_text)
     baseline_refs = extract_references(bundle.entry_text)
-
-    known = {f.relpath for f in bundle.supporting} | {
-        Path(f.relpath).name for f in bundle.supporting
-    }
 
     # Only flag paths the evolution introduced — a baseline that already
     # pointed at a missing file is a pre-existing problem, not this run's.
-    new_refs = evolved_refs - baseline_refs
-    return sorted(r for r in new_refs if r not in known)
+    new_refs = extract_references(evolved_text) - baseline_refs
+    return sorted(r for r in new_refs if resolve_reference(bundle, r) is None)
