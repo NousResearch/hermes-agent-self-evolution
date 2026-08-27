@@ -1,5 +1,50 @@
 # Hermes Agent Self-Evolution — Evolutionary Self-Improvement for Hermes Agent
 
+> ## Implementation status
+>
+> This plan was written before the system met a live Hermes install. An audit
+> against the deployment on 2026-08-27 found the optimizer sound and every
+> connection between it and Hermes broken, misaligned or absent. What follows
+> is the original plan; this box records what actually shipped.
+>
+> **Phases:** all five are implemented. Phase 4 (code evolution) needed a
+> correction to the plan: `darwinian_evolver` cannot be driven as a plain
+> external CLI, because `problems/registry.py` is a hardcoded dict and its CLI
+> restricts `--problem` to that dict's keys. Defining a Hermes problem means
+> subclassing its classes, i.e. importing AGPL-3.0 code. The AGPL-linked code
+> therefore lives in a separate sidecar package
+> (`hermes-evolver-problems`, AGPL-3.0) which imports both the engine and this
+> MIT package; this package reaches it only over a subprocess boundary, and a
+> test asserts it never imports the engine.
+>
+> **Corrections to the design as planned:**
+>
+> - *Size belongs in the objective, not only in a gate.* The penalty was
+>   computed from the baseline body and evaluated to 0.000 for every
+>   candidate; the search grew an artifact 37.6% unopposed and a post-hoc gate
+>   then discarded it. Size now derives from the candidate and from the real
+>   corpus (p90), floored at the artifact's own size — a fixed 15 KB cap
+>   disqualified 27 of the 201 installed skills at their own baseline.
+> - *Sessions live in `state.db`.* The plan's "SessionDB mining" was
+>   implemented against `~/.hermes/sessions/*.json`, which holds error
+>   request-dumps and a routing mirror that documents itself as "NOT the
+>   session list". The real corpus — 678 sessions, 37,006 messages — is in
+>   per-profile SQLite with FTS5 already built over it.
+> - *Paths must not come from `Path.home()`.* Evolution runs inside the
+>   Hermes container, where `HOME` is not the data directory. Discovery now
+>   goes through `HERMES_DATA_DIR` / `HERMES_HOME`.
+> - *Ground truth beats a rubric where it exists.* `verification_evidence.db`
+>   records real exit codes and `cron/executions.db` records real job
+>   outcomes that `jobs.json` attributes to skills.
+> - *One metric for the search and the report.* GEPA optimized a judge
+>   composite while the reported delta came from keyword overlap.
+> - *Verdicts are stated against a noise band*, in the format
+>   `evals/readtool/results/SUMMARY.md` already uses.
+> - *Rotation is prioritized, not alphabetical.* Round-robin at the deployed
+>   cadence implied a 13.4-month cycle over 117 skills.
+>
+> See the audit report for the full findings and evidence.
+
 ## Vision
 
 A standalone optimization pipeline that systematically improves Hermes Agent's performance by evolving skills, prompts, tool descriptions, and agent configurations using automated optimization loops. Lives in its own repo (`NousResearch/hermes-agent-self-evolution`), operates ON hermes-agent — not part of it.

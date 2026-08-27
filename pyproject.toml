@@ -20,6 +20,9 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.0",
     "rich>=13.0",
+    # MIPROv2 (the fallback path in evolve_skill.py when GEPA is unavailable)
+    # imports optuna. Without it the fallback dies with ModuleNotFoundError.
+    "optuna>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -27,9 +30,29 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
 ]
+# Phase 4 engine. NOT on PyPI — it is distributed only as a git repository, so
+# the plain name never resolved and `pip install -e ".[darwinian]"` failed with
+# "No matching distribution found". Pinned to the git source via a PEP 440
+# direct reference.
+#
+# Gated on Python >= 3.11: darwinian_evolver requires it, while this project
+# supports >= 3.10, and without the marker a resolver rejects the whole
+# resolution even on a new enough interpreter.
+#
+# AGPL-3.0. Installing this extra pulls AGPL code into the environment; see
+# evolution/code/README.md for what that does and does not permit.
 darwinian = [
-    "darwinian-evolver",
+    "darwinian-evolver @ git+https://github.com/imbue-ai/darwinian_evolver@main ; python_version >= '3.11'",
 ]
+
+[project.scripts]
+evolve-skill = "evolution.skills.evolve_skill:main"
+evolve-tool = "evolution.tools.evolve_tool:main"
+evolve-prompt = "evolution.prompts.evolve_prompt:main"
+evolve-rotation = "evolution.monitor.run_rotation:main"
+evolve-code = "evolution.code.evolve_code:main"
+evolve-canary = "evolution.deploy.canary_cli:main"
+evolve-import = "evolution.core.external_importers:main"
 
 [project.urls]
 Homepage = "https://github.com/NousResearch/hermes-agent-self-evolution"

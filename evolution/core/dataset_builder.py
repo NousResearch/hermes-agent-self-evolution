@@ -15,6 +15,7 @@ from typing import Optional
 import dspy
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.dspy_lm import make_dspy_lm
 
 
 @dataclass
@@ -123,7 +124,11 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        lm = make_dspy_lm(
+            self.config.judge_model,
+            api_base=self.config.api_base,
+            api_key=self.config.api_key,
+        )
 
         with dspy.context(lm=lm):
             result = self.generator(
@@ -142,7 +147,9 @@ class SyntheticDatasetBuilder:
             if match:
                 cases_raw = json.loads(match.group())
             else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+                raise ValueError(
+                    f"Could not parse test cases from LLM output: {result.test_cases[:200]}"
+                ) from None
 
         examples = [
             EvalExample(
