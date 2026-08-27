@@ -23,6 +23,7 @@ import pytest
 from click.testing import CliRunner
 
 from evolution.core.external_importers import (
+    NoSessionDataError,
     _contains_secret,
     _is_relevant_to_skill,
     _parse_scoring_json,
@@ -735,32 +736,62 @@ class TestBuildDataset:
         assert (output / "val.jsonl").exists()
         assert (output / "holdout.jsonl").exists()
 
-    def test_no_messages_returns_empty_dataset(self, tmp_path):
-        with patch.object(ClaudeCodeImporter, "extract_messages", return_value=[]):
-            dataset = build_dataset_from_external(
-                skill_name="categorize",
-                skill_text="Sort text into topics.",
-                sources=["claude-code"],
-                output_path=tmp_path / "out",
-                model="test-model",
-            )
+    def test_present_but_empty_source_raises(self, tmp_path):
+        """An empty source must say so, not return a silently empty dataset.
 
-        assert len(dataset.all_examples) == 0
+        The weekly run stayed broken for months because this path returned an
+        empty dataset and the caller reported a generic "no examples" exit,
+        which is indistinguishable from the source not existing at all.
+        """
+        with patch.object(ClaudeCodeImporter, "extract_messages", return_value=[]), \
+             patch.object(ClaudeCodeImporter, "HISTORY_PATH", tmp_path / "history.jsonl"):
+            (tmp_path / "history.jsonl").write_text("")
+            with pytest.raises(NoSessionDataError) as exc:
+                build_dataset_from_external(
+                    skill_name="categorize",
+                    skill_text="Sort text into topics.",
+                    sources=["claude-code"],
+                    output_path=tmp_path / "out",
+                    model="test-model",
+                )
 
-    def test_no_relevant_examples_returns_empty_dataset(self, tmp_path):
+        assert "hold no usable messages" in str(exc.value)
+
+    def test_missing_source_names_itself(self, tmp_path):
+        """A source that does not exist must be reported as missing."""
+        with patch.object(ClaudeCodeImporter, "HISTORY_PATH", tmp_path / "absent.jsonl"):
+            with pytest.raises(NoSessionDataError) as exc:
+                build_dataset_from_external(
+                    skill_name="categorize",
+                    skill_text="Sort text into topics.",
+                    sources=["claude-code"],
+                    output_path=tmp_path / "out",
+                    model="test-model",
+                )
+
+        message = str(exc.value)
+        assert "None of the requested session sources exist" in message
+        # The fix for the container path bug has to be discoverable from the error.
+        assert "HERMES_DATA_DIR" in message
+
+    def test_no_relevant_examples_raises_distinctly(self, tmp_path):
+        """Data present but irrelevant is a different problem than no data."""
         mock_messages = [{"task_input": "deploy the app", "source": "claude-code"}]
 
         with patch.object(ClaudeCodeImporter, "extract_messages", return_value=mock_messages), \
+             patch.object(ClaudeCodeImporter, "HISTORY_PATH", tmp_path / "history.jsonl"), \
              patch.object(RelevanceFilter, "filter_and_score", return_value=[]):
-            dataset = build_dataset_from_external(
-                skill_name="categorize",
-                skill_text="Sort text into topics.",
-                sources=["claude-code"],
-                output_path=tmp_path / "out",
-                model="test-model",
-            )
+            (tmp_path / "history.jsonl").write_text("{}")
+            with pytest.raises(NoSessionDataError) as exc:
+                build_dataset_from_external(
+                    skill_name="categorize",
+                    skill_text="Sort text into topics.",
+                    sources=["claude-code"],
+                    output_path=tmp_path / "out",
+                    model="test-model",
+                )
 
-        assert len(dataset.all_examples) == 0
+        assert "none were relevant" in str(exc.value)
 
     def test_multiple_sources(self, tmp_path):
         cc_msgs = [{"task_input": "sort from claude code session", "source": "claude-code"}]
@@ -787,8 +818,14 @@ class TestBuildDataset:
         assert "copilot" in sources
 
     def test_unknown_source_ignored(self, tmp_path):
-        """An unrecognized source name is silently skipped."""
-        with patch.object(ClaudeCodeImporter, "extract_messages", return_value=[]):
+        """An unrecognized source name is skipped without masking real sources."""
+        msgs = [{"task_input": "sort these topics", "source": "claude-code"}]
+        examples = [EvalExample(task_input="sort these topics", expected_behavior="x", source="claude-code")]
+
+        with patch.object(ClaudeCodeImporter, "extract_messages", return_value=msgs), \
+             patch.object(ClaudeCodeImporter, "HISTORY_PATH", tmp_path / "history.jsonl"), \
+             patch.object(RelevanceFilter, "filter_and_score", return_value=examples):
+            (tmp_path / "history.jsonl").write_text("{}")
             dataset = build_dataset_from_external(
                 skill_name="test",
                 skill_text="Test.",
@@ -797,7 +834,7 @@ class TestBuildDataset:
                 model="test-model",
             )
 
-        assert len(dataset.all_examples) == 0
+        assert len(dataset.all_examples) == 1
 
 
 # ── End-to-End Roundtrip ─────────────────────────────────────────────────────

@@ -35,40 +35,19 @@ from rich.progress import Progress
 
 from evolution.core.dspy_lm import make_dspy_lm
 from evolution.core.dataset_builder import EvalExample, EvalDataset
+from evolution.core.hermes_paths import HermesInstall, try_find_hermes_install
+from evolution.core.redact import SECRET_PATTERNS as _SECRET_PATTERNS
+from evolution.core.redact import contains_secret as _shared_contains_secret
+from evolution.core.state_db import HermesStateImporter
 
 console = Console()
 
 # ── Secret Detection ──────────────────────────────────────────────────────
 
-# Patterns that indicate secrets — NEVER include these in datasets.
-# Each pattern is intentionally anchored to known key formats to minimize
-# false positives on normal prose.
-SECRET_PATTERNS = re.compile(
-    r'('
-    r'sk-ant-api\S+'           # Anthropic API keys
-    r'|sk-or-v1-\S+'          # OpenRouter API keys
-    r'|sk-\S{20,}'            # Generic OpenAI-style keys (20+ chars after sk-)
-    r'|ghp_\S+'               # GitHub personal access tokens
-    r'|ghu_\S+'               # GitHub user tokens
-    r'|xoxb-\S+'              # Slack bot tokens
-    r'|xapp-\S+'              # Slack app tokens
-    r'|ntn_\S+'               # Notion integration tokens
-    r'|AKIA[0-9A-Z]{16}'      # AWS access key IDs
-    r'|Bearer\s+\S{20,}'      # Bearer auth headers (20+ char tokens)
-    r'|-----BEGIN\s+(RSA\s+)?PRIVATE\sKEY-----'  # PEM private keys
-    r'|ANTHROPIC_API_KEY'      # Known env var names (exact match)
-    r'|OPENAI_API_KEY'
-    r'|OPENROUTER_API_KEY'
-    r'|SLACK_BOT_TOKEN'
-    r'|GITHUB_TOKEN'
-    r'|AWS_SECRET_ACCESS_KEY'
-    r'|DATABASE_URL'
-    r'|\bpassword\s*[=:]\s*\S+' # password assignments (password=xxx, password: xxx)
-    r'|\bsecret\s*[=:]\s*\S+'   # secret assignments (secret=xxx, secret: xxx)
-    r'|\btoken\s*[=:]\s*\S{10,}' # token assignments with 10+ char values
-    r')',
-    re.IGNORECASE,
-)
+# Secret patterns live in evolution.core.redact so both the file importers and
+# the state.db importer can share them without an import cycle. Re-exported
+# under the original names for callers that already import them from here.
+SECRET_PATTERNS = _SECRET_PATTERNS
 
 
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
@@ -78,7 +57,7 @@ MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
 
 def _contains_secret(text: str) -> bool:
     """Check if text contains potential API keys or tokens."""
-    return bool(SECRET_PATTERNS.search(text))
+    return _shared_contains_secret(text)
 
 
 def _validate_eval_example(
@@ -644,6 +623,129 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
 # ── Orchestration ─────────────────────────────────────────────────────────
 
 
+class SourceReport:
+    """What one dataset source actually yielded, and why if nothing.
+
+    A source that produces nothing must say so out loud. The original pipeline
+    treated "this directory does not exist" and "this directory held nothing
+    relevant" identically — both surfaced as an empty dataset and a generic
+    exit — which is how a weekly job stayed broken for months while reporting
+    only "No relevant examples found from session history".
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+        self.messages = 0
+        self.available = False
+        self.detail = ""
+
+    def render(self) -> str:
+        if not self.available:
+            return f"  [yellow]{self.name}: unavailable — {self.detail}[/yellow]"
+        if not self.messages:
+            return f"  {self.name}: 0 messages ({self.detail})" if self.detail else f"  {self.name}: 0 messages"
+        suffix = f" ({self.detail})" if self.detail else ""
+        return f"  {self.name}: {self.messages} messages{suffix}"
+
+
+def collect_external_messages(
+    sources: list[str],
+    skill_name: str = "",
+    skill_text: str = "",
+    install: Optional[HermesInstall] = None,
+    profiles: Optional[list[str]] = None,
+) -> tuple[list[dict], list[SourceReport]]:
+    """Pull raw messages from every requested source, reporting each one.
+
+    Returns the messages plus a per-source report so the caller can tell the
+    difference between "no data here" and "this source is not even present".
+    """
+    reports: list[SourceReport] = []
+    all_messages: list[dict] = []
+
+    for source in sources:
+        if source == "hermes":
+            report = SourceReport("Hermes Agent (state.db)")
+            resolved = install or try_find_hermes_install()
+            if resolved is None:
+                report.detail = (
+                    "no Hermes data dir found; set HERMES_DATA_DIR to the "
+                    "directory containing state.db"
+                )
+                reports.append(report)
+                continue
+
+            importer = HermesStateImporter(resolved, profiles=profiles)
+            dbs = importer.describe_sources()
+            if not dbs:
+                report.detail = f"no profile has a state.db under {resolved.root}"
+                reports.append(report)
+                continue
+
+            report.available = True
+            msgs = importer.extract_messages(skill_name=skill_name, skill_text=skill_text)
+            # FTS narrowing can be too aggressive on a skill whose vocabulary
+            # does not appear verbatim in transcripts. Retry unfiltered rather
+            # than reporting an empty source.
+            if not msgs and skill_name:
+                msgs = importer.extract_messages(use_fts=False)
+                report.detail = f"{len(dbs)} profile(s), full scan (no FTS matches)"
+            else:
+                report.detail = f"{len(dbs)} profile(s)"
+            report.messages = len(msgs)
+            all_messages.extend(msgs)
+            reports.append(report)
+            continue
+
+        if source == "hermes-legacy":
+            report = SourceReport("Hermes Agent (legacy JSON)")
+            report.available = HermesSessionImporter.SESSION_DIR.exists()
+            if not report.available:
+                report.detail = f"{HermesSessionImporter.SESSION_DIR} not present"
+            else:
+                msgs = HermesSessionImporter.extract_messages()
+                report.messages = len(msgs)
+                all_messages.extend(msgs)
+            reports.append(report)
+            continue
+
+        if source == "claude-code":
+            report = SourceReport("Claude Code")
+            path = ClaudeCodeImporter.HISTORY_PATH
+            report.available = path.exists()
+            if not report.available:
+                report.detail = f"{path} not present"
+            else:
+                msgs = ClaudeCodeImporter.extract_messages()
+                report.messages = len(msgs)
+                all_messages.extend(msgs)
+            reports.append(report)
+            continue
+
+        if source == "copilot":
+            report = SourceReport("Copilot")
+            path = CopilotImporter.SESSION_DIR
+            report.available = path.exists()
+            if not report.available:
+                report.detail = f"{path} not present"
+            else:
+                msgs = CopilotImporter.extract_messages()
+                report.messages = len(msgs)
+                all_messages.extend(msgs)
+            reports.append(report)
+            continue
+
+    return all_messages, reports
+
+
+class NoSessionDataError(RuntimeError):
+    """Raised when no configured source has any data at all.
+
+    Distinct from "sources had data but none was relevant" — the two need
+    different fixes and must not surface as the same message.
+    """
+
+
 def build_dataset_from_external(
     skill_name: str,
     skill_text: str,
@@ -653,8 +755,10 @@ def build_dataset_from_external(
     max_examples: int = 50,
     api_base: Optional[str] = None,
     api_key: Optional[str] = None,
+    install: Optional[HermesInstall] = None,
+    profiles: Optional[list[str]] = None,
 ) -> EvalDataset:
-    """Extract messages from external tools, filter for relevance, and save.
+    """Extract messages from real session stores, filter, and save.
 
     This is the main entry point called by both the standalone CLI and
     evolve_skill.py when --eval-source sessiondb is used.
@@ -662,36 +766,43 @@ def build_dataset_from_external(
     Args:
         skill_name: Name of the target skill.
         skill_text: Full text of the SKILL.md file.
-        sources: List of source names ("claude-code", "copilot").
+        sources: Source names — "hermes", "claude-code", "copilot",
+            "hermes-legacy".
         output_path: Directory to write train/val/holdout JSONL files.
         model: LiteLLM model string for relevance scoring.
         max_examples: Maximum eval examples to generate.
         api_base: Optional API base URL for custom endpoints.
         api_key: Optional API key for custom endpoints.
+        install: Pre-resolved Hermes install (avoids re-discovery).
+        profiles: Restrict Hermes mining to these profiles.
 
-    Returns:
-        EvalDataset with train/val/holdout splits.
+    Raises:
+        NoSessionDataError: When every source is unavailable or empty.
     """
-    all_messages = []
-
-    importers = {
-        "claude-code": ("Claude Code", ClaudeCodeImporter),
-        "copilot": ("Copilot", CopilotImporter),
-        "hermes": ("Hermes Agent", HermesSessionImporter),
-    }
-
-    for source in sources:
-        if source not in importers:
-            continue
-        label, importer_cls = importers[source]
-        console.print(f"\n[bold]Importing from {label}...[/bold]")
-        msgs = importer_cls.extract_messages()
-        console.print(f"  Found {len(msgs)} messages")
-        all_messages.extend(msgs)
+    console.print("\n[bold]Session sources[/bold]")
+    all_messages, reports = collect_external_messages(
+        sources=sources,
+        skill_name=skill_name,
+        skill_text=skill_text,
+        install=install,
+        profiles=profiles,
+    )
+    for report in reports:
+        console.print(report.render())
 
     if not all_messages:
-        console.print("[red]No messages found from any source.[/red]")
-        return EvalDataset()
+        available = [r for r in reports if r.available]
+        if not available:
+            raise NoSessionDataError(
+                "None of the requested session sources exist on this machine "
+                f"({', '.join(sources)}). Evolution runs inside the Hermes "
+                "container read HERMES_DATA_DIR, not $HOME — check that it "
+                "points at the directory containing state.db."
+            )
+        raise NoSessionDataError(
+            "Session sources are present but hold no usable messages: "
+            + ", ".join(f"{r.name} ({r.detail or 'empty'})" for r in reports)
+        )
 
     console.print(f"\n[bold]Total messages: {len(all_messages)}[/bold]")
     console.print(f"[bold]Filtering for relevance to skill: {skill_name}[/bold]")
@@ -704,8 +815,10 @@ def build_dataset_from_external(
     console.print(f"\n[bold green]Found {len(examples)} relevant examples[/bold green]")
 
     if not examples:
-        console.print("[yellow]No relevant examples found. Try a different skill or broader sources.[/yellow]")
-        return EvalDataset()
+        raise NoSessionDataError(
+            f"Mined {len(all_messages)} messages but none were relevant to "
+            f"'{skill_name}'. Try --eval-source synthetic, or widen the sources."
+        )
 
     if len(examples) < MIN_DATASET_SIZE:
         console.print(
@@ -736,6 +849,7 @@ def build_dataset_from_external(
         console.print(f"  {src}: {count}")
 
     return dataset
+
 
 
 def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tuple[str, str]:
