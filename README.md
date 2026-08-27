@@ -66,10 +66,14 @@ python -m evolution.skills.evolve_skill \
 | **Phase 1** | Skill files (SKILL.md) | Judge quality × size | ✅ Implemented |
 | **Phase 2** | Tool descriptions | Tool-selection accuracy × catalog size | ✅ Implemented |
 | **Phase 3** | System prompt sections | Judge quality × per-request cost | ✅ Implemented |
-| **Phase 4** | Tool implementation code | Darwinian Evolver (external CLI) | 🔲 Planned |
+| **Phase 4** | Tool implementation code | Darwinian Evolver via AGPL sidecar | ✅ Implemented |
 | **Phase 5** | Continuous improvement loop | Evidence-prioritized rotation | ✅ Implemented |
 
 ```bash
+# Phase 4 — tool implementation code (needs the AGPL sidecar; see below)
+python -m evolution.code.evolve_code --suggest
+python -m evolution.code.evolve_code --target agent/tool_executor.py --iterations 5
+
 # Phase 2 — tool descriptions, graded on which tool the agent actually used
 hermes tools list --json > tools.json
 python -m evolution.tools.evolve_tool --catalog tools.json --iterations 6
@@ -122,12 +126,42 @@ Observations: 6 baseline / 6 evolved. Noise band ±0.021.
 **Verdict: SHIP.** +0.062 (+7.6%) beyond the ±0.021 noise band (measured)
 ```
 
+## Phase 4 and the AGPL boundary
+
+Code evolution uses [darwinian_evolver](https://github.com/imbue-ai/darwinian_evolver), which is AGPL-3.0. It **cannot be invoked as a plain external CLI**: `problems/registry.py` is a hardcoded dict and its CLI restricts `--problem` to that dict's keys, so defining a Hermes problem means subclassing its classes — importing AGPL code.
+
+The AGPL-linked code therefore lives in a separate package, [hermes-evolver-problems](https://github.com/numandev1/hermes-evolver-problems), and the dependency runs one way:
+
+```
+hermes-evolver-problems (AGPL) ──imports──▶ darwinian_evolver (AGPL)
+hermes-evolver-problems (AGPL) ──imports──▶ this package      (MIT)
+this package            (MIT)  ──subprocess──▶ the sidecar
+```
+
+A test asserts that nothing under `evolution/` imports `darwinian_evolver`, because a stray import would relicense this project and would not otherwise fail anything.
+
+```bash
+git clone https://github.com/numandev1/hermes-evolver-problems
+pip install -e ./hermes-evolver-problems     # needs Python >= 3.11
+```
+
+### Why code gets a stricter gate
+
+A bad skill edit produces a worse answer; a bad code edit ships a defect into every agent that loads the tool. So a candidate is not scored until it is admitted:
+
+- **Sandboxed.** Checks run against a copy, never the real checkout, with credentials stripped from the environment.
+- **Held-out checks.** Visible failures go back to the mutator, because that is how it improves. The full suite and replayed real commands are sealed — they gate admission but their names and output never reach the mutator, so it cannot learn to satisfy the specific checks it can see.
+- **Ground truth.** Commands recorded in `verification_evidence.db` are replayed with their real exit codes. Unsafe ones are never replayed.
+- **Tests are not evolvable.** `tests/`, `setup.py`, `__init__.py` and migrations are refused as targets — a mutator that can edit the tests can pass any gate it likes.
+- **No automatic deployment, ever.** Skill evolution can canary into a live install and roll back. Code cannot: a bad tool implementation is already executing inside the agent before any outcome signal exists. Phase 4 ends at a draft pull request.
+
+
 ## Engines
 
 | Engine | What It Does | License |
 |--------|-------------|---------|
 | **[DSPy](https://github.com/stanfordnlp/dspy) + [GEPA](https://github.com/gepa-ai/gepa)** | Reflective prompt evolution — reads execution traces, proposes targeted mutations | MIT |
-| **[Darwinian Evolver](https://github.com/imbue-ai/darwinian_evolver)** | Code evolution with Git-based organisms | AGPL v3 (external CLI only) |
+| **[Darwinian Evolver](https://github.com/imbue-ai/darwinian_evolver)** | Code evolution over git-based organisms | AGPL v3 (isolated in a separate sidecar package) |
 
 ## Models
 

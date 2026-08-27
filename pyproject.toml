@@ -30,8 +30,19 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
 ]
+# Phase 4 engine. NOT on PyPI — it is distributed only as a git repository, so
+# the plain name never resolved and `pip install -e ".[darwinian]"` failed with
+# "No matching distribution found". Pinned to the git source via a PEP 440
+# direct reference.
+#
+# Gated on Python >= 3.11: darwinian_evolver requires it, while this project
+# supports >= 3.10, and without the marker a resolver rejects the whole
+# resolution even on a new enough interpreter.
+#
+# AGPL-3.0. Installing this extra pulls AGPL code into the environment; see
+# evolution/code/README.md for what that does and does not permit.
 darwinian = [
-    "darwinian-evolver",
+    "darwinian-evolver @ git+https://github.com/imbue-ai/darwinian_evolver@main ; python_version >= '3.11'",
 ]
 
 [project.scripts]

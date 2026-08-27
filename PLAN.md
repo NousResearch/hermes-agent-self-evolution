@@ -7,10 +7,15 @@
 > connection between it and Hermes broken, misaligned or absent. What follows
 > is the original plan; this box records what actually shipped.
 >
-> **Phases:** 1 (skills), 2 (tool descriptions), 3 (prompt sections) and
-> 5 (continuous loop) are implemented. Phase 4 (code evolution) remains a
-> deliberate placeholder — `darwinian_evolver` is AGPL v3 and must stay an
-> external CLI so its licence never reaches this MIT tree.
+> **Phases:** all five are implemented. Phase 4 (code evolution) needed a
+> correction to the plan: `darwinian_evolver` cannot be driven as a plain
+> external CLI, because `problems/registry.py` is a hardcoded dict and its CLI
+> restricts `--problem` to that dict's keys. Defining a Hermes problem means
+> subclassing its classes, i.e. importing AGPL-3.0 code. The AGPL-linked code
+> therefore lives in a separate sidecar package
+> (`hermes-evolver-problems`, AGPL-3.0) which imports both the engine and this
+> MIT package; this package reaches it only over a subprocess boundary, and a
+> test asserts it never imports the engine.
 >
 > **Corrections to the design as planned:**
 >
