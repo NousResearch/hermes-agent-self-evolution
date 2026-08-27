@@ -98,7 +98,7 @@ class TestFtsNarrowing:
         assert mined == []
 
     def test_missing_index_falls_back_to_full_scan(self, tmp_path):
-        from tests.core.conftest import build_state_db
+        from tests.conftest import build_state_db
 
         root = tmp_path / "h"
         (root / "config.yaml").parent.mkdir(parents=True, exist_ok=True)

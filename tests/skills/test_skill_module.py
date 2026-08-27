@@ -139,3 +139,152 @@ class TestSkillModule:
         assert "output" in output_fields
         # skill_instructions should NOT be an input field — it's the instructions now
         assert "skill_instructions" not in input_fields
+
+
+# ── Additions covering the audited gaps ─────────────────────────────────
+
+
+class TestFrontmatterParsing:
+    """Nested `metadata:` blocks must not shadow the skill's own fields.
+
+    182 of the installed skills carry a nested metadata block, and a naive
+    line scan picks up whichever `name:` it meets first.
+    """
+
+    def test_nested_name_does_not_shadow_the_real_one(self, tmp_path):
+        from evolution.skills.skill_module import load_skill
+
+        path = tmp_path / "SKILL.md"
+        path.write_text(
+            "---\n"
+            "name: real-name\n"
+            "description: the real description\n"
+            "version: 2.3.4\n"
+            "metadata:\n"
+            "  hermes:\n"
+            "    name: nested-decoy\n"
+            "    description: nested decoy description\n"
+            "---\n\nBody.\n"
+        )
+        skill = load_skill(path)
+        assert skill["name"] == "real-name"
+        assert skill["description"] == "the real description"
+        assert skill["version"] == "2.3.4"
+
+    def test_list_items_are_not_treated_as_fields(self, tmp_path):
+        from evolution.skills.skill_module import parse_frontmatter_fields
+
+        fields = parse_frontmatter_fields("name: x\ntags:\n- name: decoy\n")
+        assert fields["name"] == "x"
+
+
+class TestVersionBump:
+    """An evolved skill that keeps its predecessor's version is indistinguishable."""
+
+    def test_patch_version_is_incremented(self):
+        from evolution.skills.skill_module import bump_version
+
+        assert "version: 1.2.4" in bump_version("name: x\nversion: 1.2.3")
+
+    def test_two_part_versions_gain_a_patch(self):
+        from evolution.skills.skill_module import bump_version
+
+        assert "version: 1.2.1" in bump_version("name: x\nversion: 1.2")
+
+    def test_a_missing_version_is_added_after_name(self):
+        from evolution.skills.skill_module import bump_version
+
+        result = bump_version("name: x\ndescription: y")
+        lines = result.split("\n")
+        assert lines[0] == "name: x"
+        assert lines[1] == "version: 1.0.1"
+
+    def test_a_nonnumeric_version_is_replaced_not_mangled(self):
+        from evolution.skills.skill_module import bump_version
+
+        assert "version: 1.0.1" in bump_version("name: x\nversion: draft")
+
+    def test_other_frontmatter_is_preserved(self):
+        from evolution.skills.skill_module import bump_version
+
+        out = bump_version("name: x\nversion: 1.0.0\nauthor: someone\nlicense: MIT")
+        assert "author: someone" in out and "license: MIT" in out
+
+
+class TestFindSkillAcrossTrees:
+    """Skills live in profile, user and repo trees; searching one missed most."""
+
+    def _make(self, root, name, body="---\nname: %s\n---\n\nx\n"):
+        d = root / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(body % name if "%s" in body else body)
+        return d / "SKILL.md"
+
+    def test_finds_a_skill_in_a_secondary_tree(self, tmp_path):
+        from evolution.skills.skill_module import find_skill
+
+        repo_skills = tmp_path / "repo" / "skills"
+        user_skills = tmp_path / "user" / "skills"
+        self._make(repo_skills, "in-repo")
+        target = self._make(user_skills, "in-user")
+
+        assert find_skill("in-user", repo_skills, user_skills) == target
+
+    def test_a_parent_directory_is_accepted(self, tmp_path):
+        from evolution.skills.skill_module import find_skill
+
+        target = self._make(tmp_path / "repo" / "skills", "demo")
+        assert find_skill("demo", tmp_path / "repo") == target
+
+    def test_earlier_trees_win_on_a_name_clash(self, tmp_path):
+        from evolution.skills.skill_module import find_skill
+
+        first = self._make(tmp_path / "a" / "skills", "dup")
+        self._make(tmp_path / "b" / "skills", "dup")
+        assert find_skill("dup", tmp_path / "a" / "skills", tmp_path / "b" / "skills") == first
+
+    def test_frontmatter_name_matches_when_the_directory_does_not(self, tmp_path):
+        from evolution.skills.skill_module import find_skill
+
+        d = tmp_path / "skills" / "weird-dir-name"
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text("---\nname: actual-name\n---\n\nx\n")
+        assert find_skill("actual-name", tmp_path / "skills") == d / "SKILL.md"
+
+    def test_missing_skill_returns_none(self, tmp_path):
+        from evolution.skills.skill_module import find_skill
+
+        (tmp_path / "skills").mkdir()
+        assert find_skill("ghost", tmp_path / "skills") is None
+
+
+class TestPredictionCarriesCandidateText:
+    """The metric cannot judge the candidate unless the module says what it is."""
+
+    def test_forward_attaches_the_live_instructions(self):
+        import dspy
+        from evolution.skills.skill_module import SkillModule
+
+        module = SkillModule("ORIGINAL SKILL BODY")
+
+        class FakePredict:
+            def __call__(self, task_input):
+                return dspy.Prediction(output="an answer")
+
+        module.predictor = FakePredict()
+        module.predictor.predict = type("P", (), {"signature": type("S", (), {"instructions": "MUTATED BODY"})})()
+
+        result = module(task_input="x")
+        assert result.skill_text == "MUTATED BODY"
+
+    def test_bundle_context_is_stripped_from_the_evolved_text(self):
+        from evolution.skills.skill_module import SkillModule
+
+        module = SkillModule("BODY", bundle_context="reference file excerpt")
+        assert "reference file excerpt" in module.current_instructions()
+        assert module.get_evolved_text() == "BODY"
+
+    def test_without_bundle_context_the_text_is_unchanged(self):
+        from evolution.skills.skill_module import SkillModule
+
+        assert SkillModule("BODY").get_evolved_text() == "BODY"
