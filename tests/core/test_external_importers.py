@@ -1268,3 +1268,69 @@ class TestEvalExampleFormat:
             data = json.loads(f.readline())
 
         assert set(data.keys()) == {"task_input", "expected_behavior", "difficulty", "category", "source"}
+
+
+class TestSourceCollectionIsHostIndependent:
+    """Results must not depend on what happens to exist on the machine.
+
+    These three cases passed on a developer laptop (which has
+    ~/.claude/history.jsonl) and failed in the Hermes container (which does
+    not) — 501/3 instead of 504/0. The cause was ordering: the collector
+    probed the importer's default path *before* calling it, which made a guess
+    about where data lives authoritative over the importer itself, and skipped
+    any importer a test had substituted.
+    """
+
+    def test_a_substituted_importer_is_used_even_with_no_file_on_disk(self, tmp_path, monkeypatch):
+        from evolution.core.external_importers import collect_external_messages
+
+        monkeypatch.setattr(ClaudeCodeImporter, "HISTORY_PATH", tmp_path / "absent.jsonl")
+        msgs = [{"task_input": "sort these topics into groups", "source": "claude-code"}]
+
+        with patch.object(ClaudeCodeImporter, "extract_messages", return_value=msgs):
+            collected, reports = collect_external_messages(["claude-code"])
+
+        assert len(collected) == 1
+        assert reports[0].available is True
+        assert reports[0].messages == 1
+
+    def test_a_genuinely_absent_source_still_says_it_is_absent(self, tmp_path, monkeypatch):
+        from evolution.core.external_importers import collect_external_messages
+
+        # HISTORY_PATH is bound at import time, so patching Path.home after the
+        # fact does not reach it — the attribute itself has to be pinned or the
+        # test reads whatever the developer's machine happens to have.
+        monkeypatch.setattr(ClaudeCodeImporter, "HISTORY_PATH", tmp_path / "absent.jsonl")
+
+        collected, reports = collect_external_messages(["claude-code"])
+
+        assert collected == []
+        assert reports[0].available is False
+        assert "not present" in reports[0].detail
+
+    def test_a_present_but_idle_source_is_distinguished_from_a_missing_one(self, tmp_path, monkeypatch):
+        from evolution.core.external_importers import collect_external_messages
+
+        history = tmp_path / "history.jsonl"
+        history.write_text("")
+        monkeypatch.setattr(ClaudeCodeImporter, "HISTORY_PATH", history)
+
+        collected, reports = collect_external_messages(["claude-code"])
+
+        assert collected == []
+        # Present and empty is a different problem from absent, and must read
+        # as such — that distinction is the whole point of the report.
+        assert reports[0].available is True
+        assert "not present" not in reports[0].detail
+
+    def test_an_importer_that_raises_is_reported_not_propagated(self, tmp_path, monkeypatch):
+        from evolution.core.external_importers import collect_external_messages
+
+        monkeypatch.setattr(ClaudeCodeImporter, "HISTORY_PATH", tmp_path / "absent.jsonl")
+
+        with patch.object(ClaudeCodeImporter, "extract_messages", side_effect=OSError("disk gone")):
+            collected, reports = collect_external_messages(["claude-code"])
+
+        assert collected == []
+        assert reports[0].available is False
+        assert "disk gone" in reports[0].detail

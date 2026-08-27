@@ -651,6 +651,47 @@ class SourceReport:
         return f"  {self.name}: {self.messages} messages{suffix}"
 
 
+def _collect_one(
+    label: str,
+    extract,
+    locate,
+    sink: list[dict],
+) -> SourceReport:
+    """Run one file-backed importer and describe what it produced.
+
+    Extraction comes first and the path is consulted only to *explain* an empty
+    result. Probing the path first looked equivalent and was not: it made our
+    guess about where the data lives authoritative over the importer itself, so
+    a source that could actually produce messages was skipped whenever the
+    guess was wrong — and any test that substituted the importer was skipped
+    with it.
+    """
+    report = SourceReport(label)
+    try:
+        msgs = extract()
+    except Exception as exc:  # noqa: BLE001 — one bad source must not end the run
+        report.detail = f"{type(exc).__name__}: {exc}"
+        return report
+
+    if msgs:
+        report.available = True
+        report.messages = len(msgs)
+        sink.extend(msgs)
+        return report
+
+    # Empty. Distinguish "the source is not here" from "it is here and idle" —
+    # they need different fixes, and conflating them is what let a broken
+    # weekly job look the same as a quiet one.
+    try:
+        path = locate()
+        report.available = bool(path) and path.exists()
+        report.detail = "" if report.available else f"{path} not present"
+    except Exception:  # noqa: BLE001
+        report.available = False
+        report.detail = "location could not be determined"
+    return report
+
+
 def collect_external_messages(
     sources: list[str],
     skill_name: str = "",
@@ -701,40 +742,32 @@ def collect_external_messages(
             continue
 
         if source == "hermes-legacy":
-            report = SourceReport("Hermes Agent (legacy JSON)")
-            report.available = HermesSessionImporter.SESSION_DIR.exists()
-            if not report.available:
-                report.detail = f"{HermesSessionImporter.SESSION_DIR} not present"
-            else:
-                msgs = HermesSessionImporter.extract_messages()
-                report.messages = len(msgs)
-                all_messages.extend(msgs)
+            report = _collect_one(
+                "Hermes Agent (legacy JSON)",
+                HermesSessionImporter.extract_messages,
+                lambda: HermesSessionImporter.SESSION_DIR,
+                all_messages,
+            )
             reports.append(report)
             continue
 
         if source == "claude-code":
-            report = SourceReport("Claude Code")
-            path = ClaudeCodeImporter.HISTORY_PATH
-            report.available = path.exists()
-            if not report.available:
-                report.detail = f"{path} not present"
-            else:
-                msgs = ClaudeCodeImporter.extract_messages()
-                report.messages = len(msgs)
-                all_messages.extend(msgs)
+            report = _collect_one(
+                "Claude Code",
+                ClaudeCodeImporter.extract_messages,
+                lambda: ClaudeCodeImporter.HISTORY_PATH,
+                all_messages,
+            )
             reports.append(report)
             continue
 
         if source == "copilot":
-            report = SourceReport("Copilot")
-            path = CopilotImporter.SESSION_DIR
-            report.available = path.exists()
-            if not report.available:
-                report.detail = f"{path} not present"
-            else:
-                msgs = CopilotImporter.extract_messages()
-                report.messages = len(msgs)
-                all_messages.extend(msgs)
+            report = _collect_one(
+                "Copilot",
+                CopilotImporter.extract_messages,
+                lambda: CopilotImporter.SESSION_DIR,
+                all_messages,
+            )
             reports.append(report)
             continue
 
