@@ -21,7 +21,7 @@ from rich.table import Table
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
-from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.fitness import llm_judge_metric, set_current_skill_text, skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -64,6 +64,7 @@ def evolve(
         sys.exit(1)
 
     skill = load_skill(skill_path)
+    set_current_skill_text(skill["raw"])
     console.print(f"  Loaded: {skill_path.relative_to(config.hermes_agent_path)}")
     console.print(f"  Name: {skill['name']}")
     console.print(f"  Size: {len(skill['raw']):,} chars")
@@ -136,8 +137,17 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy (provider compat: deepseek-chat serves only json_object; json_schema
+    # arrives as a pydantic class or dict and must be stripped before litellm serializes it)
+    class _ProviderCompatLM(dspy.LM):
+        def forward(self, prompt=None, messages=None, **kwargs):
+            model = str(getattr(self, "model", "") or "")
+            rf = kwargs.get("response_format")
+            if "deepseek" in model and not (isinstance(rf, dict) and rf.get("type") == "json_object"):
+                kwargs.pop("response_format", None)
+            return super().forward(prompt=prompt, messages=messages, **kwargs)
+
+    lm = _ProviderCompatLM(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -153,9 +163,11 @@ def evolve(
     start_time = time.time()
 
     try:
+        reflection_lm = _ProviderCompatLM(optimizer_model)
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=llm_judge_metric,
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -167,7 +179,7 @@ def evolve(
         # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
+            metric=llm_judge_metric,
             auto="light",
         )
         optimized_module = optimizer.compile(
@@ -185,7 +197,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -214,11 +226,11 @@ def evolve(
         # Score baseline
         with dspy.context(lm=lm):
             baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
+            baseline_score = llm_judge_metric(ex, baseline_pred)
             baseline_scores.append(baseline_score)
 
             evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
+            evolved_score = llm_judge_metric(ex, evolved_pred)
             evolved_scores.append(evolved_score)
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))

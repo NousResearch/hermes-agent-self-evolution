@@ -25,6 +25,7 @@ Usage from evolve_skill.py:
 import json
 import re
 import random
+import sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -344,10 +345,15 @@ class HermesSessionImporter:
     """
 
     SESSION_DIR = Path.home() / ".hermes" / "sessions"
+    STATE_DB = Path.home() / ".hermes" / "state.db"
 
     @staticmethod
     def extract_messages(limit: int = 0) -> list[dict]:
-        """Read user/assistant pairs from Hermes session files.
+        """Read user/assistant pairs from Hermes session storage.
+
+        Modern Hermes stores conversations in SQLite (~/.hermes/state.db);
+        legacy installs used JSON transcripts in ~/.hermes/sessions/.
+        Auto-detect: use SQLite when present, else fall back to JSON files.
 
         Args:
             limit: Maximum messages to return (0 = no limit).
@@ -356,6 +362,79 @@ class HermesSessionImporter:
             List of dicts with keys: source, task_input, assistant_response,
             session_id.
         """
+        messages = HermesSessionImporter._extract_from_sqlite(limit)
+        if not messages:
+            messages = HermesSessionImporter._extract_from_json(limit)
+        return messages
+
+    @staticmethod
+    def _extract_from_sqlite(limit: int = 0) -> list[dict]:
+        """Mine state.db: pair each user message with the next assistant reply.
+
+        Faithful to the JSON-walk semantics: the assistant reply must be the
+        NEXT assistant message after the user turn, with no intervening user
+        message (a user message before the assistant reply means the turn got
+        no answer and the pair is skipped).
+        """
+        if not HermesSessionImporter.STATE_DB.exists():
+            return []
+
+        messages = []
+        try:
+            conn = sqlite3.connect(str(HermesSessionImporter.STATE_DB))
+            conn.row_factory = sqlite3.Row
+            sql_limit = limit if limit > 0 else 20000
+            rows = conn.execute(
+                """
+                SELECT m.session_id AS session_id,
+                       m.content AS task_input,
+                       (SELECT m2.content FROM messages m2
+                         WHERE m2.session_id = m.session_id
+                           AND m2.id > m.id
+                           AND m2.role = 'assistant'
+                           AND m2.content IS NOT NULL
+                           AND m2.content != ''
+                           AND NOT EXISTS (
+                               SELECT 1 FROM messages m3
+                                WHERE m3.session_id = m.session_id
+                                  AND m3.id > m.id
+                                  AND m3.id < m2.id
+                                  AND m3.role = 'user')
+                         ORDER BY m2.id LIMIT 1) AS assistant_response
+                  FROM messages m
+                 WHERE m.role = 'user'
+                   AND m.active = 1
+                   AND m.content IS NOT NULL
+                   AND length(m.content) >= 10
+                 ORDER BY m.timestamp DESC
+                 LIMIT ?
+                """,
+                (sql_limit,),
+            )
+            for row in rows:
+                user_text = row["task_input"]
+                assistant_text = row["assistant_response"]
+                if not assistant_text:
+                    continue
+                if _contains_secret(user_text) or _contains_secret(assistant_text):
+                    continue
+                messages.append({
+                    "source": "hermes",
+                    "task_input": user_text,
+                    "assistant_response": assistant_text,
+                    "session_id": row["session_id"],
+                })
+                if limit and len(messages) >= limit:
+                    break
+            conn.close()
+        except sqlite3.Error:
+            return []
+
+        return messages
+
+    @staticmethod
+    def _extract_from_json(limit: int = 0) -> list[dict]:
+        """Legacy path: JSON transcripts in ~/.hermes/sessions/*.json."""
         if not HermesSessionImporter.SESSION_DIR.exists():
             return []
 
