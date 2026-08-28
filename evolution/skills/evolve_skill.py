@@ -22,6 +22,7 @@ from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import llm_judge_metric, set_current_skill_text, skill_fitness_metric, LLMJudge, FitnessScore
+import difflib
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -237,6 +238,11 @@ def evolve(
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
 
+    # Program gain vs skill gain: a holdout delta without a skill-text delta
+    # is candidate/demo selection, NOT a deployable skill change.
+    skill_similarity = difflib.SequenceMatcher(None, skill["body"], evolved_body).ratio()
+    text_changed = evolved_body.strip() != skill["body"].strip()
+
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
     table.add_column("Metric", style="bold")
@@ -256,6 +262,12 @@ def evolve(
         f"{len(skill['body']):,} chars",
         f"{len(evolved_body):,} chars",
         f"{len(evolved_body) - len(skill['body']):+,} chars",
+    )
+    table.add_row(
+        "Skill Text Delta",
+        "",
+        f"{skill_similarity:.1%} similar",
+        "[green]changed[/green]" if text_changed else "[red]UNCHANGED[/red]",
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
@@ -291,14 +303,19 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "skill_text_changed": text_changed,
+        "skill_similarity": round(skill_similarity, 4),
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if improvement > 0 and text_changed:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif improvement > 0 and not text_changed:
+        console.print(f"\n[yellow]⚠ Holdout improved by {improvement:+.3f} but the skill text is UNCHANGED[/yellow]")
+        console.print("  The gain is program-level (candidate/demo selection) — NOT deployable as a skill change.")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
