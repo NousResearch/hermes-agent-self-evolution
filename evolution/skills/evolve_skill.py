@@ -14,6 +14,18 @@ from typing import Optional
 
 import click
 import dspy
+import litellm
+
+# Transport-level timeout (bug observed on long runs): LiteLLM's default is no
+# timeout, so a single dead provider request parks the run forever — seen as a
+# multi-hour silent hang at the dataset relevance-filter stage. dspy.LM's
+# `timeout` kwarg does not reach every call path (importers construct their own
+# LMs), so set the module-level default once here: this process's entry point
+# imports evolve_skill first, and litellm reads module state at call time,
+# covering every LM construction anywhere in the run.
+litellm.request_timeout = 120
+litellm.num_retries = 2
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table

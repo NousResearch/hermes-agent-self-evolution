@@ -482,7 +482,7 @@ class TestHermesSessionImporter:
         }
         (tmp_path / "session_001.json").write_text(json.dumps(session))
 
-        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path), patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "no_state.db"):
             msgs = HermesSessionImporter.extract_messages()
 
         assert len(msgs) == 2
@@ -501,7 +501,7 @@ class TestHermesSessionImporter:
         }
         (tmp_path / "s.json").write_text(json.dumps(session))
 
-        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path), patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "no_state.db"):
             msgs = HermesSessionImporter.extract_messages()
         assert len(msgs) == 0
 
@@ -514,19 +514,19 @@ class TestHermesSessionImporter:
         }
         (tmp_path / "s.json").write_text(json.dumps(session))
 
-        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path), patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "no_state.db"):
             msgs = HermesSessionImporter.extract_messages()
         assert len(msgs) == 0
 
     def test_handles_missing_dir(self, tmp_path):
-        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path / "nonexistent"):
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path / "nonexistent"), patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "no_state.db"):
             msgs = HermesSessionImporter.extract_messages()
         assert msgs == []
 
     def test_handles_malformed_json(self, tmp_path):
         (tmp_path / "bad.json").write_text("{not valid json")
 
-        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path), patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "no_state.db"):
             msgs = HermesSessionImporter.extract_messages()
         assert msgs == []
 
@@ -538,7 +538,7 @@ class TestHermesSessionImporter:
         }
         (tmp_path / "s.json").write_text(json.dumps(session))
 
-        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path), patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "no_state.db"):
             msgs = HermesSessionImporter.extract_messages()
         assert len(msgs) == 1
         assert msgs[0]["assistant_response"] == ""
@@ -551,7 +551,7 @@ class TestHermesSessionImporter:
         }
         (tmp_path / "s.json").write_text(json.dumps(session))
 
-        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
+        with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path), patch.object(HermesSessionImporter, "STATE_DB", tmp_path / "no_state.db"):
             msgs = HermesSessionImporter.extract_messages(limit=3)
         assert len(msgs) == 3
 
