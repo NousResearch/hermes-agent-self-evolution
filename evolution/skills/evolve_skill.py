@@ -177,10 +177,14 @@ def evolve(
 
     try:
         reflection_lm = _ProviderCompatLM(optimizer_model)
+        # num_threads=1: serialize valset evals. Parallel evals under rate
+        # limits can truncate a batch and short the outputs-by-example list,
+        # crashing gepa/core/engine.py with an IndexError mid-run (#10).
         optimizer = dspy.GEPA(
             metric=llm_judge_metric,
             max_full_evals=iterations,
             reflection_lm=reflection_lm,
+            num_threads=1,
         )
 
         optimized_module = optimizer.compile(
