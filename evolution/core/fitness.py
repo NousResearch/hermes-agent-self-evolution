@@ -136,6 +136,61 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     return min(1.0, max(0.0, score))
 
 
+_skill_text: str = ""
+
+
+def set_current_skill_text(text: str) -> None:
+    """Thread the skill being evolved into the judge so it can grade against it."""
+    global _skill_text
+    _skill_text = text or ""
+
+
+class _RubricJudgeSignature(dspy.Signature):
+    """Evaluate an agent's response against an expected behavior rubric."""
+
+    task_input: str = dspy.InputField(desc="The task the agent was given")
+    expected_behavior: str = dspy.InputField(desc="Rubric describing what a good response looks like")
+    agent_output: str = dspy.InputField(desc="The agent's actual response")
+    skill_text: str = dspy.InputField(desc="The skill/instructions the agent was following")
+    correctness: float = dspy.OutputField(desc="Score 0.0-1.0: Did the response correctly address the task?")
+    procedure_following: float = dspy.OutputField(desc="Score 0.0-1.0: Did it follow the expected procedure?")
+    conciseness: float = dspy.OutputField(desc="Score 0.0-1.0: Appropriately concise?")
+    feedback: str = dspy.OutputField(desc="Specific, actionable feedback on what could be improved")
+
+
+_rubric_judge = None
+
+
+def llm_judge_metric(gold, pred, trace=None, pred_name=None, pred_trace=None) -> float:
+    """GEPA-compatible (gold, pred, trace, pred_name, pred_trace) rubric metric.
+
+    Grades with the real LLM judge (correctness / procedure / conciseness)
+    instead of the keyword-overlap heuristic. Falls back to the heuristic if
+    a judge call fails.
+    """
+    global _rubric_judge
+    agent_output = getattr(pred, "output", "") or ""
+    if not agent_output.strip():
+        return 0.0
+    expected = getattr(gold, "expected_behavior", "") or ""
+    task = getattr(gold, "task_input", "") or ""
+    try:
+        if _rubric_judge is None:
+            _rubric_judge = dspy.ChainOfThought(_RubricJudgeSignature)
+        result = _rubric_judge(
+            task_input=task,
+            expected_behavior=expected,
+            agent_output=agent_output,
+            skill_text=_skill_text,
+        )
+        c = _parse_score(result.correctness)
+        p = _parse_score(result.procedure_following)
+        x = _parse_score(result.conciseness)
+        return min(1.0, max(0.0, (c + p + x) / 3.0))
+    except Exception:
+        return skill_fitness_metric(gold, pred, trace)
+
+
 def _parse_score(value) -> float:
     """Parse a score value, handling various LLM output formats."""
     if isinstance(value, (int, float)):

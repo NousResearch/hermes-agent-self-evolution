@@ -14,6 +14,18 @@ from typing import Optional
 
 import click
 import dspy
+import litellm
+
+# Transport-level timeout (bug observed on long runs): LiteLLM's default is no
+# timeout, so a single dead provider request parks the run forever — seen as a
+# multi-hour silent hang at the dataset relevance-filter stage. dspy.LM's
+# `timeout` kwarg does not reach every call path (importers construct their own
+# LMs), so set the module-level default once here: this process's entry point
+# imports evolve_skill first, and litellm reads module state at call time,
+# covering every LM construction anywhere in the run.
+litellm.request_timeout = 120
+litellm.num_retries = 2
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -21,7 +33,8 @@ from rich.table import Table
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
-from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.fitness import llm_judge_metric, set_current_skill_text, skill_fitness_metric, LLMJudge, FitnessScore
+import difflib
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -64,6 +77,7 @@ def evolve(
         sys.exit(1)
 
     skill = load_skill(skill_path)
+    set_current_skill_text(skill["raw"])
     console.print(f"  Loaded: {skill_path.relative_to(config.hermes_agent_path)}")
     console.print(f"  Name: {skill['name']}")
     console.print(f"  Size: {len(skill['raw']):,} chars")
@@ -136,8 +150,17 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy (provider compat: deepseek-chat serves only json_object; json_schema
+    # arrives as a pydantic class or dict and must be stripped before litellm serializes it)
+    class _ProviderCompatLM(dspy.LM):
+        def forward(self, prompt=None, messages=None, **kwargs):
+            model = str(getattr(self, "model", "") or "")
+            rf = kwargs.get("response_format")
+            if "deepseek" in model and not (isinstance(rf, dict) and rf.get("type") == "json_object"):
+                kwargs.pop("response_format", None)
+            return super().forward(prompt=prompt, messages=messages, **kwargs)
+
+    lm = _ProviderCompatLM(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -153,9 +176,15 @@ def evolve(
     start_time = time.time()
 
     try:
+        reflection_lm = _ProviderCompatLM(optimizer_model)
+        # num_threads=1: serialize valset evals. Parallel evals under rate
+        # limits can truncate a batch and short the outputs-by-example list,
+        # crashing gepa/core/engine.py with an IndexError mid-run (#10).
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=llm_judge_metric,
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
+            num_threads=1,
         )
 
         optimized_module = optimizer.compile(
@@ -167,7 +196,7 @@ def evolve(
         # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
         console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
+            metric=llm_judge_metric,
             auto="light",
         )
         optimized_module = optimizer.compile(
@@ -185,7 +214,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -214,16 +243,21 @@ def evolve(
         # Score baseline
         with dspy.context(lm=lm):
             baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
+            baseline_score = llm_judge_metric(ex, baseline_pred)
             baseline_scores.append(baseline_score)
 
             evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
+            evolved_score = llm_judge_metric(ex, evolved_pred)
             evolved_scores.append(evolved_score)
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
     improvement = avg_evolved - avg_baseline
+
+    # Program gain vs skill gain: a holdout delta without a skill-text delta
+    # is candidate/demo selection, NOT a deployable skill change.
+    skill_similarity = difflib.SequenceMatcher(None, skill["body"], evolved_body).ratio()
+    text_changed = evolved_body.strip() != skill["body"].strip()
 
     # ── 9. Report results ───────────────────────────────────────────────
     table = Table(title="Evolution Results")
@@ -244,6 +278,12 @@ def evolve(
         f"{len(skill['body']):,} chars",
         f"{len(evolved_body):,} chars",
         f"{len(evolved_body) - len(skill['body']):+,} chars",
+    )
+    table.add_row(
+        "Skill Text Delta",
+        "",
+        f"{skill_similarity:.1%} similar",
+        "[green]changed[/green]" if text_changed else "[red]UNCHANGED[/red]",
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
     table.add_row("Iterations", "", str(iterations), "")
@@ -279,14 +319,19 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "skill_text_changed": text_changed,
+        "skill_similarity": round(skill_similarity, 4),
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if improvement > 0 and text_changed:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
+    elif improvement > 0 and not text_changed:
+        console.print(f"\n[yellow]⚠ Holdout improved by {improvement:+.3f} but the skill text is UNCHANGED[/yellow]")
+        console.print("  The gain is program-level (candidate/demo selection) — NOT deployable as a skill change.")
     else:
         console.print(f"\n[yellow]⚠ Evolution did not improve skill (change: {improvement:+.3f})[/yellow]")
         console.print("  Try: more iterations, better eval dataset, or different optimizer model")
