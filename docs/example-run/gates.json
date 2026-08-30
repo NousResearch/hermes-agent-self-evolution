@@ -1,0 +1,24 @@
+{
+  "strict": false,
+  "passed": true,
+  "results": [
+    {
+      "name": "cross_tool",
+      "status": "passed",
+      "message": "no tool regressed beyond a 0.0% tolerance (0 improved, 2 not measurable)",
+      "score": 1.0,
+      "baseline": 1.0,
+      "details": "",
+      "duration_s": 0.0
+    },
+    {
+      "name": "tblite",
+      "status": "unavailable",
+      "message": "benchmark 'tblite' not found in /tmp/hasereview/r5 (set HERMES_BENCH_TBLITE to point at it)",
+      "score": null,
+      "baseline": null,
+      "details": "",
+      "duration_s": 0.0
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "read_file": {
+    "tool_name": "read_file",
+    "description": "Read a text file with line numbers and pagination. Use this instead of cat/head/tail in terminal.",
+    "params": {
+      "path": "Path to the file to read",
+      "offset": "Line number to start from",
+      "limit": "Maximum number of lines to read"
+    }
+  },
+  "search_files": {
+    "tool_name": "search_files",
+    "description": "Search file contents or filenames with a regular expression.\n\nUse this instead of grep or find in terminal.",
+    "params": {
+      "pattern": "Regular expression to search for",
+      "target": "Search inside files or match names",
+      "path": "Directory to search in"
+    }
+  },
+  "terminal": {
+    "tool_name": "terminal",
+    "description": "Run a shell command in a persistent session.",
+    "params": {
+      "command": "Shell command to run",
+      "timeout": "Seconds before giving up"
+    }
+  },
+  "vision_analyze": {
+    "tool_name": "vision_analyze",
+    "description": "Describe the contents of an image file.",
+    "params": {
+      "path": "Path to the image"
+    }
+  },
+  "write_file": {
+    "tool_name": "write_file",
+    "description": "Write content to a file, completely replacing existing content.",
+    "params": {
+      "path": "Path to the file to write",
+      "content": "Complete content to write",
+      "cross_profile": "Opt out of the cross-profile soft guard. Defaults to false. Set true only after explicit user direction to edit another profile. Set true only after explicit user direction to edit another profile. Set true only after explicit user direction to edit another profile. Set true only after explicit user direction to edit another profile. "
+    }
+  }
+}

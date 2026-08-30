@@ -27,6 +27,7 @@ class EvalExample:
     source: str = "synthetic"  # synthetic, sessiondb, golden
 
     def to_dict(self) -> dict:
+        """Serialise the example for the dataset file."""
         return {
             "task_input": self.task_input,
             "expected_behavior": self.expected_behavior,
@@ -37,6 +38,7 @@ class EvalExample:
 
     @classmethod
     def from_dict(cls, d: dict) -> "EvalExample":
+        """Build from a plain dict, ignoring keys this dataclass does not declare."""
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -49,6 +51,7 @@ class EvalDataset:
 
     @property
     def all_examples(self) -> list[EvalExample]:
+        """Every example across all three splits."""
         return self.train + self.val + self.holdout
 
     def save(self, path: Path):

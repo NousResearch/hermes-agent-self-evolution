@@ -1,0 +1,10 @@
+[
+  {
+    "tool_name": "terminal",
+    "kind": "tool",
+    "param": null,
+    "before": "Run a shell command in a persistent session. Prefer the purpose-built file tools over shell equivalents wherever one exists. Prefer the purpose-built file tools over shell equivalents wherever one exists. Prefer the purpose-built file tools over shell equivalents wherever one exists. Prefer the purpose-built file tools over shell equivalents wherever one exists. Prefer the purpose-built file tools over shell equivalents wherever one exists. Prefer the purpose-built file tools over shell equivalents wherever one exists. ",
+    "after": "Run a shell command in a persistent session.",
+    "delta_chars": -481
+  }
+]

@@ -1,0 +1,586 @@
+{
+  "baseline": {
+    "n": 4,
+    "overall_accuracy": 1.0,
+    "correct": 4,
+    "num_options": 6,
+    "chance_accuracy": 0.1667,
+    "accuracy_interval": {
+      "point": 1.0,
+      "low": 0.510109,
+      "high": 1.0,
+      "confidence": 0.95,
+      "estimable": true
+    },
+    "param_accuracy": 1.0,
+    "combined_score": 1.0,
+    "rates": {
+      "none": {
+        "tool": "none",
+        "opportunities": 1,
+        "correct": 1,
+        "rate": 1.0,
+        "outcomes": [
+          1
+        ]
+      },
+      "read_file": {
+        "tool": "read_file",
+        "opportunities": 1,
+        "correct": 1,
+        "rate": 1.0,
+        "outcomes": [
+          1
+        ]
+      },
+      "search_files": {
+        "tool": "search_files",
+        "opportunities": 1,
+        "correct": 1,
+        "rate": 1.0,
+        "outcomes": [
+          1
+        ]
+      },
+      "terminal": {
+        "tool": "terminal",
+        "opportunities": 1,
+        "correct": 1,
+        "rate": 1.0,
+        "outcomes": [
+          1
+        ]
+      },
+      "vision_analyze": {
+        "tool": "vision_analyze",
+        "opportunities": 0,
+        "correct": 0,
+        "rate": 0.0,
+        "outcomes": []
+      },
+      "write_file": {
+        "tool": "write_file",
+        "opportunities": 0,
+        "correct": 0,
+        "rate": 0.0,
+        "outcomes": []
+      }
+    },
+    "confusion": {
+      "none": {
+        "none": 1
+      },
+      "read_file": {
+        "read_file": 1
+      },
+      "search_files": {
+        "search_files": 1
+      },
+      "terminal": {
+        "terminal": 1
+      }
+    }
+  },
+  "candidate": {
+    "n": 4,
+    "overall_accuracy": 1.0,
+    "correct": 4,
+    "num_options": 6,
+    "chance_accuracy": 0.1667,
+    "accuracy_interval": {
+      "point": 1.0,
+      "low": 0.510109,
+      "high": 1.0,
+      "confidence": 0.95,
+      "estimable": true
+    },
+    "param_accuracy": 1.0,
+    "combined_score": 1.0,
+    "rates": {
+      "none": {
+        "tool": "none",
+        "opportunities": 1,
+        "correct": 1,
+        "rate": 1.0,
+        "outcomes": [
+          1
+        ]
+      },
+      "read_file": {
+        "tool": "read_file",
+        "opportunities": 1,
+        "correct": 1,
+        "rate": 1.0,
+        "outcomes": [
+          1
+        ]
+      },
+      "search_files": {
+        "tool": "search_files",
+        "opportunities": 1,
+        "correct": 1,
+        "rate": 1.0,
+        "outcomes": [
+          1
+        ]
+      },
+      "terminal": {
+        "tool": "terminal",
+        "opportunities": 1,
+        "correct": 1,
+        "rate": 1.0,
+        "outcomes": [
+          1
+        ]
+      },
+      "vision_analyze": {
+        "tool": "vision_analyze",
+        "opportunities": 0,
+        "correct": 0,
+        "rate": 0.0,
+        "outcomes": []
+      },
+      "write_file": {
+        "tool": "write_file",
+        "opportunities": 0,
+        "correct": 0,
+        "rate": 0.0,
+        "outcomes": []
+      }
+    },
+    "confusion": {
+      "none": {
+        "none": 1
+      },
+      "read_file": {
+        "read_file": 1
+      },
+      "search_files": {
+        "search_files": 1
+      },
+      "terminal": {
+        "terminal": 1
+      }
+    }
+  },
+  "verdict": {
+    "accepted": true,
+    "baseline_accuracy": 1.0,
+    "candidate_accuracy": 1.0,
+    "overall_delta": 0.0,
+    "baseline_accuracy_interval": {
+      "point": 1.0,
+      "low": 0.510109,
+      "high": 1.0,
+      "confidence": 0.95,
+      "estimable": true
+    },
+    "candidate_accuracy_interval": {
+      "point": 1.0,
+      "low": 0.510109,
+      "high": 1.0,
+      "confidence": 0.95,
+      "estimable": true
+    },
+    "chance_accuracy": 0.1667,
+    "num_options": 6,
+    "tolerance": 0.0,
+    "reason": "no tool regressed beyond a 0.0% tolerance (0 improved, 2 not measurable)",
+    "regressions": [],
+    "improvements": [],
+    "comparisons": [
+      {
+        "tool": "none",
+        "baseline_rate": 1.0,
+        "candidate_rate": 1.0,
+        "delta": 0.0,
+        "opportunities": 1,
+        "n_paired": 1,
+        "regressed": false,
+        "improved": false,
+        "tolerance": 0.0,
+        "breaches_tolerance": false,
+        "significant_regression": false,
+        "significant_improvement": false,
+        "underpowered": false,
+        "p_worse": 1.0,
+        "min_detectable_shift": 1.0,
+        "delta_ci": {
+          "point": 0.0,
+          "low": -0.793451,
+          "high": 0.793451,
+          "confidence": 0.95,
+          "estimable": true
+        },
+        "paired": {
+          "n": 1,
+          "baseline_rate": 1.0,
+          "candidate_rate": 1.0,
+          "delta": 0.0,
+          "delta_ci": {
+            "point": 0.0,
+            "low": -0.793451,
+            "high": 0.793451,
+            "confidence": 0.95,
+            "estimable": true
+          },
+          "baseline_only": 0,
+          "candidate_only": 0,
+          "discordant": 0,
+          "p_worse": 1.0,
+          "p_two_sided": 1.0,
+          "significant_regression": false,
+          "min_detectable_shift": 1.0
+        }
+      },
+      {
+        "tool": "read_file",
+        "baseline_rate": 1.0,
+        "candidate_rate": 1.0,
+        "delta": 0.0,
+        "opportunities": 1,
+        "n_paired": 1,
+        "regressed": false,
+        "improved": false,
+        "tolerance": 0.0,
+        "breaches_tolerance": false,
+        "significant_regression": false,
+        "significant_improvement": false,
+        "underpowered": false,
+        "p_worse": 1.0,
+        "min_detectable_shift": 1.0,
+        "delta_ci": {
+          "point": 0.0,
+          "low": -0.793451,
+          "high": 0.793451,
+          "confidence": 0.95,
+          "estimable": true
+        },
+        "paired": {
+          "n": 1,
+          "baseline_rate": 1.0,
+          "candidate_rate": 1.0,
+          "delta": 0.0,
+          "delta_ci": {
+            "point": 0.0,
+            "low": -0.793451,
+            "high": 0.793451,
+            "confidence": 0.95,
+            "estimable": true
+          },
+          "baseline_only": 0,
+          "candidate_only": 0,
+          "discordant": 0,
+          "p_worse": 1.0,
+          "p_two_sided": 1.0,
+          "significant_regression": false,
+          "min_detectable_shift": 1.0
+        }
+      },
+      {
+        "tool": "search_files",
+        "baseline_rate": 1.0,
+        "candidate_rate": 1.0,
+        "delta": 0.0,
+        "opportunities": 1,
+        "n_paired": 1,
+        "regressed": false,
+        "improved": false,
+        "tolerance": 0.0,
+        "breaches_tolerance": false,
+        "significant_regression": false,
+        "significant_improvement": false,
+        "underpowered": false,
+        "p_worse": 1.0,
+        "min_detectable_shift": 1.0,
+        "delta_ci": {
+          "point": 0.0,
+          "low": -0.793451,
+          "high": 0.793451,
+          "confidence": 0.95,
+          "estimable": true
+        },
+        "paired": {
+          "n": 1,
+          "baseline_rate": 1.0,
+          "candidate_rate": 1.0,
+          "delta": 0.0,
+          "delta_ci": {
+            "point": 0.0,
+            "low": -0.793451,
+            "high": 0.793451,
+            "confidence": 0.95,
+            "estimable": true
+          },
+          "baseline_only": 0,
+          "candidate_only": 0,
+          "discordant": 0,
+          "p_worse": 1.0,
+          "p_two_sided": 1.0,
+          "significant_regression": false,
+          "min_detectable_shift": 1.0
+        }
+      },
+      {
+        "tool": "terminal",
+        "baseline_rate": 1.0,
+        "candidate_rate": 1.0,
+        "delta": 0.0,
+        "opportunities": 1,
+        "n_paired": 1,
+        "regressed": false,
+        "improved": false,
+        "tolerance": 0.0,
+        "breaches_tolerance": false,
+        "significant_regression": false,
+        "significant_improvement": false,
+        "underpowered": false,
+        "p_worse": 1.0,
+        "min_detectable_shift": 1.0,
+        "delta_ci": {
+          "point": 0.0,
+          "low": -0.793451,
+          "high": 0.793451,
+          "confidence": 0.95,
+          "estimable": true
+        },
+        "paired": {
+          "n": 1,
+          "baseline_rate": 1.0,
+          "candidate_rate": 1.0,
+          "delta": 0.0,
+          "delta_ci": {
+            "point": 0.0,
+            "low": -0.793451,
+            "high": 0.793451,
+            "confidence": 0.95,
+            "estimable": true
+          },
+          "baseline_only": 0,
+          "candidate_only": 0,
+          "discordant": 0,
+          "p_worse": 1.0,
+          "p_two_sided": 1.0,
+          "significant_regression": false,
+          "min_detectable_shift": 1.0
+        }
+      }
+    ],
+    "underpowered": [],
+    "unpaired": [],
+    "ignored": [
+      "vision_analyze",
+      "write_file"
+    ]
+  },
+  "holdout_verdict": {
+    "accepted": true,
+    "baseline_accuracy": 1.0,
+    "candidate_accuracy": 1.0,
+    "overall_delta": 0.0,
+    "baseline_accuracy_interval": {
+      "point": 1.0,
+      "low": 0.675592,
+      "high": 1.0,
+      "confidence": 0.95,
+      "estimable": true
+    },
+    "candidate_accuracy_interval": {
+      "point": 1.0,
+      "low": 0.675592,
+      "high": 1.0,
+      "confidence": 0.95,
+      "estimable": true
+    },
+    "chance_accuracy": 0.1667,
+    "num_options": 6,
+    "tolerance": 0.0,
+    "reason": "no tool regressed beyond a 0.0% tolerance (0 improved, 2 not measurable)",
+    "regressions": [],
+    "improvements": [],
+    "comparisons": [
+      {
+        "tool": "none",
+        "baseline_rate": 1.0,
+        "candidate_rate": 1.0,
+        "delta": 0.0,
+        "opportunities": 2,
+        "n_paired": 2,
+        "regressed": false,
+        "improved": false,
+        "tolerance": 0.0,
+        "breaches_tolerance": false,
+        "significant_regression": false,
+        "significant_improvement": false,
+        "underpowered": false,
+        "p_worse": 1.0,
+        "min_detectable_shift": 1.0,
+        "delta_ci": {
+          "point": 0.0,
+          "low": -0.65762,
+          "high": 0.65762,
+          "confidence": 0.95,
+          "estimable": true
+        },
+        "paired": {
+          "n": 2,
+          "baseline_rate": 1.0,
+          "candidate_rate": 1.0,
+          "delta": 0.0,
+          "delta_ci": {
+            "point": 0.0,
+            "low": -0.65762,
+            "high": 0.65762,
+            "confidence": 0.95,
+            "estimable": true
+          },
+          "baseline_only": 0,
+          "candidate_only": 0,
+          "discordant": 0,
+          "p_worse": 1.0,
+          "p_two_sided": 1.0,
+          "significant_regression": false,
+          "min_detectable_shift": 1.0
+        }
+      },
+      {
+        "tool": "read_file",
+        "baseline_rate": 1.0,
+        "candidate_rate": 1.0,
+        "delta": 0.0,
+        "opportunities": 2,
+        "n_paired": 2,
+        "regressed": false,
+        "improved": false,
+        "tolerance": 0.0,
+        "breaches_tolerance": false,
+        "significant_regression": false,
+        "significant_improvement": false,
+        "underpowered": false,
+        "p_worse": 1.0,
+        "min_detectable_shift": 1.0,
+        "delta_ci": {
+          "point": 0.0,
+          "low": -0.65762,
+          "high": 0.65762,
+          "confidence": 0.95,
+          "estimable": true
+        },
+        "paired": {
+          "n": 2,
+          "baseline_rate": 1.0,
+          "candidate_rate": 1.0,
+          "delta": 0.0,
+          "delta_ci": {
+            "point": 0.0,
+            "low": -0.65762,
+            "high": 0.65762,
+            "confidence": 0.95,
+            "estimable": true
+          },
+          "baseline_only": 0,
+          "candidate_only": 0,
+          "discordant": 0,
+          "p_worse": 1.0,
+          "p_two_sided": 1.0,
+          "significant_regression": false,
+          "min_detectable_shift": 1.0
+        }
+      },
+      {
+        "tool": "search_files",
+        "baseline_rate": 1.0,
+        "candidate_rate": 1.0,
+        "delta": 0.0,
+        "opportunities": 2,
+        "n_paired": 2,
+        "regressed": false,
+        "improved": false,
+        "tolerance": 0.0,
+        "breaches_tolerance": false,
+        "significant_regression": false,
+        "significant_improvement": false,
+        "underpowered": false,
+        "p_worse": 1.0,
+        "min_detectable_shift": 1.0,
+        "delta_ci": {
+          "point": 0.0,
+          "low": -0.65762,
+          "high": 0.65762,
+          "confidence": 0.95,
+          "estimable": true
+        },
+        "paired": {
+          "n": 2,
+          "baseline_rate": 1.0,
+          "candidate_rate": 1.0,
+          "delta": 0.0,
+          "delta_ci": {
+            "point": 0.0,
+            "low": -0.65762,
+            "high": 0.65762,
+            "confidence": 0.95,
+            "estimable": true
+          },
+          "baseline_only": 0,
+          "candidate_only": 0,
+          "discordant": 0,
+          "p_worse": 1.0,
+          "p_two_sided": 1.0,
+          "significant_regression": false,
+          "min_detectable_shift": 1.0
+        }
+      },
+      {
+        "tool": "terminal",
+        "baseline_rate": 1.0,
+        "candidate_rate": 1.0,
+        "delta": 0.0,
+        "opportunities": 2,
+        "n_paired": 2,
+        "regressed": false,
+        "improved": false,
+        "tolerance": 0.0,
+        "breaches_tolerance": false,
+        "significant_regression": false,
+        "significant_improvement": false,
+        "underpowered": false,
+        "p_worse": 1.0,
+        "min_detectable_shift": 1.0,
+        "delta_ci": {
+          "point": 0.0,
+          "low": -0.65762,
+          "high": 0.65762,
+          "confidence": 0.95,
+          "estimable": true
+        },
+        "paired": {
+          "n": 2,
+          "baseline_rate": 1.0,
+          "candidate_rate": 1.0,
+          "delta": 0.0,
+          "delta_ci": {
+            "point": 0.0,
+            "low": -0.65762,
+            "high": 0.65762,
+            "confidence": 0.95,
+            "estimable": true
+          },
+          "baseline_only": 0,
+          "candidate_only": 0,
+          "discordant": 0,
+          "p_worse": 1.0,
+          "p_two_sided": 1.0,
+          "significant_regression": false,
+          "min_detectable_shift": 1.0
+        }
+      }
+    ],
+    "underpowered": [],
+    "unpaired": [],
+    "ignored": [
+      "vision_analyze",
+      "write_file"
+    ]
+  }
+}

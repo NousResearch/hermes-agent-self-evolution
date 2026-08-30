@@ -107,6 +107,7 @@ class SkillModule(dspy.Module):
         self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
 
     def forward(self, task_input: str) -> dspy.Prediction:
+        """Run *task_input* with the current skill text as the instructions."""
         result = self.predictor(
             skill_instructions=self.skill_text,
             task_input=task_input,

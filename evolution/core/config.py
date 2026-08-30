@@ -30,6 +30,12 @@ class EvolutionConfig:
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
+    # Minimum content-term similarity between baseline and evolved text
+    # (PLAN.md constraint 4, semantic preservation). Same-artifact rewrites
+    # score well above this; unrelated artifacts score near zero. Removing
+    # text never trips it, by construction - see semantic_similarity().
+    # Set to 0 to disable.
+    min_semantic_similarity: float = 0.4
 
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate

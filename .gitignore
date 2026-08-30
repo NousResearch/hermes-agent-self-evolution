@@ -19,6 +19,11 @@ datasets/**/*.json
 snapshots/
 *.pkl
 
+# Run artifacts. Every phase writes output/<phase>/<timestamp>/, so without this
+# a contributor's own runs pile up in git status and eventually get committed by
+# an `add -A`. A worked example lives in docs/example-run/ instead.
+output/
+
 # IDE
 .idea/
 .vscode/

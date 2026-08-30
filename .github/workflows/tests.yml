@@ -1,0 +1,99 @@
+name: tests
+
+# The suite is fully offline: no API key, no network calls, no hermes-agent
+# checkout. That is a property worth protecting, so CI runs with no secrets
+# available at all. A test that starts reaching for a model will fail here
+# rather than on a contributor's machine weeks later.
+
+on:
+  push:
+    # evolve/** is what pr_builder creates: every branch this pipeline
+    # proposes gets a run before a human looks at the PR. feat/** and fix/**
+    # cover contributor branches, here and on forks.
+    branches: [main, "feat/**", "fix/**", "evolve/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # pyproject declares requires-python >= 3.10.
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The pytest and CLI steps below execute repository code; none of it
+          # needs an authenticated git, so none of it gets one.
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Install the sandbox backend
+        # bubblewrap is what enforces the code-evolution sandbox on Linux, and
+        # installing it here is what makes the adversarial tests in
+        # tests/code/test_sandbox.py run enforced instead of skipping. The
+        # sysctl lifts Ubuntu 24.04's unprivileged-user-namespace restriction
+        # where it applies; where it does not, the probe in sandbox.py decides
+        # honestly and the fail-closed tests bind instead.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          python -c "from evolution.code.sandbox import available_enforcer; e = available_enforcer(); print('sandbox backend:', e.name if e else 'NONE - adversarial tests will skip')"
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Check the CLI loads without a hermes-agent checkout
+        run: |
+          hermes-evolve --help
+          python -m evolution.skills.evolve_skill --help
+          python -m evolution.tools.evolve_tool_descriptions --help
+          python -m evolution.prompts.evolve_prompt_section --help
+          python -m evolution.code.evolve_tool_code --help
+          python -m evolution.monitor.loop --help
+
+  # One macOS run so the Seatbelt enforcer - the other half of the
+  # code-evolution sandbox - is exercised in CI, not only on developer
+  # machines. sandbox-exec ships with the OS, so no install step.
+  pytest-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Confirm the sandbox backend
+        run: python -c "from evolution.code.sandbox import available_enforcer; e = available_enforcer(); print('sandbox backend:', e.name if e else 'NONE - adversarial tests will skip')"
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
