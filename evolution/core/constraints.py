@@ -52,6 +52,31 @@ class ConstraintValidator:
 
         return results
 
+    def validate_skill(
+        self,
+        frontmatter: str,
+        body: str,
+        baseline_body: Optional[str] = None,
+    ) -> list[ConstraintResult]:
+        """Validate a skill from its parts, reassembling before structural checks.
+
+        Structural validation needs the *whole file* (frontmatter + body), while
+        size and growth are most meaningful against the body — the only part
+        evolution actually rewrites. Callers pass the parts and this method
+        applies each constraint to the right text, so a bare body can no longer
+        be handed to the frontmatter check by mistake.
+        """
+        from evolution.skills.skill_module import reassemble_skill
+
+        results = [
+            self._check_size(body, "skill"),
+            self._check_non_empty(body),
+            self._check_skill_structure(reassemble_skill(frontmatter, body)),
+        ]
+        if baseline_body is not None:
+            results.insert(1, self._check_growth(body, baseline_body, "skill"))
+        return results
+
     def run_test_suite(self, hermes_repo: Path) -> ConstraintResult:
         """Run the full hermes-agent test suite. Must pass 100%."""
         try:

@@ -118,7 +118,9 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_skill(
+        frontmatter=skill["frontmatter"], body=skill["body"]
+    )
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -179,13 +181,29 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
+    # The optimized module's signature instructions ARE the evolved skill text.
     evolved_body = optimized_module.skill_text
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
+    # Guard: if the optimizer produced no textual change, there is nothing to
+    # evaluate and any holdout delta would be measuring noise, not evolution.
+    if evolved_body.strip() == skill["body"].strip():
+        console.print(
+            "\n[red]✗ Optimizer returned an unchanged skill body — aborting.[/red]"
+        )
+        console.print(
+            "  No evolution occurred, so no improvement can be reported.\n"
+            "  Check that the optimizer ran and that skill text is optimizer-visible state."
+        )
+        return
+
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_skill(
+        frontmatter=skill["frontmatter"],
+        body=evolved_body,
+        baseline_body=skill["body"],
+    )
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
