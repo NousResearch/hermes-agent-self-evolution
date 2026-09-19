@@ -118,7 +118,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -136,8 +136,20 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy — support Nous Portal proxy for free models
+    import os as _os
+    proxy_url = _os.getenv("HERMES_PROXY_URL")
+    proxy_key = _os.getenv("HERMES_PROXY_KEY", "fake")
+    if proxy_url:
+        lm = dspy.LM(
+            eval_model,
+            api_base=proxy_url,
+            api_key=proxy_key,
+            custom_llm_provider="openai",
+        )
+        console.print(f"  Proxy: {proxy_url} (provider=openai)")
+    else:
+        lm = dspy.LM(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -152,9 +164,21 @@ def evolve(
 
     start_time = time.time()
 
+    # Create reflection LM with proxy support
+    if proxy_url:
+        reflect_lm = dspy.LM(
+            optimizer_model,
+            api_base=proxy_url,
+            api_key=proxy_key,
+            custom_llm_provider="openai",
+        )
+    else:
+        reflect_lm = dspy.LM(optimizer_model)
+
     try:
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
+            reflection_lm=reflect_lm,
             max_steps=iterations,
         )
 
@@ -184,8 +208,9 @@ def evolve(
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
+    # evolved_full already has frontmatter reassembled from step 6.
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill")
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"

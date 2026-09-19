@@ -122,8 +122,14 @@ class SyntheticDatasetBuilder:
 
         n = num_cases or self.config.eval_dataset_size
 
-        # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        # Configure DSPy to use the judge model for generation (with proxy support)
+        import os as _os_db
+        _proxy = _os_db.getenv("HERMES_PROXY_URL")
+        _pkey = _os_db.getenv("HERMES_PROXY_KEY", "fake")
+        if _proxy:
+            lm = dspy.LM(self.config.judge_model, api_base=_proxy, api_key=_pkey, custom_llm_provider="openai")
+        else:
+            lm = dspy.LM(self.config.judge_model)
 
         with dspy.context(lm=lm):
             result = self.generator(

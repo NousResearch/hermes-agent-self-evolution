@@ -490,7 +490,13 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(self.model)
+        import os as _os_ei
+        _proxy = _os_ei.getenv("HERMES_PROXY_URL")
+        _pkey = _os_ei.getenv("HERMES_PROXY_KEY", "fake")
+        if _proxy:
+            lm = dspy.LM(self.model, api_base=_proxy, api_key=_pkey, custom_llm_provider="openai")
+        else:
+            lm = dspy.LM(self.model)
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))

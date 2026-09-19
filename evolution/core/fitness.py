@@ -72,7 +72,13 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        import os as _os_fit
+        _proxy = _os_fit.getenv("HERMES_PROXY_URL")
+        _pkey = _os_fit.getenv("HERMES_PROXY_KEY", "fake")
+        if _proxy:
+            lm = dspy.LM(self.config.eval_model, api_base=_proxy, api_key=_pkey, custom_llm_provider="openai")
+        else:
+            lm = dspy.LM(self.config.eval_model)
 
         with dspy.context(lm=lm):
             result = self.judge(
@@ -104,16 +110,17 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(gold, pred, trace=None, pred_name=None, pred_trace=None) -> float:
     """DSPy-compatible metric function for skill optimization.
 
     This is what gets passed to dspy.GEPA(metric=...).
+    Accepts 5 args per DSPy 3.3.1 GEPA API: (gold, pred, trace, pred_name, pred_trace).
     Returns a float 0-1 score.
     """
     # The prediction should have an 'output' field with the agent's response
-    agent_output = getattr(prediction, "output", "") or ""
-    expected = getattr(example, "expected_behavior", "") or ""
-    task = getattr(example, "task_input", "") or ""
+    agent_output = getattr(pred, "output", "") or ""
+    expected = getattr(gold, "expected_behavior", "") or ""
+    task = getattr(gold, "task_input", "") or ""
 
     if not agent_output.strip():
         return 0.0
