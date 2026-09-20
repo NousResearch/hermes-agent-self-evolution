@@ -24,3 +24,6 @@ snapshots/
 .vscode/
 *.swp
 *.swo
+output/
+.env_nous
+evolve_run_*.log

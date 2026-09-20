@@ -102,15 +102,69 @@ class SyntheticDatasetBuilder:
         - An expected_behavior rubric (what a good response should contain/do, NOT exact text)
         - A difficulty level (easy, medium, hard)
         - A category (what aspect of the skill this tests)
+
+        CRITICAL: Return ONLY a valid JSON array. No markdown, no commentary.
+        Format: [{"task_input": "...", "expected_behavior": "...", "difficulty": "easy|medium|hard", "category": "..."}]
         """
         artifact_text: str = dspy.InputField(desc="The full text of the skill/tool/prompt being tested")
         artifact_type: str = dspy.InputField(desc="Type: 'skill', 'tool_description', or 'prompt_section'")
         num_cases: int = dspy.InputField(desc="Number of test cases to generate")
-        test_cases: str = dspy.OutputField(desc="JSON array of test cases, each with: task_input, expected_behavior, difficulty, category")
+        test_cases: str = dspy.OutputField(desc="JSON array ONLY — no markdown, no commentary")
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
-        self.generator = dspy.ChainOfThought(self.GenerateTestCases)
+        self.generator = dspy.Predict(self.GenerateTestCases)
+
+    def _extract_json(self, text: str) -> list:
+        """Robust JSON extraction from LLM output."""
+        import re
+
+        # Try direct parse first
+        try:
+            return json.loads(text.strip())
+        except json.JSONDecodeError:
+            pass
+
+        # Try to find JSON array in the text
+        match = re.search(r'\[.*\]', text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
+        # Try to extract individual JSON objects
+        objects = []
+        for m in re.finditer(r'\{[^{}]*\}', text, re.DOTALL):
+            try:
+                obj = json.loads(m.group())
+                if 'task_input' in obj and 'expected_behavior' in obj:
+                    objects.append(obj)
+            except json.JSONDecodeError:
+                continue
+        if objects:
+            return objects
+
+        # Try line-by-line parsing (for "key: value" format)
+        return self._parse_prose(text)
+
+    def _parse_prose(self, text: str) -> list:
+        """Fallback: parse prose test cases into structured format."""
+        import re
+        cases = []
+        # Match patterns like "Test Case 1: Input: ... Expected: ..."
+        pattern = r'(?:Test\s*Case\s*\d+:?\s*)?(?:Input|Task):\s*(.+?)(?:Expected(?:\s*Output|\s*Behavior)?|Rubric):\s*(.+?)(?=(?:Test\s*Case\s*\d+:?\s*)?(?:Input|Task):|$)'
+        for m in re.finditer(pattern, text, re.DOTALL | re.IGNORECASE):
+            task = m.group(1).strip()
+            expected = m.group(2).strip()
+            if task and expected:
+                cases.append({
+                    "task_input": task,
+                    "expected_behavior": expected,
+                    "difficulty": "medium",
+                    "category": "general",
+                })
+        return cases
 
     def generate(
         self,
@@ -119,7 +173,6 @@ class SyntheticDatasetBuilder:
         num_cases: Optional[int] = None,
     ) -> EvalDataset:
         """Generate a full eval dataset with train/val/holdout splits."""
-
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation (with proxy support)
@@ -131,24 +184,37 @@ class SyntheticDatasetBuilder:
         else:
             lm = dspy.LM(self.config.judge_model)
 
+        cases_raw = []
         with dspy.context(lm=lm):
+            # Try batch generation first
             result = self.generator(
                 artifact_text=artifact_text,
                 artifact_type=artifact_type,
                 num_cases=n,
             )
+            cases_raw = self._extract_json(result.test_cases)
 
-        # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+        # If batch failed, try generating one at a time
+        if not cases_raw:
+            print(f"  Batch generation failed, trying single-case generation...")
+            with dspy.context(lm=lm):
+                for i in range(n):
+                    try:
+                        result = self.generator(
+                            artifact_text=artifact_text,
+                            artifact_type=artifact_type,
+                            num_cases=1,
+                        )
+                        single = self._extract_json(result.test_cases)
+                        if single:
+                            cases_raw.extend(single)
+                    except Exception:
+                        continue
+                    if len(cases_raw) >= n:
+                        break
+
+        if not cases_raw:
+            raise ValueError(f"Could not generate any test cases from LLM output")
 
         examples = [
             EvalExample(
@@ -162,8 +228,9 @@ class SyntheticDatasetBuilder:
             if c.get("task_input") and c.get("expected_behavior")
         ]
 
-        # Shuffle and split
+        # Shuffle and truncate to exactly eval_dataset_size
         random.shuffle(examples)
+        examples = examples[:n]
         n_total = len(examples)
         n_train = max(1, int(n_total * self.config.train_ratio))
         n_val = max(1, int(n_total * self.config.val_ratio))

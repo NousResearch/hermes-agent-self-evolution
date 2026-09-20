@@ -116,8 +116,10 @@ def skill_fitness_metric(gold, pred, trace=None, pred_name=None, pred_trace=None
     This is what gets passed to dspy.GEPA(metric=...).
     Accepts 5 args per DSPy 3.3.1 GEPA API: (gold, pred, trace, pred_name, pred_trace).
     Returns a float 0-1 score.
+
+    Uses a fast, signal-bearing heuristic for optimization. For accurate final
+    evaluation, use LLMJudge directly (see evolve_skill.py holdout eval).
     """
-    # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(pred, "output", "") or ""
     expected = getattr(gold, "expected_behavior", "") or ""
     task = getattr(gold, "task_input", "") or ""
@@ -125,21 +127,60 @@ def skill_fitness_metric(gold, pred, trace=None, pred_name=None, pred_trace=None
     if not agent_output.strip():
         return 0.0
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
-
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
     output_lower = agent_output.lower()
+    output_len = len(agent_output)
 
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
-    if expected_words:
-        overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
+    # Penalize degenerate outputs (too short = garbage, too long = verbose)
+    if output_len < 30:
+        return 0.1
+    if output_len > 3000:
+        length_factor = 0.7
+    elif output_len > 2000:
+        length_factor = 0.85
+    else:
+        length_factor = 1.0
 
+    # Extract meaningful expected-behavior phrases (not single words)
+    expected_phrases = [p.strip() for p in expected.lower().split(",") if len(p.strip()) > 3]
+    if len(expected_phrases) < 2:
+        # Fallback: words longer than 4 chars (skip stopwords)
+        stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
+                     "being", "have", "has", "had", "do", "does", "did", "will",
+                     "would", "could", "should", "may", "might", "can", "shall",
+                     "this", "that", "these", "those", "it", "its", "and", "or",
+                     "but", "not", "no", "if", "then", "with", "for", "from",
+                     "into", "about", "between", "through", "during", "before",
+                     "after", "above", "below", "to", "of", "in", "on", "at",
+                     "by", "than", "too", "very", "just", "because", "as", "until",
+                     "while", "where", "when", "what", "which", "who", "how", "why"}
+        expected_phrases = [w for w in expected.lower().split()
+                           if len(w) > 4 and w not in stopwords]
+
+    if not expected_phrases:
+        return 0.2 * length_factor
+
+    # Phrase coverage: what fraction of expected concepts appear in output
+    phrase_hits = sum(1 for p in expected_phrases if p in output_lower)
+    phrase_coverage = phrase_hits / len(expected_phrases)
+
+    # Task relevance: does output actually address the specific task?
+    task_content_words = set(w for w in task.lower().split()
+                            if len(w) > 3 and w not in {
+                                "the", "a", "an", "is", "are", "was", "were", "be",
+                                "have", "has", "had", "do", "does", "did", "will",
+                                "would", "could", "should", "may", "might", "can",
+                                "this", "that", "these", "those", "it", "its", "and",
+                                "or", "but", "not", "if", "then", "with", "for",
+                                "from", "into", "about", "between", "how", "what",
+                                "which", "who", "when", "where", "why", "your", "you",
+                                "please", "using", "provide", "create", "make", "write",
+                                "generate", "show", "give", "tell", "explain", "help"
+                            })
+    output_word_set = set(output_lower.split())
+    task_overlap = len(task_content_words & output_word_set) / max(1, len(task_content_words))
+
+    # Weighted combination, scaled by length factor
+    score = (0.65 * phrase_coverage + 0.35 * task_overlap) * length_factor
     return min(1.0, max(0.0, score))
 
 

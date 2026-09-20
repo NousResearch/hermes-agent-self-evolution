@@ -96,16 +96,31 @@ def evolve(
             sys.exit(1)
         console.print(f"  Mined {len(dataset.all_examples)} examples from session history")
     elif eval_source == "synthetic":
-        builder = SyntheticDatasetBuilder(config)
-        dataset = builder.generate(
-            artifact_text=skill["raw"],
-            artifact_type="skill",
-        )
-        # Save for reuse
         save_path = Path("datasets") / "skills" / skill_name
-        dataset.save(save_path)
-        console.print(f"  Generated {len(dataset.all_examples)} synthetic examples")
-        console.print(f"  Saved to {save_path}/")
+        # Reuse existing dataset if size matches config
+        if save_path.exists() and (save_path / "train.jsonl").exists():
+            existing = EvalDataset.load(save_path)
+            if len(existing.all_examples) == config.eval_dataset_size:
+                dataset = existing
+                console.print(f"  Reusing existing dataset: {len(dataset.all_examples)} examples")
+            else:
+                console.print(f"  Dataset size mismatch: {len(existing.all_examples)} != {config.eval_dataset_size}, regenerating")
+                builder = SyntheticDatasetBuilder(config)
+                dataset = builder.generate(
+                    artifact_text=skill["raw"],
+                    artifact_type="skill",
+                )
+                dataset.save(save_path)
+                console.print(f"  Generated {len(dataset.all_examples)} synthetic examples")
+        else:
+            builder = SyntheticDatasetBuilder(config)
+            dataset = builder.generate(
+                artifact_text=skill["raw"],
+                artifact_type="skill",
+            )
+            dataset.save(save_path)
+            console.print(f"  Generated {len(dataset.all_examples)} synthetic examples")
+            console.print(f"  Saved to {save_path}/")
     elif dataset_path:
         dataset = EvalDataset.load(Path(dataset_path))
         console.print(f"  Loaded dataset: {len(dataset.all_examples)} examples")
@@ -229,9 +244,9 @@ def evolve(
         return
 
     # ── 8. Evaluate on holdout set ──────────────────────────────────────
-    console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
-
-    holdout_examples = dataset.to_dspy_examples("holdout")
+    # Use max 5 holdout examples to avoid excessive LLM calls
+    holdout_examples = dataset.to_dspy_examples("holdout")[:5]
+    console.print(f"\n[bold]Evaluating on holdout set ({len(holdout_examples)} examples)[/bold]")
 
     baseline_scores = []
     evolved_scores = []
