@@ -84,11 +84,12 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 class SkillModule(dspy.Module):
     """A DSPy module that wraps a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+    The skill text (body) is the optimizable parameter — it becomes the
+    inner Predict's signature instructions. MIPROv2 can then modify these
+    instructions to find better phrasings of the skill.
+
+    Uses Signature.with_instructions() to bind the skill text as the
+    signature's instructions field, which is what MIPROv2 actually optimizes.
     """
 
     class TaskWithSkill(dspy.Signature):
@@ -97,21 +98,29 @@ class SkillModule(dspy.Module):
         You are an AI agent following specific skill instructions to complete a task.
         Read the skill instructions carefully and follow the procedure described.
         """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
         task_input: str = dspy.InputField(desc="The task to complete")
         output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        # Bind skill text as signature instructions via with_instructions()
+        # MIPROv2 modifies signature.instructions during optimization
+        self._signature_class = self.TaskWithSkill.with_instructions(skill_text)
+        self.predictor = dspy.Predict(self._signature_class)
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
+
+    @property
+    def skill_text(self) -> str:
+        """Get the current skill text from the predictor's signature."""
+        return self.predictor.signature.instructions
+
+    @skill_text.setter
+    def skill_text(self, value: str):
+        """Set the skill text on the predictor's signature."""
+        self.predictor.signature.instructions = value
 
 
 def reassemble_skill(frontmatter: str, evolved_body: str) -> str:

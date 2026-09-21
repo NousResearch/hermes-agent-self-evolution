@@ -32,7 +32,7 @@ class EvolutionConfig:
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
 
     # Eval dataset
-    eval_dataset_size: int = 20  # Total examples to generate
+    eval_dataset_size: int = 60  # Total examples to generate
     train_ratio: float = 0.5
     val_ratio: float = 0.25
     holdout_ratio: float = 0.25
