@@ -32,23 +32,23 @@ class ConstraintValidator:
         artifact_text: str,
         artifact_type: str,
         baseline_text: Optional[str] = None,
+        full_text: Optional[str] = None,
     ) -> list[ConstraintResult]:
-        """Run all applicable constraints. Returns list of results."""
-        results = []
+        """Run all applicable constraints. Returns list of results.
 
-        # 1. Size limits
+        full_text (frontmatter + body) is used for the structure check;
+        artifact_text (body only) is used for size/growth/non-empty.
+        """
+        results = []
         results.append(self._check_size(artifact_text, artifact_type))
 
-        # 2. Growth limit (if baseline provided)
         if baseline_text:
             results.append(self._check_growth(artifact_text, baseline_text, artifact_type))
 
-        # 3. Non-empty
         results.append(self._check_non_empty(artifact_text))
 
-        # 4. Structural integrity
         if artifact_type == "skill":
-            results.append(self._check_skill_structure(artifact_text))
+            results.append(self._check_skill_structure(full_text if full_text is not None else artifact_text))
 
         return results
 

@@ -82,35 +82,26 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 
 
 class SkillModule(dspy.Module):
-    """A DSPy module that wraps a skill file for optimization.
+    """DSPy module wrapping a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+    skill_text is exposed as the predictor's signature instructions (not
+    an InputField value), since that's the only thing GEPA/MIPROv2 mutate.
     """
 
-    class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
-        task_input: str = dspy.InputField(desc="The task to complete")
-        output: str = dspy.OutputField(desc="Your response following the skill instructions")
+    _BASE_INSTRUCTIONS_SIGNATURE = "task_input -> output"
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        base_signature = dspy.Signature(self._BASE_INSTRUCTIONS_SIGNATURE)
+        signature = base_signature.with_instructions(skill_text)
+        self.predictor = dspy.ChainOfThought(signature)
+
+    @property
+    def skill_text(self) -> str:
+        return self.predictor.predict.signature.instructions
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
 
 

@@ -118,7 +118,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["body"], "skill", full_text=skill["raw"])
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -153,9 +153,11 @@ def evolve(
     start_time = time.time()
 
     try:
+        reflection_lm = dspy.LM(optimizer_model)
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_metric_calls=iterations * max(1, len(trainset)),
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -185,7 +187,9 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(
+        evolved_body, "skill", baseline_text=skill["body"], full_text=evolved_full
+    )
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"

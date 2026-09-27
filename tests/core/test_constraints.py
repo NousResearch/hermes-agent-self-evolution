@@ -96,3 +96,21 @@ class TestValidateAll:
         results = validator.validate_all("", "skill")
         failed = [r for r in results if not r.passed]
         assert len(failed) > 0
+
+    def test_body_only_artifact_uses_full_text_for_structure_check(self, validator):
+        """Regression: evolution strips frontmatter before optimizing the body,
+        then reassembles frontmatter + evolved body into `full_text` afterward.
+        The skill_structure check must run against `full_text`, not the bare
+        body — checking the body alone always fails (no frontmatter present)
+        regardless of whether the reassembled artifact is valid, which
+        silently blocked every evolved-skill deploy."""
+        body = "# Procedure\n1. Do thing"
+        full_text = "---\nname: test\ndescription: Test skill\n---\n\n" + body
+        results = validator.validate_all(body, "skill", full_text=full_text)
+        assert all(r.passed for r in results)
+
+        # Without full_text, the same body-only artifact must fail
+        # skill_structure (documents the previous, buggy behavior for contrast).
+        results_no_full = validator.validate_all(body, "skill")
+        structure_result = next(r for r in results_no_full if r.constraint_name == "skill_structure")
+        assert not structure_result.passed

@@ -90,3 +90,29 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModuleOptimizability:
+    """Regression: skill_text must be optimizer-mutable, not a static attribute."""
+
+    def test_skill_text_reflects_constructor_arg(self):
+        from evolution.skills.skill_module import SkillModule
+
+        m = SkillModule("BASELINE: be terse.")
+        assert m.skill_text == "BASELINE: be terse."
+
+    def test_skill_text_is_signature_instructions_not_input_field(self):
+        from evolution.skills.skill_module import SkillModule
+
+        m = SkillModule("BASELINE: be terse.")
+        assert m.predictor.predict.signature.instructions == "BASELINE: be terse."
+
+    def test_skill_text_updates_when_optimizer_mutates_signature(self):
+        from evolution.skills.skill_module import SkillModule
+
+        m = SkillModule("BASELINE: be terse.")
+        m.predictor.predict.signature = m.predictor.predict.signature.with_instructions(
+            "EVOLVED: be more thorough."
+        )
+        assert m.skill_text == "EVOLVED: be more thorough."
+        assert m.skill_text != "BASELINE: be terse."

@@ -104,13 +104,14 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
-    """DSPy-compatible metric function for skill optimization.
-
-    This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
-    """
-    # The prediction should have an 'output' field with the agent's response
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name: str | None = None,
+    pred_trace=None,
+) -> float:
+    """DSPy-compatible metric for both GEPA (5-arg feedback signature) and MIPROv2/Evaluate (2-3 args, extra params default)."""
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
@@ -118,15 +119,11 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
     if not agent_output.strip():
         return 0.0
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
+    score = 0.5
 
-    # Check if key phrases from expected behavior appear
+    # Fast keyword-overlap proxy; full LLM-as-judge scoring is reserved for LLMJudge.
     expected_lower = expected.lower()
     output_lower = agent_output.lower()
-
-    # Simple keyword overlap as a fast proxy
     expected_words = set(expected_lower.split())
     output_words = set(output_lower.split())
     if expected_words:
