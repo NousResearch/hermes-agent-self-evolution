@@ -10,7 +10,6 @@ from typing import Optional
 
 from evolution.core.config import EvolutionConfig
 
-
 @dataclass
 class FitnessScore:
     """Multi-dimensional fitness score."""
@@ -72,7 +71,10 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        # The cap matters for reasoning models: they spend most of the budget
+        # on hidden `reasoning` tokens, so a low cap truncates the reply and the
+        # typed output fields below parse as empty.
+        lm = dspy.LM(self.config.eval_model, max_tokens=self.config.max_tokens)
 
         with dspy.context(lm=lm):
             result = self.judge(
@@ -144,3 +146,74 @@ def _parse_score(value) -> float:
         return min(1.0, max(0.0, float(str(value).strip())))
     except (ValueError, TypeError):
         return 0.5  # Default to neutral on parse failure
+
+
+# ── GEPA compatibility (DSPy 3.x) ───────────────────────────────────────────
+#
+# DSPy 3.x invokes a GEPA metric with FIVE positional arguments:
+#   (gold_example, prediction, trace, pred_name, pred_trace)
+# and probes the callable with `inspect.signature(metric).bind(None x 5)` at
+# construction time. The repo's own metrics predate that contract and take
+# three, so passing them directly raises
+#   TypeError: GEPA metric must accept five arguments
+# The adapters below restore the expected arity without changing scoring.
+
+
+def make_gepa_metric(metric_fn):
+    """Bind a repo metric to a DSPy 3.x-compatible 5-arg GEPA metric."""
+    def gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None) -> float:
+        return metric_fn(gold, pred, trace)
+
+    gepa_metric.__name__ = getattr(metric_fn, "__name__", "gepa_metric")
+    gepa_metric.__doc__ = getattr(metric_fn, "__doc__", None)
+    return gepa_metric
+
+
+def make_llm_judge_metric(config: EvolutionConfig, judge_lm=None):
+    """Build a GEPA metric backed by the multi-dimensional LLMJudge.
+
+    This is the *real* fitness signal: correctness / procedure_following /
+    conciseness judged by an LLM against the example's rubric, with textual
+    feedback GEPA consumes for reflective mutation. The legacy
+    `skill_fitness_metric` is a keyword-overlap heuristic that rewards
+    surface word matches, not behaviour, and GEPA optimises against whatever
+    the metric rewards — so choosing this metric is the difference between
+    optimising a skill and optimising word frequency.
+
+    A judge failure must not zero out a rollout (that starves GEPA's
+    reflective step), so failures fall back to the heuristic.
+    """
+    judge = LLMJudge(config)
+    fallback = skill_fitness_metric
+
+    def llm_judge_metric(gold, pred, trace=None) -> float:
+        task = getattr(gold, "task_input", "") or ""
+        expected = getattr(gold, "expected_behavior", "") or ""
+        output = getattr(pred, "output", "") or ""
+        if not output.strip():
+            return 0.0
+        skill_text = getattr(trace, "skill_text", "") if trace is not None else ""
+        if not skill_text and isinstance(pred, dspy.Prediction):
+            skill_text = ""
+        try:
+            if judge_lm is not None:
+                with dspy.context(lm=judge_lm):
+                    score = judge.score(
+                        task_input=task,
+                        expected_behavior=expected,
+                        agent_output=output,
+                        skill_text=skill_text,
+                    )
+            else:
+                score = judge.score(
+                    task_input=task,
+                    expected_behavior=expected,
+                    agent_output=output,
+                    skill_text=skill_text,
+                )
+            return score.composite
+        except Exception:
+            # Never let a provider error masquerade as a bad candidate.
+            return fallback(gold, pred, trace)
+
+    return llm_judge_metric

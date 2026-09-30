@@ -24,6 +24,19 @@ class EvolutionConfig:
     optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
     eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    # Completion token cap shared by every dspy.LM built from this config.
+    # Reasoning models spend most of the budget on hidden `reasoning` tokens, so
+    # a low cap truncates the reply at finish_reason=length and DSPy sees an
+    # empty string — surfacing as "empty or null response" rather than a
+    # truncation the caller can diagnose.
+    #
+    # 20000, not the smaller numbers that look sufficient: generating the eval
+    # dataset for a ~12KB skill measured 28.8k characters of reasoning before
+    # the first content token, and 8000 truncated the response into an
+    # unparseable prefix. The same request finished in 4968 completion tokens
+    # once the cap stopped cutting it off, so this is headroom for the
+    # reasoning trace, not a guess at output size.
+    max_tokens: int = 20000
 
     # Constraints
     max_skill_size: int = 15_000  # 15KB default

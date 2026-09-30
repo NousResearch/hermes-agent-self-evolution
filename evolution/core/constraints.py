@@ -32,8 +32,13 @@ class ConstraintValidator:
         artifact_text: str,
         artifact_type: str,
         baseline_text: Optional[str] = None,
+        full_text: Optional[str] = None,
     ) -> list[ConstraintResult]:
-        """Run all applicable constraints. Returns list of results."""
+        """Run all applicable constraints. Returns list of results.
+
+        full_text (frontmatter + body) is used for the structure check;
+        artifact_text (body only) is used for size/growth/non-empty.
+        """
         results = []
 
         # 1. Size limits
@@ -48,9 +53,33 @@ class ConstraintValidator:
 
         # 4. Structural integrity
         if artifact_type == "skill":
-            results.append(self._check_skill_structure(artifact_text))
+            # Use full_text (with frontmatter) for structure check if provided,
+            # otherwise fall back to artifact_text (backward compatibility).
+            structure_text = full_text if full_text is not None else artifact_text
+            results.append(self._check_skill_structure(structure_text))
 
         return results
+
+    def validate_skill(
+        self,
+        body: str,
+        *,
+        frontmatter: str = "",
+        baseline_body: Optional[str] = None,
+    ) -> list[ConstraintResult]:
+        """Validate a skill artifact given its body and frontmatter separately.
+
+        This method reassembles the full skill (frontmatter + body) internally,
+        so the skill_structure check runs against the full artifact and
+        a bare body can't be passed by mistake.
+        """
+        full = reassemble_skill(frontmatter, body)
+        return self.validate_all(
+            artifact_text=body,
+            artifact_type="skill",
+            baseline_text=baseline_body,
+            full_text=full,
+        )
 
     def run_test_suite(self, hermes_repo: Path) -> ConstraintResult:
         """Run the full hermes-agent test suite. Must pass 100%."""
@@ -172,3 +201,14 @@ class ConstraintValidator:
                 constraint_name="skill_structure",
                 message=f"Skill missing: {', '.join(missing)}",
             )
+
+
+# ── helper: reassemble skill (copied from skill_module to avoid import cycle) ──
+
+def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
+    """Reassemble a skill file from frontmatter and evolved body.
+
+    Preserves the original YAML frontmatter (name, description, metadata)
+    and replaces only the body with the evolved version.
+    """
+    return f"---\n{frontmatter}\n---\n\n{evolved_body}\n"

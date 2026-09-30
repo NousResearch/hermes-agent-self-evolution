@@ -20,6 +20,10 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.0",
     "rich>=13.0",
+    # DSPy 3.x bundles GEPA but not every optimizer backend's extras. The
+    # CLI no longer falls back to MIPROv2 (its API drifted too), but other
+    # DSPy optimizers and user scripts still reach for optuna.
+    "optuna>=3.0.0",
 ]
 
 [project.optional-dependencies]

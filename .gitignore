@@ -19,6 +19,9 @@ datasets/**/*.json
 snapshots/
 *.pkl
 
+# Optimized artifacts (may contain private skill text — never commit)
+output/
+
 # IDE
 .idea/
 .vscode/
