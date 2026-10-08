@@ -31,6 +31,19 @@ class FitnessScore:
         return max(0.0, raw - self.length_penalty)
 
 
+def _lm_for(model: str):
+    """Build a dspy LM, preferring the Responses API for a local router.
+
+    Imported lazily from evolve_skill to avoid a circular import: that module
+    owns the factory because it is the CLI entrypoint.
+    """
+    try:
+        from evolution.skills.evolve_skill import make_lm
+        return make_lm(model)
+    except Exception:  # noqa: BLE001 - fall back to DSPy's default handling
+        return dspy.LM(model)
+
+
 class LLMJudge:
     """LLM-as-judge scorer with rubric-based evaluation.
 
@@ -72,7 +85,7 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        lm = _lm_for(self.config.eval_model)
 
         with dspy.context(lm=lm):
             result = self.judge(
@@ -104,36 +117,111 @@ class LLMJudge:
         )
 
 
+_JUDGE_SINGLETON: Optional["LLMJudge"] = None
+_CURRENT_SKILL_TEXT: str = ""
+
+
+def get_llm_judge(config: Optional[EvolutionConfig] = None) -> "LLMJudge":
+    """Return a shared LLMJudge, constructing one from `config` on first use."""
+    global _JUDGE_SINGLETON
+    if _JUDGE_SINGLETON is None:
+        _JUDGE_SINGLETON = LLMJudge(config or EvolutionConfig())
+    return _JUDGE_SINGLETON
+
+
+def set_llm_judge(judge: Optional["LLMJudge"]) -> None:
+    """Override or clear the shared judge. Used by tests.
+
+    Accepts any object exposing ``score(...) -> FitnessScore``; tests inject a
+    stub rather than constructing a real judge.
+    """
+    global _JUDGE_SINGLETON
+    _JUDGE_SINGLETON = judge
+
+
+def set_current_skill_text(text: str) -> None:
+    """Record the skill variant currently being scored.
+
+    GEPA calls the metric as `metric(example, prediction, trace)`, so the
+    candidate skill cannot be passed through the signature. The judge must
+    see the *same* instructions the candidate was given, otherwise it grades
+    output against the wrong rubric. Callers set this before each candidate.
+    """
+    global _CURRENT_SKILL_TEXT
+    _CURRENT_SKILL_TEXT = text or ""
+
+
 def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
     """DSPy-compatible metric function for skill optimization.
 
     This is what gets passed to dspy.GEPA(metric=...).
-    Returns a float 0-1 score.
+
+    Returns the rubric-based composite from :class:`LLMJudge` (0.5 correctness
+    + 0.3 procedure_following + 0.2 conciseness, minus length penalty). That
+    score is the real signal: GEPA reads its textual feedback to decide what
+    to mutate next.
+
+    Cost note: unlike a lexical-overlap proxy, this spends one LLM call per
+    scored example, so a run costs proportionally more per iteration.
+
+    If the judge is unreachable the metric degrades to neutral rather than
+    failing the run, and says so once — an optimisation driven by a silent
+    fallback score would be worse than a visible stop.
     """
-    # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
     expected = getattr(example, "expected_behavior", "") or ""
     task = getattr(example, "task_input", "") or ""
+    skill_text = getattr(example, "skill_text", "") or _CURRENT_SKILL_TEXT
 
     if not agent_output.strip():
         return 0.0
 
-    # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
-    score = 0.5  # Base score for non-empty output
+    # Read the size ceiling defensively: the judge is swappable, and a stub or
+    # alternate judge without a config must not break scoring.
+    try:
+        max_size = get_llm_judge().config.max_skill_size
+    except AttributeError:
+        max_size = DEFAULT_MAX_SKILL_SIZE
 
-    # Check if key phrases from expected behavior appear
-    expected_lower = expected.lower()
-    output_lower = agent_output.lower()
+    try:
+        judge = get_llm_judge()
+        score = judge.score(
+            task_input=task,
+            expected_behavior=expected,
+            agent_output=agent_output,
+            skill_text=skill_text,
+            artifact_size=len(skill_text) if skill_text else None,
+            max_size=max_size,
+        )
+    except Exception as e:  # noqa: BLE001 - never let scoring kill the run
+        warn_judge_unavailable(e)
+        return 0.5
 
-    # Simple keyword overlap as a fast proxy
-    expected_words = set(expected_lower.split())
-    output_words = set(output_lower.split())
-    if expected_words:
-        overlap = len(expected_words & output_words) / len(expected_words)
-        score = 0.3 + (0.7 * overlap)
+    return score.composite
 
-    return min(1.0, max(0.0, score))
+
+DEFAULT_MAX_SKILL_SIZE = 15_000  # mirrors EvolutionConfig.max_skill_size
+
+
+_WARNED_JUDGE_FAILURE: set[str] = set()
+
+
+def warn_judge_unavailable(err: Exception) -> None:
+    """Print the judge failure once per distinct cause, not once per example."""
+    key = f"{type(err).__name__}: {str(err)[:120]}"
+    if key in _WARNED_JUDGE_FAILURE:
+        return
+    _WARNED_JUDGE_FAILURE.add(key)
+    console_stderr(
+        f"[yellow]LLM judge unavailable ({type(err).__name__}: {str(err)[:200]}). "
+        f"Falling back to a neutral 0.5 — scores are NOT meaningful.[/yellow]"
+    )
+
+
+def console_stderr(message: str) -> None:
+    """Write a warning to stderr so it never pollutes stdout parsing."""
+    import sys
+    print(message, file=sys.stderr)
 
 
 def _parse_score(value) -> float:

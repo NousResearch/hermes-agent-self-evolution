@@ -1,6 +1,7 @@
 """Configuration and hermes-agent repo discovery."""
 
 import os
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -14,7 +15,7 @@ class EvolutionConfig:
     # can be constructed even when no repo is present (e.g. unit tests, or
     # callers that pass an explicit path). Use resolve_hermes_agent_path() when
     # an explicit override should win, or get_hermes_agent_path() to require one.
-    hermes_agent_path: Optional[Path] = field(default_factory=lambda: _discover_hermes_agent_path())
+    hermes_agent_path: Optional[Path] = field(default_factory=lambda: _resolve_hermes_agent_path())
 
     # Optimization parameters
     iterations: int = 10
@@ -30,6 +31,13 @@ class EvolutionConfig:
     max_tool_desc_size: int = 500  # chars
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
+
+    # Semantic preservation: evolved text must retain a minimum share of the
+    # baseline's content vocabulary, so a skill cannot drift into a different
+    # domain (PLAN.md guardrail #4). Deterministic and free -- it is a drift
+    # gate, not a quality score; see constraints._check_semantic_preservation.
+    semantic_preservation_enabled: bool = True
+    min_semantic_similarity: float = 0.5  # fraction of baseline content terms that must survive
 
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate
@@ -47,7 +55,7 @@ class EvolutionConfig:
     create_pr: bool = True
 
 
-def _discover_hermes_agent_path() -> Optional[Path]:
+def _resolve_hermes_agent_path() -> Optional[Path]:
     """Best-effort hermes-agent repo discovery that never raises.
 
     Returns the discovered path, or None when no repo can be found. Used as
@@ -58,6 +66,48 @@ def _discover_hermes_agent_path() -> Optional[Path]:
         return get_hermes_agent_path()
     except FileNotFoundError:
         return None
+
+
+def local_router_base_url() -> Optional[str]:
+    """Read the codex-router base URL from ~/.codex/config.toml, if present.
+
+    The router is the only local backend that speaks the Responses API, and it
+    serves *only* `/responses` — `/chat/completions` returns
+    `proxy_route_not_found`. DSPy/litellm default to chat completions, so the
+    caller must pair this base with `model_type="responses"`.
+
+    Returns None when no router route is configured, so callers fall back to
+    whatever provider they were already using.
+    """
+    cfg = Path.home() / ".codex" / "config.toml"
+    if not cfg.exists():
+        return None
+    try:
+        m = re.search(
+            r'codex-router/([A-Za-z0-9_\-]+)/v1',
+            cfg.read_text(),
+        )
+    except OSError:
+        return None
+    if not m:
+        return None
+    return f"http://127.0.0.1:4222/_codex-router/{m.group(1)}/v1"
+
+
+def normalize_model(model: str) -> str:
+    """Make a model string routable through the local codex-router.
+
+    litellm inspects the `provider/model` prefix and, for a known provider like
+    `openrouter/`, discards `api_base` and calls that vendor directly — which
+    fails with an auth error instead of reaching the local router. Prefixing
+    with `openai/` keeps litellm on the OpenAI-compatible path, where `api_base`
+    is honoured.
+
+    Idempotent: an existing `openai/` prefix is left alone.
+    """
+    if model.startswith("openai/"):
+        return model
+    return f"openai/{model}"
 
 
 def get_hermes_agent_path() -> Path:

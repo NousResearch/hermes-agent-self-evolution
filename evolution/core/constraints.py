@@ -5,6 +5,7 @@ considered valid. Failed constraints = immediate rejection.
 """
 
 import subprocess
+import re
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
@@ -49,6 +50,10 @@ class ConstraintValidator:
         # 4. Structural integrity
         if artifact_type == "skill":
             results.append(self._check_skill_structure(artifact_text))
+
+        # 5. Semantic preservation (if baseline provided) — PLAN.md guardrail #4
+        if baseline_text and self.config.semantic_preservation_enabled:
+            results.append(self._check_semantic_preservation(artifact_text, baseline_text))
 
         return results
 
@@ -147,13 +152,95 @@ class ConstraintValidator:
                 message="Artifact is empty",
             )
 
-    def _check_skill_structure(self, text: str) -> ConstraintResult:
-        """Check that a skill file has valid YAML frontmatter and markdown body."""
-        has_frontmatter = text.strip().startswith("---")
-        has_name = "name:" in text[:500] if has_frontmatter else False
-        has_description = "description:" in text[:500] if has_frontmatter else False
+    def _check_semantic_preservation(self, text: str, baseline: str) -> ConstraintResult:
+        """Reject evolved text that has drifted out of its original domain.
 
-        if has_frontmatter and has_name and has_description:
+        PLAN.md guardrail #4: "A skill for 'GitHub code review' must still
+        perform code reviews, not drift into something else." This is the
+        enforcement. It is deliberately a cheap, deterministic gate — content
+        vocabulary retention — not an embedding or an LLM call: those are
+        exactly the slow, timing-out, non-deterministic layers that already
+        caused trouble in the scoring path. A drift this gross (a gate-evidence
+        skill rewritten into an app-reverse-engineering prompt) loses its
+        domain vocabulary almost entirely, so term retention catches it.
+
+        Definition: strip non-alphabetic tokens, drop short stopword-ish
+        fragments (<=3 chars), take the baseline's content terms, and require
+        that at least min_semantic_similarity of them survive in the evolved
+        text. A body that still contains its domain words passes; one that has
+        been replaced wholesale fails.
+        """
+        def content_terms(s: str) -> set[str]:
+            words = re.findall(r"[a-z]{4,}", s.lower())
+            return set(words)
+
+        baseline_terms = content_terms(baseline)
+        evolved_terms = content_terms(text)
+
+        if not baseline_terms:
+            # Nothing meaningful to preserve (e.g. a near-empty baseline body);
+            # a drift gate with no anchor cannot reject anything, so pass.
+            return ConstraintResult(
+                passed=True,
+                constraint_name="semantic_preservation",
+                message="No content terms in baseline to preserve",
+            )
+
+        retained = baseline_terms & evolved_terms
+        ratio = len(retained) / len(baseline_terms)
+        threshold = self.config.min_semantic_similarity
+
+        if ratio >= threshold:
+            return ConstraintResult(
+                passed=True,
+                constraint_name="semantic_preservation",
+                message=(
+                    f"Semantic OK: {ratio:.0%} of baseline terms retained "
+                    f"({len(retained)}/{len(baseline_terms)})"
+                ),
+            )
+
+        dropped = sorted(baseline_terms - evolved_terms)
+        sample = ", ".join(dropped[:8])
+        return ConstraintResult(
+            passed=False,
+            constraint_name="semantic_preservation",
+            message=(
+                f"Drift: only {ratio:.0%} of baseline terms retained "
+                f"(need {threshold:.0%}); lost e.g. {sample}"
+            ),
+        )
+
+    def _check_skill_structure(self, text: str) -> ConstraintResult:
+        """Check that a skill file has valid YAML frontmatter and markdown body.
+
+        Accepts either a full skill file (frontmatter + body) or a bare body.
+        A bare body carries no frontmatter by definition, so it is judged on
+        substance alone — otherwise every evolved variant fails this gate,
+        because the caller optimizes the frontmatter-stripped body and only
+        reassembles frontmatter afterwards.
+        """
+        stripped = text.strip()
+
+        if not stripped.startswith("---"):
+            # Frontmatter-stripped body: structure cannot be judged here.
+            # Require real substance instead, so this is not a free pass.
+            if len(stripped) >= 200 and stripped.lstrip().startswith("#"):
+                return ConstraintResult(
+                    passed=True,
+                    constraint_name="skill_structure",
+                    message="Body has a heading and substantive content (frontmatter checked separately)",
+                )
+            return ConstraintResult(
+                passed=False,
+                constraint_name="skill_structure",
+                message="Body lacks frontmatter (expected here) and has no substantive heading content",
+            )
+
+        has_name = "name:" in text[:500]
+        has_description = "description:" in text[:500]
+
+        if has_name and has_description:
             return ConstraintResult(
                 passed=True,
                 constraint_name="skill_structure",
@@ -161,8 +248,6 @@ class ConstraintValidator:
             )
         else:
             missing = []
-            if not has_frontmatter:
-                missing.append("YAML frontmatter (---)")
             if not has_name:
                 missing.append("name field")
             if not has_description:

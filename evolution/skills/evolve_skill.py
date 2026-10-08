@@ -6,8 +6,10 @@ Usage:
 """
 
 import json
+import os
 import sys
 import time
+import inspect
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -18,10 +20,22 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
+from evolution.core.config import (
+    EvolutionConfig,
+    resolve_hermes_agent_path,
+    local_router_base_url,
+    normalize_model,
+)
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
-from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.fitness import (
+    skill_fitness_metric,
+    LLMJudge,
+    FitnessScore,
+    set_current_skill_text,
+    set_llm_judge,
+    get_llm_judge,
+)
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -31,6 +45,101 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+# Concurrent metric evaluations during optimization. GEPA evaluates a
+# candidate's full valset per step, so this is the optimizer's throughput
+# knob; keep it aligned with the relevance-scoring pool.
+_OPTIMIZER_CONCURRENCY = 12
+
+
+def _gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+    """Adapt skill_fitness_metric to GEPA's 5-arg metric contract.
+
+    GEPA inspects the metric signature and rejects anything it cannot bind five
+    positional args to. skill_fitness_metric keeps the DSPy-standard
+    (example, prediction, trace=None) shape shared with MIPROv2 and the fitness
+    tests, so the adaptation belongs here rather than in the shared metric.
+    """
+    return skill_fitness_metric(gold, pred, trace)
+
+
+def build_gepa_optimizer(iterations: int, optimizer_model: str):
+    """Construct a GEPA optimizer that matches the installed DSPy signature.
+
+    Three separate defects in this family all surfaced only at runtime, after a
+    full dataset build:
+      1. The budget parameter was renamed (max_steps -> max_full_evals /
+         max_metric_calls), and a blanket except turned the TypeError into a
+         silent MIPROv2 fallback.
+      2. GEPA asserts that reflection_lm was supplied; without it the mutation
+         proposer silently falls back to the task/judge model.
+      3. GEPA binds five positional args against the metric.
+
+    Introspecting the installed signature handles the renamed parameters
+    instead of tracking each rename.
+    """
+    # Explicit annotation: Pyright otherwise infers the value type from the
+    # first assignment (the metric callable) and flags every other kwarg.
+    gepa_kwargs: dict = {"metric": _gepa_metric}
+    params = inspect.signature(dspy.GEPA.__init__).parameters
+
+    if "max_steps" in params:
+        gepa_kwargs["max_steps"] = iterations
+    elif "max_full_evals" in params:
+        gepa_kwargs["max_full_evals"] = iterations
+    elif "max_metric_calls" in params:
+        gepa_kwargs["max_metric_calls"] = iterations
+    else:
+        raise RuntimeError(
+            "Cannot find GEPA's budget parameter in this DSPy version "
+            f"(has: {sorted(params)}). Update build_gepa_optimizer()."
+        )
+
+    if "num_threads" in params:
+        gepa_kwargs["num_threads"] = _OPTIMIZER_CONCURRENCY
+    # Must be set BEFORE construction: adding it to the dict afterwards has no
+    # effect on an already-built optimizer.
+    if "reflection_lm" in params:
+        gepa_kwargs["reflection_lm"] = make_lm(optimizer_model)
+
+    # Construction raises on a bad signature or a missing reflection_lm. Let
+    # it propagate -- do not fall back, or a version mismatch and a real bug
+    # become indistinguishable.
+    return dspy.GEPA(**gepa_kwargs)
+
+
+def preflight_optimizer(iterations: int, optimizer_model: str) -> bool:
+    """Build the optimizer now so signature errors surface in seconds.
+
+    The dataset build costs ~15 minutes of LLM calls; discovering a broken
+    optimizer signature after it is pure waste. Returns False (and explains)
+    rather than raising, so --dry-run and the CLI stay usable.
+    """
+    try:
+        build_gepa_optimizer(iterations, optimizer_model)
+    except Exception as e:
+        console.print(f"  [red]✗ Optimizer preflight failed: {type(e).__name__}: {e}[/red]")
+        return False
+    return True
+
+
+def make_lm(model: str):
+    """Construct a dspy.LM, using the Responses API when a local router exists.
+
+    The codex-router implements /responses only. litellm's default
+    chat-completions path gets `proxy_route_not_found` from it, and DSPy has no
+    way to express that from the CLI, so it is decided here — once — instead of
+    in each caller.
+    """
+    router_base = local_router_base_url()
+    if router_base:
+        return dspy.LM(
+            normalize_model(model),
+            api_base=router_base,
+            api_key=os.getenv("CODEX_ROUTER_KEY", "local"),
+            model_type="responses",
+        )
+    return dspy.LM(model)
 
 
 def evolve(
@@ -55,6 +164,20 @@ def evolve(
         run_pytest=run_tests,
     )
 
+    # The local codex-router serves ONLY /responses, and litellm defaults to
+    # /chat/completions (which the router answers with proxy_route_not_found).
+    # It also hijacks a bare `openrouter/...` prefix and bypasses api_base
+    # entirely. So: normalize the model onto the OpenAI-compatible path and
+    # force the Responses API whenever a local router is available.
+    router_base = local_router_base_url()
+    if router_base:
+        optimizer_model = normalize_model(optimizer_model)
+        eval_model = normalize_model(eval_model)
+        config.optimizer_model = optimizer_model
+        config.eval_model = eval_model
+        config.judge_model = eval_model
+        console.print(f"[dim]Using local codex-router: {router_base}[/dim]")
+
     # ── 1. Find and load the skill ──────────────────────────────────────
     console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]\n")
 
@@ -64,7 +187,13 @@ def evolve(
         sys.exit(1)
 
     skill = load_skill(skill_path)
-    console.print(f"  Loaded: {skill_path.relative_to(config.hermes_agent_path)}")
+    # Display the path relative to the repo only when it actually lives there;
+    # profile-local skills resolve outside hermes_agent_path and would raise.
+    try:
+        shown_path = skill_path.relative_to(config.hermes_agent_path or Path("/"))
+    except ValueError:
+        shown_path = skill_path
+    console.print(f"  Loaded: {shown_path}")
     console.print(f"  Name: {skill['name']}")
     console.print(f"  Size: {len(skill['raw']):,} chars")
     console.print(f"  Description: {skill['description'][:80]}...")
@@ -75,6 +204,18 @@ def evolve(
         console.print(f"  Would run GEPA optimization ({iterations} iterations)")
         console.print(f"  Would validate constraints and create PR")
         return
+
+    # Construct the optimizer BEFORE the ~15-minute dataset build. Three
+    # separate signature bugs in this path each cost a full build to discover.
+    if not preflight_optimizer(iterations, optimizer_model):
+        console.print(
+            "[red]Aborting before dataset build: fix the optimizer setup above, "
+            "or the mined examples will be wasted.[/red]"
+        )
+        sys.exit(1)
+    console.print(
+        f"  [green]✓ Optimizer preflight passed (GEPA, {iterations} budget)[/green]"
+    )
 
     # ── 2. Build or load evaluation dataset ─────────────────────────────
     console.print(f"\n[bold]Building evaluation dataset[/bold] (source: {eval_source})")
@@ -87,7 +228,7 @@ def evolve(
         dataset = build_dataset_from_external(
             skill_name=skill_name,
             skill_text=skill["raw"],
-            sources=["claude-code", "copilot", "hermes"],
+            sources=["claude-code", "copilot", "hermes", "codex"],
             output_path=save_path,
             model=eval_model,
         )
@@ -118,7 +259,9 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    # Validate the FULL artifact (raw includes frontmatter) — the structure
+    # check requires frontmatter, so a body-only text can never pass it.
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -136,8 +279,14 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
+    # The fitness metric grades output against the skill text the candidate
+    # was actually given. Register a judge bound to this run's eval model and
+    # seed the baseline instructions before the first score.
+    set_llm_judge(LLMJudge(config))
+    set_current_skill_text(skill["body"])
+
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = make_lm(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -152,23 +301,22 @@ def evolve(
 
     start_time = time.time()
 
-    try:
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
-        )
+    optimizer = build_gepa_optimizer(iterations, optimizer_model)
 
+    try:
         optimized_module = optimizer.compile(
             baseline_module,
             trainset=trainset,
             valset=valset,
         )
     except Exception as e:
-        # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
-        console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
+        # Only a compile failure reaches here now; a GEPA construction failure
+        # is a real bug and should surface rather than silently downgrade.
+        console.print(f"[yellow]GEPA compile failed ({e}), falling back to MIPROv2[/yellow]")
         optimizer = dspy.MIPROv2(
             metric=skill_fitness_metric,
             auto="light",
+            num_threads=_OPTIMIZER_CONCURRENCY,
         )
         optimized_module = optimizer.compile(
             baseline_module,
@@ -185,7 +333,10 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    # Validate the REASSEMBLED full skill (frontmatter + evolved body) — the
+    # structure check requires frontmatter, so the body alone always fails it.
+    # Baseline is the full raw file so growth compares full-vs-full.
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -210,16 +361,27 @@ def evolve(
 
     baseline_scores = []
     evolved_scores = []
+    judge_feedback = []
     for ex in holdout_examples:
-        # Score baseline
+        # Score baseline against the baseline instructions...
+        set_current_skill_text(skill["body"])
         with dspy.context(lm=lm):
             baseline_pred = baseline_module(task_input=ex.task_input)
             baseline_score = skill_fitness_metric(ex, baseline_pred)
             baseline_scores.append(baseline_score)
 
+        # ...and the evolved variant against its own. Using one set of
+        # instructions for both would grade half the runs against a rubric
+        # the candidate never saw.
+        set_current_skill_text(evolved_body)
+        with dspy.context(lm=lm):
             evolved_pred = optimized_module(task_input=ex.task_input)
             evolved_score = skill_fitness_metric(ex, evolved_pred)
             evolved_scores.append(evolved_score)
+
+        feedback = getattr(evolved_pred, "feedback", "") or ""
+        if feedback:
+            judge_feedback.append(str(feedback))
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
@@ -279,8 +441,19 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "fitness_metric": "llm_judge_composite",
+        "baseline_holdout_scores": baseline_scores,
+        "evolved_holdout_scores": evolved_scores,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+    # Save judge feedback — this is the only qualitative signal available, and
+    # it is what a human reviewer should read before judging the diff.
+    if judge_feedback:
+        (output_dir / "judge_feedback.md").write_text(
+            "# LLM judge feedback (holdout)\n\n"
+            + "\n\n".join(f"## Example {i + 1}\n{f}" for i, f in enumerate(judge_feedback))
+        )
 
     console.print(f"\n  Output saved to {output_dir}/")
 

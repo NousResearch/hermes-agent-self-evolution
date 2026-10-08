@@ -59,24 +59,52 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
     """Find a skill by name in the hermes-agent skills directory.
 
     Searches recursively for a SKILL.md in a directory matching the skill name.
+    Falls back to the live profile skills directory (``~/.hermes/skills``),
+    which is where user-authored and hub-installed skills actually live — the
+    repo tree does not contain them, so a repo-only search reports "not found"
+    for skills that are installed and loadable.
     """
-    skills_dir = hermes_agent_path / "skills"
-    if not skills_dir.exists():
-        return None
+    candidates: list[Path] = []
 
-    # Direct match: skills/<category>/<skill_name>/SKILL.md
-    for skill_md in skills_dir.rglob("SKILL.md"):
-        if skill_md.parent.name == skill_name:
-            return skill_md
+    repo_skills = hermes_agent_path / "skills"
+    if repo_skills.exists():
+        # Direct match: skills/<category>/<skill_name>/SKILL.md
+        for skill_md in repo_skills.rglob("SKILL.md"):
+            if skill_md.parent.name == skill_name:
+                candidates.append(skill_md)
 
-    # Fuzzy match: check the name field in frontmatter
-    for skill_md in skills_dir.rglob("SKILL.md"):
-        try:
-            content = skill_md.read_text()[:500]
+    # Live profile skills, including hub-installed and user-authored ones.
+    profile_root = Path.home() / ".hermes"
+    for rel in ("skills", "hermes-agent/optional-skills"):
+        root = profile_root / rel
+        if root.exists():
+            for skill_md in root.rglob("SKILL.md"):
+                if skill_md.parent.name == skill_name:
+                    candidates.append(skill_md)
+
+    if candidates:
+        # Prefer an exact frontmatter name match, then shortest path (least
+        # nested), so a repo copy does not shadow the live profile copy.
+        def rank(p: Path) -> tuple[int, int, str]:
+            try:
+                head = p.read_text()[:500]
+            except OSError:
+                head = ""
+            exact = 0 if (f"name: {skill_name}" in head
+                          or f'name: "{skill_name}"' in head) else 1
+            return (exact, len(p.parts), str(p))
+
+        return sorted(candidates, key=rank)[0]
+
+    # Last resort: fuzzy frontmatter match inside the repo tree.
+    if repo_skills.exists():
+        for skill_md in repo_skills.rglob("SKILL.md"):
+            try:
+                content = skill_md.read_text()[:500]
+            except OSError:
+                continue
             if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
                 return skill_md
-        except Exception:
-            continue
 
     return None
 

@@ -25,6 +25,8 @@ Usage from evolve_skill.py:
 import json
 import re
 import random
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
@@ -74,6 +76,17 @@ VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 
 MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
 
+# Below this total the 50/25/25 split yields a holdout too small to support a
+# trustworthy improvement claim. With 20 examples the holdout is 5; with 50 it
+# is ~13. Prefer more examples over a cheaper run.
+RECOMMENDED_DATASET_SIZE = 50
+
+# Concurrent LLM calls during relevance scoring. These are independent
+# reasoning calls against a local router, so they parallelise well; keep it
+# modest to stay under the router's own concurrency limits and avoid
+# saturating the machine.
+_RELEVANCE_CONCURRENCY = 12
+
 
 def _contains_secret(text: str) -> bool:
     """Check if text contains potential API keys or tokens."""
@@ -116,6 +129,39 @@ def _validate_eval_example(
         "difficulty": difficulty,
         "category": category,
     }
+
+
+def _skill_summary(skill_name: str, skill_text: str) -> str:
+    """A one-paragraph statement of what the skill does, for the relevance judge.
+
+    The judge must decide whether a task exercises this skill's procedure, not
+    whether it shares vocabulary. Feeding it the raw first 800 chars hands it
+    mostly YAML frontmatter (name, description, tags, related_skills) plus the
+    start of the body — which is how app-reverse-engineering examples that
+    merely mention "gates" and "evidence" were classified relevant. Instead,
+    prefer the frontmatter `description` when it states a purpose, and
+    otherwise fall back to the skill name and a bounded slice of the body.
+
+    Returns a compact, purpose-bearing string.
+    """
+    import re as _re
+
+    # 1. Frontmatter `description:` — usually a purpose statement.
+    fm = _re.match(r"\A---\s*\n(.*?)\n---", skill_text, _re.S)
+    if fm:
+        m = _re.search(r"^description:\s*[\"']?(.+?)[\"']?\s*$", fm.group(1), _re.M)
+        if m and len(m.group(1).strip()) > 10:
+            desc = " ".join(m.group(1).split())[:300]
+            return f"{skill_name}: {desc}"
+
+    # 2. First substantive body heading + sentence, stripped of markup.
+    body = _re.sub(r"\A---\s*\n.*?\n---\s*\n?", "", skill_text, flags=_re.S).strip()
+    body = _re.sub(r"^#.*$", "", body, flags=_re.M).strip()
+    first_line = " ".join(body.split())[:300]
+    if first_line:
+        return f"{skill_name}: {first_line}"
+
+    return skill_name
 
 
 def _is_relevant_to_skill(text: str, skill_name: str, skill_text: str) -> bool:
@@ -428,16 +474,25 @@ class RelevanceFilter:
     """
 
     class ScoreRelevance(dspy.Signature):
-        """Score whether a user message is relevant to a specific agent skill.
+        """Decide whether a user message is a real example of the kind of work
+        this skill does, so it can be used as an evaluation example.
+
+        This is NOT a vocabulary match. A message that merely shares words with
+        the skill (\"gate\", \"evidence\", \"verify\") is irrelevant if the actual
+        task is about a different domain. Relevance means: would following this
+        skill's procedure be the correct way to do the task?
 
         Return a JSON object with:
-        - relevant: boolean (true if the message relates to what this skill does)
-        - expected_behavior: string (if relevant, what should a good response do?)
+        - relevant: boolean. True ONLY if the task's central goal is the kind
+          of work this skill's procedure exists to do -- not merely adjacent,
+          not merely using similar language.
+        - expected_behavior: string (if relevant, what should a good response
+          do, in terms of THIS skill's procedure?)
         - difficulty: string (easy, medium, or hard)
         - category: string (what aspect of the skill this tests)
         """
         skill_name: str = dspy.InputField(desc="Name of the skill")
-        skill_description: str = dspy.InputField(desc="First 800 chars of the skill file")
+        skill_description: str = dspy.InputField(desc="What this skill does, in one paragraph")
         user_message: str = dspy.InputField(desc="The user's message to evaluate")
         assistant_response: str = dspy.InputField(desc="The assistant's actual response (may be empty)")
         scoring: str = dspy.OutputField(desc="JSON object with: relevant, expected_behavior, difficulty, category")
@@ -464,7 +519,7 @@ class RelevanceFilter:
         Returns:
             List of EvalExample objects for relevant messages.
         """
-        skill_desc = skill_text[:800]
+        skill_desc = _skill_summary(skill_name, skill_text)
 
         # Stage 0: drop messages missing required fields
         messages = [m for m in messages if m.get("task_input") and m.get("source")]
@@ -488,49 +543,75 @@ class RelevanceFilter:
         console.print(f"  Pre-filtered to {len(candidates)} candidates (from {len(messages)} total)")
 
         # Stage 2: LLM relevance scoring
-        examples = []
+        #
+        # Each candidate is scored independently, so this runs concurrently. A
+        # serial loop here was the pipeline's dominant cost: max_examples*3
+        # candidates (150 by default) each took one full reasoning call, which
+        # put a single run past half an hour before GEPA even started. The
+        # work is embarrassingly parallel, so it now runs on a thread pool.
+        #
+        # One LM per worker thread: the LM carries per-call mutable state and
+        # dspy settings are thread-local, so sharing a single instance across
+        # threads would interleave configuration.
         errors = 0
-        lm = dspy.LM(self.model)
+        local = threading.local()
 
+        def _score_one(msg: dict):
+            lm = getattr(local, "lm", None)
+            if lm is None:
+                from evolution.skills.evolve_skill import make_lm
+                lm = make_lm(self.model)
+                local.lm = lm
+            with dspy.context(lm=lm):
+                result = self.scorer(
+                    skill_name=skill_name,
+                    skill_description=skill_desc,
+                    user_message=msg["task_input"][:1000],
+                    assistant_response=msg.get("assistant_response", "")[:1000],
+                )
+            return _parse_scoring_json(result.scoring)
+
+        def _work(msg: dict):
+            """Score one candidate, returning an EvalExample or None."""
+            try:
+                scoring = _score_one(msg)
+            except Exception:
+                return None, True  # (example, is_error)
+
+            if scoring is None:
+                return None, True
+            if not scoring.get("relevant", False):
+                return None, False
+
+            validated = _validate_eval_example(
+                task_input=msg["task_input"],
+                expected_behavior=scoring.get("expected_behavior", ""),
+                difficulty=scoring.get("difficulty", "medium"),
+                category=scoring.get("category", "general"),
+            )
+            if not validated:
+                return None, False
+            return EvalExample(source=msg["source"], **validated), False
+
+        workers = max(1, min(_RELEVANCE_CONCURRENCY, len(candidates)))
+        # Each entry is (EvalExample | None, is_error: bool)
+        scored: list[tuple[Optional[EvalExample], bool]] = []
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                # executor.map preserves input order, so the resulting examples
+                # stay deterministic despite the concurrency.
+                for outcome in pool.map(_work, candidates):
+                    scored.append(outcome)
+                    progress.update(task, advance=1)
 
-            for msg in candidates:
-                try:
-                    with dspy.context(lm=lm):
-                        result = self.scorer(
-                            skill_name=skill_name,
-                            skill_description=skill_desc,
-                            user_message=msg["task_input"][:1000],
-                            assistant_response=msg.get("assistant_response", "")[:1000],
-                        )
+        examples = [ex for ex, _ in scored if ex is not None]
+        errors = sum(1 for _, is_err in scored if is_err)
 
-                    scoring = _parse_scoring_json(result.scoring)
-                    if scoring is None:
-                        errors += 1
-                        progress.update(task, advance=1)
-                        continue
-
-                    if scoring.get("relevant", False):
-                        validated = _validate_eval_example(
-                            task_input=msg["task_input"],
-                            expected_behavior=scoring.get("expected_behavior", ""),
-                            difficulty=scoring.get("difficulty", "medium"),
-                            category=scoring.get("category", "general"),
-                        )
-                        if validated:
-                            examples.append(EvalExample(
-                                source=msg["source"],
-                                **validated,
-                            ))
-
-                except Exception:
-                    errors += 1
-
-                progress.update(task, advance=1)
-
-                if len(examples) >= max_examples:
-                    break
+        # Truncate only after all scoring completes: a serial loop could stop
+        # early once it had enough examples, but stopping mid-pool would leave
+        # calls in flight and make the result depend on thread scheduling.
+        examples = examples[:max_examples]
 
         # Report error rate so users know if the LLM is misbehaving
         total_scored = len(candidates)
@@ -600,6 +681,30 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
     return None
 
 
+# ── Codex (optional, lazily loaded) ──────────────────────────────────────
+
+
+def _codex_importer_class():
+    """Load the Codex importer lazily.
+
+    Codex history lives in a separate module because it is an optional
+    dependency on the local `~/.codex` install. Resolving it here keeps the
+    claude-code / copilot / hermes importers usable when Codex is absent.
+    """
+    try:
+        from evolution.core.codex_importer import CodexImporter
+        return CodexImporter
+    except Exception as e:  # noqa: BLE001 - degrade, never break the other sources
+        console.print(f"[yellow]Codex importer unavailable: {e}[/yellow]")
+
+        class _Missing:
+            @staticmethod
+            def extract_messages(limit: int = 0) -> list[dict]:
+                return []
+
+        return _Missing
+
+
 # ── Orchestration ─────────────────────────────────────────────────────────
 
 
@@ -609,7 +714,7 @@ def build_dataset_from_external(
     sources: list[str],
     output_path: Path,
     model: str,
-    max_examples: int = 50,
+    max_examples: int = RECOMMENDED_DATASET_SIZE,
 ) -> EvalDataset:
     """Extract messages from external tools, filter for relevance, and save.
 
@@ -633,6 +738,9 @@ def build_dataset_from_external(
         "claude-code": ("Claude Code", ClaudeCodeImporter),
         "copilot": ("Copilot", CopilotImporter),
         "hermes": ("Hermes Agent", HermesSessionImporter),
+        # Codex importer is imported lazily: it lives in a separate module and
+        # must not be required for the other sources to work.
+        "codex": ("Codex", _codex_importer_class()),
     }
 
     for source in sources:
@@ -729,7 +837,7 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
 @click.command()
 @click.option(
     "--source",
-    type=click.Choice(["claude-code", "copilot", "hermes", "all"]),
+    type=click.Choice(["claude-code", "copilot", "hermes", "codex", "all"]),
     default="all",
     help="Which tool to import from",
 )
@@ -738,7 +846,8 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
               help="Output directory (default: datasets/skills/<skill>/)")
 @click.option("--model", default="openrouter/google/gemini-2.5-flash",
               help="LiteLLM model string for relevance scoring")
-@click.option("--max-examples", default=50, help="Max eval examples to generate")
+@click.option("--max-examples", default=RECOMMENDED_DATASET_SIZE,
+              help="Max eval examples to generate")
 @click.option("--dry-run", is_flag=True, help="Show message counts without LLM scoring")
 def main(source, skill, output, model, max_examples, dry_run):
     """Import external session data into golden eval datasets for self-evolution."""
@@ -752,13 +861,14 @@ def main(source, skill, output, model, max_examples, dry_run):
 
     console.print(f"  Loaded skill: {skill_name} ({len(skill_text):,} chars)")
 
-    sources = [source] if source != "all" else ["claude-code", "copilot", "hermes"]
+    sources = [source] if source != "all" else ["claude-code", "copilot", "hermes", "codex"]
 
     if dry_run:
         importers = {
             "claude-code": ClaudeCodeImporter,
             "copilot": CopilotImporter,
             "hermes": HermesSessionImporter,
+            "codex": _codex_importer_class(),
         }
         for src in sources:
             msgs = importers[src].extract_messages()
