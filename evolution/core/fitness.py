@@ -8,7 +8,7 @@ import dspy
 from dataclasses import dataclass
 from typing import Optional
 
-from evolution.core.config import EvolutionConfig
+from evolution.core.config import EvolutionConfig, make_lm
 
 
 @dataclass
@@ -72,7 +72,7 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        lm = make_lm(self.config.eval_model)
 
         with dspy.context(lm=lm):
             result = self.judge(
@@ -104,11 +104,18 @@ class LLMJudge:
         )
 
 
-def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
+def skill_fitness_metric(
+    example: dspy.Example,
+    prediction: dspy.Prediction,
+    trace=None,
+    pred_name: str = "",
+    pred_trace=None,
+) -> float:
     """DSPy-compatible metric function for skill optimization.
 
     This is what gets passed to dspy.GEPA(metric=...).
     Returns a float 0-1 score.
+    Signature must accept five args: (gold, pred, trace, pred_name, pred_trace).
     """
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
@@ -119,7 +126,10 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
         return 0.0
 
     # Quick heuristic scoring (for speed during optimization)
-    # Full LLM-as-judge scoring is expensive — use it selectively
+    # ponytail: keyword-overlap heuristic ignores stopwords, so GEPA can
+    # game it with keyword stuffing. Upgrade path: LLMJudge.score (above)
+    # as the GEPA metric when eval budget allows — reflections are only
+    # as good as this signal.
     score = 0.5  # Base score for non-empty output
 
     # Check if key phrases from expected behavior appear

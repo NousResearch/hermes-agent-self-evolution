@@ -100,3 +100,18 @@ def resolve_hermes_agent_path(hermes_repo: Optional[str] = None) -> Path:
     if hermes_repo:
         return Path(hermes_repo).expanduser()
     return get_hermes_agent_path()
+
+
+def make_lm(model: str):
+    """Build a dspy.LM, honoring HERMES_EVOLVE_API_BASE / _API_KEY.
+
+    Lets runs point at any OpenAI-compatible endpoint (local shim, proxy,
+    gateway) instead of hardcoding a provider.
+    """
+    import dspy
+
+    kwargs = {}
+    base = os.getenv("HERMES_EVOLVE_API_BASE")
+    if base:
+        kwargs = {"api_base": base, "api_key": os.getenv("HERMES_EVOLVE_API_KEY", "local")}
+    return dspy.LM(model, **kwargs)

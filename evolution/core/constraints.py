@@ -4,7 +4,10 @@ Every candidate variant must pass ALL constraints before it can be
 considered valid. Failed constraints = immediate rejection.
 """
 
+import shutil
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
@@ -52,33 +55,62 @@ class ConstraintValidator:
 
         return results
 
-    def run_test_suite(self, hermes_repo: Path) -> ConstraintResult:
-        """Run the full hermes-agent test suite. Must pass 100%."""
+    def run_test_suite(
+        self,
+        hermes_repo: Path,
+        candidate_path: Optional[Path] = None,
+        candidate_text: Optional[str] = None,
+    ) -> ConstraintResult:
+        """Run tests with the candidate installed in an isolated repo copy."""
         try:
-            result = subprocess.run(
-                ["python", "-m", "pytest", "tests/", "-q", "--tb=no"],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                cwd=str(hermes_repo),
+            if (candidate_path is None) != (candidate_text is None):
+                raise ValueError("candidate_path and candidate_text must be provided together")
+
+            repo = Path(hermes_repo).resolve(strict=True)
+            relative_path = (
+                Path(candidate_path).resolve(strict=True).relative_to(repo)
+                if candidate_path is not None else None
             )
+
+            with tempfile.TemporaryDirectory(prefix="hermes-evolve-test-") as temp_dir:
+                isolated_repo = Path(temp_dir) / "hermes-agent"
+                shutil.copytree(
+                    repo,
+                    isolated_repo,
+                    ignore=shutil.ignore_patterns(
+                        ".git", ".venv", "venv", "node_modules", "__pycache__",
+                        ".pytest_cache", ".mypy_cache", ".ruff_cache",
+                    ),
+                )
+                if relative_path is not None:
+                    target = isolated_repo / relative_path
+                    if not target.is_file():
+                        raise FileNotFoundError(f"Skill not found in test checkout: {relative_path}")
+                    target.write_text(candidate_text)
+
+                result = subprocess.run(
+                    [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no"],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    cwd=str(isolated_repo),
+                )
 
             if result.returncode == 0:
                 return ConstraintResult(
                     passed=True,
                     constraint_name="test_suite",
-                    message="All tests passed",
+                    message="All tests passed in isolated candidate checkout",
                     details=result.stdout.strip().split("\n")[-1] if result.stdout else "",
                 )
-            else:
-                # Extract failure summary
-                last_lines = result.stdout.strip().split("\n")[-5:] if result.stdout else []
-                return ConstraintResult(
-                    passed=False,
-                    constraint_name="test_suite",
-                    message="Test suite failed",
-                    details="\n".join(last_lines),
-                )
+
+            last_lines = result.stdout.strip().split("\n")[-5:] if result.stdout else []
+            return ConstraintResult(
+                passed=False,
+                constraint_name="test_suite",
+                message="Candidate test suite failed",
+                details="\n".join(last_lines),
+            )
         except subprocess.TimeoutExpired:
             return ConstraintResult(
                 passed=False,
@@ -89,7 +121,7 @@ class ConstraintValidator:
             return ConstraintResult(
                 passed=False,
                 constraint_name="test_suite",
-                message=f"Failed to run tests: {e}",
+                message=f"Failed to run candidate tests: {e}",
             )
 
     def _check_size(self, text: str, artifact_type: str) -> ConstraintResult:

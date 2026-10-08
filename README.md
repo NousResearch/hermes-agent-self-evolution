@@ -20,7 +20,7 @@ Read current skill/prompt/tool ──► Generate eval dataset
                                    Constraint gates (tests, size limits, benchmarks)
                                         │
                                         ▼
-                                   Best variant ──► PR against hermes-agent
+                                   Best variant ──► Saved artifact ──► Reviewed PR (manual)
 ```
 
 GEPA reads execution traces to understand *why* things fail (not just that they failed), then proposes targeted improvements. ICLR 2026 Oral, MIT licensed.
@@ -74,6 +74,19 @@ Every evolved variant must pass:
 3. **Caching compatibility** — No mid-conversation changes
 4. **Semantic preservation** — Must not drift from original purpose
 5. **PR review** — All changes go through human review, never direct commit
+
+## Candidate testing and publication (Phase 1)
+
+Skill evolution runs the Hermes test suite by default against a **temporary copy**
+of the target repository with the evolved `SKILL.md` substituted at its original
+relative path. The installed skill and working tree stay unchanged. Use
+`--no-run-tests` only for exploratory runs; it skips this gate.
+
+The command writes `evolved_skill.md`, `baseline_skill.md`, and `metrics.json`
+under `output/`. **It does not automatically deploy the candidate or create
+a pull request.** A maintainer must inspect the diff, check behavior-specific
+tests, and submit a separate reviewed change. A passing general pytest suite
+does not by itself establish that the evolved skill's behavior is correct.
 
 ## Full Plan
 

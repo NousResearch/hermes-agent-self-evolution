@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from evolution.skills.skill_module import load_skill, reassemble_skill
+from evolution.skills.skill_module import SkillModule, load_skill, reassemble_skill
 
 
 SAMPLE_SKILL = """---
@@ -90,3 +90,36 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModule:
+    """Regression tests: the skill text MUST live in the predictor's
+    instructions — that is the exact search space GEPA mutates."""
+
+    def test_skill_text_is_predictor_instructions(self):
+        module = SkillModule("# My Skill\nDo the thing.")
+        assert module.skill_text == module.predictor.predict.signature.instructions
+        assert module.skill_text == "# My Skill\nDo the thing."
+
+    def test_instruction_mutation_visible_in_skill_text(self):
+        module = SkillModule("baseline")
+        # Mutate exactly the way GEPA does: through named_predictors()
+        for _, pred in module.predictor.named_predictors():
+            pred.signature = pred.signature.with_instructions("EVOLVED")
+        assert module.skill_text == "EVOLVED"
+
+
+def test_full_file_passes_validation_but_body_does_not():
+    """Guards the evolve() pipeline: structure validation must run on the
+    raw full file (frontmatter included), never on the stripped body."""
+    from evolution.core.config import EvolutionConfig
+    from evolution.core.constraints import ConstraintValidator
+
+    validator = ConstraintValidator(EvolutionConfig(hermes_agent_path=None))
+
+    raw_results = validator.validate_all(SAMPLE_SKILL, "skill")
+    assert all(r.passed for r in raw_results)
+
+    body = SAMPLE_SKILL.split("---", 2)[2].strip()
+    body_results = validator.validate_all(body, "skill")
+    assert not next(r for r in body_results if r.constraint_name == "skill_structure").passed
