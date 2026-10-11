@@ -103,12 +103,26 @@ class SkillModule(dspy.Module):
 
     def __init__(self, skill_text: str):
         super().__init__()
+        # The skill text must be seeded as the predictor's signature
+        # instructions: GEPA/MIPROv2 discover and evolve exactly the
+        # signature.instructions of named_predictors. Storing it as a plain
+        # attribute (or a generic Parameter) means the optimizer only tunes
+        # the generic ChainOfThought instructions while the extracted skill
+        # text always equals the input — an evolved artifact identical to the
+        # baseline.
+        sig = self.TaskWithSkill.with_instructions(skill_text)
         self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        self.predictor = dspy.ChainOfThought(sig)
+
+    def evolved_text(self) -> str:
+        """Read back the optimizer-mutated skill text from the predictor."""
+        for _name, pred in self.named_predictors():
+            return pred.signature.instructions
+        return self.skill_text
 
     def forward(self, task_input: str) -> dspy.Prediction:
         result = self.predictor(
-            skill_instructions=self.skill_text,
+            skill_instructions=str(self.skill_text),
             task_input=task_input,
         )
         return dspy.Prediction(output=result.output)

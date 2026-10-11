@@ -109,6 +109,10 @@ def skill_fitness_metric(example: dspy.Example, prediction: dspy.Prediction, tra
 
     This is what gets passed to dspy.GEPA(metric=...).
     Returns a float 0-1 score.
+
+    GEPA requires a five-argument metric signature
+    ``(gold, pred, trace, pred_name, pred_trace)``; MIPROv2 calls with three.
+    ``gepa_metric`` below adapts this function for GEPA.
     """
     # The prediction should have an 'output' field with the agent's response
     agent_output = getattr(prediction, "output", "") or ""
@@ -144,3 +148,13 @@ def _parse_score(value) -> float:
         return min(1.0, max(0.0, float(str(value).strip())))
     except (ValueError, TypeError):
         return 0.5  # Default to neutral on parse failure
+
+
+def gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None) -> float:
+    """Five-argument GEPA-compatible adapter around skill_fitness_metric.
+
+    dspy.GEPA validates at construction time that the metric accepts five
+    arguments ``(gold, pred, trace, pred_name, pred_trace)``; the extra two
+    are unused by the keyword-overlap scorer.
+    """
+    return skill_fitness_metric(gold, pred, trace)
