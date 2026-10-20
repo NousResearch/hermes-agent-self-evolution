@@ -90,3 +90,15 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModule:
+    def test_skill_text_is_optimizable_instructions(self):
+        from evolution.skills.skill_module import SkillModule
+
+        module = SkillModule("# Body\nDo X.")
+        assert module.skill_text == "# Body\nDo X."
+        # GEPA mutates the predictor's signature instructions; skill_text must follow
+        pred = module.predictor.predict
+        pred.signature = pred.signature.with_instructions("# Evolved")
+        assert module.skill_text == "# Evolved"

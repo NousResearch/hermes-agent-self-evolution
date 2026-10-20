@@ -34,7 +34,7 @@ console = Console()
 
 
 def evolve(
-    skill_name: str,
+    skill_name: Optional[str] = None,
     iterations: int = 10,
     eval_source: str = "synthetic",
     dataset_path: Optional[str] = None,
@@ -43,6 +43,7 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    skill_path: Optional[str] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -56,15 +57,29 @@ def evolve(
     )
 
     # ── 1. Find and load the skill ──────────────────────────────────────
-    console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name}[/bold]\n")
+    console.print(f"\n[bold cyan]🧬 Hermes Agent Self-Evolution[/bold cyan] — Evolving skill: [bold]{skill_name or skill_path}[/bold]\n")
 
-    skill_path = find_skill(skill_name, config.hermes_agent_path)
-    if not skill_path:
-        console.print(f"[red]✗ Skill '{skill_name}' not found in {config.hermes_agent_path / 'skills'}[/red]")
-        sys.exit(1)
+    if skill_path:
+        # Explicit path: a SKILL.md file or a skill directory, anywhere on disk
+        found = Path(skill_path).expanduser().resolve()
+        if found.is_dir():
+            found = found / "SKILL.md"
+        if not found.is_file():
+            console.print(f"[red]✗ Skill file not found: {found}[/red]")
+            sys.exit(1)
+        skill_name = skill_name or found.parent.name
+    else:
+        found = find_skill(skill_name, config.hermes_agent_path)
+        if not found:
+            console.print(f"[red]✗ Skill '{skill_name}' not found in {config.hermes_agent_path / 'skills'}[/red]")
+            sys.exit(1)
 
-    skill = load_skill(skill_path)
-    console.print(f"  Loaded: {skill_path.relative_to(config.hermes_agent_path)}")
+    skill = load_skill(found)
+    try:
+        shown = found.relative_to(config.hermes_agent_path)
+    except ValueError:
+        shown = found
+    console.print(f"  Loaded: {shown}")
     console.print(f"  Name: {skill['name']}")
     console.print(f"  Size: {len(skill['raw']):,} chars")
     console.print(f"  Description: {skill['description'][:80]}...")
@@ -118,7 +133,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -137,7 +152,11 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm_kwargs = {}
+    if eval_model.startswith("github_copilot/"):
+        # litellm's Copilot provider needs editor headers on every request
+        lm_kwargs["extra_headers"] = {"editor-version": "vscode/1.95.0", "Copilot-Integration-Id": "vscode-chat"}
+    lm = dspy.LM(eval_model, **lm_kwargs)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -153,9 +172,14 @@ def evolve(
     start_time = time.time()
 
     try:
+        def gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+            return skill_fitness_metric(gold, pred, trace)
+
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=gepa_metric,
+            # newer DSPy has no max_steps; bound the budget by metric calls
+            max_metric_calls=max(1, iterations) * max(1, len(valset)) + len(valset),
+            reflection_lm=dspy.LM(optimizer_model, **lm_kwargs),
         )
 
         optimized_module = optimizer.compile(
@@ -185,7 +209,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -293,7 +317,8 @@ def evolve(
 
 
 @click.command()
-@click.option("--skill", required=True, help="Name of the skill to evolve")
+@click.option("--skill", default=None, help="Name of the skill to evolve (looked up in hermes-agent repo)")
+@click.option("--skill-path", default=None, help="Full path to a SKILL.md (or its directory) anywhere on this machine")
 @click.option("--iterations", default=10, help="Number of GEPA iterations")
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
@@ -303,8 +328,10 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, skill_path):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
+    if not skill and not skill_path:
+        raise click.UsageError("Provide --skill or --skill-path")
     evolve(
         skill_name=skill,
         iterations=iterations,
@@ -315,6 +342,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        skill_path=skill_path,
     )
 
 
