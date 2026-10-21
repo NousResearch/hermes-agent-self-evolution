@@ -21,9 +21,10 @@ class EvolutionConfig:
     population_size: int = 5
 
     # LLM configuration
-    optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
-    eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
-    judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    # Routed to OpenRouter (session's model access) via OPENAI_API_KEY/OPENAI_API_BASE.
+    optimizer_model: str = "tencent/hy3:free"  # Model for GEPA reflections
+    eval_model: str = "tencent/hy3:free"  # Model for LLM-as-judge scoring
+    judge_model: str = "tencent/hy3:free"  # Model for dataset generation
 
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
@@ -86,6 +87,90 @@ def get_hermes_agent_path() -> Path:
         "Cannot find hermes-agent repo. Set HERMES_AGENT_REPO env var "
         "or ensure it exists at ~/.hermes/hermes-agent"
     )
+
+
+def _install_litellm_shim() -> None:
+    """Route vendor models that lack structured-output support through a proxy.
+
+    DSPy's adapter forces a JSON-schema ``response_format``. Some OpenRouter
+    models (e.g. ``tencent/hy3:free``) reject that. We intercept litellm's
+    completion call, drop ``response_format``, call the proxy via the openai
+    client, and return a litellm-compatible ``ModelResponse`` built from plain
+    text. Idempotent — safe to call repeatedly.
+    """
+    import litellm
+    from openai import OpenAI
+    from litellm import ModelResponse, Choices, MessageData, Usage
+
+    api_base = os.getenv("OPENAI_API_BASE") or os.getenv("OPENAI_BASE_URL")
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_base or not api_key:
+        return
+
+    client = OpenAI(api_key=api_key, base_url=api_base)
+    _orig = litellm.completion
+
+    def _patched(model=None, messages=None, **kwargs):
+        if model and "hy3" in str(model):
+            kwargs.pop("response_format", None)
+            kwargs.pop("extra_body", None)
+            cleaned = {
+                k: v for k, v in kwargs.items()
+                if k in ("temperature", "max_tokens", "top_p", "stop",
+                         "tools", "tool_choice", "n", "seed")
+            }
+            oa = client.chat.completions.create(
+                model="tencent/hy3:free",
+                messages=messages or [{"role": "user", "content": ""}],
+                **cleaned,
+            )
+            c = oa.choices[0]
+            return ModelResponse(
+                model=oa.model,
+                choices=[Choices(
+                    message=MessageData(content=c.message.content or "", role="assistant"),
+                    finish_reason=(c.finish_reason or "stop"),
+                    index=0,
+                )],
+                usage=Usage(
+                    prompt_tokens=oa.usage.prompt_tokens,
+                    completion_tokens=oa.usage.completion_tokens,
+                    total_tokens=oa.usage.total_tokens,
+                ) if oa.usage else None,
+            )
+        return _orig(model=model, messages=messages, **kwargs)
+
+    litellm.completion = _patched
+    # DSPy imports `completion` by name; patch that binding too.
+    try:
+        import dspy.clients.lm as _dspy_lm
+        _dspy_lm.completion = _patched
+    except Exception:
+        pass
+
+
+def make_lm(model: str) -> "dspy.LM":  # noqa: F821
+    """Build a DSPy LM that honors OPENAI_API_BASE / OPENAI_API_KEY.
+
+    When an OpenAI-compatible proxy (OpenRouter, Nous gateway, etc.) is
+    configured via ``OPENAI_API_BASE``, pass api_base + api_key explicitly so
+    dspy/litellm route calls to that endpoint. A shim is installed so models
+    that reject JSON-schema structured output (e.g. ``tencent/hy3:free``) still
+    work: the adapter's response_format is dropped and plain-text JSON is
+    returned in litellm's response shape.
+    """
+    import dspy
+
+    _install_litellm_shim()
+
+    api_base = os.getenv("OPENAI_API_BASE") or os.getenv("OPENAI_BASE_URL")
+    api_key = os.getenv("OPENAI_API_KEY")
+    kwargs = {}
+    if api_base:
+        kwargs["api_base"] = api_base
+    if api_key:
+        kwargs["api_key"] = api_key
+    return dspy.LM(model, **kwargs)
 
 
 def resolve_hermes_agent_path(hermes_repo: Optional[str] = None) -> Path:
