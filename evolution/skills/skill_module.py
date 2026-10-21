@@ -92,26 +92,23 @@ class SkillModule(dspy.Module):
     """
 
     class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
+        """Complete a task following the skill instructions."""
         task_input: str = dspy.InputField(desc="The task to complete")
         output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        # The skill body IS the signature instructions: that is the text GEPA/MIPRO mutate.
+        self.predictor = dspy.Predict(self.TaskWithSkill.with_instructions(skill_text))
+
+    @property
+    def skill_text(self) -> str:
+        """Current (possibly optimized) skill body."""
+        return self.predictor.signature.instructions
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
-        return dspy.Prediction(output=result.output)
+        result = self.predictor(task_input=task_input)
+        return dspy.Prediction(output=result.output, skill_text=self.skill_text)
 
 
 def reassemble_skill(frontmatter: str, evolved_body: str) -> str:

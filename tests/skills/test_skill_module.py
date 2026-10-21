@@ -90,3 +90,31 @@ class TestReassembleSkill:
 
         assert "EVOLVED" in result
         assert "New and improved" in result
+
+
+class TestSkillModule:
+    def test_skill_text_is_optimizable_instructions(self):
+        from evolution.skills.skill_module import SkillModule
+
+        module = SkillModule("# Body\nDo X.")
+        assert module.skill_text == "# Body\nDo X."
+        # GEPA mutates the predictor's signature instructions; skill_text must follow
+        pred = module.predictor
+        pred.signature = pred.signature.with_instructions("# Evolved")
+        assert module.skill_text == "# Evolved"
+
+    def test_prediction_consumers_require_outputs_not_chain_of_thought(self):
+        from evolution.core.config import EvolutionConfig
+        from evolution.core.dataset_builder import SyntheticDatasetBuilder
+        from evolution.core.external_importers import RelevanceFilter
+        from evolution.core.fitness import LLMJudge
+        from evolution.skills.skill_module import SkillModule
+
+        config = EvolutionConfig()
+        predictors = [SkillModule("Answer accurately").predictor,
+                      LLMJudge(config).judge,
+                      SyntheticDatasetBuilder(config).generator,
+                      RelevanceFilter("copilot/claude-sonnet-5.5").scorer]
+        for predictor in predictors:
+            assert "reasoning" not in predictor.signature.output_fields
+        assert "feedback" in predictors[1].signature.output_fields

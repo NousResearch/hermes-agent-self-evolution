@@ -5,6 +5,7 @@ Supports length penalties and multi-dimensional scoring.
 """
 
 import dspy
+from evolution.core.lm import make_lm
 from dataclasses import dataclass
 from typing import Optional
 
@@ -59,7 +60,7 @@ class LLMJudge:
 
     def __init__(self, config: EvolutionConfig):
         self.config = config
-        self.judge = dspy.ChainOfThought(self.JudgeSignature)
+        self.judge = dspy.Predict(self.JudgeSignature)
 
     def score(
         self,
@@ -72,7 +73,7 @@ class LLMJudge:
     ) -> FitnessScore:
         """Score an agent output using LLM-as-judge."""
 
-        lm = dspy.LM(self.config.eval_model)
+        lm = make_lm(self.config.eval_model)
 
         with dspy.context(lm=lm):
             result = self.judge(

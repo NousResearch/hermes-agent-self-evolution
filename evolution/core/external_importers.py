@@ -30,6 +30,7 @@ from typing import Optional
 
 import click
 import dspy
+from evolution.core.lm import make_lm
 from rich.console import Console
 from rich.progress import Progress
 
@@ -443,7 +444,7 @@ class RelevanceFilter:
         scoring: str = dspy.OutputField(desc="JSON object with: relevant, expected_behavior, difficulty, category")
 
     def __init__(self, model: str):
-        self.scorer = dspy.ChainOfThought(self.ScoreRelevance)
+        self.scorer = dspy.Predict(self.ScoreRelevance)
         self.model = model
 
     def filter_and_score(
@@ -490,7 +491,7 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(self.model)
+        lm = make_lm(self.model)
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))

@@ -47,6 +47,7 @@ def test_resolve_expands_user_home(monkeypatch):
     from evolution.core.config import resolve_hermes_agent_path
 
     monkeypatch.setenv("HOME", "/home/example")
+    monkeypatch.setenv("USERPROFILE", "/home/example")
     assert resolve_hermes_agent_path("~/code/hermes-agent") == Path("/home/example/code/hermes-agent")
 
 
