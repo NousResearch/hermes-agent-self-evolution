@@ -18,7 +18,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
+from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path, make_lm
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
@@ -38,8 +38,8 @@ def evolve(
     iterations: int = 10,
     eval_source: str = "synthetic",
     dataset_path: Optional[str] = None,
-    optimizer_model: str = "openai/gpt-4.1",
-    eval_model: str = "openai/gpt-4.1-mini",
+    optimizer_model: str = "tencent/hy3:free",
+    eval_model: str = "tencent/hy3:free",
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
@@ -137,7 +137,7 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy
-    lm = dspy.LM(eval_model)
+    lm = make_lm(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -298,8 +298,8 @@ def evolve(
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
-@click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
+@click.option("--optimizer-model", default="tencent/hy3:free", help="Model for GEPA reflections")
+@click.option("--eval-model", default="tencent/hy3:free", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
