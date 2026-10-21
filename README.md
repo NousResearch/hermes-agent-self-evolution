@@ -49,6 +49,39 @@ python -m evolution.skills.evolve_skill \
     --eval-source sessiondb
 ```
 
+### Using MiniMax
+
+Set your API key and pass `--use-minimax` (or specify the model directly):
+
+```bash
+export MINIMAX_API_KEY=your_key_here
+
+# Shorthand — selects MiniMax-M3.1-Flash for unspecified model options
+python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --use-minimax
+
+# Explicit model selection
+python -m evolution.skills.evolve_skill \
+    --skill github-code-review \
+    --optimizer-model minimax/MiniMax-M3.1-Flash \
+    --eval-model minimax/MiniMax-M3
+```
+
+Current MiniMax choices:
+
+| Model ID | Description |
+|----------|-------------|
+| `MiniMax-M3.1-Flash` | Default MiniMax choice |
+| `MiniMax-M3` | Alternative MiniMax choice |
+
+MiniMax uses the OpenAI-compatible endpoint at `https://api.minimax.io/v1`. The
+`MINIMAX_API_KEY` environment variable is read automatically. Explicit model
+options take precedence over `--use-minimax`. Saved selections of `MiniMax-M2.7`
+and `MiniMax-M2.7-highspeed` still route to MiniMax without being listed as current
+choices. Custom IDs prefixed with `minimax/` use the configured MiniMax endpoint;
+gateway-prefixed model strings retain their own routing.
+
 ## What It Optimizes
 
 | Phase | Target | Engine | Status |

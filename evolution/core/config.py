@@ -3,7 +3,22 @@
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import dspy
+
+
+# Ordinary MiniMax chat choices, with the default first.
+MINIMAX_MODELS = (
+    "MiniMax-M3.1-Flash",
+    "MiniMax-M3",
+)
+
+# Preserve explicitly selected legacy IDs without advertising them as choices.
+_MINIMAX_LEGACY_MODELS = ("MiniMax-M2.7", "MiniMax-M2.7-highspeed")
+
+MINIMAX_BASE_URL = "https://api.minimax.io/v1"
 
 
 @dataclass
@@ -25,6 +40,10 @@ class EvolutionConfig:
     eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
     judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
 
+    # MiniMax provider configuration
+    minimax_api_key: str = field(default_factory=lambda: os.getenv("MINIMAX_API_KEY", ""))
+    minimax_base_url: str = MINIMAX_BASE_URL
+
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
     max_tool_desc_size: int = 500  # chars
@@ -45,6 +64,41 @@ class EvolutionConfig:
     # Output
     output_dir: Path = field(default_factory=lambda: Path("./output"))
     create_pr: bool = True
+
+    def make_lm(self, model: str) -> "dspy.LM":
+        """Create a DSPy LM instance, with MiniMax routing handled automatically.
+
+        For current and explicitly selected legacy MiniMax models, this sets
+        the base URL and API key. Pass a bare model ID or a direct prefix such
+        as ``minimax/MiniMax-M3.1-Flash`` or ``openai/MiniMax-M3.1-Flash``.
+        Custom IDs with the explicit ``minimax/`` prefix also use this route.
+
+        All other models are forwarded to ``dspy.LM`` unchanged, so existing
+        OpenAI / OpenRouter / LiteLLM strings continue to work.
+        """
+        import dspy
+
+        prefix, separator, bare = model.partition("/")
+        if not separator:
+            bare, prefix = model, ""
+        known_model = bare in MINIMAX_MODELS + _MINIMAX_LEGACY_MODELS
+        direct_model = (
+            prefix == "minimax" and bool(bare) and "/" not in bare
+        ) or (prefix in ("", "openai") and known_model)
+
+        if direct_model:
+            if not self.minimax_api_key:
+                raise ValueError(
+                    f"MINIMAX_API_KEY is not set. Export it before using '{bare}'."
+                )
+            return dspy.LM(
+                f"openai/{bare}",
+                api_key=self.minimax_api_key,
+                base_url=self.minimax_base_url,
+                temperature=1.0,  # MiniMax requires temperature in (0.0, 1.0]
+            )
+
+        return dspy.LM(model)
 
 
 def _discover_hermes_agent_path() -> Optional[Path]:
