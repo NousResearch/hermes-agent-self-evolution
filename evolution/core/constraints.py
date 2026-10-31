@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.content_retention import analyse_retention, format_report
 
 
 @dataclass
@@ -42,6 +43,20 @@ class ConstraintValidator:
         # 2. Growth limit (if baseline provided)
         if baseline_text:
             results.append(self._check_growth(artifact_text, baseline_text, artifact_type))
+
+            # 2b. Content retention.
+            # The growth limit bounds how much an artifact may grow; it says
+            # nothing about content that was *removed*. An optimizer that
+            # drops runnable commands and guard lessons while keeping the
+            # prose can score higher with an LLM-as-judge, because the judge
+            # sees whether an answer "looks right" and has no visibility into
+            # why a paragraph existed in the first place.
+            if self.config.enable_content_retention:
+                results.append(
+                    self._check_content_retention(
+                        artifact_text, baseline_text, artifact_type
+                    )
+                )
 
         # 3. Non-empty
         results.append(self._check_non_empty(artifact_text))
@@ -132,6 +147,66 @@ class ConstraintValidator:
                 constraint_name="growth_limit",
                 message=f"Growth exceeded: {growth:+.1%} (max {max_growth:+.1%})",
             )
+
+    def _check_content_retention(
+        self, text: str, baseline: str, artifact_type: str
+    ) -> ConstraintResult:
+        """Check that load-bearing content survived the evolution pass.
+
+        Three structural signals are used, all of which are insensitive to
+        rewording but sensitive to removal:
+
+        ``commands``
+            Runnable commands extracted from fenced code blocks.
+        ``blocks``
+            Headings and paragraphs from the baseline document.
+        ``size``
+            Overall length relative to the baseline.
+
+        Guard-line ("lesson") retention is reported as a diagnostic but is
+        deliberately not part of the verdict: rewording a guard line can
+        change which marker word it uses, which makes a hard threshold on
+        that signal produce false rejections.
+        """
+        report = analyse_retention(baseline, text)
+
+        failures: list[str] = []
+
+        if report.commands_total:
+            if report.command_retention < self.config.min_command_retention:
+                failures.append(
+                    f"commands retained {report.command_retention:.0%} "
+                    f"< {self.config.min_command_retention:.0%}"
+                )
+
+        if report.blocks_total:
+            if report.block_retention < self.config.min_block_retention:
+                failures.append(
+                    f"content blocks retained {report.block_retention:.0%} "
+                    f"< {self.config.min_block_retention:.0%}"
+                )
+
+        if report.size_ratio < self.config.min_size_ratio:
+            failures.append(
+                f"size {report.size_ratio:.0%} of baseline "
+                f"< {self.config.min_size_ratio:.0%}"
+            )
+
+        details = format_report(report)
+        if failures:
+            return ConstraintResult(
+                passed=False,
+                constraint_name="content_retention",
+                message="Content retention below threshold: "
+                + "; ".join(failures),
+                details=details,
+            )
+        return ConstraintResult(
+            passed=True,
+            constraint_name="content_retention",
+            message="Content retention OK",
+            details=details,
+        )
 
     def _check_non_empty(self, text: str) -> ConstraintResult:
         if text.strip():

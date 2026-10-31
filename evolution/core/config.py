@@ -31,6 +31,19 @@ class EvolutionConfig:
     max_param_desc_size: int = 200  # chars
     max_prompt_growth: float = 0.2  # 20% max growth over baseline
 
+    # Content retention (deletion detector).
+    # The growth limit above only bounds how much an artifact may grow; it
+    # cannot catch content that was *removed*. An optimizer can delete
+    # runnable commands and guard lessons, keep the prose, and be rewarded
+    # for it by an LLM-as-judge that has no visibility into why a paragraph
+    # existed. These thresholds are structural (commands, blocks, size) and
+    # are chosen to be insensitive to rewording but sensitive to removal.
+    # Set enable_content_retention=False to restore the previous behaviour.
+    enable_content_retention: bool = True
+    min_command_retention: float = 0.5  # min share of baseline commands kept
+    min_block_retention: float = 0.6  # min share of baseline blocks kept
+    min_size_ratio: float = 0.6  # min size relative to baseline
+
     # Eval dataset
     eval_dataset_size: int = 20  # Total examples to generate
     train_ratio: float = 0.5
