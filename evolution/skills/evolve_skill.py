@@ -138,6 +138,7 @@ def evolve(
 
     # Configure DSPy
     lm = dspy.LM(eval_model)
+    type(lm).supports_response_schema = property(lambda self: False)  # DeepSeek et al.: no json_schema support
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
