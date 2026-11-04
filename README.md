@@ -99,7 +99,7 @@ Probes live in `SKILL.probes.jsonl` next to `SKILL.md`, one per line:
  "must_include": ["exit code"]}
 ```
 
-`anchor` is the lesson's text as it appears in the skill; `scenario` is a task that reproduces the original incident; the expectation is `must_include`, `must_not_include` and/or `must_match` (regex). Without a probe file the gate does nothing but list the lesson-like passages that are unguarded. Cost per probe: one agent call each for baseline, lesion and (gating probes only) candidate. Disable with `--no-lesson-probes`.
+`anchor` is the lesson's text as it appears in the skill; `scenario` is a task that reproduces the original incident; the expectation is `must_include`, `must_not_include` and/or `must_match` (regex). Without a probe file the gate does nothing but list the lesson-like passages that are unguarded. Cost per probe: one agent call each for baseline, lesion and (gating probes only) candidate. Disable with `--no-lesson-probes`. Every probe's verdict is printed during evolution and saved as `lesson_probes.json` in the output directory; `--probe-report -` additionally streams the full JSON report to stderr (or `--probe-report PATH` writes it to a file).
 
 ## Full Plan
 

@@ -96,6 +96,23 @@ def _lesson_probe_gate(
     return report
 
 
+def _emit_probe_report(report: LessonProbeReport, destination: Optional[str]) -> None:
+    """Write the full probe report (every probe with its status, baseline/lesion/
+    candidate verdicts, and unprobed lessons) as JSON to ``destination``:
+    ``-`` for stderr, otherwise a file path. No-op when destination is None."""
+    if not destination:
+        return
+    payload = json.dumps(report.to_dict(), indent=2)
+    if destination == "-":
+        sys.stderr.write(payload + "\n")
+        sys.stderr.flush()
+    else:
+        out = Path(destination)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(payload)
+        console.print(f"  Full probe report written to {out}")
+
+
 def evolve(
     skill_name: str,
     iterations: int = 10,
@@ -108,6 +125,7 @@ def evolve(
     dry_run: bool = False,
     lesson_probes: bool = True,
     generate_probes_for_lessons: bool = False,
+    probe_report: Optional[str] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -262,12 +280,13 @@ def evolve(
             all_pass = False
 
     # ── 7b. Lesson probes: did the candidate keep the behaviors its lessons provide? ──
-    probe_report = None
+    probe_report_obj = None
     if config.lesson_probes_enabled:
         console.print(f"\n[bold]Lesson probes[/bold] (lesion check: {'on' if config.lesson_probe_lesion_check else 'off'})")
-        probe_report = _lesson_probe_gate(config, skill_path, skill["body"], evolved_body, lm)
-        if probe_report is not None:
-            c = validator.check_lesson_probes(probe_report)
+        probe_report_obj = _lesson_probe_gate(config, skill_path, skill["body"], evolved_body, lm)
+        if probe_report_obj is not None:
+            _emit_probe_report(probe_report_obj, probe_report)
+            c = validator.check_lesson_probes(probe_report_obj)
             evolved_constraints.append(c)
             icon = "✓" if c.passed else "✗"
             color = "green" if c.passed else "red"
@@ -282,8 +301,8 @@ def evolve(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(evolved_full)
         console.print(f"  Saved failed variant to {output_path}")
-        if probe_report is not None:
-            (output_path.parent / "lesson_probes_FAILED.json").write_text(json.dumps(probe_report.to_dict(), indent=2))
+        if probe_report_obj is not None:
+            (output_path.parent / "lesson_probes_FAILED.json").write_text(json.dumps(probe_report_obj.to_dict(), indent=2))
         return
 
     # ── 8. Evaluate on holdout set ──────────────────────────────────────
@@ -362,11 +381,11 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
-        "lesson_probes": probe_report.summary() if probe_report is not None else None,
+        "lesson_probes": probe_report_obj.summary() if probe_report_obj is not None else None,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
-    if probe_report is not None:
-        (output_dir / "lesson_probes.json").write_text(json.dumps(probe_report.to_dict(), indent=2))
+    if probe_report_obj is not None:
+        (output_dir / "lesson_probes.json").write_text(json.dumps(probe_report_obj.to_dict(), indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
@@ -393,8 +412,11 @@ def evolve(
               help="Skip the lesson-probe gate (SKILL.probes.jsonl next to the skill)")
 @click.option("--generate-probes", is_flag=True,
               help="LLM-generate probes for lesson-like passages that have none; each is validated by lesion before it can gate")
+@click.option("--probe-report", default=None, metavar="PATH|-",
+              help="Write the full lesson-probe report (every probe: discriminating/dead/broken/orphaned, "
+                   "baseline/lesion/candidate verdicts, unprobed lessons) as JSON to PATH, or to stderr with '-'")
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run,
-         no_lesson_probes, generate_probes):
+         no_lesson_probes, generate_probes, probe_report):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -408,6 +430,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         dry_run=dry_run,
         lesson_probes=not no_lesson_probes,
         generate_probes_for_lessons=generate_probes,
+        probe_report=probe_report,
     )
 
 
