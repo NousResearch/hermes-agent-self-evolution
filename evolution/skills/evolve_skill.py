@@ -23,6 +23,13 @@ from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset,
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.constraints import ConstraintValidator
+from evolution.core.lesson_probes import (
+    LessonProbeReport,
+    find_unprobed_lessons,
+    generate_probes,
+    load_probes,
+    run_lesson_probes,
+)
 from evolution.skills.skill_module import (
     SkillModule,
     load_skill,
@@ -31,6 +38,79 @@ from evolution.skills.skill_module import (
 )
 
 console = Console()
+
+
+def _lesson_probe_gate(
+    config: EvolutionConfig,
+    skill_path: Path,
+    baseline_body: str,
+    candidate_body: str,
+    lm,
+) -> Optional[LessonProbeReport]:
+    """Run the lesion-validated lesson-probe gate. Returns None when there is nothing to run."""
+    probe_file = skill_path.parent / config.lesson_probe_filename
+    probes, errors = [], []
+    if probe_file.exists():
+        probes, errors = load_probes(probe_file)
+        for err in errors:
+            console.print(f"  [yellow]⚠ {err}[/yellow]")
+
+    if config.lesson_probe_generate:
+        from evolution.skills.lesson_probe_generator import make_dspy_generator
+
+        generated = generate_probes(baseline_body, make_dspy_generator(config.judge_model), probes)
+        console.print(f"  Generated {len(generated)} probe(s) for unprobed lessons — each is validated by lesion below")
+        probes = probes + generated
+
+    if not probes:
+        unprobed = find_unprobed_lessons(baseline_body, [])
+        if unprobed:
+            console.print(
+                f"  [yellow]⚠ No lesson probes ({probe_file.name} not found). "
+                f"{len(unprobed)} lesson-like passage(s) are unguarded — the optimizer can delete them for free:[/yellow]"
+            )
+            for line in unprobed[:10]:
+                console.print(f"      · {line}")
+        return None
+
+    def responder(skill_text: str, scenario: str) -> str:
+        with dspy.context(lm=lm):
+            return SkillModule(skill_text)(task_input=scenario).output
+
+    report = run_lesson_probes(
+        baseline_body,
+        candidate_body,
+        probes,
+        responder,
+        lesion_check=config.lesson_probe_lesion_check,
+    )
+    for o in report.outcomes:
+        if o.regressed:
+            console.print(f"    [red]✗ {o.probe.lesson_id}[/red]: {o.detail}")
+        elif o.gates:
+            console.print(f"    [green]✓ {o.probe.lesson_id}[/green]: kept")
+        else:
+            console.print(f"    [yellow]– {o.probe.lesson_id}[/yellow]: {o.status.value} ({o.detail})")
+    for line in report.unprobed_lessons[:10]:
+        console.print(f"    [yellow]· unprobed:[/yellow] {line}")
+    return report
+
+
+def _emit_probe_report(report: LessonProbeReport, destination: Optional[str]) -> None:
+    """Write the full probe report (every probe with its status, baseline/lesion/
+    candidate verdicts, and unprobed lessons) as JSON to ``destination``:
+    ``-`` for stderr, otherwise a file path. No-op when destination is None."""
+    if not destination:
+        return
+    payload = json.dumps(report.to_dict(), indent=2)
+    if destination == "-":
+        sys.stderr.write(payload + "\n")
+        sys.stderr.flush()
+    else:
+        out = Path(destination)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(payload)
+        console.print(f"  Full probe report written to {out}")
 
 
 def evolve(
@@ -43,6 +123,9 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    lesson_probes: bool = True,
+    generate_probes_for_lessons: bool = False,
+    probe_report: Optional[str] = None,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -53,6 +136,8 @@ def evolve(
         eval_model=eval_model,
         judge_model=eval_model,  # Use same model for dataset generation
         run_pytest=run_tests,
+        lesson_probes_enabled=lesson_probes,
+        lesson_probe_generate=generate_probes_for_lessons,
     )
 
     # ── 1. Find and load the skill ──────────────────────────────────────
@@ -194,6 +279,21 @@ def evolve(
         if not c.passed:
             all_pass = False
 
+    # ── 7b. Lesson probes: did the candidate keep the behaviors its lessons provide? ──
+    probe_report_obj = None
+    if config.lesson_probes_enabled:
+        console.print(f"\n[bold]Lesson probes[/bold] (lesion check: {'on' if config.lesson_probe_lesion_check else 'off'})")
+        probe_report_obj = _lesson_probe_gate(config, skill_path, skill["body"], evolved_body, lm)
+        if probe_report_obj is not None:
+            _emit_probe_report(probe_report_obj, probe_report)
+            c = validator.check_lesson_probes(probe_report_obj)
+            evolved_constraints.append(c)
+            icon = "✓" if c.passed else "✗"
+            color = "green" if c.passed else "red"
+            console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
+            if not c.passed:
+                all_pass = False
+
     if not all_pass:
         console.print("[red]✗ Evolved skill FAILED constraints — not deploying[/red]")
         # Still save for inspection
@@ -201,6 +301,8 @@ def evolve(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(evolved_full)
         console.print(f"  Saved failed variant to {output_path}")
+        if probe_report_obj is not None:
+            (output_path.parent / "lesson_probes_FAILED.json").write_text(json.dumps(probe_report_obj.to_dict(), indent=2))
         return
 
     # ── 8. Evaluate on holdout set ──────────────────────────────────────
@@ -279,8 +381,11 @@ def evolve(
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
         "constraints_passed": all_pass,
+        "lesson_probes": probe_report_obj.summary() if probe_report_obj is not None else None,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    if probe_report_obj is not None:
+        (output_dir / "lesson_probes.json").write_text(json.dumps(probe_report_obj.to_dict(), indent=2))
 
     console.print(f"\n  Output saved to {output_dir}/")
 
@@ -303,7 +408,15 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--no-lesson-probes", is_flag=True,
+              help="Skip the lesson-probe gate (SKILL.probes.jsonl next to the skill)")
+@click.option("--generate-probes", is_flag=True,
+              help="LLM-generate probes for lesson-like passages that have none; each is validated by lesion before it can gate")
+@click.option("--probe-report", default=None, metavar="PATH|-",
+              help="Write the full lesson-probe report (every probe: discriminating/dead/broken/orphaned, "
+                   "baseline/lesion/candidate verdicts, unprobed lessons) as JSON to PATH, or to stderr with '-'")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run,
+         no_lesson_probes, generate_probes, probe_report):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -315,6 +428,9 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        lesson_probes=not no_lesson_probes,
+        generate_probes_for_lessons=generate_probes,
+        probe_report=probe_report,
     )
 
 
