@@ -37,6 +37,15 @@ class EvolutionConfig:
     val_ratio: float = 0.25
     holdout_ratio: float = 0.25
 
+    # Lesson probes — lesion-validated regression gate for incident-derived
+    # lessons (see evolution/core/lesson_probes.py). Probes live in a JSONL
+    # sidecar next to SKILL.md. With lesion_check on, a probe only gates when
+    # the baseline passes it and the baseline-minus-lesson fails it.
+    lesson_probes_enabled: bool = True
+    lesson_probe_filename: str = "SKILL.probes.jsonl"
+    lesson_probe_lesion_check: bool = True
+    lesson_probe_generate: bool = False  # LLM-generate probes for unprobed lessons (opt-in, costs calls)
+
     # Benchmark gating
     run_pytest: bool = True
     run_tblite: bool = False  # Expensive — opt-in

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from evolution.core.config import EvolutionConfig
+from evolution.core.lesson_probes import LessonProbeReport
 
 
 @dataclass
@@ -51,6 +52,29 @@ class ConstraintValidator:
             results.append(self._check_skill_structure(artifact_text))
 
         return results
+
+    def check_lesson_probes(self, report: LessonProbeReport) -> ConstraintResult:
+        """Turn a lesson-probe report into a constraint result.
+
+        Fails only on a regression: the candidate lost a behavior that a
+        discriminating probe showed the baseline had *because of* a lesson.
+        Dead/broken/orphaned probes and unprobed lessons are surfaced in the
+        details but never fail the candidate on their own.
+        """
+        if report.regressions:
+            lost = ", ".join(o.probe.lesson_id for o in report.regressions)
+            return ConstraintResult(
+                passed=False,
+                constraint_name="lesson_probes",
+                message=f"Lost behavior guarded by lesson(s): {lost}",
+                details=report.summary(),
+            )
+        return ConstraintResult(
+            passed=True,
+            constraint_name="lesson_probes",
+            message=f"Lesson probes OK: {report.summary()}",
+            details="\n".join(report.unprobed_lessons) or None,
+        )
 
     def run_test_suite(self, hermes_repo: Path) -> ConstraintResult:
         """Run the full hermes-agent test suite. Must pass 100%."""
