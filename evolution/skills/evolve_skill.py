@@ -118,7 +118,10 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    # Validate the full skill file (frontmatter + body): _check_skill_structure
+    # requires the YAML frontmatter, which the bare body does not contain.
+    baseline_full = reassemble_skill(skill["frontmatter"], skill["body"])
+    baseline_constraints = validator.validate_all(baseline_full, "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -185,7 +188,7 @@ def evolve(
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=baseline_full)
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
