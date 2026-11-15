@@ -91,21 +91,19 @@ def _validate_eval_example(
     Returns:
         Dict of validated fields, or None if the example should be skipped.
     """
-    # task_input and expected_behavior must be non-empty
-    if not task_input or not task_input.strip():
+    # task_input and expected_behavior must be non-empty strings
+    if not isinstance(task_input, str) or not task_input.strip():
         return None
-    if not expected_behavior or not expected_behavior.strip():
+    if not isinstance(expected_behavior, str) or not expected_behavior.strip():
         return None
 
     # Normalize difficulty to a known value
-    difficulty = difficulty.strip().lower() if difficulty else "medium"
+    difficulty = difficulty.strip().lower() if isinstance(difficulty, str) and difficulty.strip() else "medium"
     if difficulty not in VALID_DIFFICULTIES:
         difficulty = "medium"
 
-    # Category must be non-empty
-    category = category.strip() if category else "general"
-    if not category:
-        category = "general"
+    # Category must be a non-empty string
+    category = category.strip() if isinstance(category, str) and category.strip() else "general"
 
     # Cap task_input length to prevent bloated datasets
     task_input = task_input[:2000]
@@ -492,10 +490,12 @@ class RelevanceFilter:
         errors = 0
         lm = dspy.LM(self.model)
 
+        scored_count = 0
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))
 
             for msg in candidates:
+                scored_count += 1
                 try:
                     with dspy.context(lm=lm):
                         result = self.scorer(
@@ -511,7 +511,7 @@ class RelevanceFilter:
                         progress.update(task, advance=1)
                         continue
 
-                    if scoring.get("relevant", False):
+                    if _is_relevant_flag(scoring.get("relevant", False)):
                         validated = _validate_eval_example(
                             task_input=msg["task_input"],
                             expected_behavior=scoring.get("expected_behavior", ""),
@@ -532,15 +532,25 @@ class RelevanceFilter:
                 if len(examples) >= max_examples:
                     break
 
-        # Report error rate so users know if the LLM is misbehaving
-        total_scored = len(candidates)
+        # Report error rate against messages actually scored (loop may break early at max_examples)
         if errors > 0:
             console.print(
-                f"  [yellow]LLM scoring: {errors}/{total_scored} failed "
-                f"({errors / max(1, total_scored) * 100:.0f}% error rate)[/yellow]"
+                f"  [yellow]LLM scoring: {errors}/{scored_count} failed "
+                f"({errors / max(1, scored_count) * 100:.0f}% error rate)[/yellow]"
             )
 
         return examples
+
+
+def _is_relevant_flag(value: object) -> bool:
+    """Coerce an LLM ``relevant`` JSON field without treating ``"false"`` as True."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes"}
+    return False
 
 
 def _parse_scoring_json(text: str) -> Optional[dict]:
@@ -548,54 +558,34 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
 
     Strategy:
       1. Try direct json.loads (handles clean LLM output)
-      2. Fall back to regex extraction (handles text-wrapped or fenced JSON)
+      2. Scan candidate '{' offsets with JSONDecoder.raw_decode (handles prose
+         containing braces or code snippets before fenced/inline JSON)
 
     Returns:
-        Parsed dict or None if no valid JSON found.
+        Parsed dict or None if no valid JSON object found.
     """
-    if not text:
+    if not isinstance(text, str) or not text:
         return None
 
     # Fast path: LLM returned clean JSON
     try:
         result = json.loads(text)
-        if isinstance(result, dict):
-            return result
+        return result if isinstance(result, dict) else None
     except json.JSONDecodeError:
         pass
 
-    # Slow path: find balanced {...} block using brace counting.
-    # Simple regex like r'\{[^}]+\}' breaks on nested braces
-    # (e.g. "handle {edge} cases" in a string value).
-    start = text.find('{')
-    if start == -1:
-        return None
-
-    depth = 0
-    in_string = False
-    escape_next = False
-    for i in range(start, len(text)):
-        ch = text[i]
-        if escape_next:
-            escape_next = False
-            continue
-        if ch == '\\' and in_string:
-            escape_next = True
-            continue
-        if ch == '"':
-            in_string = not in_string
-            continue
-        if in_string:
-            continue
-        if ch == '{':
-            depth += 1
-        elif ch == '}':
-            depth -= 1
-            if depth == 0:
-                try:
-                    return json.loads(text[start:i + 1])
-                except json.JSONDecodeError:
-                    return None
+    # Slow path: scan every '{' offset so prose placeholders like "{var}" or
+    # code fragments like "if (x) {" before the JSON block do not abort parsing.
+    decoder = json.JSONDecoder()
+    idx = text.find("{")
+    while idx != -1:
+        try:
+            candidate, _ = decoder.raw_decode(text, idx)
+            if isinstance(candidate, dict):
+                return candidate
+        except json.JSONDecodeError:
+            pass
+        idx = text.find("{", idx + 1)
 
     return None
 

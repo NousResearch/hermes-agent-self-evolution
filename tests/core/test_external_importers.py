@@ -250,6 +250,21 @@ class TestScoringJsonParser:
     def test_empty_string_returns_none(self):
         assert _parse_scoring_json("") is None
 
+    def test_prose_braces_before_json_object(self):
+        """Non-JSON {placeholder} tokens in preamble prose must not abort extraction."""
+        text = 'User asks about {topic_var}: {"relevant": true, "category": "sorting"}'
+        result = _parse_scoring_json(text)
+        assert result is not None
+        assert result["relevant"] is True
+        assert result["category"] == "sorting"
+
+    def test_unclosed_brace_or_stray_quote_before_json_object(self):
+        """Code fragments like `if (x) {` or stray quotes in preamble must not break parsing."""
+        text = 'Snippet `if (x) {` lacks context; user said "sort:\n```json\n{"relevant": false}\n```'
+        result = _parse_scoring_json(text)
+        assert result is not None
+        assert result["relevant"] is False
+
 
 # ── Claude Code Importer ────────────────────────────────────────────────────
 
@@ -686,6 +701,49 @@ class TestRelevanceFilter:
         examples = rf.filter_and_score(messages, "categorize", "Sort text into topics.", max_examples=10)
         assert len(examples) == 0
 
+    def test_string_false_relevant_is_not_treated_as_truthy(self, mock_dspy):
+        """LLMs returning '"relevant": "false"' or '"no"' must not admit irrelevant examples."""
+        rf = RelevanceFilter.__new__(RelevanceFilter)
+        rf.model = "test-model"
+
+        rf.scorer = MagicMock(side_effect=[
+            SimpleNamespace(scoring='{"relevant": "false", "expected_behavior": "should be skipped"}'),
+            SimpleNamespace(scoring='{"relevant": "no", "expected_behavior": "should be skipped"}'),
+            SimpleNamespace(scoring='{"relevant": "true", "expected_behavior": "group by topic", "difficulty": "easy", "category": "sorting"}'),
+        ])
+
+        messages = [
+            {"task_input": "categorize item one into topics", "source": "claude-code"},
+            {"task_input": "categorize item two into topics", "source": "claude-code"},
+            {"task_input": "categorize item three into topics", "source": "claude-code"},
+        ]
+
+        examples = rf.filter_and_score(messages, "categorize", "Sort text into topics.", max_examples=10)
+        assert len(examples) == 1
+        assert examples[0].task_input == "categorize item three into topics"
+
+    def test_error_rate_uses_actual_scored_count_on_early_break(self, mock_dspy):
+        """When max_examples stops scoring early, error rate uses scored_count rather than len(candidates)."""
+        rf = RelevanceFilter.__new__(RelevanceFilter)
+        rf.model = "test-model"
+
+        rf.scorer = MagicMock(side_effect=[
+            SimpleNamespace(scoring="not valid json"),
+            SimpleNamespace(scoring='{"relevant": true, "expected_behavior": "group by topic", "difficulty": "easy", "category": "sorting"}'),
+        ])
+
+        messages = [
+            {"task_input": f"categorize message number {i} into topics", "source": "claude-code"}
+            for i in range(10)
+        ]
+
+        with patch("evolution.core.external_importers.console") as mock_console:
+            examples = rf.filter_and_score(messages, "categorize", "Sort text into topics.", max_examples=1)
+
+        assert len(examples) == 1
+        printed = " ".join(str(call.args[0]) for call in mock_console.print.call_args_list if call.args)
+        assert "1/2 failed (50% error rate)" in printed
+
 
 # ── build_dataset_from_external ──────────────────────────────────────────────
 
@@ -1030,6 +1088,14 @@ class TestValidateEvalExample:
     def test_category_stripped(self):
         result = _validate_eval_example("task", "behavior", "easy", "  sorting  ")
         assert result["category"] == "sorting"
+
+    def test_non_string_fields_handled_safely(self):
+        assert _validate_eval_example(["not-a-str"], "behavior", "easy", "cat") is None
+        assert _validate_eval_example("task", ["not-a-str"], "easy", "cat") is None
+        result = _validate_eval_example("task", "behavior", 2, ["sorting"])
+        assert result is not None
+        assert result["difficulty"] == "medium"
+        assert result["category"] == "general"
 
 
 class TestValidationIntegration:
