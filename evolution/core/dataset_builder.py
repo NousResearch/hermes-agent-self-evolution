@@ -17,6 +17,61 @@ import dspy
 from evolution.core.config import EvolutionConfig
 
 
+VALID_DIFFICULTIES = {"easy", "medium", "hard"}
+
+
+def _extract_cases_list(parsed: object) -> Optional[list]:
+    """Unwrap a parsed JSON payload into a list of raw test-case entries."""
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        if "task_input" in parsed or "expected_behavior" in parsed:
+            return [parsed]
+        for key in ("test_cases", "cases", "examples", "items", "data"):
+            value = parsed.get(key)
+            if isinstance(value, list):
+                return value
+    return None
+
+
+def _parse_test_cases(raw_text: str) -> list[dict]:
+    """Extract test-case dicts from raw JSON, fenced blocks, or wrapper objects."""
+    if not isinstance(raw_text, str) or not raw_text.strip():
+        raise ValueError("Could not parse test cases from empty LLM output")
+
+    try:
+        cases = _extract_cases_list(json.loads(raw_text))
+        if cases is not None:
+            dict_cases = [c for c in cases if isinstance(c, dict)]
+            if dict_cases or cases == []:
+                return dict_cases
+    except json.JSONDecodeError:
+        pass
+
+    decoder = json.JSONDecoder()
+    saw_empty_list = False
+    for idx, ch in enumerate(raw_text):
+        if ch not in "[{":
+            continue
+        try:
+            candidate, _ = decoder.raw_decode(raw_text, idx)
+        except json.JSONDecodeError:
+            continue
+        cases = _extract_cases_list(candidate)
+        if cases is None:
+            continue
+        dict_cases = [c for c in cases if isinstance(c, dict)]
+        if dict_cases:
+            return dict_cases
+        if cases == []:
+            saw_empty_list = True
+
+    if saw_empty_list:
+        return []
+
+    raise ValueError(f"Could not parse test cases from LLM output: {raw_text[:200]}")
+
+
 @dataclass
 class EvalExample:
     """A single evaluation example."""
@@ -133,28 +188,34 @@ class SyntheticDatasetBuilder:
             )
 
         # Parse the generated test cases
-        try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+        cases_raw = _parse_test_cases(result.test_cases)
 
-        examples = [
-            EvalExample(
-                task_input=c.get("task_input", ""),
-                expected_behavior=c.get("expected_behavior", ""),
-                difficulty=c.get("difficulty", "medium"),
-                category=c.get("category", "general"),
-                source="synthetic",
+        examples = []
+        for c in cases_raw:
+            task_input = c.get("task_input")
+            expected_behavior = c.get("expected_behavior")
+            if not isinstance(task_input, str) or not task_input.strip():
+                continue
+            if not isinstance(expected_behavior, str) or not expected_behavior.strip():
+                continue
+
+            difficulty = c.get("difficulty")
+            difficulty_norm = difficulty.strip().lower() if isinstance(difficulty, str) and difficulty.strip() else "medium"
+            if difficulty_norm not in VALID_DIFFICULTIES:
+                difficulty_norm = "medium"
+
+            category = c.get("category")
+            category_norm = category.strip() if isinstance(category, str) and category.strip() else "general"
+
+            examples.append(
+                EvalExample(
+                    task_input=task_input.strip(),
+                    expected_behavior=expected_behavior.strip(),
+                    difficulty=difficulty_norm,
+                    category=category_norm,
+                    source="synthetic",
+                )
             )
-            for c in cases_raw
-            if c.get("task_input") and c.get("expected_behavior")
-        ]
 
         # Shuffle and split
         random.shuffle(examples)
