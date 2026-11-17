@@ -47,6 +47,11 @@ python -m evolution.skills.evolve_skill \
     --skill github-code-review \
     --iterations 10 \
     --eval-source sessiondb
+
+# Measure discovery/routing against a complete skill catalog
+python -m evolution.routing.evaluate_routing \
+    --skills-dir ~/.hermes/hermes-agent/skills \
+    --dataset datasets/routing.jsonl
 ```
 
 ## What It Optimizes
@@ -58,6 +63,30 @@ python -m evolution.skills.evolve_skill \
 | **Phase 3** | System prompt sections | DSPy + GEPA | 🔲 Planned |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
+
+Routing evaluation is available as a cross-cutting capability. It evaluates a
+labelled request against the complete skill catalog, including no-skill
+rejections, neighboring false positives, and cumulative catalog token cost.
+Use reviewed JSONL examples with `expected_skill` set to `null` for requests
+that should not load a skill. Session-derived examples should retain their
+`source` and use `confidence: "inferred"` until reviewed.
+`routing_examples_from_events` accepts normalized session signals (`query`,
+`manual_command`/`manual_skill`, `expected_skill`, and explicit
+`should_load_skill: false`) and skips ambiguous events instead of guessing.
+
+Each routing example has this shape:
+
+```json
+{"query": "review this pull request for security issues", "expected_skill": "github-code-review", "source": "golden", "confidence": "reviewed"}
+{"query": "what is the weather today?", "expected_skill": null, "source": "golden", "confidence": "reviewed"}
+```
+
+The catalog is snapshotted for each evaluation. Candidate descriptions can be
+compared with `acceptance_gate`: the discovery accuracy multiplied by
+execution success must not regress, and catalog token cost is reported as a
+separate objective. `PairwiseDescriptionMutator` provides the boundary-focused
+prompt used by a family-level optimizer; it does not change skill files
+automatically.
 
 ## Engines
 
