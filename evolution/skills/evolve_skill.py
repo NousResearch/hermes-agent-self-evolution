@@ -2,7 +2,19 @@
 
 Usage:
     python -m evolution.skills.evolve_skill --skill github-code-review --iterations 10
-    python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset datasets/skills/arxiv/
+    python -m evolution.skills.evolve_skill --skill arxiv --eval-source golden --dataset-path datasets/skills/arxiv/ --auto light
+
+Optimiser: ``dspy.GEPA`` only. There is no fallback to another optimiser; if
+GEPA cannot be built or fails, the run stops with the error.
+
+GEPA budget (exactly one): ``--auto light|medium|heavy``,
+``--max-metric-calls N``, or ``--iterations N`` (passed as GEPA
+``max_full_evals``; the default when neither of the others is given).
+
+Models: ``--eval-model`` runs the skill (task LM), ``--optimizer-model`` is
+GEPA's reflection LM (it proposes new skill text), ``--judge-model`` scores
+responses when ``--metric judge`` (default). See ``evolution.core.fitness``
+for metric limits.
 """
 
 import json
@@ -21,16 +33,75 @@ from rich.table import Table
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
-from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.fitness import SkillMetric, make_skill_metric
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
+    extract_skill_text,
     load_skill,
     find_skill,
     reassemble_skill,
 )
 
 console = Console()
+
+GEPA_AUTO_LEVELS = ("light", "medium", "heavy")
+METRICS = ("judge", "keyword")
+# dspy recommends a strong, high-temperature reflection LM with a large output budget.
+REFLECTION_LM_KWARGS = {"temperature": 1.0, "max_tokens": 32000}
+
+
+def gepa_budget(*, auto: Optional[str] = None, max_metric_calls: Optional[int] = None,
+                max_full_evals: Optional[int] = None) -> dict:
+    """The single GEPA budget argument, validated (dspy itself only asserts)."""
+    given = {k: v for k, v in (("auto", auto), ("max_metric_calls", max_metric_calls),
+                               ("max_full_evals", max_full_evals)) if v is not None}
+    if len(given) != 1:
+        raise ValueError("set exactly one GEPA budget: auto, max_metric_calls or "
+                         f"max_full_evals (got {sorted(given) or 'none'})")
+    (key, value), = given.items()
+    if key == "auto":
+        if value not in GEPA_AUTO_LEVELS:
+            raise ValueError(f"auto must be one of {GEPA_AUTO_LEVELS}, got {value!r}")
+    elif isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{key} must be a positive integer, got {value!r}")
+    return given
+
+
+def resolve_budget(iterations: Optional[int], auto: Optional[str],
+                   max_metric_calls: Optional[int]) -> dict:
+    """CLI rule: --auto or --max-metric-calls win; otherwise --iterations -> max_full_evals."""
+    if auto is not None and max_metric_calls is not None:
+        raise ValueError("use either --auto or --max-metric-calls, not both")
+    if auto is None and max_metric_calls is None:
+        return gepa_budget(max_full_evals=iterations)
+    return gepa_budget(auto=auto, max_metric_calls=max_metric_calls)
+
+
+def make_lm(model: str, **kwargs):
+    """Single construction point for every LM (tests patch this)."""
+    return dspy.LM(model, **kwargs)
+
+
+def build_optimizer(metric: SkillMetric, *, reflection_lm, budget: dict) -> "dspy.GEPA":
+    """``dspy.GEPA`` with a reflection LM and exactly one budget. No fallback."""
+    if reflection_lm is None:
+        raise ValueError("GEPA needs a reflection LM (--optimizer-model)")
+    return dspy.GEPA(metric=metric, reflection_lm=reflection_lm, **gepa_budget(**budget))
+
+
+def run_gepa(module: SkillModule, trainset, valset, *, metric: SkillMetric, task_lm,
+             reflection_lm, budget: dict) -> SkillModule:
+    """Optimise the skill text (the module's instructions) with GEPA.
+
+    Errors propagate: there is deliberately no fallback optimiser.
+    """
+    if not trainset:
+        raise ValueError("GEPA needs a nonempty trainset")
+    optimizer = build_optimizer(metric, reflection_lm=reflection_lm, budget=budget)
+    with dspy.context(lm=task_lm):
+        return optimizer.compile(module, trainset=list(trainset),
+                                 valset=list(valset) if valset else None)
 
 
 def evolve(
@@ -43,8 +114,16 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    auto: Optional[str] = None,
+    max_metric_calls: Optional[int] = None,
+    metric: str = "judge",
+    judge_model: str = "openai/gpt-4.1",
 ):
     """Main evolution function — orchestrates the full optimization loop."""
+    # Validate the run configuration first, so --dry-run reports mistakes too.
+    budget = resolve_budget(iterations, auto, max_metric_calls)
+    if metric not in METRICS:
+        raise ValueError(f"metric must be one of {METRICS}, got {metric!r}")
 
     config = EvolutionConfig(
         hermes_agent_path=resolve_hermes_agent_path(hermes_repo),
@@ -72,7 +151,8 @@ def evolve(
     if dry_run:
         console.print(f"\n[bold green]DRY RUN — setup validated successfully.[/bold green]")
         console.print(f"  Would generate eval dataset (source: {eval_source})")
-        console.print(f"  Would run GEPA optimization ({iterations} iterations)")
+        console.print(f"  Would run dspy.GEPA with budget {budget}, "
+                      f"reflection model {optimizer_model}, metric {metric}")
         console.print(f"  Would validate constraints and create PR")
         return
 
@@ -132,60 +212,46 @@ def evolve(
 
     # ── 4. Set up DSPy + GEPA optimizer ─────────────────────────────────
     console.print(f"\n[bold]Configuring optimizer[/bold]")
-    console.print(f"  Optimizer: GEPA ({iterations} iterations)")
-    console.print(f"  Optimizer model: {optimizer_model}")
-    console.print(f"  Eval model: {eval_model}")
+    console.print(f"  Optimizer: dspy.GEPA, budget {budget} (no fallback)")
+    console.print(f"  Reflection model: {optimizer_model}")
+    console.print(f"  Task model: {eval_model}")
+    console.print(f"  Metric: {metric}" + (f" (judge model: {judge_model})" if metric == "judge" else
+                                           " (keyword proxy, not a quality measure)"))
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
-    dspy.configure(lm=lm)
+    lm = make_lm(eval_model)
+    reflection_lm = make_lm(optimizer_model, **REFLECTION_LM_KWARGS)
+    skill_metric = make_skill_metric(
+        metric, judge_lm=make_lm(judge_model) if metric == "judge" else None, config=config)
 
-    # Create the baseline skill module
+    # The skill body becomes the predictor instructions GEPA optimises.
     baseline_module = SkillModule(skill["body"])
+    baseline_body = baseline_module.skill_text   # as dspy normalises it
 
     # Prepare DSPy examples
     trainset = dataset.to_dspy_examples("train")
     valset = dataset.to_dspy_examples("val")
 
     # ── 5. Run GEPA optimization ────────────────────────────────────────
-    console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
+    console.print(f"\n[bold cyan]Running GEPA optimization...[/bold cyan]\n")
 
     start_time = time.time()
-
-    try:
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
-        )
-
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-            valset=valset,
-        )
-    except Exception as e:
-        # Fall back to MIPROv2 if GEPA isn't available in this DSPy version
-        console.print(f"[yellow]GEPA not available ({e}), falling back to MIPROv2[/yellow]")
-        optimizer = dspy.MIPROv2(
-            metric=skill_fitness_metric,
-            auto="light",
-        )
-        optimized_module = optimizer.compile(
-            baseline_module,
-            trainset=trainset,
-        )
-
+    optimized_module = run_gepa(baseline_module, trainset, valset, metric=skill_metric,
+                                task_lm=lm, reflection_lm=reflection_lm, budget=budget)
     elapsed = time.time() - start_time
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # GEPA rewrote the predictor instructions; they are the evolved skill.
+    evolved_body = extract_skill_text(optimized_module)
+    skill_changed = evolved_body != baseline_body
+    if not skill_changed:
+        console.print("[yellow]⚠ GEPA returned the baseline skill text unchanged[/yellow]")
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
+    # Structure checks need the frontmatter, so validate the reassembled file.
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
@@ -211,15 +277,12 @@ def evolve(
     baseline_scores = []
     evolved_scores = []
     for ex in holdout_examples:
-        # Score baseline
         with dspy.context(lm=lm):
             baseline_pred = baseline_module(task_input=ex.task_input)
-            baseline_score = skill_fitness_metric(ex, baseline_pred)
-            baseline_scores.append(baseline_score)
+            baseline_scores.append(skill_metric.score(ex, baseline_pred))
 
             evolved_pred = optimized_module(task_input=ex.task_input)
-            evolved_score = skill_fitness_metric(ex, evolved_pred)
-            evolved_scores.append(evolved_score)
+            evolved_scores.append(skill_metric.score(ex, evolved_pred))
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
     avg_evolved = sum(evolved_scores) / max(1, len(evolved_scores))
@@ -246,7 +309,7 @@ def evolve(
         f"{len(evolved_body) - len(skill['body']):+,} chars",
     )
     table.add_row("Time", "", f"{elapsed:.1f}s", "")
-    table.add_row("Iterations", "", str(iterations), "")
+    table.add_row("GEPA budget", "", str(budget), "")
 
     console.print()
     console.print(table)
@@ -266,9 +329,18 @@ def evolve(
     metrics = {
         "skill_name": skill_name,
         "timestamp": timestamp,
-        "iterations": iterations,
+        "optimizer": "dspy.GEPA",
+        "dspy_version": getattr(dspy, "__version__", "unknown"),
+        "gepa_budget": budget,
+        # Kept for readers of the old schema (scalar): GEPA max_full_evals, or
+        # None when --auto / --max-metric-calls set the budget.
+        "iterations": budget.get("max_full_evals"),
         "optimizer_model": optimizer_model,
+        "reflection_lm_kwargs": REFLECTION_LM_KWARGS,
         "eval_model": eval_model,
+        "metric": skill_metric.name,
+        "judge_model": judge_model if metric == "judge" else None,
+        "skill_changed": skill_changed,
         "baseline_score": avg_baseline,
         "evolved_score": avg_evolved,
         "improvement": improvement,
@@ -284,7 +356,9 @@ def evolve(
 
     console.print(f"\n  Output saved to {output_dir}/")
 
-    if improvement > 0:
+    if not skill_changed:
+        console.print("\n[yellow]⚠ No evolution: the skill text is unchanged[/yellow]")
+    elif improvement > 0:
         console.print(f"\n[bold green]✓ Evolution improved skill by {improvement:+.3f} ({improvement/max(0.001, avg_baseline)*100:+.1f}%)[/bold green]")
         console.print(f"  Review the diff: diff {output_dir}/baseline_skill.md {output_dir}/evolved_skill.md")
     else:
@@ -294,7 +368,15 @@ def evolve(
 
 @click.command()
 @click.option("--skill", required=True, help="Name of the skill to evolve")
-@click.option("--iterations", default=10, help="Number of GEPA iterations")
+@click.option("--iterations", default=10, show_default=True,
+              help="GEPA max_full_evals (used unless --auto or --max-metric-calls is given)")
+@click.option("--auto", "auto", default=None, type=click.Choice(GEPA_AUTO_LEVELS),
+              help="GEPA auto budget preset")
+@click.option("--max-metric-calls", default=None, type=int, help="GEPA budget in metric calls")
+@click.option("--metric", default="judge", show_default=True, type=click.Choice(METRICS),
+              help="judge = LLM rubric judge with feedback; keyword = offline proxy")
+@click.option("--judge-model", default="openai/gpt-4.1", show_default=True,
+              help="Model for the LLM judge metric")
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
@@ -303,8 +385,13 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+def main(skill, iterations, auto, max_metric_calls, metric, judge_model, eval_source,
+         dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
+    try:
+        resolve_budget(iterations, auto, max_metric_calls)
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from None
     evolve(
         skill_name=skill,
         iterations=iterations,
@@ -315,6 +402,10 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        auto=auto,
+        max_metric_calls=max_metric_calls,
+        metric=metric,
+        judge_model=judge_model,
     )
 
 

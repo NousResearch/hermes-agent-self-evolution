@@ -49,6 +49,23 @@ python -m evolution.skills.evolve_skill \
     --eval-source sessiondb
 ```
 
+How a run is configured:
+
+- **Optimizer:** `dspy.GEPA` only. If GEPA cannot be built or fails, the run
+  stops with the error; there is no fallback optimizer.
+- **Budget (exactly one):** `--auto light|medium|heavy`, `--max-metric-calls N`,
+  or `--iterations N` (GEPA `max_full_evals`, the default).
+- **Models:** `--eval-model` runs the skill, `--optimizer-model` is GEPA's
+  reflection LM (it rewrites the skill text), `--judge-model` scores answers.
+- **Metric:** `--metric judge` (default) scores each answer against the
+  example's rubric with an LLM judge and gives GEPA written feedback;
+  `--metric keyword` is a free offline proxy (rubric-term overlap) that does
+  not measure quality. With synthetic data the tasks, rubrics and judge are
+  all LLM-generated, so scores are circular; prefer golden or session data.
+  See `evolution/core/fitness.py` for the limits.
+- `metrics.json` records the budget, models, metric and `skill_changed`
+  (false when GEPA returned the baseline text unchanged).
+
 ## What It Optimizes
 
 | Phase | Target | Engine | Status |

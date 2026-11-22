@@ -1,8 +1,8 @@
 """Wraps a SKILL.md file as a DSPy module for optimization.
 
-The key abstraction: a skill file becomes a parameterized DSPy module
-where the skill text is the optimizable parameter. GEPA can then
-mutate the skill text and evaluate the results.
+The key abstraction: a skill file becomes a DSPy module whose predictor
+instructions are the skill text. GEPA optimises predictor instructions, so
+it mutates the skill text itself and evaluates the results.
 """
 
 import re
@@ -82,36 +82,50 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 
 
 class SkillModule(dspy.Module):
-    """A DSPy module that wraps a skill file for optimization.
+    """A DSPy module whose optimisable instructions ARE the skill text.
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+    The skill body is set as the predictor's signature instructions, which is
+    exactly the component GEPA rewrites (``named_predictors()`` ->
+    ``signature.with_instructions``). The only input field is ``task_input``;
+    the skill text is never passed as an input, so the optimiser can edit it.
+    Read the (possibly evolved) text back with :func:`extract_skill_text` or
+    the ``skill_text`` property.
+
+    Note: dspy returns instructions through ``inspect.cleandoc``, so outer
+    blank lines are trimmed and tabs expanded. Compare an evolved text with
+    ``SkillModule(baseline).skill_text``, not with the raw baseline string.
     """
 
     class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
-        task_input: str = dspy.InputField(desc="The task to complete")
-        output: str = dspy.OutputField(desc="Your response following the skill instructions")
+        """Placeholder instructions; replaced by the skill text in SkillModule.__init__."""
+        task_input: str = dspy.InputField(
+            desc="The task to complete. Follow the procedure in your instructions.")
+        output: str = dspy.OutputField(desc="Your response, following the instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        if not isinstance(skill_text, str) or not skill_text.strip():
+            raise ValueError("skill_text must be a nonempty string")
+        self.predictor = dspy.ChainOfThought(self.TaskWithSkill.with_instructions(skill_text))
+
+    @property
+    def skill_text(self) -> str:
+        return extract_skill_text(self)
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
+
+
+def extract_skill_text(module: dspy.Module) -> str:
+    """The skill text held as instructions by a (possibly GEPA-optimised) SkillModule."""
+    predictors = module.named_predictors()
+    if len(predictors) != 1:
+        raise ValueError(f"expected exactly one predictor, found {len(predictors)}")
+    text = predictors[0][1].signature.instructions
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("optimised module has empty instructions")
+    return text
 
 
 def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
