@@ -1,0 +1,2469 @@
+{
+  "final_test_evaluation": {
+    "alternates": {
+      "defects_in_split": 3,
+      "n_defects": 15,
+      "sha256": "042fbfaca8018664de4b3f4b1a14a0831098d1cb3deb865aee2510bed7b06dbd",
+      "table": "category_alternates_v1.json"
+    },
+    "analysis_plan": {
+      "ci": "95% paired percentile bootstrap over cases: 10000 resamples of case indices (random.Random(0), cases sorted by case_id), the same resamples for both skills, linearly interpolated quantiles",
+      "confidence": 0.95,
+      "descriptive": "per-skill micro precision, recall and F1 and macro F1 with CIs; paired macro-F1, micro-precision and micro-recall differences; cost, completions, parse failures, violations",
+      "design": "paired: the baseline and the candidate skill each review the same sealed test cases once (sample 0), same model, provider, budget, prompt and parser; calls interleave per case, in case_id order the baseline goes first on the 1st, 3rd, ... case and the candidate on the 2nd, 4th, ...",
+      "id": "kafo-evo-001-final-eval-plan/1",
+      "interpretation": "the candidate counts as better on the sealed test only if the primary CI lower bound is above 0; the secondary result cannot override the primary; synthetic hand-written cases, so no claim of a real Hermes improvement",
+      "missing_data": "a call that errors or reports no cost is re-sent once automatically by the spend-ledger wrapper (as in the full run); a call still failed after that, skipped (cost cap) or unparseable is scored as an empty review for that skill and case; nothing else is re-run",
+      "n_bootstrap": 10000,
+      "primary": "candidate minus baseline micro-F1 under STRICT scoring (gate 3 verifier, exact normalised category)",
+      "secondary": "candidate minus baseline micro-F1 under LENIENT scoring (strict rules, plus the label audit's alternate categories)",
+      "seed": 0
+    },
+    "analysis_plan_sha256": "345f05baf846d654fc7c993f58bbf01feda5db7c5a763ab238500723bdf31b71",
+    "benchmark": {
+      "manifest_sha256": "fada5f14b7d89c0e081f820475ce52a51ecc585abfe2264de09f38c69cfb7282",
+      "name": "python_review",
+      "version": "v1"
+    },
+    "design": "paired",
+    "finished_at": "2026-11-22T19:59:57.471797+00:00",
+    "n_cases": 10,
+    "paired": {
+      "lenient": {
+        "macro_f1": {
+          "high": 0.4833333333333333,
+          "low": 0.11666666666666659,
+          "point": 0.2833333333333332
+        },
+        "micro_f1": {
+          "high": 0.4736842105263158,
+          "low": 0.19443181818181826,
+          "point": 0.3324808184143222
+        },
+        "micro_precision": {
+          "high": 0.6111111111111112,
+          "low": 0.30000000000000004,
+          "point": 0.5
+        },
+        "micro_recall": {
+          "high": 0.375,
+          "low": 0.0,
+          "point": 0.11111111111111105
+        }
+      },
+      "strict": {
+        "macro_f1": {
+          "high": 0.46666666666666656,
+          "low": 0.06666666666666676,
+          "point": 0.2499999999999999
+        },
+        "micro_f1": {
+          "high": 0.46153846153846156,
+          "low": 0.1568398119481713,
+          "point": 0.30179028132992325
+        },
+        "micro_precision": {
+          "high": 0.6,
+          "low": 0.25974025974025977,
+          "point": 0.44642857142857145
+        },
+        "micro_recall": {
+          "high": 0.375,
+          "low": 0.0,
+          "point": 0.11111111111111116
+        }
+      }
+    },
+    "primary": "strict.micro_f1",
+    "reviewer_id": "hermes:claude-sonnet-5-5[1m]:claude-subscription-directsdk-experimental:review",
+    "reviewer_summaries": {
+      "baseline": {
+        "backend": "hermes",
+        "calls": 10,
+        "completed": 10,
+        "cost_statuses": {
+          "estimated": 10
+        },
+        "exceptions": 0,
+        "max_total_cost_usd": 2.0,
+        "meter_total_cost_usd": 0.077868,
+        "model": "claude-sonnet-5-5[1m]",
+        "provider": "claude-subscription-directsdk-experimental",
+        "skipped": 0,
+        "stopped": null,
+        "strategy_id": "review:github-code-review@11ad06e6d49b",
+        "toolsets": [],
+        "total_cost_usd": 0.048931,
+        "unparseable": 1,
+        "violations": 0
+      },
+      "candidate": {
+        "backend": "hermes",
+        "calls": 10,
+        "completed": 10,
+        "cost_statuses": {
+          "estimated": 10
+        },
+        "exceptions": 0,
+        "max_total_cost_usd": 2.0,
+        "meter_total_cost_usd": 0.077868,
+        "model": "claude-sonnet-5-5[1m]",
+        "provider": "claude-subscription-directsdk-experimental",
+        "skipped": 0,
+        "stopped": null,
+        "strategy_id": "review:github-code-review@28dcec5ab528",
+        "toolsets": [],
+        "total_cost_usd": 0.028937,
+        "unparseable": 0,
+        "violations": 0
+      }
+    },
+    "scores": {
+      "lenient": {
+        "baseline": {
+          "macro": {
+            "f1": {
+              "high": 0.8666666666666666,
+              "low": 0.4833333333333333,
+              "point": 0.6833333333333333
+            },
+            "precision": {
+              "high": 0.8333333333333334,
+              "low": 0.4,
+              "point": 0.6166666666666667
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 0.65,
+              "point": 0.85
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 0.7619047619047619,
+              "low": 0.5,
+              "point": 0.6086956521739131
+            },
+            "precision": {
+              "high": 0.7,
+              "low": 0.3888888888888889,
+              "point": 0.5
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 0.5454545454545454,
+              "point": 0.7777777777777778
+            }
+          },
+          "totals": {
+            "false_negatives": 2,
+            "false_positives": 7,
+            "true_positives": 7
+          }
+        },
+        "candidate": {
+          "macro": {
+            "f1": {
+              "high": 1.0,
+              "low": 0.9,
+              "point": 0.9666666666666666
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 0.85,
+              "point": 0.95
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 1.0,
+              "low": 0.8333333333333334,
+              "point": 0.9411764705882353
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 0.7142857142857143,
+              "point": 0.8888888888888888
+            }
+          },
+          "totals": {
+            "false_negatives": 1,
+            "false_positives": 0,
+            "true_positives": 8
+          }
+        }
+      },
+      "strict": {
+        "baseline": {
+          "macro": {
+            "f1": {
+              "high": 0.8333333333333334,
+              "low": 0.3833333333333333,
+              "point": 0.6166666666666667
+            },
+            "precision": {
+              "high": 0.8,
+              "low": 0.3333333333333333,
+              "point": 0.5666666666666667
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 0.5,
+              "point": 0.75
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 0.7142857142857143,
+              "low": 0.32,
+              "point": 0.5217391304347826
+            },
+            "precision": {
+              "high": 0.6666666666666666,
+              "low": 0.26282894736842394,
+              "point": 0.42857142857142855
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 0.375,
+              "point": 0.6666666666666666
+            }
+          },
+          "totals": {
+            "false_negatives": 3,
+            "false_positives": 8,
+            "true_positives": 6
+          }
+        },
+        "candidate": {
+          "macro": {
+            "f1": {
+              "high": 1.0,
+              "low": 0.6333333333333333,
+              "point": 0.8666666666666666
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 0.7,
+              "point": 0.9
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 0.6,
+              "point": 0.85
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 1.0,
+              "low": 0.5555555555555556,
+              "point": 0.8235294117647058
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 0.6,
+              "point": 0.875
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 0.5,
+              "point": 0.7777777777777778
+            }
+          },
+          "totals": {
+            "false_negatives": 2,
+            "false_positives": 1,
+            "true_positives": 7
+          }
+        }
+      }
+    },
+    "secondary": "lenient.micro_f1",
+    "skill_versions": {
+      "baseline": "github-code-review@11ad06e6d49b",
+      "candidate": "github-code-review@28dcec5ab528"
+    },
+    "started_at": "2026-11-22T19:58:35.764887+00:00",
+    "status": "completed",
+    "synthetic": true,
+    "verifier": {
+      "config": {
+        "category_aliases": [],
+        "line_tolerance": 1,
+        "min_overlap_ratio": 0.5
+      },
+      "match_rule": "category-equal+line-overlap/1",
+      "verifier_sha256": "f3310b479ff67439dbf4cadf8de834ecf5b4056ae30d98c70923f46157f2ec92",
+      "verifier_version": "kafo-verifier/1"
+    }
+  },
+  "generated_at": null,
+  "headline": [
+    "Pre-registered sealed final evaluation (run once, live Hermes, 10 hand-written synthetic test cases): candidate `github-code-review@28dcec5ab528` minus baseline `github-code-review@11ad06e6d49b`, STRICT micro-F1 +0.302 [0.157, 0.462] (primary; CI lower bound above 0, so the pre-registered rule is met), mostly precision (precision +0.446 [0.260, 0.600], recall +0.111 [0.000, 0.375]); LENIENT micro-F1 +0.332 [0.194, 0.474] (secondary).",
+    "Live full run live-1 (2-arm comparison on live Hermes outcomes, validation split): the best fixed strategy `fixed:skill` has utility 0.607; no adaptive policy improves on it: epsilon_greedy -0.032 [-0.039, -0.024] (worse); linucb -0.034 [-0.041, -0.026] (worse).",
+    "GEPA candidate `github-code-review@28dcec5ab528` (parent `github-code-review@11ad06e6d49b`) was admitted by gate 6 with a validation utility gain of +0.127 [+0.006, +0.272]; gate 7's post-admission check then kept it (catalogue validation utility 0.617 -> 0.809).",
+    "Simulator: No adaptive policy shows an improvement over the best fixed strategy (`fixed:structured`) on held-out validation: epsilon_greedy -0.006 [-0.024, +0.014] (no improvement detected); linucb +0.012 [-0.009, +0.033] (no improvement detected).",
+    "On train, epsilon_greedy +0.025 [+0.007, +0.043]; linucb +0.041 [+0.026, +0.056] against `fixed:structured`. That baseline was chosen in hindsight on the same train data, so this does not show generalisation.",
+    "Every adaptive policy beats uniform random selection in both phases.",
+    "A live Hermes smoke run scored 4 validation cases (4 completed, 0 violations). With so few cases this is a plumbing check, not a quality estimate.",
+    "The simulator findings are results from a hypothetical simulator, not from Hermes. The live full run (live-1), the one-time sealed final evaluation and a 4-case smoke test used live Hermes on a hand-written, synthetic benchmark, so none of this is evidence of real-world improvement."
+  ],
+  "live_run": {
+    "admission": {
+      "active_skill": "github-code-review@28dcec5ab528",
+      "candidate_id": "github-code-review@28dcec5ab528",
+      "decision": {
+        "admitted": true,
+        "baseline_id": "github-code-review@11ad06e6d49b",
+        "baseline_mean_quality": 0.7157142857142857,
+        "baseline_mean_utility": 0.6795353867320629,
+        "baseline_violations": 0,
+        "candidate_id": "github-code-review@28dcec5ab528",
+        "candidate_mean_quality": 0.8333333333333334,
+        "candidate_mean_utility": 0.8065782389355541,
+        "candidate_violations": 0,
+        "ci_high": 0.2717719394419058,
+        "ci_low": 0.006258370212034345,
+        "mean_utility_gain": 0.12704285220349115,
+        "n_cases": 10,
+        "notice": "SYNTHETIC: gate 2 v1 benchmark is hand-written synthetic data; an admission is not evidence of real Hermes improvement.",
+        "policy": {
+          "benchmark_version": "v1",
+          "bootstrap_seed": 0,
+          "confidence": 0.95,
+          "max_critical_violations": 0,
+          "min_margin": 0.05,
+          "n_bootstrap": 2000,
+          "reference_cost_usd": 0.03,
+          "reference_latency_s": 6.0,
+          "seeds": [
+            0,
+            1,
+            2
+          ],
+          "split": "validation"
+        },
+        "policy_sha256": "1c3cd3e28dd5f9d140183bae6a747b7b0f396358adb93d14eeceff6913f0f4ed",
+        "reasons": [],
+        "synthetic": true,
+        "unparseable_outputs": 0,
+        "verifier_sha256": "f3310b479ff67439dbf4cadf8de834ecf5b4056ae30d98c70923f46157f2ec92"
+      },
+      "parent_id": "github-code-review@11ad06e6d49b",
+      "post_validation": {
+        "critical_violation": false,
+        "n_tasks": 30,
+        "synthetic": true,
+        "utility": 0.8092093904172197
+      },
+      "pre_validation": {
+        "critical_violation": false,
+        "n_tasks": 30,
+        "synthetic": true,
+        "utility": 0.6165984054402781
+      },
+      "reason": "admitted and kept",
+      "registry_status": "admitted",
+      "status": "kept"
+    },
+    "baseline_id": "github-code-review@11ad06e6d49b",
+    "canary": {
+      "cases": [
+        {
+          "case_id": "pyrev-001",
+          "cost_usd": 0.029114,
+          "f1": 1.0,
+          "parse_ok": true
+        },
+        {
+          "case_id": "pyrev-002",
+          "cost_usd": 0.0040193,
+          "f1": 0.6666666666666666,
+          "parse_ok": true
+        },
+        {
+          "case_id": "pyrev-004",
+          "cost_usd": 0.0021013,
+          "f1": 1.0,
+          "parse_ok": true
+        }
+      ],
+      "fresh_calls": 3,
+      "replayed_calls": 0
+    },
+    "checkpoints": {
+      "checkpoints": {
+        "good": 2
+      },
+      "events": {
+        "promote": 1,
+        "save": 2
+      },
+      "log": [
+        {
+          "checkpoint_id": 1,
+          "event": "save",
+          "from": null,
+          "reason": "admission:github-code-review@28dcec5ab528:pre"
+        },
+        {
+          "checkpoint_id": 2,
+          "event": "save",
+          "from": null,
+          "reason": "admission:github-code-review@28dcec5ab528:post"
+        },
+        {
+          "checkpoint_id": 2,
+          "event": "promote",
+          "from": 1,
+          "reason": "post-admission validation passed"
+        }
+      ],
+      "rollbacks": [],
+      "status": "supplied"
+    },
+    "compare": {
+      "best_fixed_baseline": "fixed:skill",
+      "comparisons": [
+        {
+          "baseline": "fixed:skill",
+          "ci_high": 0.015340206731601563,
+          "ci_low": 0.0006672722032532923,
+          "mean_diff": 0.00829532881722066,
+          "metric": "utility",
+          "phase": "train",
+          "policy": "epsilon_greedy",
+          "verdict": "improvement"
+        },
+        {
+          "baseline": "fixed:skill",
+          "ci_high": -0.024018583756759693,
+          "ci_low": -0.03925198224511951,
+          "mean_diff": -0.03194020063020521,
+          "metric": "utility",
+          "phase": "validation",
+          "policy": "epsilon_greedy",
+          "verdict": "worse"
+        },
+        {
+          "baseline": "random",
+          "ci_high": 0.03451150817476553,
+          "ci_low": 0.017494397105047115,
+          "mean_diff": 0.026340094385991147,
+          "metric": "utility",
+          "phase": "train",
+          "policy": "epsilon_greedy",
+          "verdict": "improvement"
+        },
+        {
+          "baseline": "random",
+          "ci_high": -0.0107172397355573,
+          "ci_low": -0.04072864408666229,
+          "mean_diff": -0.025149463262958312,
+          "metric": "utility",
+          "phase": "validation",
+          "policy": "epsilon_greedy",
+          "verdict": "worse"
+        },
+        {
+          "baseline": "fixed:skill",
+          "ci_high": 0.04754750819427244,
+          "ci_low": 0.03908319227976841,
+          "mean_diff": 0.043632403032438274,
+          "metric": "utility",
+          "phase": "train",
+          "policy": "linucb",
+          "verdict": "improvement"
+        },
+        {
+          "baseline": "fixed:skill",
+          "ci_high": -0.026139422044257815,
+          "ci_low": -0.041161351514930423,
+          "mean_diff": -0.034022710724121434,
+          "metric": "utility",
+          "phase": "validation",
+          "policy": "linucb",
+          "verdict": "worse"
+        },
+        {
+          "baseline": "random",
+          "ci_high": 0.06597442958418788,
+          "ci_low": 0.05705820362057132,
+          "mean_diff": 0.06167716860120877,
+          "metric": "utility",
+          "phase": "train",
+          "policy": "linucb",
+          "verdict": "improvement"
+        },
+        {
+          "baseline": "random",
+          "ci_high": -0.013422187652281542,
+          "ci_low": -0.039937166899836854,
+          "mean_diff": -0.02723197335687454,
+          "metric": "utility",
+          "phase": "validation",
+          "policy": "linucb",
+          "verdict": "worse"
+        }
+      ],
+      "config": {
+        "bootstrap": {
+          "confidence": 0.95,
+          "resamples": 2000,
+          "seed": 0,
+          "unit": "seed-level run mean"
+        },
+        "seeds": 20,
+        "strategies": [
+          "direct",
+          "skill"
+        ],
+        "train_episodes": 300,
+        "train_items": 28,
+        "validation_items": 10,
+        "validation_learning": false
+      },
+      "executions": 76,
+      "executor_backend": "hermes",
+      "fresh_calls": 73,
+      "policies": {
+        "epsilon_greedy": {
+          "kind": "adaptive",
+          "train": {
+            "cost_usd": {
+              "ci_high": 0.005602425454583333,
+              "ci_low": 0.0052650713875,
+              "mean": 0.0054408759,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 22.207231554998916,
+              "ci_low": 18.530220102822316,
+              "mean": 20.335932189174336,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.798790124166835,
+              "ci_low": 3.7191437707974524,
+              "mean": 3.7597184197636357,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.7100451388888889,
+              "ci_low": 0.6914319444444444,
+              "mean": 0.7009111111111112,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.07396397248339885,
+              "ci_low": 0.06171063157535901,
+              "mean": 0.06778644063058112,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.6608377277371786,
+              "ci_low": 0.6417760287521019,
+              "mean": 0.6514438712797475,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "validation": {
+            "cost_usd": {
+              "ci_high": 0.004216884749999999,
+              "ci_low": 0.00412365075,
+              "mean": 0.0041740875,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 0.7471784271662774,
+              "ci_low": 0.5912642959517407,
+              "mean": 0.6695673045687508,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.393440051518473,
+              "ci_low": 3.184661164755264,
+              "mean": 3.285365938025243,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.6238095238095238,
+              "ci_low": 0.608642857142857,
+              "mean": 0.6159761904761905,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.07407070945994866,
+              "ci_low": 0.059329619627087195,
+              "mean": 0.06695673045687509,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.5825169672239837,
+              "ci_low": 0.5670916495725313,
+              "mean": 0.5746845159926468,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "version": "epsilon-greedy/1:eps=0.15"
+        },
+        "fixed:direct": {
+          "kind": "fixed",
+          "train": {
+            "cost_usd": {
+              "ci_high": 0.00436092185,
+              "ci_low": 0.004285940106666667,
+              "mean": 0.004326109,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 35.2213288095842,
+              "ci_low": 31.611723424012677,
+              "mean": 33.29520471843027,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.9508024611026755,
+              "ci_low": 3.8993743440160697,
+              "mean": 3.9273341914660116,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.6626779166666666,
+              "ci_low": 0.6480495833333334,
+              "mean": 0.6553944444444444,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.11741677861137137,
+              "ci_low": 0.1051763655275156,
+              "mean": 0.1109840157281009,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.6160495656972061,
+              "ci_low": 0.6002922540439392,
+              "mean": 0.6082462961822277,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "validation": {
+            "cost_usd": {
+              "ci_high": 0.0038421999999999996,
+              "ci_low": 0.0038421999999999996,
+              "mean": 0.0038421999999999996,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 0.6102484083249624,
+              "ci_low": 0.6102484083249624,
+              "mean": 0.6102484083249624,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.646294183099781,
+              "ci_low": 3.646294183099781,
+              "mean": 3.646294183099781,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.6238095238095238,
+              "ci_low": 0.6238095238095238,
+              "mean": 0.6238095238095238,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.06102484083249624,
+              "ci_low": 0.06102484083249624,
+              "mean": 0.06102484083249624,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.5806164056170255,
+              "ci_low": 0.5806164056170255,
+              "mean": 0.5806164056170255,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "version": "fixed/1:direct"
+        },
+        "fixed:skill": {
+          "kind": "fixed",
+          "train": {
+            "cost_usd": {
+              "ci_high": 0.006216227132083333,
+              "ci_low": 0.006000612754166667,
+              "mean": 0.006114809416666667,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 24.069207196189865,
+              "ci_low": 21.48151943211037,
+              "mean": 22.824530834340525,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.750776185123658,
+              "ci_low": 3.6740217469125613,
+              "mean": 3.7129178044967803,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.7040404166666666,
+              "ci_low": 0.6844929166666668,
+              "mean": 0.6944722222222223,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.08029650005076101,
+              "ci_low": 0.07123898953498603,
+              "mean": 0.07608176944780175,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.6530101865203335,
+              "ci_low": 0.6330054758252123,
+              "mean": 0.6431485424625268,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "validation": {
+            "cost_usd": {
+              "ci_high": 0.0043407,
+              "ci_low": 0.0043407,
+              "mean": 0.0043407,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 0.35016529826669907,
+              "ci_low": 0.35016529826669907,
+              "mean": 0.35016529826669907,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.125896862400623,
+              "ci_low": 3.125896862400623,
+              "mean": 3.125896862400623,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.6471428571428571,
+              "ci_low": 0.6471428571428571,
+              "mean": 0.6471428571428571,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.035016529826669904,
+              "ci_low": 0.035016529826669904,
+              "mean": 0.035016529826669904,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.606624716622852,
+              "ci_low": 0.606624716622852,
+              "mean": 0.606624716622852,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "version": "fixed/1:skill"
+        },
+        "linucb": {
+          "kind": "adaptive",
+          "train": {
+            "cost_usd": {
+              "ci_high": 0.005117618645833334,
+              "ci_low": 0.00500468565375,
+              "mean": 0.005060403066666667,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 10.13021372342564,
+              "ci_low": 9.330188125118138,
+              "mean": 9.734809924609044,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.731274975925685,
+              "ci_low": 3.668955148461764,
+              "mean": 3.700791980604187,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.7417176388888889,
+              "ci_low": 0.7267104166666667,
+              "mean": 0.7344888888888889,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.03377534764080237,
+              "ci_low": 0.031115631843044785,
+              "mean": 0.03244936641536349,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.6943259871965619,
+              "ci_low": 0.6788609127108061,
+              "mean": 0.686780945494965,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "validation": {
+            "cost_usd": {
+              "ci_high": 0.004189085687499999,
+              "ci_low": 0.0041083266874999995,
+              "mean": 0.0041505325,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 0.7666397119805916,
+              "ci_low": 0.6057376142683604,
+              "mean": 0.6903924055079131,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.377087510463028,
+              "ci_low": 3.206350075419354,
+              "mean": 3.284689149295191,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.6213095238095238,
+              "ci_low": 0.6063095238095239,
+              "mean": 0.6138095238095238,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.07654623141070334,
+              "ci_low": 0.06088787486665718,
+              "mean": 0.06903924055079132,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.5811856825406023,
+              "ci_low": 0.5647065612740472,
+              "mean": 0.5726020058987306,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "version": "linucb/1:alpha=1,ridge=1"
+        },
+        "random": {
+          "kind": "random",
+          "train": {
+            "cost_usd": {
+              "ci_high": 0.005331917008333333,
+              "ci_low": 0.00520194855,
+              "mean": 0.005266194833333333,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 29.60324897081319,
+              "ci_low": 26.81701640189896,
+              "mean": 28.237960504971674,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.8507389940984953,
+              "ci_low": 3.78457050414475,
+              "mean": 3.8184021727492405,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.6832393055555556,
+              "ci_low": 0.665648888888889,
+              "mean": 0.6744777777777778,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.09885311781728284,
+              "ci_low": 0.08943470591884288,
+              "mean": 0.09412653501657225,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.6343920657570508,
+              "ci_low": 0.6156671844387677,
+              "mean": 0.6251037768937564,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "validation": {
+            "cost_usd": {
+              "ci_high": 0.004149929312500001,
+              "ci_low": 0.0040522812499999995,
+              "mean": 0.0041000375,
+              "n": 20
+            },
+            "cumulative_regret": {
+              "ci_high": 0.5366366130006542,
+              "ci_low": 0.3048529680491681,
+              "mean": 0.4180726719391673,
+              "n": 20
+            },
+            "latency_s": {
+              "ci_high": 3.4348821458014736,
+              "ci_low": 3.280756103140551,
+              "mean": 3.357050346470241,
+              "n": 20
+            },
+            "quality": {
+              "ci_high": 0.6521470238095238,
+              "ci_low": 0.6304720238095237,
+              "mean": 0.6414761904761905,
+              "n": 20
+            },
+            "regret": {
+              "ci_high": 0.0534128812769028,
+              "ci_low": 0.030547400062171316,
+              "mean": 0.04180726719391673,
+              "n": 20
+            },
+            "utility": {
+              "ci_high": 0.6116190286277915,
+              "ci_low": 0.5881007918527837,
+              "mean": 0.5998339792556051,
+              "n": 20
+            },
+            "violation_rate": {
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "mean": 0.0,
+              "n": 20
+            }
+          },
+          "version": "random/1"
+        }
+      },
+      "replayed_calls": 3
+    },
+    "file": "live_run_live-1.json",
+    "gepa": {
+      "candidates": [
+        {
+          "chars": 13210,
+          "index": 0,
+          "merge": false,
+          "parent": null,
+          "registered_as": null,
+          "seed": true,
+          "sha256": "7885961688b5"
+        },
+        {
+          "chars": 7464,
+          "index": 1,
+          "merge": false,
+          "parent": 0,
+          "registered_as": "github-code-review@28dcec5ab528",
+          "seed": false,
+          "sha256": "ca35278bcbe9"
+        },
+        {
+          "chars": 8998,
+          "index": 2,
+          "merge": true,
+          "parent": 1,
+          "registered_as": null,
+          "seed": false,
+          "sha256": "e4cb996b16d9"
+        },
+        {
+          "chars": 10237,
+          "index": 3,
+          "merge": false,
+          "parent": 2,
+          "registered_as": null,
+          "seed": false,
+          "sha256": "d5daec3b43e0"
+        }
+      ],
+      "metrics": {
+        "baseline_score": 0.675,
+        "baseline_size": 13211,
+        "candidates_explored": 4,
+        "constraints_passed": true,
+        "data": "python_review v1 train split only",
+        "elapsed_seconds": 638.5,
+        "evolved_score": 0.75,
+        "evolved_size": 7465,
+        "gepa_train_cases": 20,
+        "gepa_val_cases": 8,
+        "identical_to_baseline": false,
+        "lm_route": {
+          "reflection": "hermes:claude-subscription-directsdk-experimental:claude-sonnet-5-5[1m]",
+          "task": "hermes:claude-subscription-directsdk-experimental:claude-sonnet-5-5[1m]"
+        },
+        "max_metric_calls": 150,
+        "optimizer": "dspy.GEPA",
+        "seed": 0,
+        "skill_name": "github-code-review"
+      }
+    },
+    "identity": {
+      "budget": {
+        "max_cost_usd": null,
+        "max_iterations": 8,
+        "max_tokens": null,
+        "startup_grace_s": 120.0,
+        "timeout_s": 300.0
+      },
+      "mode": "live",
+      "model": "claude-sonnet-5-5[1m]",
+      "provider": "claude-subscription-directsdk-experimental",
+      "run_version": "kafo-full-run/1",
+      "skill_sha256": "11ad06e6d49bcfc3433530b40f95b72f568cae0a2d7ca6e2450b22d3e0626d7b"
+    },
+    "registry": {
+      "candidates": [
+        {
+          "count": 1,
+          "source": "baseline",
+          "status": "admitted"
+        },
+        {
+          "count": 1,
+          "source": "gepa",
+          "status": "admitted"
+        }
+      ],
+      "lineage": [
+        {
+          "candidate_id": "github-code-review@11ad06e6d49b",
+          "parent_id": null,
+          "source": "baseline",
+          "status": "admitted"
+        },
+        {
+          "candidate_id": "github-code-review@28dcec5ab528",
+          "parent_id": "github-code-review@11ad06e6d49b",
+          "source": "gepa",
+          "status": "admitted"
+        }
+      ],
+      "rejected": [],
+      "retired": [],
+      "status": "supplied",
+      "transitions": [
+        {
+          "candidate_id": "github-code-review@11ad06e6d49b",
+          "decided_by": "registry:baseline",
+          "from": null,
+          "to": "admitted"
+        },
+        {
+          "candidate_id": "github-code-review@28dcec5ab528",
+          "decided_by": "registry:gepa",
+          "from": null,
+          "to": "proposed"
+        },
+        {
+          "candidate_id": "github-code-review@28dcec5ab528",
+          "decided_by": "admission-gate:1c3cd3e28dd5",
+          "from": "proposed",
+          "to": "admitted"
+        }
+      ]
+    },
+    "run_id": "live-1",
+    "schema": "kafo-live-run-snapshot/1",
+    "sealed_split_open_attempts": 0,
+    "skill_source": "hermes-agent@caafe5389a:skills/software-development/github/references/code-review.md",
+    "source_files": {
+      "checkpoints.sqlite": "e63a063ce016ae7ab8169d9145ced3b83e979b2a3998a63626bd4e56020d835c",
+      "gepa_log/candidates.json": "40c58ebdd29fbea275c5bfa6e69726aed801fad5d99fd8944714f4b0e196d90a",
+      "gepa_log/run_log.json": "fdaf1569808fd5b6f06fa8725484763ed2dda239af71e98fb7b90478e60d0653",
+      "ledger.jsonl": "fc6c019a7458ef05d41d0599c99860366e79d066b5c8298904e0c2fe970bc824",
+      "registry.sqlite": "a2166b29499a84a588add51b9da5cd677083e0bdc247d2020ab83c78d68f9129",
+      "report.json": "01da865da291088915c724cd4f501c6b2eaf89bb0392314887a231b721acd96a",
+      "state.json": "8df3a60f8bd7981b4c06b281f4fd7a962d6899e23a34790120b294fcd1374691"
+    },
+    "spend": {
+      "by_stage": {
+        "admission": {
+          "calls": 120,
+          "cost_usd": 0.352691,
+          "errors": 0,
+          "mean_latency_s": 2.538,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        },
+        "canary": {
+          "calls": 3,
+          "cost_usd": 0.035235,
+          "errors": 0,
+          "mean_latency_s": 2.79,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        },
+        "compare": {
+          "calls": 73,
+          "cost_usd": 0.34199,
+          "errors": 0,
+          "mean_latency_s": 3.756,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        },
+        "final_eval_preflight:baseline": {
+          "calls": 1,
+          "cost_usd": 0.001474,
+          "errors": 0,
+          "mean_latency_s": 2.048,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        },
+        "final_eval_preflight:candidate": {
+          "calls": 1,
+          "cost_usd": 0.001161,
+          "errors": 0,
+          "mean_latency_s": 1.701,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        },
+        "final_test_evaluation:baseline": {
+          "calls": 10,
+          "cost_usd": 0.048931,
+          "errors": 0,
+          "mean_latency_s": 3.374,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        },
+        "final_test_evaluation:candidate": {
+          "calls": 10,
+          "cost_usd": 0.028937,
+          "errors": 0,
+          "mean_latency_s": 2.054,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        },
+        "gepa:reflection": {
+          "calls": 11,
+          "cost_usd": 0.657106,
+          "errors": 0,
+          "mean_latency_s": 21.478,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        },
+        "gepa:task": {
+          "calls": 92,
+          "cost_usd": 0.59914,
+          "errors": 0,
+          "mean_latency_s": 2.65,
+          "retries": 0,
+          "unknown_cost_calls": 0
+        }
+      },
+      "total_cost_usd": 2.066664
+    },
+    "splits_used": [
+      "train",
+      "validation"
+    ],
+    "stages": {
+      "admission": {
+        "seconds": 466.8,
+        "status": "done"
+      },
+      "canary": {
+        "seconds": 12.6,
+        "status": "done"
+      },
+      "compare": {
+        "seconds": 377.0,
+        "status": "done"
+      },
+      "gepa": {
+        "seconds": 647.3,
+        "status": "done"
+      }
+    },
+    "status": "supplied"
+  },
+  "live_smoke": {
+    "cases": [
+      {
+        "case_id": "pyrev-007",
+        "completed": true,
+        "cost_usd": 0.0041,
+        "latency_s": 4.3,
+        "quality": 0.5,
+        "violation": false
+      },
+      {
+        "case_id": "pyrev-008",
+        "completed": true,
+        "cost_usd": 0.0045,
+        "latency_s": 3.7,
+        "quality": 0.67,
+        "violation": false
+      },
+      {
+        "case_id": "pyrev-031",
+        "completed": true,
+        "cost_usd": 0.0014,
+        "latency_s": 3.7,
+        "quality": 1.0,
+        "violation": false
+      },
+      {
+        "case_id": "pyrev-043",
+        "completed": true,
+        "cost_usd": 0.0063,
+        "latency_s": 5.2,
+        "quality": 0.8,
+        "violation": false
+      }
+    ],
+    "completed": 4,
+    "label": "4 live cases; a smoke test, not a benchmark result",
+    "mean_cost_usd": 0.004075,
+    "mean_latency_s": 4.225,
+    "mean_quality": 0.7425,
+    "model": "claude-sonnet-5-5[1m] via claude-subscription-directsdk-experimental, no toolsets",
+    "n_cases": 4,
+    "note": "Plumbing check, not evidence that Hermes improves or performs well. One run, no confidence intervals. Cost is Hermes' estimate at API rates; the provider bills a subscription, so metered spend may be zero.",
+    "source": "live Hermes smoke run, 2026-11-22, owner-approved (PR #10); transcribed from docs/sprints/KAFO-EVO-001.md \"Live smoke run\", values rounded as published",
+    "split": "validation",
+    "status": "supplied",
+    "violations": 0
+  },
+  "notice": "SYNTHETIC RESULTS. The simulator sections (gate 4 policy comparison, simulated cost and latency) use a hypothetical simulator with invented success rates, costs and latencies; the verifier reference scores use reviews derived from the benchmark labels, not a model. The live full run (live-1), the one-time sealed final evaluation and a 4-case smoke test used live Hermes (claude-sonnet-5-5[1m]) on the hand-written, synthetic python_review benchmark. Nothing in this report is evidence that Hermes improves on any real task: no result here is evidence of real-world improvement.",
+  "pending": [],
+  "policy_comparison": {
+    "benchmark": "synthetic-python-review/1",
+    "best_fixed_baseline": "fixed:structured",
+    "comparisons": [
+      {
+        "baseline": "fixed:structured",
+        "ci_high": 0.043188288993055594,
+        "ci_low": 0.0068806366666667295,
+        "mean_diff": 0.02480261236111115,
+        "metric": "utility",
+        "phase": "train",
+        "policy": "epsilon_greedy",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "fixed:structured",
+        "ci_high": 0.014232798611111128,
+        "ci_low": -0.02416990800347219,
+        "mean_diff": -0.0056668826388888704,
+        "metric": "utility",
+        "phase": "validation",
+        "policy": "epsilon_greedy",
+        "verdict": "no improvement detected"
+      },
+      {
+        "baseline": "random",
+        "ci_high": 0.11203575517361111,
+        "ci_low": 0.0893059008125,
+        "mean_diff": 0.10086459388888888,
+        "metric": "utility",
+        "phase": "train",
+        "policy": "epsilon_greedy",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "random",
+        "ci_high": 0.07081093105902778,
+        "ci_low": 0.008892411684027778,
+        "mean_diff": 0.04054200486111111,
+        "metric": "utility",
+        "phase": "validation",
+        "policy": "epsilon_greedy",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "fixed:structured",
+        "ci_high": 0.056230168732638926,
+        "ci_low": 0.025503055274305592,
+        "mean_diff": 0.040536064166666705,
+        "metric": "utility",
+        "phase": "train",
+        "policy": "linucb",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "fixed:structured",
+        "ci_high": 0.033300797760416646,
+        "ci_low": -0.008911093715277763,
+        "mean_diff": 0.012091076388888905,
+        "metric": "utility",
+        "phase": "validation",
+        "policy": "linucb",
+        "verdict": "no improvement detected"
+      },
+      {
+        "baseline": "random",
+        "ci_high": 0.1326162771597222,
+        "ci_low": 0.10098272921180554,
+        "mean_diff": 0.11659804569444443,
+        "metric": "utility",
+        "phase": "train",
+        "policy": "linucb",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "random",
+        "ci_high": 0.08783584168402778,
+        "ci_low": 0.02943680046874999,
+        "mean_diff": 0.058299963888888896,
+        "metric": "utility",
+        "phase": "validation",
+        "policy": "linucb",
+        "verdict": "improvement"
+      }
+    ],
+    "config": {
+      "bootstrap": {
+        "confidence": 0.95,
+        "resamples": 2000,
+        "seed": 0,
+        "unit": "seed-level run mean"
+      },
+      "context_dim": 8,
+      "context_key_fields": [
+        "difficulty",
+        "domain"
+      ],
+      "oracle": true,
+      "scoring": {
+        "reference_cost_usd": 0.03,
+        "reference_latency_s": 6.0
+      },
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "strategies": [
+        "direct",
+        "structured",
+        "tool_assisted"
+      ],
+      "train_episodes": 300,
+      "train_items": 120,
+      "validation_items": 60,
+      "validation_learning": false
+    },
+    "executions": 540,
+    "executor_backend": "scripted",
+    "notice": "SYNTHETIC RESULTS: scripted/fake executor and/or synthetic benchmark. Not evidence that Hermes improves on any real task.",
+    "policies": {
+      "epsilon_greedy": {
+        "kind": "adaptive",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.047932114375,
+            "ci_low": 0.043109021875,
+            "mean": 0.045373866666666665,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 77.38725428125,
+            "ci_low": 68.96147453645833,
+            "mean": 73.28335670833334,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 9.211518085,
+            "ci_low": 8.305536106666667,
+            "mean": 8.732151483333334,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7835,
+            "ci_low": 0.7533333333333333,
+            "mean": 0.7683333333333333,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.2574228708923611,
+            "ci_low": 0.22991148819444446,
+            "mean": 0.24427785569444443,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6036675623541666,
+            "ci_low": 0.576067492767361,
+            "mean": 0.5897787948611112,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.007333333333333333,
+            "ci_low": 0.0045000000000000005,
+            "mean": 0.005833333333333334,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.04918126666666667,
+            "ci_low": 0.04197747083333333,
+            "mean": 0.04568320833333333,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 18.944718208333327,
+            "ci_low": 16.539072140625,
+            "mean": 17.767102958333332,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 9.532572993749998,
+            "ci_low": 8.131521493750002,
+            "mean": 8.8141255,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7675,
+            "ci_low": 0.735,
+            "mean": 0.7508333333333334,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.3153574123958333,
+            "ci_low": 0.2768117018923611,
+            "mean": 0.29611838263888884,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5978818052083333,
+            "ci_low": 0.5587800148611112,
+            "mean": 0.5785980618055555,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "epsilon-greedy/1:eps=0.15"
+      },
+      "fixed:direct": {
+        "kind": "fixed",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.01334833875,
+            "ci_low": 0.013289841458333333,
+            "mean": 0.013317975000000001,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 101.71639985,
+            "ci_low": 96.934762190625,
+            "mean": 99.26817495833333,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 2.6200506991666668,
+            "ci_low": 2.6057380937500003,
+            "mean": 2.6132819166666668,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.5803333333333334,
+            "ci_low": 0.5581666666666667,
+            "mean": 0.5693333333333334,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.33868920070486114,
+            "ci_low": 0.32275501463541667,
+            "mean": 0.3308939165277778,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5144732846736111,
+            "ci_low": 0.4924709311284723,
+            "mean": 0.5031627340277778,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.013239999999999998,
+            "ci_low": 0.013239999999999998,
+            "mean": 0.013239999999999998,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 21.43867,
+            "ci_low": 21.43867,
+            "mean": 21.43867,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 2.6153666666666666,
+            "ci_low": 2.6153666666666666,
+            "mean": 2.6153666666666666,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.5833333333333334,
+            "ci_low": 0.5833333333333334,
+            "mean": 0.5833333333333334,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.3573111666666666,
+            "ci_low": 0.3573111666666666,
+            "mean": 0.3573111666666666,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5174052777777778,
+            "ci_low": 0.5174052777777778,
+            "mean": 0.5174052777777778,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "fixed/1:direct"
+      },
+      "fixed:structured": {
+        "kind": "fixed",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.040041044375,
+            "ci_low": 0.039871859375,
+            "mean": 0.039953925,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 83.61722554166667,
+            "ci_low": 78.11438366875001,
+            "mean": 80.72414041666667,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 8.032686944583332,
+            "ci_low": 7.971164985416666,
+            "mean": 8.0012881,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7743333333333333,
+            "ci_low": 0.7546666666666667,
+            "mean": 0.7648333333333334,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.27887045745486116,
+            "ci_low": 0.26039434840625003,
+            "mean": 0.2690804680555556,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5747695352534722,
+            "ci_low": 0.5541721289444445,
+            "mean": 0.5649761824999999,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.03972,
+            "ci_low": 0.03972,
+            "mean": 0.03972,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 17.42709,
+            "ci_low": 17.42709,
+            "mean": 17.42709,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 8.000206666666667,
+            "ci_low": 8.000206666666667,
+            "mean": 8.000206666666667,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7833333333333333,
+            "ci_low": 0.7833333333333333,
+            "mean": 0.7833333333333333,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.2904515,
+            "ci_low": 0.2904515,
+            "mean": 0.2904515,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5842649444444444,
+            "ci_low": 0.5842649444444444,
+            "mean": 0.5842649444444444,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "fixed/1:structured"
+      },
+      "fixed:tool_assisted": {
+        "kind": "fixed",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.10677840833333334,
+            "ci_low": 0.10631931333333335,
+            "mean": 0.10654380000000001,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 134.51889997499998,
+            "ci_low": 127.340420940625,
+            "mean": 130.91199516666666,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 19.808595720833335,
+            "ci_low": 19.698596477916666,
+            "mean": 19.752141316666666,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.784,
+            "ci_low": 0.766,
+            "mean": 0.775,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.4482945305486111,
+            "ci_low": 0.4245234057326389,
+            "mean": 0.4363733172222222,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.4105345833333334,
+            "ci_low": 0.38409625000000003,
+            "mean": 0.39768333333333333,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.05800416666666664,
+            "ci_low": 0.04416666666666667,
+            "mean": 0.05116666666666667,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.10591999999999999,
+            "ci_low": 0.10591999999999999,
+            "mean": 0.10591999999999999,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 23.482986666666662,
+            "ci_low": 23.482986666666662,
+            "mean": 23.482986666666662,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 19.545956666666665,
+            "ci_low": 19.545956666666665,
+            "mean": 19.545956666666665,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7833333333333333,
+            "ci_low": 0.7833333333333333,
+            "mean": 0.7833333333333333,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.391383111111111,
+            "ci_low": 0.391383111111111,
+            "mean": 0.391383111111111,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.4833333333333334,
+            "ci_low": 0.4833333333333334,
+            "mean": 0.4833333333333334,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "fixed/1:tool_assisted"
+      },
+      "linucb": {
+        "kind": "adaptive",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.047829939791666665,
+            "ci_low": 0.041718405416666667,
+            "mean": 0.044873125,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 72.35508355937499,
+            "ci_low": 64.81141005833334,
+            "mean": 68.56332116666667,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 9.212323819583332,
+            "ci_low": 8.094550294583334,
+            "mean": 8.674708983333334,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.8029999999999999,
+            "ci_low": 0.7698250000000001,
+            "mean": 0.7875,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.24228663119791669,
+            "ci_low": 0.21543411548263888,
+            "mean": 0.22854440388888891,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6190234116736112,
+            "ci_low": 0.592090996875,
+            "mean": 0.6055122466666667,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0075,
+            "ci_low": 0.0045000000000000005,
+            "mean": 0.006,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.04178293958333333,
+            "ci_low": 0.03695413958333334,
+            "mean": 0.03929825,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 17.953926145833332,
+            "ci_low": 15.469470277083333,
+            "mean": 16.701625416666666,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 8.166822679166666,
+            "ci_low": 7.23627775,
+            "mean": 7.688429416666667,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7783333333333333,
+            "ci_low": 0.7408333333333333,
+            "mean": 0.76,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.29953226621527773,
+            "ci_low": 0.2572057961458333,
+            "mean": 0.27836042361111113,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6170227234375,
+            "ci_low": 0.5759283677256944,
+            "mean": 0.5963560208333333,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "linucb/1:alpha=1,ridge=1"
+      },
+      "random": {
+        "kind": "random",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.053927681874999994,
+            "ci_low": 0.052382277708333334,
+            "mean": 0.05316506666666667,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 106.19706663333332,
+            "ci_low": 100.731253659375,
+            "mean": 103.542734875,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 10.219071359166666,
+            "ci_low": 9.945195835833335,
+            "mean": 10.082046733333332,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7103333333333334,
+            "ci_low": 0.693,
+            "mean": 0.7016666666666667,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.35428010675694444,
+            "ci_low": 0.33559615830208334,
+            "mean": 0.34514244958333334,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5000363941458335,
+            "ci_low": 0.47756214536458336,
+            "mean": 0.48891420097222227,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.01916666666666667,
+            "ci_low": 0.012833333333333332,
+            "mean": 0.016,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.052389436458333334,
+            "ci_low": 0.04829318125,
+            "mean": 0.05027829166666666,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 21.375603886458332,
+            "ci_low": 18.869462778124998,
+            "mean": 20.19962325,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 9.942121718749998,
+            "ci_low": 9.2205185125,
+            "mean": 9.586916333333333,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7424999999999999,
+            "ci_low": 0.6999791666666667,
+            "mean": 0.72,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.35670661673611104,
+            "ci_low": 0.31533879392361114,
+            "mean": 0.3366603875,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5600352336631944,
+            "ci_low": 0.5179381118055556,
+            "mean": 0.5380560569444445,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "random/1"
+      }
+    },
+    "synthetic": true
+  },
+  "provenance": {
+    "benchmark": {
+      "manifest_sha256": "fada5f14b7d89c0e081f820475ce52a51ecc585abfe2264de09f38c69cfb7282",
+      "name": "python_review",
+      "version": "v1"
+    },
+    "verifier": {
+      "config": {
+        "category_aliases": [],
+        "line_tolerance": 1,
+        "min_overlap_ratio": 0.5
+      },
+      "match_rule": "category-equal+line-overlap/1",
+      "verifier_sha256": "f3310b479ff67439dbf4cadf8de834ecf5b4056ae30d98c70923f46157f2ec92",
+      "verifier_version": "kafo-verifier/1"
+    }
+  },
+  "safety": {
+    "admission": {
+      "note": "decisions are recorded in the candidate registry (above; from the live full-run snapshot unless --registry is given); the live run's decision and its evidence are in the live full run section",
+      "policy": {
+        "benchmark_version": "v1",
+        "bootstrap_seed": 0,
+        "confidence": 0.95,
+        "max_critical_violations": 0,
+        "min_margin": 0.05,
+        "n_bootstrap": 2000,
+        "reference_cost_usd": 0.03,
+        "reference_latency_s": 6.0,
+        "seeds": [
+          0,
+          1,
+          2
+        ],
+        "split": "validation"
+      },
+      "policy_sha256": "1c3cd3e28dd5f9d140183bae6a747b7b0f396358adb93d14eeceff6913f0f4ed",
+      "rules": [
+        "zero critical violations for the candidate over all runs",
+        "mean utility gain over the baseline of at least 0.05",
+        "lower bound of the 95% paired bootstrap CI of that gain above 0"
+      ],
+      "status": "merged"
+    },
+    "critical_violations": {
+      "by_policy": {
+        "epsilon_greedy": {
+          "train": {
+            "steps": 6000,
+            "violations": 35
+          },
+          "validation": {
+            "steps": 1200,
+            "violations": 0
+          }
+        },
+        "fixed:direct": {
+          "train": {
+            "steps": 6000,
+            "violations": 0
+          },
+          "validation": {
+            "steps": 1200,
+            "violations": 0
+          }
+        },
+        "fixed:structured": {
+          "train": {
+            "steps": 6000,
+            "violations": 0
+          },
+          "validation": {
+            "steps": 1200,
+            "violations": 0
+          }
+        },
+        "fixed:tool_assisted": {
+          "train": {
+            "steps": 6000,
+            "violations": 307
+          },
+          "validation": {
+            "steps": 1200,
+            "violations": 0
+          }
+        },
+        "linucb": {
+          "train": {
+            "steps": 6000,
+            "violations": 36
+          },
+          "validation": {
+            "steps": 1200,
+            "violations": 0
+          }
+        },
+        "random": {
+          "train": {
+            "steps": 6000,
+            "violations": 96
+          },
+          "validation": {
+            "steps": 1200,
+            "violations": 0
+          }
+        }
+      },
+      "total_steps": 43200,
+      "total_violations": 474
+    },
+    "registry": {
+      "candidates": [
+        {
+          "count": 1,
+          "source": "baseline",
+          "status": "admitted"
+        },
+        {
+          "count": 1,
+          "source": "gepa",
+          "status": "admitted"
+        }
+      ],
+      "lineage": [
+        {
+          "candidate_id": "github-code-review@11ad06e6d49b",
+          "parent_id": null,
+          "source": "baseline",
+          "status": "admitted"
+        },
+        {
+          "candidate_id": "github-code-review@28dcec5ab528",
+          "parent_id": "github-code-review@11ad06e6d49b",
+          "source": "gepa",
+          "status": "admitted"
+        }
+      ],
+      "rejected": [],
+      "retired": [],
+      "status": "supplied",
+      "transitions": [
+        {
+          "candidate_id": "github-code-review@11ad06e6d49b",
+          "decided_by": "registry:baseline",
+          "from": null,
+          "to": "admitted"
+        },
+        {
+          "candidate_id": "github-code-review@28dcec5ab528",
+          "decided_by": "registry:gepa",
+          "from": null,
+          "to": "proposed"
+        },
+        {
+          "candidate_id": "github-code-review@28dcec5ab528",
+          "decided_by": "admission-gate:1c3cd3e28dd5",
+          "from": "proposed",
+          "to": "admitted"
+        }
+      ]
+    },
+    "rollbacks": {
+      "checkpoints": {
+        "good": 2
+      },
+      "events": {
+        "promote": 1,
+        "save": 2
+      },
+      "log": [
+        {
+          "checkpoint_id": 1,
+          "event": "save",
+          "from": null,
+          "reason": "admission:github-code-review@28dcec5ab528:pre"
+        },
+        {
+          "checkpoint_id": 2,
+          "event": "save",
+          "from": null,
+          "reason": "admission:github-code-review@28dcec5ab528:post"
+        },
+        {
+          "checkpoint_id": 2,
+          "event": "promote",
+          "from": 1,
+          "reason": "post-admission validation passed"
+        }
+      ],
+      "rollbacks": [],
+      "status": "supplied"
+    },
+    "sealed_access_blocked_during_generation": 0
+  },
+  "schema": "kafo-sprint-report/1",
+  "settings": {
+    "benchmark_seed": 0,
+    "checkpoints": null,
+    "comparison_resamples": 2000,
+    "final_ledger": "reports/kafo-evo-001/final_test_evaluation.json",
+    "live_run": "live_run_live-1.json",
+    "live_smoke": "live_smoke_2026-11-22.json",
+    "registry": null,
+    "seeds": 20,
+    "train_episodes": 300,
+    "verifier_resamples": 1000,
+    "verifier_seed": 0
+  },
+  "synthetic": true,
+  "title": "KAFO-EVO-001 sprint report",
+  "verifier_scores": {
+    "reviewers": {
+      "empty": {
+        "train": {
+          "macro": {
+            "f1": {
+              "high": 0.25,
+              "low": 0.03571428571428571,
+              "point": 0.14285714285714285
+            },
+            "precision": {
+              "high": 0.25,
+              "low": 0.03571428571428571,
+              "point": 0.14285714285714285
+            },
+            "recall": {
+              "high": 0.25,
+              "low": 0.03571428571428571,
+              "point": 0.14285714285714285
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 0.0,
+              "low": 0.0,
+              "point": 0.0
+            },
+            "precision": {
+              "high": 0.0,
+              "low": 0.0,
+              "point": 0.0
+            },
+            "recall": {
+              "high": 0.0,
+              "low": 0.0,
+              "point": 0.0
+            }
+          },
+          "missing_reviews": 0,
+          "n_cases": 28,
+          "totals": {
+            "false_negatives": 31,
+            "false_positives": 0,
+            "true_positives": 0
+          }
+        },
+        "validation": {
+          "macro": {
+            "f1": {
+              "high": 0.5,
+              "low": 0.0,
+              "point": 0.2
+            },
+            "precision": {
+              "high": 0.5,
+              "low": 0.0,
+              "point": 0.2
+            },
+            "recall": {
+              "high": 0.5,
+              "low": 0.0,
+              "point": 0.2
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 0.0,
+              "low": 0.0,
+              "point": 0.0
+            },
+            "precision": {
+              "high": 0.0,
+              "low": 0.0,
+              "point": 0.0
+            },
+            "recall": {
+              "high": 0.0,
+              "low": 0.0,
+              "point": 0.0
+            }
+          },
+          "missing_reviews": 0,
+          "n_cases": 10,
+          "totals": {
+            "false_negatives": 10,
+            "false_positives": 0,
+            "true_positives": 0
+          }
+        }
+      },
+      "ground_truth": {
+        "train": {
+          "macro": {
+            "f1": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            }
+          },
+          "missing_reviews": 0,
+          "n_cases": 28,
+          "totals": {
+            "false_negatives": 0,
+            "false_positives": 0,
+            "true_positives": 31
+          }
+        },
+        "validation": {
+          "macro": {
+            "f1": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "recall": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            }
+          },
+          "missing_reviews": 0,
+          "n_cases": 10,
+          "totals": {
+            "false_negatives": 0,
+            "false_positives": 0,
+            "true_positives": 10
+          }
+        }
+      },
+      "noisy_reference": {
+        "train": {
+          "macro": {
+            "f1": {
+              "high": 0.7619047619047619,
+              "low": 0.4224702380952382,
+              "point": 0.5892857142857143
+            },
+            "precision": {
+              "high": 0.7857142857142857,
+              "low": 0.42857142857142855,
+              "point": 0.6071428571428571
+            },
+            "recall": {
+              "high": 0.7678571428571429,
+              "low": 0.42857142857142855,
+              "point": 0.5892857142857143
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 0.8182190760059612,
+              "low": 0.5217391304347826,
+              "point": 0.6792452830188679
+            },
+            "precision": {
+              "high": 0.9583333333333334,
+              "low": 0.65,
+              "point": 0.8181818181818182
+            },
+            "recall": {
+              "high": 0.7575757575757576,
+              "low": 0.4117647058823529,
+              "point": 0.5806451612903226
+            }
+          },
+          "missing_reviews": 0,
+          "n_cases": 28,
+          "totals": {
+            "false_negatives": 13,
+            "false_positives": 4,
+            "true_positives": 18
+          }
+        },
+        "validation": {
+          "macro": {
+            "f1": {
+              "high": 0.9666666666666666,
+              "low": 0.5,
+              "point": 0.7666666666666667
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 0.5,
+              "point": 0.8
+            },
+            "recall": {
+              "high": 0.95,
+              "low": 0.5,
+              "point": 0.75
+            }
+          },
+          "micro": {
+            "f1": {
+              "high": 0.9629629629629629,
+              "low": 0.5714285714285714,
+              "point": 0.8235294117647058
+            },
+            "precision": {
+              "high": 1.0,
+              "low": 1.0,
+              "point": 1.0
+            },
+            "recall": {
+              "high": 0.9285714285714286,
+              "low": 0.4,
+              "point": 0.7
+            }
+          },
+          "missing_reviews": 0,
+          "n_cases": 10,
+          "totals": {
+            "false_negatives": 3,
+            "false_positives": 0,
+            "true_positives": 7
+          }
+        }
+      }
+    },
+    "split_sizes": {
+      "train": 28,
+      "validation": 10
+    }
+  }
+}

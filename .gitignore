@@ -14,6 +14,9 @@ venv/
 datasets/**/*.jsonl
 datasets/**/*.json
 !datasets/.gitkeep
+# Versioned, hand-labelled benchmark (tracked; integrity pinned by MANIFEST.json)
+!datasets/python_review/**/*.jsonl
+!datasets/python_review/**/*.json
 
 # Evolution snapshots
 snapshots/

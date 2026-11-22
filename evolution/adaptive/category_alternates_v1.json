@@ -1,0 +1,69 @@
+{
+  "alternates": {
+    "pyrev-003-d1": [
+      "logic_error"
+    ],
+    "pyrev-015-d1": [
+      "input_validation"
+    ],
+    "pyrev-016-d1": [
+      "performance"
+    ],
+    "pyrev-019-d1": [
+      "api_misuse"
+    ],
+    "pyrev-023-d1": [
+      "api_misuse"
+    ],
+    "pyrev-023-d2": [
+      "performance",
+      "resource_management"
+    ],
+    "pyrev-026-d1": [
+      "api_misuse"
+    ],
+    "pyrev-028-d1": [
+      "logic_error"
+    ],
+    "pyrev-030-d1": [
+      "api_misuse",
+      "performance"
+    ],
+    "pyrev-032-d2": [
+      "error_handling"
+    ],
+    "pyrev-041-d1": [
+      "logic_error"
+    ],
+    "pyrev-043-d2": [
+      "performance",
+      "security"
+    ],
+    "pyrev-046-d1": [
+      "error_handling",
+      "security"
+    ],
+    "pyrev-047-d1": [
+      "error_handling",
+      "resource_management"
+    ],
+    "pyrev-048-d1": [
+      "logic_error"
+    ]
+  },
+  "benchmark": {
+    "manifest_sha256": "fada5f14b7d89c0e081f820475ce52a51ecc585abfe2264de09f38c69cfb7282",
+    "name": "python_review",
+    "version": "v1"
+  },
+  "rule": "LENIENT (secondary) scoring only. A finding is category-compatible with a defect if its normalised category equals the label's category or one of the alternates listed for that defect_id. Line rules, one-to-one matching and counting are the gate 3 verifier's. The dataset, its labels and the manifest are unchanged; STRICT (primary) scoring ignores this table.",
+  "schema": "kafo-category-alternates/1",
+  "source": {
+    "audit": "Independent ground-truth label audit of datasets/python_review/v1",
+    "audit_sha256": "47f5d1588294078181883387542a4900e288d668c34d7e098ca17a0205d1ee07",
+    "audited_commit": "3ce418df6223cfca346244f47d41fc54ce7a8373",
+    "auditor": "worker session selfadaptive-hermes-6 (independent of dataset author)",
+    "date": "2026-11-22",
+    "field": "cases[].defects[].flags.alt_category"
+  }
+}

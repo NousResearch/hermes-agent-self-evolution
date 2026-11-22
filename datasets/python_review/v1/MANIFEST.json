@@ -1,0 +1,29 @@
+{
+  "benchmark": "python_review",
+  "hash_algorithm": "sha256",
+  "schema": {
+    "path": "schema.json",
+    "sha256": "42b391711020e33bf1aae33f579b9099838eff489a33e291a6efc750efb9d63b"
+  },
+  "splits": {
+    "test": {
+      "cases": 10,
+      "path": "v1/sealed/test.jsonl",
+      "sealed": true,
+      "sha256": "e0322e19904955288b2039b3bb4ad8fd14b6e2a7c3575aeb3d6d3cbadb366419"
+    },
+    "train": {
+      "cases": 28,
+      "path": "v1/train.jsonl",
+      "sealed": false,
+      "sha256": "f424fd144cade5b377be86b659eaa78acd12131e2ddf05bc9d3485ce8dadbbb6"
+    },
+    "validation": {
+      "cases": 10,
+      "path": "v1/validation.jsonl",
+      "sealed": false,
+      "sha256": "d5eae7842ad67a2320f79b08cf4c05e5a6202b1a5baf7cc5a82e270df1cbba19"
+    }
+  },
+  "version": "v1"
+}

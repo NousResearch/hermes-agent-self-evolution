@@ -10,7 +10,7 @@ Three complementary engines, unified under one workflow:
 |--------|------------------|---------|-------------|
 | **DSPy + GEPA** | Skills, prompts, instructions, tool descriptions | MIT | Native Python, primary engine |
 | **Darwinian Evolver** | Code files, algorithms, tool implementations | AGPL v3 | External CLI only |
-| **DSPy MIPROv2** | Few-shot examples, instruction text | MIT | Native Python, fallback optimizer |
+| **DSPy MIPROv2** | Few-shot examples, instruction text | MIT | Native Python; not used as a fallback (the skill pipeline fails closed if GEPA fails) |
 
 GEPA is the star — it's integrated into DSPy, reads execution traces to understand WHY things fail (not just that they fail), and works with as few as 3 examples. It outperforms both RL and previous DSPy optimizers.
 
@@ -70,7 +70,7 @@ GEPA is the star — it's integrated into DSPy, reads execution traces to unders
 │                                             │
 │  4. RUN OPTIMIZER                           │
 │     - Primary: dspy.GEPA (reflective evolution)│
-│     - Fallback: dspy.MIPROv2 (bayesian opt)  │
+│     - No fallback: GEPA errors stop the run  │
 │     - Code: Darwinian Evolver (external CLI)  │
 │                                             │
 │  5. EVALUATE & COMPARE                      │

@@ -1,0 +1,921 @@
+{
+  "admission": {
+    "active_skill": "github-code-review@28dcec5ab528",
+    "candidate_id": "github-code-review@28dcec5ab528",
+    "decision": {
+      "admitted": true,
+      "baseline_id": "github-code-review@11ad06e6d49b",
+      "baseline_mean_quality": 0.7157142857142857,
+      "baseline_mean_utility": 0.6795353867320629,
+      "baseline_violations": 0,
+      "candidate_id": "github-code-review@28dcec5ab528",
+      "candidate_mean_quality": 0.8333333333333334,
+      "candidate_mean_utility": 0.8065782389355541,
+      "candidate_violations": 0,
+      "ci_high": 0.2717719394419058,
+      "ci_low": 0.006258370212034345,
+      "mean_utility_gain": 0.12704285220349115,
+      "n_cases": 10,
+      "notice": "SYNTHETIC: gate 2 v1 benchmark is hand-written synthetic data; an admission is not evidence of real Hermes improvement.",
+      "policy": {
+        "benchmark_version": "v1",
+        "bootstrap_seed": 0,
+        "confidence": 0.95,
+        "max_critical_violations": 0,
+        "min_margin": 0.05,
+        "n_bootstrap": 2000,
+        "reference_cost_usd": 0.03,
+        "reference_latency_s": 6.0,
+        "seeds": [
+          0,
+          1,
+          2
+        ],
+        "split": "validation"
+      },
+      "policy_sha256": "1c3cd3e28dd5f9d140183bae6a747b7b0f396358adb93d14eeceff6913f0f4ed",
+      "reasons": [],
+      "synthetic": true,
+      "unparseable_outputs": 0,
+      "verifier_sha256": "f3310b479ff67439dbf4cadf8de834ecf5b4056ae30d98c70923f46157f2ec92"
+    },
+    "parent_id": "github-code-review@11ad06e6d49b",
+    "post_validation": {
+      "critical_violation": false,
+      "n_tasks": 30,
+      "synthetic": true,
+      "utility": 0.8092093904172197
+    },
+    "pre_validation": {
+      "critical_violation": false,
+      "n_tasks": 30,
+      "synthetic": true,
+      "utility": 0.6165984054402781
+    },
+    "reason": "admitted and kept",
+    "registry_status": "admitted",
+    "status": "kept"
+  },
+  "baseline_id": "github-code-review@11ad06e6d49b",
+  "canary": {
+    "cases": [
+      {
+        "case_id": "pyrev-001",
+        "cost_usd": 0.029114,
+        "f1": 1.0,
+        "parse_ok": true
+      },
+      {
+        "case_id": "pyrev-002",
+        "cost_usd": 0.0040193,
+        "f1": 0.6666666666666666,
+        "parse_ok": true
+      },
+      {
+        "case_id": "pyrev-004",
+        "cost_usd": 0.0021013,
+        "f1": 1.0,
+        "parse_ok": true
+      }
+    ],
+    "fresh_calls": 3,
+    "replayed_calls": 0
+  },
+  "checkpoints": {
+    "checkpoints": {
+      "good": 2
+    },
+    "events": {
+      "promote": 1,
+      "save": 2
+    },
+    "log": [
+      {
+        "checkpoint_id": 1,
+        "event": "save",
+        "from": null,
+        "reason": "admission:github-code-review@28dcec5ab528:pre"
+      },
+      {
+        "checkpoint_id": 2,
+        "event": "save",
+        "from": null,
+        "reason": "admission:github-code-review@28dcec5ab528:post"
+      },
+      {
+        "checkpoint_id": 2,
+        "event": "promote",
+        "from": 1,
+        "reason": "post-admission validation passed"
+      }
+    ],
+    "rollbacks": [],
+    "status": "supplied"
+  },
+  "compare": {
+    "best_fixed_baseline": "fixed:skill",
+    "comparisons": [
+      {
+        "baseline": "fixed:skill",
+        "ci_high": 0.015340206731601563,
+        "ci_low": 0.0006672722032532923,
+        "mean_diff": 0.00829532881722066,
+        "metric": "utility",
+        "phase": "train",
+        "policy": "epsilon_greedy",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "fixed:skill",
+        "ci_high": -0.024018583756759693,
+        "ci_low": -0.03925198224511951,
+        "mean_diff": -0.03194020063020521,
+        "metric": "utility",
+        "phase": "validation",
+        "policy": "epsilon_greedy",
+        "verdict": "worse"
+      },
+      {
+        "baseline": "random",
+        "ci_high": 0.03451150817476553,
+        "ci_low": 0.017494397105047115,
+        "mean_diff": 0.026340094385991147,
+        "metric": "utility",
+        "phase": "train",
+        "policy": "epsilon_greedy",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "random",
+        "ci_high": -0.0107172397355573,
+        "ci_low": -0.04072864408666229,
+        "mean_diff": -0.025149463262958312,
+        "metric": "utility",
+        "phase": "validation",
+        "policy": "epsilon_greedy",
+        "verdict": "worse"
+      },
+      {
+        "baseline": "fixed:skill",
+        "ci_high": 0.04754750819427244,
+        "ci_low": 0.03908319227976841,
+        "mean_diff": 0.043632403032438274,
+        "metric": "utility",
+        "phase": "train",
+        "policy": "linucb",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "fixed:skill",
+        "ci_high": -0.026139422044257815,
+        "ci_low": -0.041161351514930423,
+        "mean_diff": -0.034022710724121434,
+        "metric": "utility",
+        "phase": "validation",
+        "policy": "linucb",
+        "verdict": "worse"
+      },
+      {
+        "baseline": "random",
+        "ci_high": 0.06597442958418788,
+        "ci_low": 0.05705820362057132,
+        "mean_diff": 0.06167716860120877,
+        "metric": "utility",
+        "phase": "train",
+        "policy": "linucb",
+        "verdict": "improvement"
+      },
+      {
+        "baseline": "random",
+        "ci_high": -0.013422187652281542,
+        "ci_low": -0.039937166899836854,
+        "mean_diff": -0.02723197335687454,
+        "metric": "utility",
+        "phase": "validation",
+        "policy": "linucb",
+        "verdict": "worse"
+      }
+    ],
+    "config": {
+      "bootstrap": {
+        "confidence": 0.95,
+        "resamples": 2000,
+        "seed": 0,
+        "unit": "seed-level run mean"
+      },
+      "seeds": 20,
+      "strategies": [
+        "direct",
+        "skill"
+      ],
+      "train_episodes": 300,
+      "train_items": 28,
+      "validation_items": 10,
+      "validation_learning": false
+    },
+    "executions": 76,
+    "executor_backend": "hermes",
+    "fresh_calls": 73,
+    "policies": {
+      "epsilon_greedy": {
+        "kind": "adaptive",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.005602425454583333,
+            "ci_low": 0.0052650713875,
+            "mean": 0.0054408759,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 22.207231554998916,
+            "ci_low": 18.530220102822316,
+            "mean": 20.335932189174336,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.798790124166835,
+            "ci_low": 3.7191437707974524,
+            "mean": 3.7597184197636357,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7100451388888889,
+            "ci_low": 0.6914319444444444,
+            "mean": 0.7009111111111112,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.07396397248339885,
+            "ci_low": 0.06171063157535901,
+            "mean": 0.06778644063058112,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6608377277371786,
+            "ci_low": 0.6417760287521019,
+            "mean": 0.6514438712797475,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.004216884749999999,
+            "ci_low": 0.00412365075,
+            "mean": 0.0041740875,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 0.7471784271662774,
+            "ci_low": 0.5912642959517407,
+            "mean": 0.6695673045687508,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.393440051518473,
+            "ci_low": 3.184661164755264,
+            "mean": 3.285365938025243,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.6238095238095238,
+            "ci_low": 0.608642857142857,
+            "mean": 0.6159761904761905,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.07407070945994866,
+            "ci_low": 0.059329619627087195,
+            "mean": 0.06695673045687509,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5825169672239837,
+            "ci_low": 0.5670916495725313,
+            "mean": 0.5746845159926468,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "epsilon-greedy/1:eps=0.15"
+      },
+      "fixed:direct": {
+        "kind": "fixed",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.00436092185,
+            "ci_low": 0.004285940106666667,
+            "mean": 0.004326109,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 35.2213288095842,
+            "ci_low": 31.611723424012677,
+            "mean": 33.29520471843027,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.9508024611026755,
+            "ci_low": 3.8993743440160697,
+            "mean": 3.9273341914660116,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.6626779166666666,
+            "ci_low": 0.6480495833333334,
+            "mean": 0.6553944444444444,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.11741677861137137,
+            "ci_low": 0.1051763655275156,
+            "mean": 0.1109840157281009,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6160495656972061,
+            "ci_low": 0.6002922540439392,
+            "mean": 0.6082462961822277,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.0038421999999999996,
+            "ci_low": 0.0038421999999999996,
+            "mean": 0.0038421999999999996,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 0.6102484083249624,
+            "ci_low": 0.6102484083249624,
+            "mean": 0.6102484083249624,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.646294183099781,
+            "ci_low": 3.646294183099781,
+            "mean": 3.646294183099781,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.6238095238095238,
+            "ci_low": 0.6238095238095238,
+            "mean": 0.6238095238095238,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.06102484083249624,
+            "ci_low": 0.06102484083249624,
+            "mean": 0.06102484083249624,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5806164056170255,
+            "ci_low": 0.5806164056170255,
+            "mean": 0.5806164056170255,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "fixed/1:direct"
+      },
+      "fixed:skill": {
+        "kind": "fixed",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.006216227132083333,
+            "ci_low": 0.006000612754166667,
+            "mean": 0.006114809416666667,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 24.069207196189865,
+            "ci_low": 21.48151943211037,
+            "mean": 22.824530834340525,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.750776185123658,
+            "ci_low": 3.6740217469125613,
+            "mean": 3.7129178044967803,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7040404166666666,
+            "ci_low": 0.6844929166666668,
+            "mean": 0.6944722222222223,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.08029650005076101,
+            "ci_low": 0.07123898953498603,
+            "mean": 0.07608176944780175,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6530101865203335,
+            "ci_low": 0.6330054758252123,
+            "mean": 0.6431485424625268,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.0043407,
+            "ci_low": 0.0043407,
+            "mean": 0.0043407,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 0.35016529826669907,
+            "ci_low": 0.35016529826669907,
+            "mean": 0.35016529826669907,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.125896862400623,
+            "ci_low": 3.125896862400623,
+            "mean": 3.125896862400623,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.6471428571428571,
+            "ci_low": 0.6471428571428571,
+            "mean": 0.6471428571428571,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.035016529826669904,
+            "ci_low": 0.035016529826669904,
+            "mean": 0.035016529826669904,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.606624716622852,
+            "ci_low": 0.606624716622852,
+            "mean": 0.606624716622852,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "fixed/1:skill"
+      },
+      "linucb": {
+        "kind": "adaptive",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.005117618645833334,
+            "ci_low": 0.00500468565375,
+            "mean": 0.005060403066666667,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 10.13021372342564,
+            "ci_low": 9.330188125118138,
+            "mean": 9.734809924609044,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.731274975925685,
+            "ci_low": 3.668955148461764,
+            "mean": 3.700791980604187,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.7417176388888889,
+            "ci_low": 0.7267104166666667,
+            "mean": 0.7344888888888889,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.03377534764080237,
+            "ci_low": 0.031115631843044785,
+            "mean": 0.03244936641536349,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6943259871965619,
+            "ci_low": 0.6788609127108061,
+            "mean": 0.686780945494965,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.004189085687499999,
+            "ci_low": 0.0041083266874999995,
+            "mean": 0.0041505325,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 0.7666397119805916,
+            "ci_low": 0.6057376142683604,
+            "mean": 0.6903924055079131,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.377087510463028,
+            "ci_low": 3.206350075419354,
+            "mean": 3.284689149295191,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.6213095238095238,
+            "ci_low": 0.6063095238095239,
+            "mean": 0.6138095238095238,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.07654623141070334,
+            "ci_low": 0.06088787486665718,
+            "mean": 0.06903924055079132,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.5811856825406023,
+            "ci_low": 0.5647065612740472,
+            "mean": 0.5726020058987306,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "linucb/1:alpha=1,ridge=1"
+      },
+      "random": {
+        "kind": "random",
+        "train": {
+          "cost_usd": {
+            "ci_high": 0.005331917008333333,
+            "ci_low": 0.00520194855,
+            "mean": 0.005266194833333333,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 29.60324897081319,
+            "ci_low": 26.81701640189896,
+            "mean": 28.237960504971674,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.8507389940984953,
+            "ci_low": 3.78457050414475,
+            "mean": 3.8184021727492405,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.6832393055555556,
+            "ci_low": 0.665648888888889,
+            "mean": 0.6744777777777778,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.09885311781728284,
+            "ci_low": 0.08943470591884288,
+            "mean": 0.09412653501657225,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6343920657570508,
+            "ci_low": 0.6156671844387677,
+            "mean": 0.6251037768937564,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "validation": {
+          "cost_usd": {
+            "ci_high": 0.004149929312500001,
+            "ci_low": 0.0040522812499999995,
+            "mean": 0.0041000375,
+            "n": 20
+          },
+          "cumulative_regret": {
+            "ci_high": 0.5366366130006542,
+            "ci_low": 0.3048529680491681,
+            "mean": 0.4180726719391673,
+            "n": 20
+          },
+          "latency_s": {
+            "ci_high": 3.4348821458014736,
+            "ci_low": 3.280756103140551,
+            "mean": 3.357050346470241,
+            "n": 20
+          },
+          "quality": {
+            "ci_high": 0.6521470238095238,
+            "ci_low": 0.6304720238095237,
+            "mean": 0.6414761904761905,
+            "n": 20
+          },
+          "regret": {
+            "ci_high": 0.0534128812769028,
+            "ci_low": 0.030547400062171316,
+            "mean": 0.04180726719391673,
+            "n": 20
+          },
+          "utility": {
+            "ci_high": 0.6116190286277915,
+            "ci_low": 0.5881007918527837,
+            "mean": 0.5998339792556051,
+            "n": 20
+          },
+          "violation_rate": {
+            "ci_high": 0.0,
+            "ci_low": 0.0,
+            "mean": 0.0,
+            "n": 20
+          }
+        },
+        "version": "random/1"
+      }
+    },
+    "replayed_calls": 3
+  },
+  "gepa": {
+    "candidates": [
+      {
+        "chars": 13210,
+        "index": 0,
+        "merge": false,
+        "parent": null,
+        "registered_as": null,
+        "seed": true,
+        "sha256": "7885961688b5"
+      },
+      {
+        "chars": 7464,
+        "index": 1,
+        "merge": false,
+        "parent": 0,
+        "registered_as": "github-code-review@28dcec5ab528",
+        "seed": false,
+        "sha256": "ca35278bcbe9"
+      },
+      {
+        "chars": 8998,
+        "index": 2,
+        "merge": true,
+        "parent": 1,
+        "registered_as": null,
+        "seed": false,
+        "sha256": "e4cb996b16d9"
+      },
+      {
+        "chars": 10237,
+        "index": 3,
+        "merge": false,
+        "parent": 2,
+        "registered_as": null,
+        "seed": false,
+        "sha256": "d5daec3b43e0"
+      }
+    ],
+    "metrics": {
+      "baseline_score": 0.675,
+      "baseline_size": 13211,
+      "candidates_explored": 4,
+      "constraints_passed": true,
+      "data": "python_review v1 train split only",
+      "elapsed_seconds": 638.5,
+      "evolved_score": 0.75,
+      "evolved_size": 7465,
+      "gepa_train_cases": 20,
+      "gepa_val_cases": 8,
+      "identical_to_baseline": false,
+      "lm_route": {
+        "reflection": "hermes:claude-subscription-directsdk-experimental:claude-sonnet-5-5[1m]",
+        "task": "hermes:claude-subscription-directsdk-experimental:claude-sonnet-5-5[1m]"
+      },
+      "max_metric_calls": 150,
+      "optimizer": "dspy.GEPA",
+      "seed": 0,
+      "skill_name": "github-code-review"
+    }
+  },
+  "identity": {
+    "budget": {
+      "max_cost_usd": null,
+      "max_iterations": 8,
+      "max_tokens": null,
+      "startup_grace_s": 120.0,
+      "timeout_s": 300.0
+    },
+    "mode": "live",
+    "model": "claude-sonnet-5-5[1m]",
+    "provider": "claude-subscription-directsdk-experimental",
+    "run_version": "kafo-full-run/1",
+    "skill_sha256": "11ad06e6d49bcfc3433530b40f95b72f568cae0a2d7ca6e2450b22d3e0626d7b"
+  },
+  "registry": {
+    "candidates": [
+      {
+        "count": 1,
+        "source": "baseline",
+        "status": "admitted"
+      },
+      {
+        "count": 1,
+        "source": "gepa",
+        "status": "admitted"
+      }
+    ],
+    "lineage": [
+      {
+        "candidate_id": "github-code-review@11ad06e6d49b",
+        "parent_id": null,
+        "source": "baseline",
+        "status": "admitted"
+      },
+      {
+        "candidate_id": "github-code-review@28dcec5ab528",
+        "parent_id": "github-code-review@11ad06e6d49b",
+        "source": "gepa",
+        "status": "admitted"
+      }
+    ],
+    "rejected": [],
+    "retired": [],
+    "status": "supplied",
+    "transitions": [
+      {
+        "candidate_id": "github-code-review@11ad06e6d49b",
+        "decided_by": "registry:baseline",
+        "from": null,
+        "to": "admitted"
+      },
+      {
+        "candidate_id": "github-code-review@28dcec5ab528",
+        "decided_by": "registry:gepa",
+        "from": null,
+        "to": "proposed"
+      },
+      {
+        "candidate_id": "github-code-review@28dcec5ab528",
+        "decided_by": "admission-gate:1c3cd3e28dd5",
+        "from": "proposed",
+        "to": "admitted"
+      }
+    ]
+  },
+  "run_id": "live-1",
+  "schema": "kafo-live-run-snapshot/1",
+  "sealed_split_open_attempts": 0,
+  "skill_source": "hermes-agent@caafe5389a:skills/software-development/github/references/code-review.md",
+  "source_files": {
+    "checkpoints.sqlite": "e63a063ce016ae7ab8169d9145ced3b83e979b2a3998a63626bd4e56020d835c",
+    "gepa_log/candidates.json": "40c58ebdd29fbea275c5bfa6e69726aed801fad5d99fd8944714f4b0e196d90a",
+    "gepa_log/run_log.json": "fdaf1569808fd5b6f06fa8725484763ed2dda239af71e98fb7b90478e60d0653",
+    "ledger.jsonl": "fc6c019a7458ef05d41d0599c99860366e79d066b5c8298904e0c2fe970bc824",
+    "registry.sqlite": "a2166b29499a84a588add51b9da5cd677083e0bdc247d2020ab83c78d68f9129",
+    "report.json": "01da865da291088915c724cd4f501c6b2eaf89bb0392314887a231b721acd96a",
+    "state.json": "8df3a60f8bd7981b4c06b281f4fd7a962d6899e23a34790120b294fcd1374691"
+  },
+  "spend": {
+    "by_stage": {
+      "admission": {
+        "calls": 120,
+        "cost_usd": 0.352691,
+        "errors": 0,
+        "mean_latency_s": 2.538,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      },
+      "canary": {
+        "calls": 3,
+        "cost_usd": 0.035235,
+        "errors": 0,
+        "mean_latency_s": 2.79,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      },
+      "compare": {
+        "calls": 73,
+        "cost_usd": 0.34199,
+        "errors": 0,
+        "mean_latency_s": 3.756,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      },
+      "final_eval_preflight:baseline": {
+        "calls": 1,
+        "cost_usd": 0.001474,
+        "errors": 0,
+        "mean_latency_s": 2.048,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      },
+      "final_eval_preflight:candidate": {
+        "calls": 1,
+        "cost_usd": 0.001161,
+        "errors": 0,
+        "mean_latency_s": 1.701,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      },
+      "final_test_evaluation:baseline": {
+        "calls": 10,
+        "cost_usd": 0.048931,
+        "errors": 0,
+        "mean_latency_s": 3.374,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      },
+      "final_test_evaluation:candidate": {
+        "calls": 10,
+        "cost_usd": 0.028937,
+        "errors": 0,
+        "mean_latency_s": 2.054,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      },
+      "gepa:reflection": {
+        "calls": 11,
+        "cost_usd": 0.657106,
+        "errors": 0,
+        "mean_latency_s": 21.478,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      },
+      "gepa:task": {
+        "calls": 92,
+        "cost_usd": 0.59914,
+        "errors": 0,
+        "mean_latency_s": 2.65,
+        "retries": 0,
+        "unknown_cost_calls": 0
+      }
+    },
+    "total_cost_usd": 2.066664
+  },
+  "splits_used": [
+    "train",
+    "validation"
+  ],
+  "stages": {
+    "admission": {
+      "seconds": 466.8,
+      "status": "done"
+    },
+    "canary": {
+      "seconds": 12.6,
+      "status": "done"
+    },
+    "compare": {
+      "seconds": 377.0,
+      "status": "done"
+    },
+    "gepa": {
+      "seconds": 647.3,
+      "status": "done"
+    }
+  }
+}

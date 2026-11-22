@@ -1,0 +1,12 @@
+{
+  "source": "live Hermes smoke run, 2026-11-22, owner-approved (PR #10); transcribed from docs/sprints/KAFO-EVO-001.md \"Live smoke run\", values rounded as published",
+  "model": "claude-sonnet-5-5[1m] via claude-subscription-directsdk-experimental, no toolsets",
+  "split": "validation",
+  "note": "Plumbing check, not evidence that Hermes improves or performs well. One run, no confidence intervals. Cost is Hermes' estimate at API rates; the provider bills a subscription, so metered spend may be zero.",
+  "cases": [
+    {"case_id": "pyrev-007", "completed": true, "quality": 0.50, "cost_usd": 0.0041, "latency_s": 4.3, "violation": false},
+    {"case_id": "pyrev-008", "completed": true, "quality": 0.67, "cost_usd": 0.0045, "latency_s": 3.7, "violation": false},
+    {"case_id": "pyrev-031", "completed": true, "quality": 1.00, "cost_usd": 0.0014, "latency_s": 3.7, "violation": false},
+    {"case_id": "pyrev-043", "completed": true, "quality": 0.80, "cost_usd": 0.0063, "latency_s": 5.2, "violation": false}
+  ]
+}
