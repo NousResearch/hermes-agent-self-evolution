@@ -1,0 +1,807 @@
+{
+  "alternates": {
+    "benchmark": {
+      "manifest_sha256": "fada5f14b7d89c0e081f820475ce52a51ecc585abfe2264de09f38c69cfb7282",
+      "name": "python_review",
+      "version": "v1"
+    },
+    "n_defects": 15,
+    "schema": "kafo-category-alternates/1",
+    "sha256": "042fbfaca8018664de4b3f4b1a14a0831098d1cb3deb865aee2510bed7b06dbd",
+    "source": {
+      "audit": "Independent ground-truth label audit of datasets/python_review/v1",
+      "audit_sha256": "47f5d1588294078181883387542a4900e288d668c34d7e098ca17a0205d1ee07",
+      "audited_commit": "3ce418df6223cfca346244f47d41fc54ce7a8373",
+      "auditor": "worker session selfadaptive-hermes-6 (independent of dataset author)",
+      "date": "2026-11-22",
+      "field": "cases[].defects[].flags.alt_category"
+    },
+    "table": "category_alternates_v1.json"
+  },
+  "analysis_plan": {
+    "ci": "95% paired percentile bootstrap over cases: 10000 resamples of case indices (random.Random(0), cases sorted by case_id), the same resamples for both skills, linearly interpolated quantiles",
+    "confidence": 0.95,
+    "descriptive": "per-skill micro precision, recall and F1 and macro F1 with CIs; paired macro-F1, micro-precision and micro-recall differences; cost, completions, parse failures, violations",
+    "design": "paired: the baseline and the candidate skill each review the same sealed test cases once (sample 0), same model, provider, budget, prompt and parser; calls interleave per case, in case_id order the baseline goes first on the 1st, 3rd, ... case and the candidate on the 2nd, 4th, ...",
+    "id": "kafo-evo-001-final-eval-plan/1",
+    "interpretation": "the candidate counts as better on the sealed test only if the primary CI lower bound is above 0; the secondary result cannot override the primary; synthetic hand-written cases, so no claim of a real Hermes improvement",
+    "missing_data": "a call that errors or reports no cost is re-sent once automatically by the spend-ledger wrapper (as in the full run); a call still failed after that, skipped (cost cap) or unparseable is scored as an empty review for that skill and case; nothing else is re-run",
+    "n_bootstrap": 10000,
+    "primary": "candidate minus baseline micro-F1 under STRICT scoring (gate 3 verifier, exact normalised category)",
+    "secondary": "candidate minus baseline micro-F1 under LENIENT scoring (strict rules, plus the label audit's alternate categories)",
+    "seed": 0
+  },
+  "analysis_plan_sha256": "345f05baf846d654fc7c993f58bbf01feda5db7c5a763ab238500723bdf31b71",
+  "benchmark": {
+    "manifest_sha256": "fada5f14b7d89c0e081f820475ce52a51ecc585abfe2264de09f38c69cfb7282",
+    "name": "python_review",
+    "version": "v1"
+  },
+  "design": "paired",
+  "finished_at": "2026-11-22T19:59:57.471797+00:00",
+  "first_call_by_position": [
+    "baseline",
+    "candidate",
+    "baseline",
+    "candidate",
+    "baseline",
+    "candidate",
+    "baseline",
+    "candidate",
+    "baseline",
+    "candidate"
+  ],
+  "lenient_defects_in_split": 3,
+  "n_cases": 10,
+  "paired": {
+    "lenient": {
+      "macro_f1": {
+        "high": 0.4833333333333333,
+        "low": 0.11666666666666659,
+        "point": 0.2833333333333332
+      },
+      "micro_f1": {
+        "high": 0.4736842105263158,
+        "low": 0.19443181818181826,
+        "point": 0.3324808184143222
+      },
+      "micro_precision": {
+        "high": 0.6111111111111112,
+        "low": 0.30000000000000004,
+        "point": 0.5
+      },
+      "micro_recall": {
+        "high": 0.375,
+        "low": 0.0,
+        "point": 0.11111111111111105
+      }
+    },
+    "strict": {
+      "macro_f1": {
+        "high": 0.46666666666666656,
+        "low": 0.06666666666666676,
+        "point": 0.2499999999999999
+      },
+      "micro_f1": {
+        "high": 0.46153846153846156,
+        "low": 0.1568398119481713,
+        "point": 0.30179028132992325
+      },
+      "micro_precision": {
+        "high": 0.6,
+        "low": 0.25974025974025977,
+        "point": 0.44642857142857145
+      },
+      "micro_recall": {
+        "high": 0.375,
+        "low": 0.0,
+        "point": 0.11111111111111116
+      }
+    }
+  },
+  "primary": "strict.micro_f1",
+  "reviewer_id": "hermes:claude-sonnet-5-5[1m]:claude-subscription-directsdk-experimental:review",
+  "reviewer_summaries": {
+    "baseline": {
+      "backend": "hermes",
+      "calls": 10,
+      "cases": [
+        {
+          "case_id": "pyrev-003",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0045073000000000005,
+          "error": false,
+          "latency_s": 3.4373066250009288,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-013",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0054333,
+          "error": false,
+          "latency_s": 3.938721999998961,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-017",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0039453000000000005,
+          "error": false,
+          "latency_s": 2.255955708998954,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-025",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0033533,
+          "error": false,
+          "latency_s": 2.749356500000431,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-029",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0065893,
+          "error": false,
+          "latency_s": 5.027954790999502,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-030",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0039193000000000006,
+          "error": false,
+          "latency_s": 2.4016013339987694,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-034",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0044013,
+          "error": false,
+          "latency_s": 3.0465562919998774,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": false,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-037",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0052953,
+          "error": false,
+          "latency_s": 2.9625452919990494,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-042",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.006529300000000001,
+          "error": false,
+          "latency_s": 4.5060650409996015,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-046",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0049573,
+          "error": false,
+          "latency_s": 3.4121139159997256,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        }
+      ],
+      "completed": 10,
+      "cost_statuses": {
+        "estimated": 10
+      },
+      "exceptions": 0,
+      "max_total_cost_usd": 2.0,
+      "meter_total_cost_usd": 0.077868,
+      "model": "claude-sonnet-5-5[1m]",
+      "provider": "claude-subscription-directsdk-experimental",
+      "skipped": 0,
+      "stopped": null,
+      "strategy_id": "review:github-code-review@11ad06e6d49b",
+      "toolsets": [],
+      "total_cost_usd": 0.048931,
+      "unparseable": 1,
+      "violations": 0
+    },
+    "candidate": {
+      "backend": "hermes",
+      "calls": 10,
+      "cases": [
+        {
+          "case_id": "pyrev-003",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0026439,
+          "error": false,
+          "latency_s": 2.0693316249999043,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-013",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0027599,
+          "error": false,
+          "latency_s": 2.2173381249995145,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-017",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0033119000000000004,
+          "error": false,
+          "latency_s": 2.0800306659984926,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-025",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0019399,
+          "error": false,
+          "latency_s": 1.8474693749994913,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-029",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0031559,
+          "error": false,
+          "latency_s": 2.1601141659994028,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-030",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0028059,
+          "error": false,
+          "latency_s": 1.8291160839999066,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-034",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0026679,
+          "error": false,
+          "latency_s": 1.8977087909988768,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-037",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0039819,
+          "error": false,
+          "latency_s": 2.407073250000394,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-042",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0029059000000000003,
+          "error": false,
+          "latency_s": 1.99340950000078,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        },
+        {
+          "case_id": "pyrev-046",
+          "completed": true,
+          "cost_status": "estimated",
+          "cost_usd": 0.0027638999999999997,
+          "error": false,
+          "latency_s": 2.035557332999815,
+          "model": "claude-sonnet-5-5[1m]",
+          "parse_ok": true,
+          "violations": 0
+        }
+      ],
+      "completed": 10,
+      "cost_statuses": {
+        "estimated": 10
+      },
+      "exceptions": 0,
+      "max_total_cost_usd": 2.0,
+      "meter_total_cost_usd": 0.077868,
+      "model": "claude-sonnet-5-5[1m]",
+      "provider": "claude-subscription-directsdk-experimental",
+      "skipped": 0,
+      "stopped": null,
+      "strategy_id": "review:github-code-review@28dcec5ab528",
+      "toolsets": [],
+      "total_cost_usd": 0.028937,
+      "unparseable": 0,
+      "violations": 0
+    }
+  },
+  "schema": "kafo-final-evaluation/2",
+  "scores": {
+    "lenient": {
+      "baseline": {
+        "cases": [
+          {
+            "case_id": "pyrev-003",
+            "fn": 0,
+            "fp": 1,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-013",
+            "fn": 0,
+            "fp": 2,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-017",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-025",
+            "fn": 0,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-029",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-030",
+            "fn": 0,
+            "fp": 1,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-034",
+            "fn": 1,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-037",
+            "fn": 0,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-042",
+            "fn": 1,
+            "fp": 1,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-046",
+            "fn": 0,
+            "fp": 2,
+            "tp": 1
+          }
+        ],
+        "macro": {
+          "f1": {
+            "high": 0.8666666666666666,
+            "low": 0.4833333333333333,
+            "point": 0.6833333333333333
+          },
+          "precision": {
+            "high": 0.8333333333333334,
+            "low": 0.4,
+            "point": 0.6166666666666667
+          },
+          "recall": {
+            "high": 1.0,
+            "low": 0.65,
+            "point": 0.85
+          }
+        },
+        "micro": {
+          "f1": {
+            "high": 0.7619047619047619,
+            "low": 0.5,
+            "point": 0.6086956521739131
+          },
+          "precision": {
+            "high": 0.7,
+            "low": 0.3888888888888889,
+            "point": 0.5
+          },
+          "recall": {
+            "high": 1.0,
+            "low": 0.5454545454545454,
+            "point": 0.7777777777777778
+          }
+        },
+        "totals": {
+          "false_negatives": 2,
+          "false_positives": 7,
+          "true_positives": 7
+        }
+      },
+      "candidate": {
+        "cases": [
+          {
+            "case_id": "pyrev-003",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-013",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-017",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-025",
+            "fn": 0,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-029",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-030",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-034",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-037",
+            "fn": 0,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-042",
+            "fn": 1,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-046",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          }
+        ],
+        "macro": {
+          "f1": {
+            "high": 1.0,
+            "low": 0.9,
+            "point": 0.9666666666666666
+          },
+          "precision": {
+            "high": 1.0,
+            "low": 1.0,
+            "point": 1.0
+          },
+          "recall": {
+            "high": 1.0,
+            "low": 0.85,
+            "point": 0.95
+          }
+        },
+        "micro": {
+          "f1": {
+            "high": 1.0,
+            "low": 0.8333333333333334,
+            "point": 0.9411764705882353
+          },
+          "precision": {
+            "high": 1.0,
+            "low": 1.0,
+            "point": 1.0
+          },
+          "recall": {
+            "high": 1.0,
+            "low": 0.7142857142857143,
+            "point": 0.8888888888888888
+          }
+        },
+        "totals": {
+          "false_negatives": 1,
+          "false_positives": 0,
+          "true_positives": 8
+        }
+      }
+    },
+    "strict": {
+      "baseline": {
+        "cases": [
+          {
+            "case_id": "pyrev-003",
+            "fn": 1,
+            "fp": 2,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-013",
+            "fn": 0,
+            "fp": 2,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-017",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-025",
+            "fn": 0,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-029",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-030",
+            "fn": 0,
+            "fp": 1,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-034",
+            "fn": 1,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-037",
+            "fn": 0,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-042",
+            "fn": 1,
+            "fp": 1,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-046",
+            "fn": 0,
+            "fp": 2,
+            "tp": 1
+          }
+        ],
+        "macro": {
+          "f1": {
+            "high": 0.8333333333333334,
+            "low": 0.3833333333333333,
+            "point": 0.6166666666666667
+          },
+          "precision": {
+            "high": 0.8,
+            "low": 0.3333333333333333,
+            "point": 0.5666666666666667
+          },
+          "recall": {
+            "high": 1.0,
+            "low": 0.5,
+            "point": 0.75
+          }
+        },
+        "micro": {
+          "f1": {
+            "high": 0.7142857142857143,
+            "low": 0.32,
+            "point": 0.5217391304347826
+          },
+          "precision": {
+            "high": 0.6666666666666666,
+            "low": 0.26282894736842394,
+            "point": 0.42857142857142855
+          },
+          "recall": {
+            "high": 1.0,
+            "low": 0.375,
+            "point": 0.6666666666666666
+          }
+        },
+        "totals": {
+          "false_negatives": 3,
+          "false_positives": 8,
+          "true_positives": 6
+        }
+      },
+      "candidate": {
+        "cases": [
+          {
+            "case_id": "pyrev-003",
+            "fn": 1,
+            "fp": 1,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-013",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-017",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-025",
+            "fn": 0,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-029",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-030",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-034",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-037",
+            "fn": 0,
+            "fp": 0,
+            "tp": 0
+          },
+          {
+            "case_id": "pyrev-042",
+            "fn": 1,
+            "fp": 0,
+            "tp": 1
+          },
+          {
+            "case_id": "pyrev-046",
+            "fn": 0,
+            "fp": 0,
+            "tp": 1
+          }
+        ],
+        "macro": {
+          "f1": {
+            "high": 1.0,
+            "low": 0.6333333333333333,
+            "point": 0.8666666666666666
+          },
+          "precision": {
+            "high": 1.0,
+            "low": 0.7,
+            "point": 0.9
+          },
+          "recall": {
+            "high": 1.0,
+            "low": 0.6,
+            "point": 0.85
+          }
+        },
+        "micro": {
+          "f1": {
+            "high": 1.0,
+            "low": 0.5555555555555556,
+            "point": 0.8235294117647058
+          },
+          "precision": {
+            "high": 1.0,
+            "low": 0.6,
+            "point": 0.875
+          },
+          "recall": {
+            "high": 1.0,
+            "low": 0.5,
+            "point": 0.7777777777777778
+          }
+        },
+        "totals": {
+          "false_negatives": 2,
+          "false_positives": 1,
+          "true_positives": 7
+        }
+      }
+    }
+  },
+  "secondary": "lenient.micro_f1",
+  "skill_versions": {
+    "baseline": "github-code-review@11ad06e6d49b",
+    "candidate": "github-code-review@28dcec5ab528"
+  },
+  "started_at": "2026-11-22T19:58:35.764887+00:00",
+  "status": "completed",
+  "synthetic": true,
+  "verifier": {
+    "config": {
+      "category_aliases": [],
+      "line_tolerance": 1,
+      "min_overlap_ratio": 0.5
+    },
+    "match_rule": "category-equal+line-overlap/1",
+    "verifier_sha256": "f3310b479ff67439dbf4cadf8de834ecf5b4056ae30d98c70923f46157f2ec92",
+    "verifier_version": "kafo-verifier/1"
+  }
+}

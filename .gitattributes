@@ -1,0 +1,2 @@
+# Benchmark files are hashed byte-for-byte (see MANIFEST.json); never convert line endings.
+datasets/python_review/** -text
