@@ -24,6 +24,7 @@ from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
 from evolution.core.gepa_metric import make_feedback_metric
 from evolution.core.lm import make_lm
+from evolution.core.optimize import build_gepa, print_constraints
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -121,14 +122,7 @@ def evolve(
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
     baseline_constraints = validator.validate_all(skill["raw"], "skill")
-    all_pass = True
-    for c in baseline_constraints:
-        icon = "✓" if c.passed else "✗"
-        color = "green" if c.passed else "red"
-        console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-        if not c.passed:
-            all_pass = False
-
+    all_pass = print_constraints(console, baseline_constraints)
     if not all_pass:
         console.print("[yellow]⚠ Baseline skill has constraint violations — proceeding anyway[/yellow]")
 
@@ -160,11 +154,8 @@ def evolve(
 
     try:
         # DSPy 3.5 GEPA requires an explicit reflection LM.
-        optimizer = dspy.GEPA(
-            metric=make_feedback_metric(skill_fitness_metric),
-            auto="light" if iterations <= 5 else "medium",
-            num_threads=8,
-            reflection_lm=make_lm(optimizer_model, reflection=True),
+        optimizer = build_gepa(
+            make_feedback_metric(skill_fitness_metric), iterations, optimizer_model
         )
 
         optimized_module = optimizer.compile(
@@ -194,14 +185,7 @@ def evolve(
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
     evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
-    all_pass = True
-    for c in evolved_constraints:
-        icon = "✓" if c.passed else "✗"
-        color = "green" if c.passed else "red"
-        console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-        if not c.passed:
-            all_pass = False
-
+    all_pass = print_constraints(console, evolved_constraints)
     if not all_pass:
         console.print("[red]✗ Evolved skill FAILED constraints — not deploying[/red]")
         # Still save for inspection

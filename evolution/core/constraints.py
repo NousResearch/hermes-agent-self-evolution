@@ -54,9 +54,6 @@ class ConstraintValidator:
         if artifact_type == "skill":
             results.append(self._check_skill_structure(artifact_text))
 
-        if artifact_type == "tool_description":
-            results.append(self._check_markers(artifact_text))
-
         return results
 
     def validate_tool_description(
@@ -72,6 +69,7 @@ class ConstraintValidator:
         return [
             self._check_size(description, "tool_description"),
             self._check_non_empty(description),
+            self._check_min_length(description),
             self._check_markers(instructions),
         ]
 
@@ -169,6 +167,21 @@ class ConstraintValidator:
                 constraint_name="non_empty",
                 message="Artifact is empty",
             )
+
+    def _check_min_length(self, text: str) -> ConstraintResult:
+        # Collapse insurance: a trivially short description can score well on
+        # negatives while saying nothing.
+        if len(text.strip()) >= 40:
+            return ConstraintResult(
+                passed=True,
+                constraint_name="min_length",
+                message=f"Length OK: {len(text.strip())} chars",
+            )
+        return ConstraintResult(
+            passed=False,
+            constraint_name="min_length",
+            message=f"Too short to be informative: {len(text.strip())} chars (min 40)",
+        )
 
     def _check_markers(self, text: str) -> ConstraintResult:
         missing = [m for m in TOOL_DESCRIPTION_MARKERS if m not in text]

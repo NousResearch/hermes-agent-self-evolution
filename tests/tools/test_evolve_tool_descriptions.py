@@ -113,3 +113,30 @@ class TestBuildSelectionDataset:
 
         assert len(dataset.all_examples) == 10
         assert all(ex.expected_behavior == "search_files" for ex in dataset.all_examples)
+
+    def test_token_boundary_rejects_superstring_tools(self):
+        """'close_terminal' and 'read_terminal' must NOT score for gold 'terminal'."""
+        gold = dspy.Example(task_input="x", expected_behavior="terminal")
+
+        def pred(text):
+            return dspy.Prediction(output=text)
+
+        assert selection_metric(gold, pred("close_terminal")) == 0.0
+        assert selection_metric(gold, pred("read_terminal")) == 0.0
+        assert selection_metric(gold, pred("terminal")) == 1.0
+        assert selection_metric(gold, pred("use terminal here")) == 1.0
+        assert selection_metric(gold, pred("the_terminal_config")) == 0.0
+
+    def test_split_ratios_pinned(self):
+        from evolution.core.dataset_builder import EvalExample
+        from evolution.tools.evolve_tool_descriptions import _split
+
+        def ex(i):
+            return EvalExample(task_input=f"t{i}", expected_behavior="x", source="test")
+
+        d60 = _split([ex(i) for i in range(60)])
+        assert (len(d60.train), len(d60.val), len(d60.holdout)) == (30, 15, 15)
+        d10 = _split([ex(i) for i in range(10)])
+        assert (len(d10.train), len(d10.val), len(d10.holdout)) == (5, 2, 3)
+        d2 = _split([ex(i) for i in range(2)])
+        assert (len(d2.train), len(d2.val), len(d2.holdout)) == (1, 1, 0)

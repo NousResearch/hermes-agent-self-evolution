@@ -137,6 +137,7 @@ def _conditional_branch(node: ast.IfExp) -> ast.expr:
             and isinstance(right.value, str)
         ):
             return node.body if left.value == right.value else node.orelse
+    logger.debug("undecidable IfExp test — taking else branch")
     return node.orelse
 
 

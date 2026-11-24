@@ -11,6 +11,7 @@ Usage:
 
 import json
 import random
+import re
 import sys
 import time
 from datetime import datetime
@@ -27,6 +28,8 @@ from evolution.core.constraints import ConstraintValidator
 from evolution.core.dataset_builder import EvalDataset, EvalExample
 from evolution.core.gepa_metric import make_feedback_metric
 from evolution.core.lm import make_lm
+from evolution.core.optimize import build_gepa, print_constraints
+from evolution.core.state_db import DEFAULT_DB
 from evolution.tools.tool_doc_module import ToolDocModule, extract_description
 from evolution.tools.tool_registry_reader import read_tool_descriptions
 from evolution.tools.tool_usage_miner import mine_tool_usage
@@ -49,8 +52,10 @@ def selection_metric(gold, pred, trace=None) -> float:
     if answer == expected:
         return 1.0
     # A gold tool name inside a sentence ("use search_files here") still counts;
-    # for a negative example only the bare "other" is correct.
-    if expected != OTHER and expected in answer:
+    # token-boundary match so "close_terminal" never scores for "terminal".
+    if expected != OTHER and re.search(
+        rf"(?<![\w-]){re.escape(expected)}(?![\w-])", answer
+    ):
         return 1.0
     return 0.0
 
@@ -181,7 +186,17 @@ def evolve(
 
     # ── 2. Mined tool-selection dataset ─────────────────────────────────
     console.print(f"\n[bold]Mining tool usage[/bold] (last {days} days)")
-    pairs = mine_tool_usage(days)
+    try:
+        pairs = mine_tool_usage(days)
+    except (RuntimeError, ValueError) as e:
+        console.print(f"[red]✗ {e}[/red]")
+        sys.exit(1)
+    if not pairs:
+        console.print(
+            f"[red]✗ No usage pairs mined — no session store at {DEFAULT_DB}, "
+            f"or the window is empty[/red]"
+        )
+        sys.exit(1)
     dataset = build_selection_dataset(pairs, tool_name)
     positives = sum(
         1 for ex in dataset.all_examples if ex.expected_behavior == tool_name
@@ -219,11 +234,7 @@ def evolve(
     baseline_constraints = validator.validate_tool_description(
         description, baseline_instructions
     )
-    for c in baseline_constraints:
-        icon = "✓" if c.passed else "✗"
-        color = "green" if c.passed else "red"
-        console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-    if not all(c.passed for c in baseline_constraints):
+    if not print_constraints(console, baseline_constraints):
         console.print(
             "[yellow]⚠ Baseline description has constraint violations — proceeding anyway[/yellow]"
         )
@@ -244,11 +255,8 @@ def evolve(
     console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
 
     start_time = time.time()
-    optimizer = dspy.GEPA(
-        metric=make_feedback_metric(selection_metric),
-        auto="light" if iterations <= 5 else "medium",
-        num_threads=8,
-        reflection_lm=make_lm(optimizer_model, reflection=True),
+    optimizer = build_gepa(
+        make_feedback_metric(selection_metric), iterations, optimizer_model
     )
     optimized_module = optimizer.compile(
         baseline_module,
@@ -259,7 +267,7 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 5. Extract + validate the evolved description ───────────────────
-    evolved_instructions = str(optimized_module.extract())
+    evolved_instructions = optimized_module.extract()
     console.print("\n[bold]Validating evolved description[/bold]")
     try:
         evolved_description = extract_description(evolved_instructions)
@@ -271,18 +279,17 @@ def evolve(
     evolved_constraints = validator.validate_tool_description(
         evolved_description, evolved_instructions
     )
-    for c in evolved_constraints:
-        icon = "✓" if c.passed else "✗"
-        color = "green" if c.passed else "red"
-        console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-
-    if not all(c.passed for c in evolved_constraints):
+    constraints_passed = print_constraints(console, evolved_constraints)
+    if not constraints_passed:
         console.print("[red]✗ Evolved description FAILED constraints — not deploying[/red]")
         return
 
     # ── 6. Holdout comparison ───────────────────────────────────────────
+    # Score the deployable artifact — the extracted description inside a fresh
+    # frozen template — not the co-optimized prompt GEPA produced.
     console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
 
+    evolved_module = ToolDocModule(tool_name, evolved_description)
     baseline_scores = []
     evolved_scores = []
     for ex in dataset.to_dspy_examples("holdout"):
@@ -291,7 +298,7 @@ def evolve(
                 selection_metric(ex, baseline_module(task_input=ex.task_input))
             )
             evolved_scores.append(
-                selection_metric(ex, optimized_module(task_input=ex.task_input))
+                selection_metric(ex, evolved_module(task_input=ex.task_input))
             )
 
     avg_baseline = sum(baseline_scores) / max(1, len(baseline_scores))
@@ -349,7 +356,7 @@ def evolve(
         "val_examples": len(dataset.val),
         "holdout_examples": len(dataset.holdout),
         "elapsed_seconds": elapsed,
-        "constraints_passed": True,
+        "constraints_passed": constraints_passed,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
@@ -374,7 +381,8 @@ def evolve(
 @click.command()
 @click.option("--tool", "tool_name", required=True, help="Name of the tool to evolve")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
-@click.option("--days", default=90, show_default=True, help="Session-history window in days")
+@click.option("--days", default=90, show_default=True, type=click.IntRange(min=1),
+              help="Session-history window in days")
 @click.option("--iterations", default=10, show_default=True, help="Number of GEPA iterations")
 @click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
 @click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")

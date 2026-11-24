@@ -59,3 +59,8 @@ class TestToolDocModule:
     def test_extraction_rejects_mangled_markers(self, mangled):
         with pytest.raises(ValueError):
             extract_description(mangled)
+
+    def test_description_containing_markers_rejected(self):
+        """A description embedding the end marker would silently truncate on extraction."""
+        with pytest.raises(ValueError, match="markers"):
+            ToolDocModule("t", "Closes with <</DESCRIPTION>> then continues.")

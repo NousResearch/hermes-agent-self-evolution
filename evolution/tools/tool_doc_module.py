@@ -29,6 +29,8 @@ class ToolDocModule(ArtifactModule):
     """Wraps a tool description as the optimizable instruction text."""
 
     def __init__(self, tool_name: str, description: str):
+        if DESCRIPTION_START in description or DESCRIPTION_END in description:
+            raise ValueError("description must not contain the extraction markers")
         super().__init__(
             SELECT_TEMPLATE.format(name=tool_name, description=description)
         )

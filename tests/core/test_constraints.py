@@ -53,8 +53,15 @@ class TestToolDescriptionConstraints:
         results = validator.validate_tool_description("x" * 600, instructions)
         assert not all(r.passed for r in results)
 
-        ok = validator.validate_tool_description("Search files", "<<DESCRIPTION>>Search files<</DESCRIPTION>>")
+        desc = "Search files by content and by name across the tree"
+        ok = validator.validate_tool_description(desc, f"<<DESCRIPTION>>{desc}<</DESCRIPTION>>")
         assert all(r.passed for r in ok)
+
+    def test_min_length_floor_rejects_collapse(self, validator):
+        result = validator._check_min_length("Search files.")
+        assert not result.passed
+        assert "min 40" in result.message
+        assert validator._check_min_length("x" * 40).passed
 
 
 class TestGrowthConstraints:

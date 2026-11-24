@@ -66,7 +66,7 @@ def mine_tool_usage(days: int = 90, db_path: Path | None = None) -> list[dict]:
                         {"task_input": text, "tool": win_tool, "session_id": session_id}
                     )
         return pairs
-    except sqlite3.OperationalError as e:
+    except sqlite3.DatabaseError as e:
         raise RuntimeError(f"cannot read session store {db} (locked or corrupt?): {e}") from e
     finally:
         if con is not None:
