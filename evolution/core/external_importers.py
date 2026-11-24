@@ -25,6 +25,7 @@ Usage from evolve_skill.py:
 import json
 import re
 import random
+import sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -416,6 +417,102 @@ class HermesSessionImporter:
         return messages
 
 
+class HermesStateDBImporter:
+    """Import conversations from Hermes Agent's state.db (SQLite).
+
+    Current Hermes versions store sessions in ~/.hermes/state.db, not
+    per-session JSON files — HermesSessionImporter finds nothing there.
+    Interactive sources only: subagent/cron dispatches are machine-generated
+    prompts, not user tasks. WebUI workspace tags and system-injected
+    wrappers (compaction references, async-delegation notices) are stripped
+    or skipped so task_input reflects what the user actually asked.
+    """
+
+    DB_PATH = Path.home() / ".hermes" / "state.db"
+    AUTOMATED_SOURCES = ("subagent", "cron", "task", "local")
+    SKIP_PREFIXES = ("[CONTEXT COMPACTION", "[ASYNC DELEGATION")
+
+    @staticmethod
+    def _clean_user_text(text: str) -> str:
+        lines = [l for l in text.split("\n") if not l.startswith("[Workspace::v1:")]
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def extract_messages(limit: int = 0, days: int = 90) -> list[dict]:
+        """Read user/assistant pairs from state.db.
+
+        Args:
+            limit: Maximum pairs to return (0 = no limit).
+            days: Only scan sessions started within this window.
+
+        Returns:
+            List of dicts with keys: source, task_input, assistant_response,
+            session_id.
+        """
+        if not HermesStateDBImporter.DB_PATH.exists():
+            return []
+
+        conn = sqlite3.connect(
+            f"file:{HermesStateDBImporter.DB_PATH}?mode=ro", uri=True
+        )
+        conn.row_factory = sqlite3.Row
+        placeholders = ",".join("?" * len(HermesStateDBImporter.AUTOMATED_SOURCES))
+        session_ids = [
+            r["id"]
+            for r in conn.execute(
+                f"""SELECT id FROM sessions
+                    WHERE started_at > strftime('%s','now','-{days} days')
+                      AND source NOT IN ({placeholders})
+                    ORDER BY started_at DESC""",
+                HermesStateDBImporter.AUTOMATED_SOURCES,
+            ).fetchall()
+        ]
+
+        messages = []
+        for session_id in session_ids:
+            rows = conn.execute(
+                """SELECT role, content FROM messages
+                   WHERE session_id = ? AND active = 1 ORDER BY id""",
+                (session_id,),
+            ).fetchall()
+
+            for i, msg in enumerate(rows):
+                if msg["role"] != "user":
+                    continue
+                user_text = HermesStateDBImporter._clean_user_text(msg["content"] or "")
+                if not user_text or len(user_text) < 10:
+                    continue
+                if user_text.startswith(HermesStateDBImporter.SKIP_PREFIXES):
+                    continue
+                if _contains_secret(user_text):
+                    continue
+
+                assistant_text = ""
+                for j in range(i + 1, len(rows)):
+                    if rows[j]["role"] == "assistant" and rows[j]["content"]:
+                        assistant_text = rows[j]["content"]
+                        break
+                    elif rows[j]["role"] == "user":
+                        break
+
+                if assistant_text and _contains_secret(assistant_text):
+                    continue
+
+                messages.append({
+                    "source": "hermes-statedb",
+                    "task_input": user_text,
+                    "assistant_response": assistant_text,
+                    "session_id": session_id,
+                })
+
+                if limit and len(messages) >= limit:
+                    conn.close()
+                    return messages
+
+        conn.close()
+        return messages
+
+
 # ── Relevance Filtering ───────────────────────────────────────────────────
 
 
@@ -490,7 +587,9 @@ class RelevanceFilter:
         # Stage 2: LLM relevance scoring
         examples = []
         errors = 0
-        lm = dspy.LM(self.model)
+        # Bounded: an unbounded LiteLLM request can black-hole for 10+ min
+        # on a stalled provider stream.
+        lm = dspy.LM(self.model, timeout=120, num_retries=2)
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))
@@ -633,6 +732,7 @@ def build_dataset_from_external(
         "claude-code": ("Claude Code", ClaudeCodeImporter),
         "copilot": ("Copilot", CopilotImporter),
         "hermes": ("Hermes Agent", HermesSessionImporter),
+        "hermes-statedb": ("Hermes state.db", HermesStateDBImporter),
     }
 
     for source in sources:
@@ -729,7 +829,7 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
 @click.command()
 @click.option(
     "--source",
-    type=click.Choice(["claude-code", "copilot", "hermes", "all"]),
+    type=click.Choice(["claude-code", "copilot", "hermes", "hermes-statedb", "all"]),
     default="all",
     help="Which tool to import from",
 )
@@ -752,13 +852,14 @@ def main(source, skill, output, model, max_examples, dry_run):
 
     console.print(f"  Loaded skill: {skill_name} ({len(skill_text):,} chars)")
 
-    sources = [source] if source != "all" else ["claude-code", "copilot", "hermes"]
+    sources = [source] if source != "all" else ["claude-code", "copilot", "hermes", "hermes-statedb"]
 
     if dry_run:
         importers = {
             "claude-code": ClaudeCodeImporter,
             "copilot": CopilotImporter,
             "hermes": HermesSessionImporter,
+            "hermes-statedb": HermesStateDBImporter,
         }
         for src in sources:
             msgs = importers[src].extract_messages()

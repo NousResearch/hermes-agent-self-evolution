@@ -92,25 +92,22 @@ class SkillModule(dspy.Module):
     """
 
     class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
+        """Complete a task by following the given skill instructions."""
         task_input: str = dspy.InputField(desc="The task to complete")
         output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
         self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        # The skill text must BE the predictor's instructions: GEPA/MIPRO
+        # mutate signature instructions, not plain module attributes, so
+        # passing the skill as an input field left nothing to optimize.
+        self.predictor = dspy.ChainOfThought(
+            self.TaskWithSkill.with_instructions(skill_text)
+        )
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
 
 

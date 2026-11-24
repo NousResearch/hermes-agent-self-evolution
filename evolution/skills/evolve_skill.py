@@ -87,7 +87,7 @@ def evolve(
         dataset = build_dataset_from_external(
             skill_name=skill_name,
             skill_text=skill["raw"],
-            sources=["claude-code", "copilot", "hermes"],
+            sources=["claude-code", "copilot", "hermes", "hermes-statedb"],
             output_path=save_path,
             model=eval_model,
         )
@@ -118,7 +118,7 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
     all_pass = True
     for c in baseline_constraints:
         icon = "✓" if c.passed else "✗"
@@ -136,8 +136,8 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy (bounded: unbounded requests can black-hole on a stalled stream)
+    lm = dspy.LM(eval_model, timeout=120, num_retries=2)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -153,9 +153,30 @@ def evolve(
     start_time = time.time()
 
     try:
+        # DSPy 3.5 GEPA: 5-arg feedback metric, budget via auto=/max_metric_calls
+        # (upstream's max_steps kwarg and 3-arg metric predate dspy 3.x).
+        # Defaults required: GEPA reflection calls with 5 args, but dspy's
+        # evaluator and bootstrap call the same metric with 2-3.
+        def _gepa_feedback_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+            score = skill_fitness_metric(gold, pred, trace)
+            feedback = (
+                "Output addressed the expected behavior; tighten coverage of the skill's procedure."
+                if score >= 0.5
+                else "Output missed key parts of the expected behavior; follow the skill's procedure more closely."
+            )
+            return dspy.Prediction(score=score, feedback=feedback)
+
+        # DSPy 3.5 GEPA requires an explicit reflection LM (no fallback to
+        # the configured one); strong-ish model at temp 1.0 per upstream guidance.
+        reflection_lm = dspy.LM(
+            optimizer_model, temperature=1.0, max_tokens=32000,
+            timeout=180, num_retries=2,
+        )
         optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+            metric=_gepa_feedback_metric,
+            auto="light" if iterations <= 5 else "medium",
+            num_threads=8,
+            reflection_lm=reflection_lm,
         )
 
         optimized_module = optimizer.compile(
@@ -179,13 +200,15 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    # The optimizer mutates the predictor's signature instructions — that
+    # IS the evolved skill body (module attributes are not optimized).
+    # ChainOfThought wraps an inner dspy.Predict that owns the signature.
+    evolved_body = optimized_module.predictor.predict.signature.instructions
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
     all_pass = True
     for c in evolved_constraints:
         icon = "✓" if c.passed else "✗"
