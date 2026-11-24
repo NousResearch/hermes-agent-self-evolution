@@ -208,16 +208,28 @@ def test_wrapper_injections_skipped(tmp_path):
             _tool(43, "interactive", "patch"),
             _user(44, "interactive", "[OUT-OF-BAND USER MESSAGE — a direct message] payload"),
             _tool(45, "interactive", "read_file"),
-            _user(46, "interactive", "<workspace_context>lots of scaffolding</workspace_context>"),
+            _user(46, "interactive", "[Continuing toward your standing goal of gib]"),
             _tool(47, "interactive", "write_file"),
+            _user(48, "interactive", "[System: Your previous response was truncated. Continue now]"),
+            _tool(49, "interactive", "search_files"),
+            # genuine tasks that MUST survive:
+            _user(50, "interactive", "<workspace_context src=\"webui\"/> continue tuning the speed loop"),
+            _tool(51, "interactive", "execute_code"),
+            _user(52, "interactive", "[patc883] why is my deploy failing on startup?"),
+            _tool(53, "interactive", "web_search"),
         ],
     )
     con.commit()
     con.close()
 
     pairs = mine_tool_usage(days=90, db_path=db)
+    tasks = {p["task_input"] for p in pairs}
 
     assert not any(
-        p["task_input"].startswith(("[IMPORTANT", "[patc883]", "[OUT-OF-BAND", "<workspace_context"))
-        for p in pairs
+        t.startswith(("[IMPORTANT", "[patc883]", "[OUT-OF-BAND", "[Continuing", "[System:"))
+        for t in tasks
     )
+    # positive: self-closing context tag stripped, task kept
+    assert "continue tuning the speed loop" in tasks
+    # positive: transport tag stripped, genuine question kept
+    assert "why is my deploy failing on startup?" in tasks

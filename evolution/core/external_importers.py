@@ -427,7 +427,7 @@ class HermesStateDBImporter:
                 r["id"]
                 for r in conn.execute(
                     f"""SELECT id FROM sessions
-                        WHERE started_at > strftime('%s','now','-' || ? || ' days')
+                        WHERE started_at > CAST(strftime('%s','now','-' || ? || ' days') AS REAL)
                           AND source NOT IN ({placeholders})
                         ORDER BY started_at DESC""",
                     (days, *MACHINE_SOURCES),

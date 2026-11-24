@@ -11,17 +11,24 @@ DEFAULT_DB = Path.home() / ".hermes" / "state.db"
 MACHINE_SOURCES = ("subagent", "cron", "task", "oneshot", "acp")
 # System-injected wrappers that arrive as user-role text. Matched as substrings
 # of the message head: transports prefix lines (e.g. "[user] [ASYNC DELEGATION").
+# Known false-positive class: a genuine task quoting one of these markers in its
+# first 200 chars is dropped — accepted (zero occurrences in the host DB).
 SKIP_PREFIXES = (
     "[CONTEXT COMPACTION",
     "[ASYNC DELEGATION",
     "[IMPORTANT:",
     "[OUT-OF-BAND USER MESSAGE",
-    "<workspace_context",
+    "[Continuing toward your standing goal",
+    "[System",
+    "[Your active task list",
+    "[STILL IN PROGRESS",
     "Available swarm workers",
 )
 MIN_TASK_CHARS = 10
 
 _WORKSPACE_LINE = re.compile(r"^\[Workspace::v1:.*$", re.MULTILINE)
+_WORKSPACE_CTX_TAG = re.compile(r"<workspace_context[^>]*/>\s*")
+_TRANSPORT_TAG = re.compile(r"^\[[A-Za-z0-9_.-]+\]\s+")
 
 # Anchored to known key formats to minimize false positives on normal prose.
 SECRET_PATTERNS = re.compile(
@@ -58,8 +65,11 @@ def contains_secret(text: str) -> bool:
 
 
 def clean_user_text(text: str | None) -> str:
-    """Strip WebUI workspace tags and surrounding whitespace."""
-    return _WORKSPACE_LINE.sub("", text or "").strip()
+    """Strip WebUI workspace tags, self-closing context tags, and transport prefixes."""
+    text = _WORKSPACE_LINE.sub("", text or "")
+    text = _WORKSPACE_CTX_TAG.sub("", text)
+    text = _TRANSPORT_TAG.sub("", text.lstrip())
+    return text.strip()
 
 
 def is_task_like(text: str) -> bool:
