@@ -22,6 +22,8 @@ from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.gepa_metric import make_feedback_metric
+from evolution.core.lm import make_lm
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -137,7 +139,7 @@ def evolve(
     console.print(f"  Eval model: {eval_model}")
 
     # Configure DSPy (bounded: unbounded requests can black-hole on a stalled stream)
-    lm = dspy.LM(eval_model, timeout=120, num_retries=2)
+    lm = make_lm(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
@@ -153,25 +155,14 @@ def evolve(
     start_time = time.time()
 
     try:
-        # DSPy 3.5 GEPA: 5-arg feedback metric, budget via auto=/max_metric_calls
-        # (upstream's max_steps kwarg and 3-arg metric predate dspy 3.x).
-        # Defaults required: GEPA reflection calls with 5 args, but dspy's
-        # evaluator and bootstrap call the same metric with 2-3.
-        def _gepa_feedback_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
-            score = skill_fitness_metric(gold, pred, trace)
-            feedback = (
-                "Output addressed the expected behavior; tighten coverage of the skill's procedure."
-                if score >= 0.5
-                else "Output missed key parts of the expected behavior; follow the skill's procedure more closely."
-            )
-            return dspy.Prediction(score=score, feedback=feedback)
+        # Shared factory: all five metric args defaulted (GEPA reflection passes
+        # 5, dspy's evaluator/bootstrap pass 2-3).
+        _gepa_feedback_metric = make_feedback_metric(skill_fitness_metric)
 
         # DSPy 3.5 GEPA requires an explicit reflection LM (no fallback to
-        # the configured one); strong-ish model at temp 1.0 per upstream guidance.
-        reflection_lm = dspy.LM(
-            optimizer_model, temperature=1.0, max_tokens=32000,
-            timeout=180, num_retries=2,
-        )
+        # the configured one); make_lm(reflection=True) supplies the sampling
+        # profile and a longer bound.
+        reflection_lm = make_lm(optimizer_model, reflection=True)
         optimizer = dspy.GEPA(
             metric=_gepa_feedback_metric,
             auto="light" if iterations <= 5 else "medium",

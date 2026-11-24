@@ -35,6 +35,7 @@ from rich.console import Console
 from rich.progress import Progress
 
 from evolution.core.dataset_builder import EvalExample, EvalDataset
+from evolution.core.lm import make_lm
 
 console = Console()
 
@@ -589,7 +590,7 @@ class RelevanceFilter:
         errors = 0
         # Bounded: an unbounded LiteLLM request can black-hole for 10+ min
         # on a stalled provider stream.
-        lm = dspy.LM(self.model, timeout=120, num_retries=2)
+        lm = make_lm(self.model)
 
         with Progress() as progress:
             task = progress.add_task("Scoring relevance...", total=len(candidates))
