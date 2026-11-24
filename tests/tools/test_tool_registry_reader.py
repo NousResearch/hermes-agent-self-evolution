@@ -87,6 +87,33 @@ def test_skips_unresolvable_names_and_reports_count(tmp_path, caplog):
     assert any("1 skipped" in record.getMessage() for record in caplog.records)
 
 
+CONDITIONAL_DESCRIPTION_MODULE = textwrap.dedent(
+    '''
+    """Description whose tail is host-dependent."""
+
+    from tools.registry import registry
+
+    HOST_NOTE = (" Only on macOS." if host.os_family() == "darwin" else "")
+
+    SCHEMA = {
+        "name": "search_files",
+        "description": "Search files by content." + HOST_NOTE + " Regex, ripgrep-backed.",
+    }
+
+    registry.register(name="search_files", toolset="file", schema=SCHEMA, handler=_handler)
+    '''
+)
+
+
+def test_host_conditional_text_resolves_to_the_unconditional_branch(tmp_path):
+    """An undecidable condition must not drop the tool, nor leak host text."""
+    _write(tmp_path, "file_tools.py", CONDITIONAL_DESCRIPTION_MODULE)
+
+    tools = read_tool_descriptions(tmp_path)
+
+    assert tools == {"search_files": "Search files by content. Regex, ripgrep-backed."}
+
+
 def test_missing_tools_dir_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         read_tool_descriptions(tmp_path)

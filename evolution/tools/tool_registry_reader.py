@@ -91,7 +91,13 @@ def _description(schema: ast.Dict, env: dict[str, ast.expr]) -> str | None:
 
 
 def _string(node: ast.expr | None, env: dict[str, ast.expr], depth: int = 0) -> str | None:
-    """Resolve an expression to a string constant, following names and ``+``/f-string joins."""
+    """Resolve an expression to a string constant.
+
+    Follows names, ``+``/f-string joins and conditional expressions. A branch
+    chosen by a test that cannot be decided from source is host-dependent (an
+    OS-specific note, say): the ``else`` branch — the unconditional text — is
+    taken, so the reader never guesses host-specific sentences.
+    """
     if node is None or depth > _MAX_RESOLVE_DEPTH:
         return None
     if isinstance(node, ast.Constant):
@@ -104,11 +110,34 @@ def _string(node: ast.expr | None, env: dict[str, ast.expr], depth: int = 0) -> 
             for value in node.values
         ]
         return None if any(part is None for part in parts) else "".join(parts)  # type: ignore[arg-type]
+    if isinstance(node, ast.IfExp):
+        return _string(_conditional_branch(node), env, depth + 1)
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
         left = _string(node.left, env, depth + 1)
         right = _string(node.right, env, depth + 1)
         return None if left is None or right is None else left + right
     return None
+
+
+def _conditional_branch(node: ast.IfExp) -> ast.expr:
+    """The branch a conditional string expression contributes statically."""
+    test = node.test
+    if isinstance(test, ast.Constant) and isinstance(test.value, bool):
+        return node.body if test.value else node.orelse
+    if (
+        isinstance(test, ast.Compare)
+        and len(test.ops) == 1
+        and isinstance(test.ops[0], ast.Eq)
+    ):
+        left, right = test.left, test.comparators[0]
+        if (
+            isinstance(left, ast.Constant)
+            and isinstance(left.value, str)
+            and isinstance(right, ast.Constant)
+            and isinstance(right.value, str)
+        ):
+            return node.body if left.value == right.value else node.orelse
+    return node.orelse
 
 
 def _dict(node: ast.expr | None, env: dict[str, ast.expr], depth: int = 0) -> ast.Dict | None:

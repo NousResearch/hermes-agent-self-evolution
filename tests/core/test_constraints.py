@@ -30,6 +30,33 @@ class TestSizeConstraints:
         assert not result.passed
 
 
+class TestToolDescriptionConstraints:
+    def test_499_chars_accepted(self, validator):
+        assert validator._check_size("x" * 499, "tool_description").passed
+
+    def test_501_chars_rejected(self, validator):
+        result = validator._check_size("x" * 501, "tool_description")
+        assert not result.passed
+        assert "exceeded" in result.message
+
+    def test_markers_present_passes(self, validator):
+        result = validator._check_markers("<<DESCRIPTION>>Search files<</DESCRIPTION>>")
+        assert result.passed
+
+    def test_mangled_markers_rejected(self, validator):
+        result = validator._check_markers("Description: Search files")
+        assert not result.passed
+        assert "DESCRIPTION" in result.message
+
+    def test_validate_tool_description_checks_size_and_markers(self, validator):
+        instructions = "<<DESCRIPTION>>" + "x" * 600 + "<</DESCRIPTION>>"
+        results = validator.validate_tool_description("x" * 600, instructions)
+        assert not all(r.passed for r in results)
+
+        ok = validator.validate_tool_description("Search files", "<<DESCRIPTION>>Search files<</DESCRIPTION>>")
+        assert all(r.passed for r in ok)
+
+
 class TestGrowthConstraints:
     def test_acceptable_growth(self, validator):
         baseline = "x" * 1000

@@ -11,6 +11,10 @@ from typing import Optional
 
 from evolution.core.config import EvolutionConfig
 
+# The optimizer rewrites the whole selection prompt; these markers must survive
+# so the description can still be extracted for deployment.
+TOOL_DESCRIPTION_MARKERS = ("<<DESCRIPTION>>", "<</DESCRIPTION>>")
+
 
 @dataclass
 class ConstraintResult:
@@ -50,7 +54,26 @@ class ConstraintValidator:
         if artifact_type == "skill":
             results.append(self._check_skill_structure(artifact_text))
 
+        if artifact_type == "tool_description":
+            results.append(self._check_markers(artifact_text))
+
         return results
+
+    def validate_tool_description(
+        self,
+        description: str,
+        instructions: str,
+    ) -> list[ConstraintResult]:
+        """Validate an evolved tool description.
+
+        The size limit applies to the deployable description; the markers are
+        checked on the full instruction text the optimizer returns.
+        """
+        return [
+            self._check_size(description, "tool_description"),
+            self._check_non_empty(description),
+            self._check_markers(instructions),
+        ]
 
     def run_test_suite(self, hermes_repo: Path) -> ConstraintResult:
         """Run the full hermes-agent test suite. Must pass 100%."""
@@ -146,6 +169,20 @@ class ConstraintValidator:
                 constraint_name="non_empty",
                 message="Artifact is empty",
             )
+
+    def _check_markers(self, text: str) -> ConstraintResult:
+        missing = [m for m in TOOL_DESCRIPTION_MARKERS if m not in text]
+        if not missing:
+            return ConstraintResult(
+                passed=True,
+                constraint_name="markers_present",
+                message="Description markers intact",
+            )
+        return ConstraintResult(
+            passed=False,
+            constraint_name="markers_present",
+            message=f"Missing marker(s): {', '.join(missing)}",
+        )
 
     def _check_skill_structure(self, text: str) -> ConstraintResult:
         """Check that a skill file has valid YAML frontmatter and markdown body."""
