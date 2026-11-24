@@ -5,9 +5,20 @@ from pathlib import Path
 
 DEFAULT_DB = Path.home() / ".hermes" / "state.db"
 
-# Sources whose "user" text is a machine dispatch, not a human task.
-MACHINE_SOURCES = ("subagent", "cron", "task", "local", "api_server", "oneshot", "acp")
-SKIP_PREFIXES = ("[CONTEXT COMPACTION", "[ASYNC DELEGATION")
+# Sources whose "user" text is always a machine dispatch or probe. Transports
+# (api_server, local, webui, ...) carry both human and injected text — they are
+# kept, and the wrapper markers below do the filtering.
+MACHINE_SOURCES = ("subagent", "cron", "task", "oneshot", "acp")
+# System-injected wrappers that arrive as user-role text. Matched as substrings
+# of the message head: transports prefix lines (e.g. "[user] [ASYNC DELEGATION").
+SKIP_PREFIXES = (
+    "[CONTEXT COMPACTION",
+    "[ASYNC DELEGATION",
+    "[IMPORTANT:",
+    "[OUT-OF-BAND USER MESSAGE",
+    "<workspace_context",
+    "Available swarm workers",
+)
 MIN_TASK_CHARS = 10
 
 _WORKSPACE_LINE = re.compile(r"^\[Workspace::v1:.*$", re.MULTILINE)
@@ -53,4 +64,7 @@ def clean_user_text(text: str | None) -> str:
 
 def is_task_like(text: str) -> bool:
     """A user message long enough to be a task, not a system wrapper."""
-    return len(text) >= MIN_TASK_CHARS and not text.startswith(SKIP_PREFIXES)
+    if len(text) < MIN_TASK_CHARS:
+        return False
+    head = text[:200]
+    return not any(marker in head for marker in SKIP_PREFIXES)

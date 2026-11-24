@@ -2,6 +2,8 @@
 
 The pairs are the raw material for tool-description selection evals: they record
 which tool actually answered a real user task, in the user's own words.
+Machine-dispatch sources (state_db.MACHINE_SOURCES) and system-injected wrapper
+messages are excluded.
 """
 
 import sqlite3
@@ -20,13 +22,14 @@ TOOL_WINDOW = 30  # max messages after a user turn that count as "the response"
 
 def mine_tool_usage(days: int = 90, db_path: Path | None = None) -> list[dict]:
     """Return one `{task_input, tool, session_id}` dict per (user message, tool)."""
-    if not isinstance(days, int) or days <= 0:
+    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
         raise ValueError("days must be a positive int")
     db = Path(db_path) if db_path is not None else DEFAULT_DB
     if not db.exists():
         return []
 
     placeholders = ",".join("?" * len(MACHINE_SOURCES))
+    con = None
     try:
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
         sessions = con.execute(
@@ -36,10 +39,7 @@ def mine_tool_usage(days: int = 90, db_path: Path | None = None) -> list[dict]:
             f" ORDER BY started_at DESC",
             (*MACHINE_SOURCES, days),
         ).fetchall()
-    except sqlite3.OperationalError as e:
-        raise RuntimeError(f"cannot read session store {db} (locked or corrupt?): {e}") from e
 
-    try:
         pairs: list[dict] = []
         for (session_id,) in sessions:
             rows = con.execute(
@@ -66,5 +66,8 @@ def mine_tool_usage(days: int = 90, db_path: Path | None = None) -> list[dict]:
                         {"task_input": text, "tool": win_tool, "session_id": session_id}
                     )
         return pairs
+    except sqlite3.OperationalError as e:
+        raise RuntimeError(f"cannot read session store {db} (locked or corrupt?): {e}") from e
     finally:
-        con.close()
+        if con is not None:
+            con.close()

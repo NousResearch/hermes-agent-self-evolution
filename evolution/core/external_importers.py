@@ -38,7 +38,6 @@ from evolution.core.dataset_builder import EvalExample, EvalDataset
 from evolution.core.lm import make_lm
 from evolution.core.state_db import (
     MACHINE_SOURCES,
-    SKIP_PREFIXES,
     clean_user_text,
     contains_secret as _contains_secret,
     is_task_like,
@@ -412,66 +411,76 @@ class HermesStateDBImporter:
             List of dicts with keys: source, task_input, assistant_response,
             session_id.
         """
+        if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
+            raise ValueError("days must be a positive int")
         if not HermesStateDBImporter.DB_PATH.exists():
             return []
 
-        conn = sqlite3.connect(
-            f"file:{HermesStateDBImporter.DB_PATH}?mode=ro", uri=True
-        )
-        conn.row_factory = sqlite3.Row
-        placeholders = ",".join("?" * len(MACHINE_SOURCES))
-        session_ids = [
-            r["id"]
-            for r in conn.execute(
-                f"""SELECT id FROM sessions
-                    WHERE started_at > strftime('%s','now','-' || ? || ' days')
-                      AND source NOT IN ({placeholders})
-                    ORDER BY started_at DESC""",
-                (*MACHINE_SOURCES, days),
-            ).fetchall()
-        ]
+        conn = None
+        try:
+            conn = sqlite3.connect(
+                f"file:{HermesStateDBImporter.DB_PATH}?mode=ro", uri=True
+            )
+            conn.row_factory = sqlite3.Row
+            placeholders = ",".join("?" * len(MACHINE_SOURCES))
+            session_ids = [
+                r["id"]
+                for r in conn.execute(
+                    f"""SELECT id FROM sessions
+                        WHERE started_at > strftime('%s','now','-' || ? || ' days')
+                          AND source NOT IN ({placeholders})
+                        ORDER BY started_at DESC""",
+                    (days, *MACHINE_SOURCES),
+                ).fetchall()
+            ]
 
-        messages = []
-        for session_id in session_ids:
-            rows = conn.execute(
-                """SELECT role, content FROM messages
-                   WHERE session_id = ? AND active = 1 ORDER BY id""",
-                (session_id,),
-            ).fetchall()
+            messages = []
+            for session_id in session_ids:
+                rows = conn.execute(
+                    """SELECT role, content FROM messages
+                       WHERE session_id = ? AND active = 1 ORDER BY id""",
+                    (session_id,),
+                ).fetchall()
 
-            for i, msg in enumerate(rows):
-                if msg["role"] != "user":
-                    continue
-                user_text = clean_user_text(msg["content"] or "")
-                if not is_task_like(user_text):
-                    continue
-                if _contains_secret(user_text):
-                    continue
+                for i, msg in enumerate(rows):
+                    if msg["role"] != "user":
+                        continue
+                    user_text = clean_user_text(msg["content"] or "")
+                    if not is_task_like(user_text):
+                        continue
+                    if _contains_secret(user_text):
+                        continue
 
-                assistant_text = ""
-                for j in range(i + 1, len(rows)):
-                    if rows[j]["role"] == "assistant" and rows[j]["content"]:
-                        assistant_text = rows[j]["content"]
-                        break
-                    elif rows[j]["role"] == "user":
-                        break
+                    assistant_text = ""
+                    for j in range(i + 1, len(rows)):
+                        if rows[j]["role"] == "assistant" and rows[j]["content"]:
+                            assistant_text = rows[j]["content"]
+                            break
+                        elif rows[j]["role"] == "user":
+                            break
 
-                if assistant_text and _contains_secret(assistant_text):
-                    continue
+                    if assistant_text and _contains_secret(assistant_text):
+                        continue
 
-                messages.append({
-                    "source": "hermes-statedb",
-                    "task_input": user_text,
-                    "assistant_response": assistant_text,
-                    "session_id": session_id,
-                })
+                    messages.append({
+                        "source": "hermes-statedb",
+                        "task_input": user_text,
+                        "assistant_response": assistant_text,
+                        "session_id": session_id,
+                    })
 
-                if limit and len(messages) >= limit:
-                    conn.close()
-                    return messages
+                    if limit and len(messages) >= limit:
+                        return messages
 
-        conn.close()
-        return messages
+            return messages
+        except sqlite3.OperationalError as e:
+            raise RuntimeError(
+                f"cannot read session store {HermesStateDBImporter.DB_PATH}"
+                f" (locked or corrupt?): {e}"
+            ) from e
+        finally:
+            if conn is not None:
+                conn.close()
 
 
 # ── Relevance Filtering ───────────────────────────────────────────────────

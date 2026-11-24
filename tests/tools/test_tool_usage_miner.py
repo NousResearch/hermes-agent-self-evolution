@@ -190,6 +190,34 @@ def test_window_drops_tool_beyond_30_messages(tmp_path):
 
 
 def test_days_validated():
-    for bad in (0, -5, "abc"):
+    for bad in (0, -5, "abc", True):
         with pytest.raises(ValueError):
             mine_tool_usage(days=bad)
+
+
+def test_wrapper_injections_skipped(tmp_path):
+    """System-injected wrappers are not user tasks, even with transport prefixes."""
+    db = _make_db(tmp_path / "state.db")
+    con = sqlite3.connect(db)
+    con.executemany(
+        INSERT_MSG,
+        [
+            _user(40, "interactive", "[IMPORTANT: The user has invoked a skill — do stuff]"),
+            _tool(41, "interactive", "terminal"),
+            _user(42, "interactive", "[patc883] [ASYNC DELEGATION BATCH COMPLETE — results below]"),
+            _tool(43, "interactive", "patch"),
+            _user(44, "interactive", "[OUT-OF-BAND USER MESSAGE — a direct message] payload"),
+            _tool(45, "interactive", "read_file"),
+            _user(46, "interactive", "<workspace_context>lots of scaffolding</workspace_context>"),
+            _tool(47, "interactive", "write_file"),
+        ],
+    )
+    con.commit()
+    con.close()
+
+    pairs = mine_tool_usage(days=90, db_path=db)
+
+    assert not any(
+        p["task_input"].startswith(("[IMPORTANT", "[patc883]", "[OUT-OF-BAND", "<workspace_context"))
+        for p in pairs
+    )
