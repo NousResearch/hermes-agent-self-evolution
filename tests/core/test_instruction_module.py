@@ -27,3 +27,36 @@ class TestArtifactModule:
         mod.predict.assert_called_once_with(task_input="x")
         assert result.output == "ok"
         assert isinstance(result, dspy.Prediction)
+
+
+class TestSkillModuleUsesArtifactModule:
+    def test_subclasses_artifact_module(self):
+        from evolution.skills.skill_module import SkillModule
+
+        assert issubclass(SkillModule, ArtifactModule)
+
+    def test_skill_text_is_the_optimizable_instructions(self):
+        from evolution.skills.skill_module import SkillModule
+
+        mod = SkillModule(ARTIFACT)
+
+        assert mod.extract() == ARTIFACT
+        assert mod.skill_text == ARTIFACT
+
+    def test_public_constructor_takes_only_skill_text(self):
+        """Other modules construct SkillModule(skill_text) positionally."""
+        import inspect
+
+        from evolution.skills.skill_module import SkillModule
+
+        params = list(inspect.signature(SkillModule.__init__).parameters)
+        assert params == ["self", "skill_text"]
+
+    def test_forward_is_inherited_and_wired(self):
+        from evolution.skills.skill_module import SkillModule
+
+        mod = SkillModule(ARTIFACT)
+        mod.predict = Mock(return_value=Mock(output="ok"))
+
+        assert mod.forward("x").output == "ok"
+        mod.predict.assert_called_once_with(task_input="x")

@@ -11,6 +11,8 @@ from typing import Optional
 
 import dspy
 
+from evolution.core.instruction_module import ArtifactModule
+
 
 def load_skill(skill_path: Path) -> dict:
     """Load a skill file and parse its frontmatter + body.
@@ -81,34 +83,21 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
     return None
 
 
-class SkillModule(dspy.Module):
+class SkillModule(ArtifactModule):
     """A DSPy module that wraps a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+    The skill text (body) is the parameter that GEPA optimizes; the artifact
+    text IS the predictor's instructions (see ArtifactModule).
     """
 
-    class TaskWithSkill(dspy.Signature):
-        """Complete a task by following the given skill instructions."""
-        task_input: str = dspy.InputField(desc="The task to complete")
-        output: str = dspy.OutputField(desc="Your response following the skill instructions")
-
     def __init__(self, skill_text: str):
-        super().__init__()
+        super().__init__(skill_text)
         self.skill_text = skill_text
-        # The skill text must BE the predictor's instructions: GEPA/MIPRO
-        # mutate signature instructions, not plain module attributes, so
-        # passing the skill as an input field left nothing to optimize.
-        self.predictor = dspy.ChainOfThought(
-            self.TaskWithSkill.with_instructions(skill_text)
-        )
 
-    def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(task_input=task_input)
-        return dspy.Prediction(output=result.output)
+    @property
+    def predictor(self):
+        """Backwards-compatible alias for the ChainOfThought predictor."""
+        return self.predict
 
 
 def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
