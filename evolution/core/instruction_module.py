@@ -1,13 +1,20 @@
 """Generic DSPy module that treats an arbitrary text artifact as instructions.
 
-Phases 2-4 reuse this for any optimizable artifact (skills, prompts, specs):
-
     mod = ArtifactModule(open("SKILL.md").read())
     pred = mod(task_input="...")
     optimized_text = mod.extract()
 """
 
 import dspy
+
+
+class ArtifactSignature(dspy.Signature):
+    """Complete a task by following the given instructions."""
+
+    task_input: str = dspy.InputField(desc="The task to complete")
+    output: str = dspy.OutputField(
+        desc="Your response following the given instructions"
+    )
 
 
 class ArtifactModule(dspy.Module):
@@ -18,24 +25,10 @@ class ArtifactModule(dspy.Module):
     optimizer. So the artifact text becomes the signature's instructions.
     """
 
-    def __init__(
-        self,
-        artifact_text: str,
-        task_desc: str = "Complete a task by following the given instructions.",
-    ):
+    def __init__(self, artifact_text: str):
         super().__init__()
-
-        class ArtifactSignature(dspy.Signature):
-            """Complete a task by following the given instructions."""
-
-            task_input: str = dspy.InputField(desc="The task to complete")
-            output: str = dspy.OutputField(
-                desc="Your response following the given instructions"
-            )
-
-        # The artifact text must BE the predictor's instructions: GEPA/MIPRO
-        # mutate signature instructions, so an artifact passed as an input
-        # field (or stored as a plain module attribute) is unoptimizable.
+        if not artifact_text or not artifact_text.strip():
+            raise ValueError("artifact_text must be non-empty")
         self.predict = dspy.ChainOfThought(
             ArtifactSignature.with_instructions(artifact_text)
         )

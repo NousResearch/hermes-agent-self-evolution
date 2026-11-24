@@ -155,19 +155,12 @@ def evolve(
     start_time = time.time()
 
     try:
-        # Shared factory: all five metric args defaulted (GEPA reflection passes
-        # 5, dspy's evaluator/bootstrap pass 2-3).
-        _gepa_feedback_metric = make_feedback_metric(skill_fitness_metric)
-
-        # DSPy 3.5 GEPA requires an explicit reflection LM (no fallback to
-        # the configured one); make_lm(reflection=True) supplies the sampling
-        # profile and a longer bound.
-        reflection_lm = make_lm(optimizer_model, reflection=True)
+        # DSPy 3.5 GEPA requires an explicit reflection LM.
         optimizer = dspy.GEPA(
-            metric=_gepa_feedback_metric,
+            metric=make_feedback_metric(skill_fitness_metric),
             auto="light" if iterations <= 5 else "medium",
             num_threads=8,
-            reflection_lm=reflection_lm,
+            reflection_lm=make_lm(optimizer_model, reflection=True),
         )
 
         optimized_module = optimizer.compile(
@@ -191,10 +184,7 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimizer mutates the predictor's signature instructions — that
-    # IS the evolved skill body (module attributes are not optimized).
-    # ChainOfThought wraps an inner dspy.Predict that owns the signature.
-    evolved_body = optimized_module.predictor.predict.signature.instructions
+    evolved_body = optimized_module.extract()
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────

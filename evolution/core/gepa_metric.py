@@ -1,12 +1,8 @@
 """Shared GEPA feedback metric factory.
 
-dspy.GEPA's reflection step calls the metric with five arguments
-``(gold, pred, trace, pred_name, pred_trace)``, while dspy's evaluator and
-bootstrap paths call the same metric object with two or three. A strict
-five-argument signature therefore raises TypeError for every evaluation and
-shows up as a misleading "Failed to unpack prediction" warning with an
-all-zero score, so all five parameters carry defaults and the extra GEPA
-arguments are accepted but ignored.
+All five metric parameters carry defaults: dspy.GEPA's reflection step calls
+the metric with five arguments, dspy's evaluator and bootstrap paths call the
+same object with two or three.
 """
 
 from typing import Any, Callable
@@ -14,6 +10,7 @@ from typing import Any, Callable
 import dspy
 
 SUCCESS_FEEDBACK = "met expected behavior; tighten coverage"
+NEUTRAL_FEEDBACK = "output carried no clear signal on the expected behavior; make the expected procedure explicit"
 FAILURE_FEEDBACK = "missed key parts of the expected behavior"
 
 
@@ -33,7 +30,12 @@ def make_feedback_metric(score_fn: Callable[..., float]) -> Callable[..., dspy.P
         pred_trace: Any = None,
     ) -> dspy.Prediction:
         score = score_fn(gold, pred, trace)
-        feedback = SUCCESS_FEEDBACK if score >= 0.5 else FAILURE_FEEDBACK
+        if score > 0.5:
+            feedback = SUCCESS_FEEDBACK
+        elif score < 0.45:
+            feedback = FAILURE_FEEDBACK
+        else:
+            feedback = NEUTRAL_FEEDBACK
         return dspy.Prediction(score=score, feedback=feedback)
 
     return metric

@@ -1,13 +1,8 @@
-"""Bounded dspy.LM construction.
+"""Bounded dspy.LM construction — every LM in the pipeline carries a timeout."""
 
-Every LM used by the evolution pipeline must carry an explicit timeout: an
-unbounded LiteLLM request black-holed for 10+ minutes on a stalled provider
-stream in production use here, so ``make_lm`` is the only sanctioned way to
-build one.
-"""
+from typing import Any
 
 import dspy
-from typing import Any
 
 DEFAULT_TIMEOUT = 120
 DEFAULT_NUM_RETRIES = 2

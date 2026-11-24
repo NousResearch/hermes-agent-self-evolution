@@ -5,11 +5,8 @@ where the skill text is the optimizable parameter. GEPA can then
 mutate the skill text and evaluate the results.
 """
 
-import re
 from pathlib import Path
 from typing import Optional
-
-import dspy
 
 from evolution.core.instruction_module import ArtifactModule
 
@@ -84,20 +81,10 @@ def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
 
 
 class SkillModule(ArtifactModule):
-    """A DSPy module that wraps a skill file for optimization.
-
-    The skill text (body) is the parameter that GEPA optimizes; the artifact
-    text IS the predictor's instructions (see ArtifactModule).
-    """
+    """Wraps a SKILL.md body as optimizable instructions (see ArtifactModule)."""
 
     def __init__(self, skill_text: str):
         super().__init__(skill_text)
-        self.skill_text = skill_text
-
-    @property
-    def predictor(self):
-        """Backwards-compatible alias for the ChainOfThought predictor."""
-        return self.predict
 
 
 def reassemble_skill(frontmatter: str, evolved_body: str) -> str:

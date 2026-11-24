@@ -3,6 +3,7 @@
 from unittest.mock import Mock
 
 import dspy
+import pytest
 
 from evolution.core.instruction_module import ArtifactModule
 
@@ -41,7 +42,12 @@ class TestSkillModuleUsesArtifactModule:
         mod = SkillModule(ARTIFACT)
 
         assert mod.extract() == ARTIFACT
-        assert mod.skill_text == ARTIFACT
+
+    @pytest.mark.parametrize("bad", ["", "   ", "\n\t "])
+    def test_empty_artifact_rejected(self, bad):
+        """An empty artifact would silently optimize dspy's default docstring."""
+        with pytest.raises(ValueError, match="non-empty"):
+            ArtifactModule(bad)
 
     def test_public_constructor_takes_only_skill_text(self):
         """Other modules construct SkillModule(skill_text) positionally."""
