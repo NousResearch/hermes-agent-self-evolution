@@ -11,6 +11,13 @@ class TestCleanUserText:
         text = "<workspace_context src=\"webui\"/> I want to continue tuning the speed loop."
         assert clean_user_text(text) == "I want to continue tuning the speed loop."
 
+    def test_strips_paired_workspace_context_block(self):
+        text = "<workspace_context>\n cwd=/tmp\n</workspace_context>\nI want to continue tuning the speed loop."
+        assert clean_user_text(text) == "I want to continue tuning the speed loop."
+
+    def test_strips_multiline_transport_tag(self):
+        assert clean_user_text("note line\n[patc883] please fix the parser bug") == "note line\nplease fix the parser bug"
+
     def test_strips_transport_tag(self):
         assert clean_user_text("[patc883] why is my deploy failing?") == "why is my deploy failing?"
 

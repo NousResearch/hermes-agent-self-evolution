@@ -27,8 +27,10 @@ SKIP_PREFIXES = (
 MIN_TASK_CHARS = 10
 
 _WORKSPACE_LINE = re.compile(r"^\[Workspace::v1:.*$", re.MULTILINE)
-_WORKSPACE_CTX_TAG = re.compile(r"<workspace_context[^>]*/>\s*")
-_TRANSPORT_TAG = re.compile(r"^\[[A-Za-z0-9_.-]+\]\s+")
+_WORKSPACE_CTX_TAG = re.compile(
+    r"<workspace_context[^>]*?(?:/>|>.*?</workspace_context>)\s*", re.S
+)
+_TRANSPORT_TAG = re.compile(r"^\[[A-Za-z0-9_.-]+\]\s+", re.M)
 
 # Anchored to known key formats to minimize false positives on normal prose.
 SECRET_PATTERNS = re.compile(
