@@ -36,50 +36,19 @@ from rich.progress import Progress
 
 from evolution.core.dataset_builder import EvalExample, EvalDataset
 from evolution.core.lm import make_lm
-
-console = Console()
-
-# ── Secret Detection ──────────────────────────────────────────────────────
-
-# Patterns that indicate secrets — NEVER include these in datasets.
-# Each pattern is intentionally anchored to known key formats to minimize
-# false positives on normal prose.
-SECRET_PATTERNS = re.compile(
-    r'('
-    r'sk-ant-api\S+'           # Anthropic API keys
-    r'|sk-or-v1-\S+'          # OpenRouter API keys
-    r'|sk-\S{20,}'            # Generic OpenAI-style keys (20+ chars after sk-)
-    r'|ghp_\S+'               # GitHub personal access tokens
-    r'|ghu_\S+'               # GitHub user tokens
-    r'|xoxb-\S+'              # Slack bot tokens
-    r'|xapp-\S+'              # Slack app tokens
-    r'|ntn_\S+'               # Notion integration tokens
-    r'|AKIA[0-9A-Z]{16}'      # AWS access key IDs
-    r'|Bearer\s+\S{20,}'      # Bearer auth headers (20+ char tokens)
-    r'|-----BEGIN\s+(RSA\s+)?PRIVATE\sKEY-----'  # PEM private keys
-    r'|ANTHROPIC_API_KEY'      # Known env var names (exact match)
-    r'|OPENAI_API_KEY'
-    r'|OPENROUTER_API_KEY'
-    r'|SLACK_BOT_TOKEN'
-    r'|GITHUB_TOKEN'
-    r'|AWS_SECRET_ACCESS_KEY'
-    r'|DATABASE_URL'
-    r'|\bpassword\s*[=:]\s*\S+' # password assignments (password=xxx, password: xxx)
-    r'|\bsecret\s*[=:]\s*\S+'   # secret assignments (secret=xxx, secret: xxx)
-    r'|\btoken\s*[=:]\s*\S{10,}' # token assignments with 10+ char values
-    r')',
-    re.IGNORECASE,
+from evolution.core.state_db import (
+    MACHINE_SOURCES,
+    SKIP_PREFIXES,
+    clean_user_text,
+    contains_secret as _contains_secret,
+    is_task_like,
 )
 
+console = Console()
 
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 
 MIN_DATASET_SIZE = 3  # Minimum examples needed to produce a meaningful split
-
-
-def _contains_secret(text: str) -> bool:
-    """Check if text contains potential API keys or tokens."""
-    return bool(SECRET_PATTERNS.search(text))
 
 
 def _validate_eval_example(
@@ -430,13 +399,6 @@ class HermesStateDBImporter:
     """
 
     DB_PATH = Path.home() / ".hermes" / "state.db"
-    AUTOMATED_SOURCES = ("subagent", "cron", "task", "local")
-    SKIP_PREFIXES = ("[CONTEXT COMPACTION", "[ASYNC DELEGATION")
-
-    @staticmethod
-    def _clean_user_text(text: str) -> str:
-        lines = [l for l in text.split("\n") if not l.startswith("[Workspace::v1:")]
-        return "\n".join(lines).strip()
 
     @staticmethod
     def extract_messages(limit: int = 0, days: int = 90) -> list[dict]:
@@ -457,15 +419,15 @@ class HermesStateDBImporter:
             f"file:{HermesStateDBImporter.DB_PATH}?mode=ro", uri=True
         )
         conn.row_factory = sqlite3.Row
-        placeholders = ",".join("?" * len(HermesStateDBImporter.AUTOMATED_SOURCES))
+        placeholders = ",".join("?" * len(MACHINE_SOURCES))
         session_ids = [
             r["id"]
             for r in conn.execute(
                 f"""SELECT id FROM sessions
-                    WHERE started_at > strftime('%s','now','-{days} days')
+                    WHERE started_at > strftime('%s','now','-' || ? || ' days')
                       AND source NOT IN ({placeholders})
                     ORDER BY started_at DESC""",
-                HermesStateDBImporter.AUTOMATED_SOURCES,
+                (*MACHINE_SOURCES, days),
             ).fetchall()
         ]
 
@@ -480,10 +442,8 @@ class HermesStateDBImporter:
             for i, msg in enumerate(rows):
                 if msg["role"] != "user":
                     continue
-                user_text = HermesStateDBImporter._clean_user_text(msg["content"] or "")
-                if not user_text or len(user_text) < 10:
-                    continue
-                if user_text.startswith(HermesStateDBImporter.SKIP_PREFIXES):
+                user_text = clean_user_text(msg["content"] or "")
+                if not is_task_like(user_text):
                     continue
                 if _contains_secret(user_text):
                     continue

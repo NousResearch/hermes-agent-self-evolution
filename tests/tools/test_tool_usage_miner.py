@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from evolution.core.external_importers import _contains_secret
+from evolution.core.state_db import contains_secret as _contains_secret
 from evolution.tools.tool_usage_miner import mine_tool_usage
 
 REAL_DB = Path.home() / ".hermes" / "state.db"
@@ -146,3 +146,50 @@ def test_skips_short_and_boilerplate_user_messages(tmp_path):
         and p["task_input"] == "run the full test suite please"
         for p in pairs
     )
+
+
+def test_tools_do_not_leak_across_user_turns(tmp_path):
+    """A tool used for the NEXT task must not be attributed to this one."""
+    db = _make_db(tmp_path / "state.db")
+    con = sqlite3.connect(db)
+    con.executemany(
+        INSERT_MSG,
+        [
+            _user(20, "interactive", "first task: list open ports please"),
+            _tool(21, "interactive", "terminal"),
+            _user(22, "interactive", "second task: read the config file"),
+            _tool(23, "interactive", "read_file"),
+        ],
+    )
+    con.commit()
+    con.close()
+
+    pairs = mine_tool_usage(days=90, db_path=db)
+
+    first = [p["tool"] for p in pairs if p["task_input"].startswith("first task")]
+    second = [p["tool"] for p in pairs if p["task_input"].startswith("second task")]
+    assert first == ["terminal"]
+    assert second == ["read_file"]
+
+
+def test_window_drops_tool_beyond_30_messages(tmp_path):
+    db = _make_db(tmp_path / "state.db")
+    con = sqlite3.connect(db)
+    con.executemany(
+        INSERT_MSG,
+        [_user(30, "interactive", "task with a very late tool call")]
+        + [(30 + k, "interactive", "assistant", None, None, "thinking", NOW) for k in range(1, 31)]
+        + [_tool(61, "interactive", "terminal")],
+    )
+    con.commit()
+    con.close()
+
+    pairs = mine_tool_usage(days=90, db_path=db)
+
+    assert not any(p["task_input"] == "task with a very late tool call" for p in pairs)
+
+
+def test_days_validated():
+    for bad in (0, -5, "abc"):
+        with pytest.raises(ValueError):
+            mine_tool_usage(days=bad)

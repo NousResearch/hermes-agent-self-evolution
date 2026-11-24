@@ -72,7 +72,7 @@ def _registrations(tree: ast.Module, env: dict[str, ast.expr]):
             isinstance(func, ast.Attribute)
             and func.attr == "register"
             and isinstance(func.value, ast.Name)
-            and func.value.id.endswith("registry")
+            and func.value.id == "registry"
         ):
             continue
         kwargs = {kw.arg: kw.value for kw in node.keywords if kw.arg is not None}
@@ -86,7 +86,7 @@ def _description(schema: ast.Dict, env: dict[str, ast.expr]) -> str | None:
     for key, value in zip(schema.keys, schema.values):
         if isinstance(key, ast.Constant) and key.value == "description":
             text = _string(value, env)
-            return text if text and text.strip() else None
+            return text.strip() if text and text.strip() else None
     return None
 
 

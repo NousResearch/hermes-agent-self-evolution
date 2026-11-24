@@ -2,40 +2,33 @@
 
 The pairs are the raw material for tool-description selection evals: they record
 which tool actually answered a real user task, in the user's own words.
-
-Interactive sessions only — subagent, cron, task and local sources are machine
-dispatches, so their "user" text is an orchestrator prompt, not a task.
 """
 
-import re
 import sqlite3
 from pathlib import Path
 
-from evolution.core.external_importers import _contains_secret
+from evolution.core.state_db import (
+    DEFAULT_DB,
+    MACHINE_SOURCES,
+    clean_user_text,
+    contains_secret,
+    is_task_like,
+)
 
-DEFAULT_DB = Path.home() / ".hermes" / "state.db"
-
-MACHINE_SOURCES = ("subagent", "cron", "task", "local")
-SKIP_PREFIXES = ("[CONTEXT COMPACTION", "[ASYNC DELEGATION")
-TOOL_WINDOW = 30  # messages after a user turn that count as "the response"
-MIN_TASK_CHARS = 10
-
-_WORKSPACE_LINE = re.compile(r"^\[Workspace::v1:.*$", re.MULTILINE)
-
-
-def _clean(text: str | None) -> str:
-    return _WORKSPACE_LINE.sub("", text or "").strip()
+TOOL_WINDOW = 30  # max messages after a user turn that count as "the response"
 
 
 def mine_tool_usage(days: int = 90, db_path: Path | None = None) -> list[dict]:
     """Return one `{task_input, tool, session_id}` dict per (user message, tool)."""
+    if not isinstance(days, int) or days <= 0:
+        raise ValueError("days must be a positive int")
     db = Path(db_path) if db_path is not None else DEFAULT_DB
     if not db.exists():
         return []
 
     placeholders = ",".join("?" * len(MACHINE_SOURCES))
-    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
         sessions = con.execute(
             f"SELECT id FROM sessions"
             f" WHERE source NOT IN ({placeholders})"
@@ -43,7 +36,10 @@ def mine_tool_usage(days: int = 90, db_path: Path | None = None) -> list[dict]:
             f" ORDER BY started_at DESC",
             (*MACHINE_SOURCES, days),
         ).fetchall()
+    except sqlite3.OperationalError as e:
+        raise RuntimeError(f"cannot read session store {db} (locked or corrupt?): {e}") from e
 
+    try:
         pairs: list[dict] = []
         for (session_id,) in sessions:
             rows = con.execute(
@@ -54,13 +50,15 @@ def mine_tool_usage(days: int = 90, db_path: Path | None = None) -> list[dict]:
             for i, (role, _tool, content) in enumerate(rows):
                 if role != "user":
                     continue
-                text = _clean(content)
-                if len(text) < MIN_TASK_CHARS or text.startswith(SKIP_PREFIXES):
+                text = clean_user_text(content)
+                if not is_task_like(text):
                     continue
-                if _contains_secret(text):
+                if contains_secret(text):
                     continue
                 seen: set[str] = set()
                 for win_role, win_tool, _ in rows[i + 1 : i + 1 + TOOL_WINDOW]:
+                    if win_role == "user":
+                        break  # the next turn's tools belong to its own task
                     if win_role != "tool" or not win_tool or win_tool in seen:
                         continue
                     seen.add(win_tool)
