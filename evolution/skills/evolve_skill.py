@@ -143,7 +143,11 @@ def evolve(
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
-    baseline_module = SkillModule(skill["body"])
+    try:
+        baseline_module = SkillModule(skill["body"])
+    except ValueError:
+        console.print(f"[red]✗ Skill '{skill_name}' has an empty body after frontmatter — nothing to optimize[/red]")
+        sys.exit(1)
 
     # Prepare DSPy examples
     trainset = dataset.to_dspy_examples("train")

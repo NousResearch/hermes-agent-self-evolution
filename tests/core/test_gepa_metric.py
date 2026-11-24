@@ -48,13 +48,17 @@ def test_high_score_feedback_mentions_coverage():
     assert "coverage" in result.feedback.lower()
 
 
-def test_score_at_half_is_neutral_not_success():
-    """0.5 is skill_fitness_metric's no-signal base, not a pass."""
-    result = make_feedback_metric(lambda g, p, t=None: 0.5)("gold", "pred")
+@pytest.mark.parametrize("score,expect", [
+    (0.44, "missed"),
+    (0.45, "signal"),
+    (0.46, "signal"),
+    (0.5, "signal"),
+    (0.51, "coverage"),
+])
+def test_feedback_band_edges(score, expect):
+    result = make_feedback_metric(lambda g, p, t=None: score)("gold", "pred")
 
-    assert "coverage" not in result.feedback.lower()
-    assert "missed" not in result.feedback.lower()
-    assert "signal" in result.feedback.lower()
+    assert expect in result.feedback.lower()
 
 
 def test_trace_is_forwarded_to_score_fn():
