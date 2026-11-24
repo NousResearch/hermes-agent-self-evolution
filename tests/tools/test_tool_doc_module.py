@@ -64,3 +64,14 @@ class TestToolDocModule:
         """A description embedding the end marker would silently truncate on extraction."""
         with pytest.raises(ValueError, match="markers"):
             ToolDocModule("t", "Closes with <</DESCRIPTION>> then continues.")
+
+    def test_extraction_discards_scaffolding_outside_markers(self):
+        """C1 invariant: only the marked description is deployable — prompt
+        scaffolding the optimizer adds outside the markers is discarded."""
+        instructions = (
+            "Always answer with the tool name.\n"
+            "Tool under evaluation: t\n"
+            "Description: <<DESCRIPTION>>the real description text here<</DESCRIPTION>>\n"
+            "Never say 'other'."
+        )
+        assert extract_description(instructions) == "the real description text here"

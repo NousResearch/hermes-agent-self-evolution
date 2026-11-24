@@ -289,7 +289,12 @@ def evolve(
     # frozen template — not the co-optimized prompt GEPA produced.
     console.print(f"\n[bold]Evaluating on holdout set ({len(dataset.holdout)} examples)[/bold]")
 
-    evolved_module = ToolDocModule(tool_name, evolved_description)
+    try:
+        evolved_module = ToolDocModule(tool_name, evolved_description)
+    except ValueError as e:
+        console.print(f"[red]✗ {e}[/red]")
+        console.print("[red]✗ Evolved variant is unusable — not deploying[/red]")
+        return
     baseline_scores = []
     evolved_scores = []
     for ex in dataset.to_dspy_examples("holdout"):
