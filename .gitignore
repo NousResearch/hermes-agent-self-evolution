@@ -28,3 +28,4 @@ snapshots/
 # Local run outputs
 output/
 run_evolve.sh
+run_evolve_tools.sh
