@@ -47,6 +47,14 @@ python -m evolution.skills.evolve_skill \
     --skill github-code-review \
     --iterations 10 \
     --eval-source sessiondb
+
+# Evolve a tool description (Phase 2)
+python -m evolution.tools.evolve_tool_descriptions \
+    --tool search_files \
+    --iterations 10
+
+# Validate setup without spending tokens
+python -m evolution.tools.evolve_tool_descriptions --tool search_files --dry-run
 ```
 
 ## What It Optimizes
@@ -54,7 +62,7 @@ python -m evolution.skills.evolve_skill \
 | Phase | Target | Engine | Status |
 |-------|--------|--------|--------|
 | **Phase 1** | Skill files (SKILL.md) | DSPy + GEPA | ✅ Implemented |
-| **Phase 2** | Tool descriptions | DSPy + GEPA | 🔲 Planned |
+| **Phase 2** | Tool descriptions | DSPy + GEPA | ✅ Implemented |
 | **Phase 3** | System prompt sections | DSPy + GEPA | 🔲 Planned |
 | **Phase 4** | Tool implementation code | Darwinian Evolver | 🔲 Planned |
 | **Phase 5** | Continuous improvement loop | Automated pipeline | 🔲 Planned |
@@ -65,6 +73,26 @@ python -m evolution.skills.evolve_skill \
 |--------|-------------|---------|
 | **[DSPy](https://github.com/stanfordnlp/dspy) + [GEPA](https://github.com/gepa-ai/gepa)** | Reflective prompt evolution — reads execution traces, proposes targeted mutations | MIT |
 | **[Darwinian Evolver](https://github.com/imbue-ai/darwinian_evolver)** | Code evolution with Git-based organisms | AGPL v3 (external CLI only) |
+
+## Eval Data Sources
+
+`--eval-source` selects where evaluation examples come from:
+
+| Source | Reads |
+|--------|-------|
+| `synthetic` | Generated examples (no history needed) |
+| `golden` | Curated dataset in `datasets/` |
+| `sessiondb` | Real session history — Claude Code, Copilot, and Hermes |
+
+The `sessiondb` source mines all three tools, including Hermes `state.db` (see
+below). To build a dataset from one tool only, use the importer directly:
+`python -m evolution.core.external_importers --source hermes-statedb --skill <name>`.
+
+Current Hermes releases write session transcripts to `state.db`; the files under
+`~/.hermes/sessions/*.json` are API request dumps, not transcripts. `HermesStateDBImporter`
+reads `state.db`, so the Hermes leg of a dataset actually contains conversations.
+Messages that look like they carry credentials (API keys, tokens) are dropped
+before an example is used.
 
 ## Guardrails
 
