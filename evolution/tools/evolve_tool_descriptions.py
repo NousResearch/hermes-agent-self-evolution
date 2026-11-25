@@ -24,7 +24,7 @@ from rich.console import Console
 from rich.table import Table
 
 from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
-from evolution.core.constraints import ConstraintValidator
+from evolution.core.constraints import ConstraintValidator, TOOL_DESCRIPTION_MARKERS
 from evolution.core.dataset_builder import EvalDataset, EvalExample
 from evolution.core.gepa_metric import make_feedback_metric
 from evolution.core.lm import make_lm
@@ -266,6 +266,7 @@ def evolve(
             "Always preserve the <<DESCRIPTION>> and <</DESCRIPTION>> markers verbatim. "
             "Keep the description under 500 characters."
         ),
+        marker_guard=TOOL_DESCRIPTION_MARKERS,
     )
     optimized_module = optimizer.compile(
         baseline_module,
