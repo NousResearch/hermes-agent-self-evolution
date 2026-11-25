@@ -1,6 +1,7 @@
 """Tests for the AST-based tool registry reader."""
 
 import logging
+import os
 import textwrap
 from pathlib import Path
 
@@ -8,7 +9,8 @@ import pytest
 
 from evolution.tools.tool_registry_reader import read_tool_descriptions
 
-REAL_HERMES = Path("/home/pat/.hermes/hermes-agent")
+# Optional live check against a real checkout; skips when absent.
+REAL_HERMES = Path(os.environ.get("HERMES_REPO", Path.home() / ".hermes" / "hermes-agent"))
 
 SAMPLE_TOOL_MODULE = textwrap.dedent(
     '''
