@@ -1,1 +1,1 @@
-"""Phase placeholder: tools evolution."""
+"""Phase 2: tool description evolution."""

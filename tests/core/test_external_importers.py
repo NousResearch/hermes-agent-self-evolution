@@ -35,6 +35,7 @@ from evolution.core.external_importers import (
     ClaudeCodeImporter,
     CopilotImporter,
     HermesSessionImporter,
+    HermesStateDBImporter,
     RelevanceFilter,
     VALID_DIFFICULTIES,
     MIN_DATASET_SIZE,
@@ -553,7 +554,85 @@ class TestHermesSessionImporter:
 
         with patch.object(HermesSessionImporter, "SESSION_DIR", tmp_path):
             msgs = HermesSessionImporter.extract_messages(limit=3)
-        assert len(msgs) == 3
+            assert len(msgs) == 3
+
+
+# ── Hermes state.db Importer ─────────────────────────────────────────────────
+
+
+class TestHermesStateDBImporter:
+    SCHEMA = """
+    CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT NOT NULL, started_at REAL NOT NULL);
+    CREATE TABLE messages (
+        id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, role TEXT NOT NULL,
+        content TEXT, timestamp REAL NOT NULL, active INTEGER NOT NULL DEFAULT 1
+    );
+    """
+
+    def _make_db(self, path):
+        import sqlite3
+        import time
+
+        now = time.time()
+        con = sqlite3.connect(path)
+        con.executescript(self.SCHEMA)
+        con.executemany(
+            "INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
+            [
+                ("recent", "webui", now - 60),
+                ("api", "api_server", now - 30),
+                ("machine", "subagent", now - 50),
+                ("old", "webui", now - 200 * 86400),
+            ],
+        )
+        con.executemany(
+            "INSERT INTO messages (id, session_id, role, content, timestamp, active)"
+            " VALUES (?, ?, ?, ?, ?, 1)",
+            [
+                (1, "recent", "user", "please review my pull request for the widget", now),
+                (2, "recent", "assistant", "I reviewed it; two issues found.", now),
+                (3, "api", "user", "why is my deployment failing on startup?", now),
+                (4, "api", "assistant", "the port is already in use.", now),
+                (5, "machine", "user", "orchestrator dispatch text for workers", now),
+                (6, "machine", "assistant", "done", now),
+                (7, "old", "user", "an ancient question about configuration", now),
+                (8, "old", "assistant", "ancient answer", now),
+                (9, "recent", "user", "[IMPORTANT: The user has invoked a skill — injected wrapper]", now),
+                (10, "recent", "assistant", "wrapper response", now),
+            ],
+        )
+        con.commit()
+        con.close()
+        return path
+
+    def test_extracts_pairs_and_filters(self, tmp_path):
+        """Interactive pairs extracted; machine source, wrappers, and out-of-window dropped."""
+        db = self._make_db(tmp_path / "state.db")
+        with patch.object(HermesStateDBImporter, "DB_PATH", db):
+            msgs = HermesStateDBImporter.extract_messages(days=90)
+
+        by_task = {m["task_input"]: m for m in msgs}
+        assert "please review my pull request for the widget" in by_task
+        assert by_task["please review my pull request for the widget"]["assistant_response"] == \
+            "I reviewed it; two issues found."
+        # api_server is a transport, not an automation type — genuine questions are kept
+        assert "why is my deployment failing on startup?" in by_task
+        # machine dispatch, wrapper injection, and the 200-day-old session are all out
+        assert not any("orchestrator" in t or "[IMPORTANT" in t or "ancient" in t for t in by_task)
+        assert all(m["source"] == "hermes-statedb" for m in msgs)
+
+    def test_days_window_widens(self, tmp_path):
+        """A wider window includes the old session — pins the parameter bind order."""
+        db = self._make_db(tmp_path / "state.db")
+        with patch.object(HermesStateDBImporter, "DB_PATH", db):
+            msgs = HermesStateDBImporter.extract_messages(days=400)
+
+        assert any("ancient question" in m["task_input"] for m in msgs)
+
+    def test_days_validated(self, tmp_path):
+        for bad in (0, -5, "abc", True):
+            with pytest.raises(ValueError):
+                HermesStateDBImporter.extract_messages(days=bad)
 
 
 # ── Skill Name Matching ──────────────────────────────────────────────────────

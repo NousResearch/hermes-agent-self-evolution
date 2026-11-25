@@ -22,6 +22,9 @@ from evolution.core.config import EvolutionConfig, resolve_hermes_agent_path
 from evolution.core.dataset_builder import SyntheticDatasetBuilder, EvalDataset, GoldenDatasetLoader
 from evolution.core.external_importers import build_dataset_from_external
 from evolution.core.fitness import skill_fitness_metric, LLMJudge, FitnessScore
+from evolution.core.gepa_metric import make_feedback_metric
+from evolution.core.lm import make_lm
+from evolution.core.optimize import build_gepa, print_constraints
 from evolution.core.constraints import ConstraintValidator
 from evolution.skills.skill_module import (
     SkillModule,
@@ -43,6 +46,7 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    max_examples: int = 50,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -87,9 +91,10 @@ def evolve(
         dataset = build_dataset_from_external(
             skill_name=skill_name,
             skill_text=skill["raw"],
-            sources=["claude-code", "copilot", "hermes"],
+            sources=["claude-code", "copilot", "hermes", "hermes-statedb"],
             output_path=save_path,
             model=eval_model,
+            max_examples=max_examples,
         )
         if not dataset.all_examples:
             console.print("[red]✗ No relevant examples found from session history[/red]")
@@ -118,15 +123,8 @@ def evolve(
     # ── 3. Validate constraints on baseline ─────────────────────────────
     console.print(f"\n[bold]Validating baseline constraints[/bold]")
     validator = ConstraintValidator(config)
-    baseline_constraints = validator.validate_all(skill["body"], "skill")
-    all_pass = True
-    for c in baseline_constraints:
-        icon = "✓" if c.passed else "✗"
-        color = "green" if c.passed else "red"
-        console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-        if not c.passed:
-            all_pass = False
-
+    baseline_constraints = validator.validate_all(skill["raw"], "skill")
+    all_pass = print_constraints(console, baseline_constraints)
     if not all_pass:
         console.print("[yellow]⚠ Baseline skill has constraint violations — proceeding anyway[/yellow]")
 
@@ -136,12 +134,16 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy (bounded: unbounded requests can black-hole on a stalled stream)
+    lm = make_lm(eval_model)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
-    baseline_module = SkillModule(skill["body"])
+    try:
+        baseline_module = SkillModule(skill["body"])
+    except ValueError:
+        console.print(f"[red]✗ Skill '{skill_name}' has an empty body after frontmatter — nothing to optimize[/red]")
+        sys.exit(1)
 
     # Prepare DSPy examples
     trainset = dataset.to_dspy_examples("train")
@@ -153,9 +155,12 @@ def evolve(
     start_time = time.time()
 
     try:
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_steps=iterations,
+        # DSPy 3.5 GEPA requires an explicit reflection LM.
+        optimizer = build_gepa(
+            make_feedback_metric(skill_fitness_metric),
+            iterations,
+            optimizer_model,
+            max_instruction_chars=config.max_skill_size - 500,
         )
 
         optimized_module = optimizer.compile(
@@ -179,21 +184,13 @@ def evolve(
     console.print(f"\n  Optimization completed in {elapsed:.1f}s")
 
     # ── 6. Extract evolved skill text ───────────────────────────────────
-    # The optimized module's instructions contain the evolved skill text
-    evolved_body = optimized_module.skill_text
+    evolved_body = optimized_module.extract()
     evolved_full = reassemble_skill(skill["frontmatter"], evolved_body)
 
     # ── 7. Validate evolved skill ───────────────────────────────────────
     console.print(f"\n[bold]Validating evolved skill[/bold]")
-    evolved_constraints = validator.validate_all(evolved_body, "skill", baseline_text=skill["body"])
-    all_pass = True
-    for c in evolved_constraints:
-        icon = "✓" if c.passed else "✗"
-        color = "green" if c.passed else "red"
-        console.print(f"  [{color}]{icon} {c.constraint_name}[/{color}]: {c.message}")
-        if not c.passed:
-            all_pass = False
-
+    evolved_constraints = validator.validate_all(evolved_full, "skill", baseline_text=skill["raw"])
+    all_pass = print_constraints(console, evolved_constraints)
     if not all_pass:
         console.print("[red]✗ Evolved skill FAILED constraints — not deploying[/red]")
         # Still save for inspection
@@ -303,7 +300,9 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--max-examples", default=50, show_default=True, type=click.IntRange(min=3),
+              help="Max eval examples to mine for sessiondb source")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, max_examples):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -315,6 +314,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        max_examples=max_examples,
     )
 
 

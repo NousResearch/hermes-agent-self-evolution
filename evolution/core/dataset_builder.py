@@ -14,6 +14,7 @@ from typing import Optional
 
 import dspy
 
+from evolution.core.lm import make_lm
 from evolution.core.config import EvolutionConfig
 
 
@@ -123,7 +124,7 @@ class SyntheticDatasetBuilder:
         n = num_cases or self.config.eval_dataset_size
 
         # Configure DSPy to use the judge model for generation
-        lm = dspy.LM(self.config.judge_model)
+        lm = make_lm(self.config.judge_model)
 
         with dspy.context(lm=lm):
             result = self.generator(
