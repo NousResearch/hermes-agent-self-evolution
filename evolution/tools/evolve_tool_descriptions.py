@@ -255,13 +255,16 @@ def evolve(
     console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
 
     start_time = time.time()
+    # Template overhead is ~250 chars; capping instructions at 750 keeps the
+    # description inside its 500-char limit.
     optimizer = build_gepa(
         make_feedback_metric(selection_metric),
         iterations,
         optimizer_model,
-        max_instruction_chars=2000,
+        max_instruction_chars=750,
         proposer_guidance=(
-            "Always preserve the <<DESCRIPTION>> and <</DESCRIPTION>> markers verbatim."
+            "Always preserve the <<DESCRIPTION>> and <</DESCRIPTION>> markers verbatim. "
+            "Keep the description under 500 characters."
         ),
     )
     optimized_module = optimizer.compile(
@@ -288,6 +291,10 @@ def evolve(
     constraints_passed = print_constraints(console, evolved_constraints)
     if not constraints_passed:
         console.print("[red]✗ Evolved description FAILED constraints — not deploying[/red]")
+        failed_dir = Path("output") / "tools" / tool_name
+        failed_dir.mkdir(parents=True, exist_ok=True)
+        (failed_dir / "evolved_FAILED.txt").write_text(evolved_description)
+        console.print(f"  Saved failed variant to {failed_dir}/evolved_FAILED.txt")
         return
 
     # ── 6. Holdout comparison ───────────────────────────────────────────
