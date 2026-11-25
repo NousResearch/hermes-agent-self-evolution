@@ -46,6 +46,7 @@ def evolve(
     hermes_repo: Optional[str] = None,
     run_tests: bool = False,
     dry_run: bool = False,
+    max_examples: int = 50,
 ):
     """Main evolution function — orchestrates the full optimization loop."""
 
@@ -93,6 +94,7 @@ def evolve(
             sources=["claude-code", "copilot", "hermes", "hermes-statedb"],
             output_path=save_path,
             model=eval_model,
+            max_examples=max_examples,
         )
         if not dataset.all_examples:
             console.print("[red]✗ No relevant examples found from session history[/red]")
@@ -155,7 +157,10 @@ def evolve(
     try:
         # DSPy 3.5 GEPA requires an explicit reflection LM.
         optimizer = build_gepa(
-            make_feedback_metric(skill_fitness_metric), iterations, optimizer_model
+            make_feedback_metric(skill_fitness_metric),
+            iterations,
+            optimizer_model,
+            max_instruction_chars=config.max_skill_size - 500,
         )
 
         optimized_module = optimizer.compile(
@@ -295,7 +300,9 @@ def evolve(
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
-def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
+@click.option("--max-examples", default=50, show_default=True, type=click.IntRange(min=3),
+              help="Max eval examples to mine for sessiondb source")
+def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run, max_examples):
     """Evolve a Hermes Agent skill using DSPy + GEPA optimization."""
     evolve(
         skill_name=skill,
@@ -307,6 +314,7 @@ def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_mod
         hermes_repo=hermes_repo,
         run_tests=run_tests,
         dry_run=dry_run,
+        max_examples=max_examples,
     )
 
 

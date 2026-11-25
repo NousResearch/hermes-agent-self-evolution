@@ -256,7 +256,13 @@ def evolve(
 
     start_time = time.time()
     optimizer = build_gepa(
-        make_feedback_metric(selection_metric), iterations, optimizer_model
+        make_feedback_metric(selection_metric),
+        iterations,
+        optimizer_model,
+        max_instruction_chars=2000,
+        proposer_guidance=(
+            "Always preserve the <<DESCRIPTION>> and <</DESCRIPTION>> markers verbatim."
+        ),
     )
     optimized_module = optimizer.compile(
         baseline_module,
