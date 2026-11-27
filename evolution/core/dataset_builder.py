@@ -25,6 +25,8 @@ class EvalExample:
     difficulty: str = "medium"  # easy, medium, hard
     category: str = "general"  # Category for stratified eval
     source: str = "synthetic"  # synthetic, sessiondb, golden
+    # Used only to split mined examples; never written to JSONL or sent to DSPy.
+    session_id: Optional[str] = field(default=None, repr=False, compare=False)
 
     def to_dict(self) -> dict:
         return {

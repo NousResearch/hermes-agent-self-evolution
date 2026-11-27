@@ -49,6 +49,13 @@ python -m evolution.skills.evolve_skill \
     --eval-source sessiondb
 ```
 
+Session imports keep messages from the same source and session together when
+splitting training, validation, and holdout data. The split targets 50/25/25
+by example count. Large sessions can shift those proportions. For histories
+that lack session IDs, identical prompts from the same source stay together,
+but distinct prompts cannot be linked back to a conversation. Skill evolution
+requires at least three groups to evaluate on a separate holdout.
+
 ## What It Optimizes
 
 | Phase | Target | Engine | Status |
