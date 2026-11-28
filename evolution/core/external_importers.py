@@ -521,6 +521,7 @@ class RelevanceFilter:
                         if validated:
                             examples.append(EvalExample(
                                 source=msg["source"],
+                                session_id=msg.get("session_id"),
                                 **validated,
                             ))
 
@@ -602,6 +603,34 @@ def _parse_scoring_json(text: str) -> Optional[dict]:
 
 # ── Orchestration ─────────────────────────────────────────────────────────
 
+def _split_by_session(examples: list[EvalExample]) -> EvalDataset:
+    """Keep each source conversation in one split, targeting 50/25/25 by row count."""
+    groups = {}
+    for example in examples:
+        session = example.session_id
+        if isinstance(session, str) and session.strip():
+            key = (example.source, "session", session.strip())
+        else:
+            # Older histories can lack IDs. Keep identical prompts together.
+            key = (example.source, "prompt", example.task_input)
+        groups.setdefault(key, []).append(example)
+
+    # Assign large groups first; break size ties reproducibly, independent of
+    # input order and without changing the process-wide random state.
+    ordered = [groups[key] for key in sorted(groups)]
+    random.Random(0).shuffle(ordered)
+    ordered.sort(key=len, reverse=True)
+
+    dataset = EvalDataset()
+    splits = (dataset.train, dataset.val, dataset.holdout)
+    for split, group in zip(splits, ordered):
+        split.extend(group)
+    targets = (len(examples) * 0.5, len(examples) * 0.25, len(examples) * 0.25)
+    for group in ordered[3:]:
+        idx = max(range(3), key=lambda i: targets[i] - len(splits[i]))
+        splits[idx].extend(group)
+    return dataset
+
 
 def build_dataset_from_external(
     skill_name: str,
@@ -668,17 +697,7 @@ def build_dataset_from_external(
             f"recommended for meaningful train/val/holdout split)[/yellow]"
         )
 
-    # Split into train/val/holdout (50/25/25)
-    random.shuffle(examples)
-    n = len(examples)
-    n_train = max(1, int(n * 0.5))
-    n_val = max(1, int(n * 0.25))
-
-    dataset = EvalDataset(
-        train=examples[:n_train],
-        val=examples[n_train:n_train + n_val],
-        holdout=examples[n_train + n_val:],
-    )
+    dataset = _split_by_session(examples)
 
     dataset.save(output_path)
     console.print(f"\n[bold]Saved to {output_path}/[/bold]")

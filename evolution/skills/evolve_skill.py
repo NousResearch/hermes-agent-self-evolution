@@ -94,6 +94,10 @@ def evolve(
         if not dataset.all_examples:
             console.print("[red]✗ No relevant examples found from session history[/red]")
             sys.exit(1)
+        if not dataset.holdout:
+            console.print("[red]✗ Too few independent groups for a holdout. "
+                          "Import examples from at least three sessions or use a golden dataset.[/red]")
+            sys.exit(1)
         console.print(f"  Mined {len(dataset.all_examples)} examples from session history")
     elif eval_source == "synthetic":
         builder = SyntheticDatasetBuilder(config)

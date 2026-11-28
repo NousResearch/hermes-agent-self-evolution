@@ -30,6 +30,7 @@ from evolution.core.external_importers import (
     _read_copilot_workspace,
     _load_skill_text,
     _validate_eval_example,
+    _split_by_session,
     build_dataset_from_external,
     main,
     ClaudeCodeImporter,
@@ -610,7 +611,7 @@ class TestRelevanceFilter:
         )
 
         messages = [
-            {"task_input": "sort these messages by topic", "source": "claude-code"},
+            {"task_input": "sort these messages by topic", "source": "claude-code", "session_id": "private-session"},
             {"task_input": "categorize my emails please", "source": "copilot", "assistant_response": "Sure!"},
         ]
 
@@ -620,6 +621,9 @@ class TestRelevanceFilter:
         inputs = {ex.task_input for ex in examples}
         assert "sort these messages by topic" in inputs
         assert "categorize my emails please" in inputs
+        tagged = next(ex for ex in examples if ex.source == "claude-code")
+        assert tagged.session_id == "private-session"
+        assert "session_id" not in tagged.to_dict()
         # All examples should have the scoring metadata
         for ex in examples:
             assert ex.expected_behavior == "group by topic"
@@ -798,6 +802,51 @@ class TestBuildDataset:
             )
 
         assert len(dataset.all_examples) == 0
+
+
+class TestSessionSplits:
+    def test_sessions_are_disjoint_across_splits_and_source_scoped(self):
+        examples = [
+            EvalExample(f"{source} turn {turn}", "rubric", source=source, session_id="shared-id")
+            for source in ("claude-code", "copilot", "hermes")
+            for turn in range(4)
+        ]
+        def membership(rows):
+            dataset = _split_by_session(rows)
+            return [{ex.task_input for ex in split}
+                    for split in (dataset.train, dataset.val, dataset.holdout)]
+
+        splits = membership(examples)
+        assert sorted(len(split) for split in splits) == [4, 4, 4]
+        for source in ("claude-code", "copilot", "hermes"):
+            assert {ex.task_input for ex in examples if ex.source == source} in splits
+        assert membership(list(reversed(examples))) == splits
+
+    def test_large_session_is_never_cut_to_fill_holdout(self):
+        rows = [EvalExample(f"turn {i}", "rubric", session_id="one") for i in range(12)]
+        dataset = _split_by_session(rows)
+        assert dataset.train == rows
+        assert dataset.val == dataset.holdout == []
+
+    def test_missing_ids_group_repeated_prompts(self):
+        rows = [EvalExample(text, "rubric") for text in ("again", "again", "second", "third")]
+        dataset = _split_by_session(rows)
+        assert [ex.task_input for ex in dataset.train] == ["again", "again"]
+        assert len(dataset.val) == len(dataset.holdout) == 1
+
+    def test_evolution_stops_before_optimization_without_holdout(self, tmp_path, monkeypatch):
+        from evolution.skills import evolve_skill
+
+        skill = tmp_path / "skills" / "demo" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\nname: demo\ndescription: Demo\n---\nDemo skill\n")
+        dataset = _split_by_session([EvalExample("one turn", "rubric", session_id="one")])
+        monkeypatch.setattr(evolve_skill, "build_dataset_from_external", lambda **kwargs: dataset)
+        result = CliRunner().invoke(evolve_skill.main, [
+            "--skill", "demo", "--hermes-repo", str(tmp_path), "--eval-source", "sessiondb",
+        ])
+        assert result.exit_code == 1
+        assert "Too few independent groups" in result.output
 
 
 # ── End-to-End Roundtrip ─────────────────────────────────────────────────────
